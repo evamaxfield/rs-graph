@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 import logging
+import shutil
+from datetime import datetime
 
 import typer
 
@@ -22,6 +24,7 @@ app = typer.Typer()
 def joss(
     output_filepath: str = "joss-short-paper-details.parquet",
     start_page: int = 1,
+    copy_to_lib: bool = False,
     debug: bool = False,
 ) -> None:
     """Download the JOSS dataset."""
@@ -34,6 +37,16 @@ def joss(
         start_page=start_page,
     )
     log.info(f"Stored JOSS dataset to: '{final_stored_dataset}'")
+
+    # Copy the final to the repo / library
+    if copy_to_lib:
+        current_date_str = datetime.now().date().isoformat()
+        lib_storage_path = f"rs_graph/data/files/joss-{current_date_str}.parquet"
+        shutil.copy2(
+            final_stored_dataset,
+            lib_storage_path,
+        )
+        log.info(f"Copied JOSS dataset to: '{lib_storage_path}'")
 
 
 @app.command()

@@ -111,3 +111,6 @@ ENV/
 
 # VSCode
 .vscode
+
+# Project specific
+joss-short-paper-details.parquet
