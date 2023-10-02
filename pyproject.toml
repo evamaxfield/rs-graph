@@ -1,3 +1,66 @@
+# package build
+# https://peps.python.org/pep-0517/
+[build-system]
+requires = ["setuptools>=65", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+
+# package basics
+# https://peps.python.org/pep-0621/
+[project]
+name = "rs-graph"
+description = "Exploring research software"
+keywords = []
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT License" }
+authors = [
+  { email = "evamaxfieldbrown@gmail.com", name = "Eva Maxfield Brown" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Natural Language :: English",
+  "Programming Language :: Python :: 3.11",
+]
+dynamic = ["version"]
+dependencies = [
+  "pandas",
+]
+
+[project.urls]
+Homepage = "https://github.com/evamaxfield/rs-graph"
+"Bug Tracker" = "https://github.com/evamaxfield/rs-graph/issues"
+Documentation = "https://evamaxfield.github.io/rs-graph"
+"User Support" = "https://github.com/evamaxfield/rs-graph/issues"
+
+# extra dependencies
+# https://peps.python.org/pep-0621/#dependencies-optional-dependencies
+[project.optional-dependencies]
+lint = [
+  "pre-commit>=2.20.0",
+]
+dev = [
+  "ipython",
+  "jupyterlab",
+]
+
+# entry points
+# https://peps.python.org/pep-0621/#entry-points
+# [project.entry-points."console_scripts"]
+
+# build settings
+# https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html
+[tool.setuptools]
+zip-safe = false
+include-package-data = true
+
+[tool.setuptools.packages.find]
+exclude = ["*docs/*", "*tests/*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "py.typed"]
+
 # tools
 [tool.black]
 line-length = 88
@@ -36,6 +99,7 @@ extend-ignore = [
 
 [tool.ruff.per-file-ignores]
 "**/notebooks/*" = ["E501"]
+"**/tests/*.py" = ["D"]
 
 [tool.mypy]
 ignore_missing_imports = true

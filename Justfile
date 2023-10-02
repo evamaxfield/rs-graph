@@ -16,8 +16,11 @@ clean:
 
 # install with all deps
 install:
-    pip install -r requirements.txt
-    pip install -r requirements-dev.txt
+    pip install -e ".[dev,lint]"
+
+# update submodules
+update-submodules:
+    git submodule update --init --recursive
 
 # lint, format, and check all files
 lint:
