@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 
-from dataclasses_json import DataClassJsonMixin
-import requests
 import pandas as pd
+import requests
+from dataclasses_json import DataClassJsonMixin
 from tqdm import tqdm
 
 ###############################################################################
@@ -22,6 +22,7 @@ JOSS_PUBLISHED_PAPERS_ESTIMATE = 2176  # As of 2023-10-02
 
 ###############################################################################
 
+
 @dataclass
 class JOSSPaperResults(DataClassJsonMixin):
     repo: str
@@ -29,14 +30,15 @@ class JOSSPaperResults(DataClassJsonMixin):
     doi: str
     published_date: str
 
+
 def _process_joss_results_page(
-        results: list[dict],
+    results: list[dict],
 ) -> tuple[list[JOSSPaperResults | None], bool]:
     # Store "continuation" flag
     continue_next = len(results) == 10
 
     # Store processed results
-    processed_results = []
+    processed_results: list[JOSSPaperResults | None] = []
 
     # Parse each result
     for paper in results:
@@ -56,6 +58,7 @@ def _process_joss_results_page(
         )
 
     return processed_results, continue_next
+
 
 def get_joss_dataset(
     output_filepath: str = "joss-short-paper-details.parquet",
@@ -122,7 +125,7 @@ def get_joss_dataset(
 
         # Store page results
         processed_results.extend(cleaned_page_results)
-        
+
         # Store to file
         pd.DataFrame(processed_results).to_parquet(output_filepath)
 

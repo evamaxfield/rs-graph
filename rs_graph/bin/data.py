@@ -4,8 +4,8 @@ import logging
 
 import typer
 
-from rs_graph.data.joss import get_joss_dataset
 from rs_graph.bin.typer_utils import setup_logger
+from rs_graph.data.joss import get_joss_dataset
 
 ###############################################################################
 
@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
 app = typer.Typer()
 
 ###############################################################################
+
 
 @app.command()
 def joss(
@@ -34,6 +35,7 @@ def joss(
     )
     log.info(f"Stored JOSS dataset to: '{final_stored_dataset}'")
 
+
 @app.command()
 def f1000(
     output_filepath: str = "f1000-short-paper-details.parquet",
@@ -45,10 +47,13 @@ def f1000(
 
     raise NotImplementedError()
 
+
 ###############################################################################
+
 
 def main() -> None:
     app()
+
 
 if __name__ == "__main__":
     app()
