@@ -25,7 +25,11 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
+  "dataclasses-json>=0.6,<1",
   "pandas",
+  "pyarrow>=9",
+  "tqdm",
+  "typer>=0.9.0",
 ]
 
 [project.urls]
@@ -47,7 +51,8 @@ dev = [
 
 # entry points
 # https://peps.python.org/pep-0621/#entry-points
-# [project.entry-points."console_scripts"]
+[project.entry-points."console_scripts"]
+rs-graph-data = "rs_graph.bin.data:main"
 
 # build settings
 # https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html
