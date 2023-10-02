@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
+import logging
 from dataclasses import dataclass
 from enum import Enum
-import logging
 
 from dotenv import load_dotenv
 from ghapi.all import GhApi
@@ -65,6 +65,7 @@ class DependencyDetails:
     registry: RegistryEnum
     name: str
     version: str
+
 
 # TODO: add backoff for rate limit
 def get_repo_upstream_dependency_list(
