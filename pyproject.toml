@@ -26,9 +26,10 @@ classifiers = [
 dynamic = ["version"]
 dependencies = [
   "dataclasses-json>=0.6,<1",
+  "ghapi>=1,<2",
   "pandas",
+  "parse>=1,<2",
   "pyarrow>=9",
-  "PyGithub>=2.1,<3",
   "python-dotenv>=1.0,<2",
   "requests>=2,<3",
   "tqdm",
