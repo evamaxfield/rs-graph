@@ -1,3 +1,0 @@
-[submodule "data/raw/joss-papers"]
-	path = data/raw/joss-papers
-	url = https://github.com/openjournals/joss-papers.git
