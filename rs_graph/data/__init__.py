@@ -11,6 +11,7 @@ JOSS_DATASET_PATH = DATA_FILES_DIR / "joss-2023-10-02.parquet"
 
 ###############################################################################
 
+
 def load_joss() -> pd.DataFrame:
     """Load the JOSS dataset."""
     return pd.read_parquet(JOSS_DATASET_PATH)
