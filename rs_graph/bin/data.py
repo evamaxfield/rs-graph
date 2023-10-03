@@ -64,12 +64,6 @@ def get_upstream_deps_from_repos_dataset(
     """Get upstream dependencies from repos."""
     # Setup logger
     setup_logger(debug=debug)
-    # If debug, allow lots of logging
-    if debug:
-        logging.getLogger("backoff").setLevel(logging.DEBUG)
-    # Otherwise ignore basically all backoff logging
-    else:
-        logging.getLogger("backoff").setLevel(logging.ERROR)
 
     # Read repos dataset
     repos_dataset = pd.read_parquet(repos_dataset_path)
