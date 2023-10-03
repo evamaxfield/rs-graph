@@ -114,3 +114,5 @@ ENV/
 
 # Project specific
 joss-short-paper-details.parquet
+joss-upstream-deps-failed.parquet
+joss-upstream-deps.parquet

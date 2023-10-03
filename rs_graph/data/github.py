@@ -3,10 +3,15 @@
 import logging
 from dataclasses import dataclass
 from enum import Enum
+from functools import partial
 
+import backoff
+from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
+from fastcore.net import HTTP403ForbiddenError
 from ghapi.all import GhApi
 from parse import search
+from tqdm import tqdm
 
 ###############################################################################
 
@@ -87,10 +92,15 @@ class DependencyDetails:
     version: str
 
 
-# TODO: add backoff for rate limit
+@backoff.on_exception(
+    backoff.expo,
+    (HTTP403ForbiddenError),
+    max_time=300,
+)
 def get_repo_upstream_dependency_list(
     url: str,
     github_api_key: str | None = None,
+    allowed_registries: list[str] | None = None,
 ) -> list[DependencyDetails] | None:
     """
     Get the upstream dependency list for a repo.
@@ -102,6 +112,9 @@ def get_repo_upstream_dependency_list(
     github_api_key: str, optional
         The GitHub API key to use for the request.
         If not provided, will use the GITHUB_TOKEN env variable.
+    allowed_registries: list[RegistryEnum], optional
+        The list of allowed registries to return.
+        If not provided, will return all registries.
 
     Returns
     -------
@@ -123,6 +136,10 @@ def get_repo_upstream_dependency_list(
         # Load env
         load_dotenv()
         api = GhApi()
+
+    # Set allowed registries
+    if not allowed_registries:
+        allowed_registries = list(RegistryEnum)
 
     # Get repo parts
     repo_parts = get_repo_parts_from_url(url)
@@ -149,6 +166,10 @@ def get_repo_upstream_dependency_list(
         name = ":".join(registry_and_name[1:])  # Join back in case name has ":"
         version = package["versionInfo"]
 
+        # Handle not allowed registry
+        if RegistryEnum(registry) not in allowed_registries:
+            continue
+
         # Store to deps
         deps.append(
             DependencyDetails(
@@ -162,7 +183,136 @@ def get_repo_upstream_dependency_list(
     return deps
 
 
-# TODO:
-# handle value errors for unknown registry
-# handle non-github-urls
-# handle HTTP404NotFoundError
+@dataclass
+class RepoDependency(DataClassJsonMixin):
+    repo: str
+    upstream_dep_registry: str
+    upstream_dep_name: str
+    upstream_dep_version: str
+
+
+@dataclass
+class RepoFailure(DataClassJsonMixin):
+    repo: str
+    exception: str
+
+
+def _get_upstream_dependencies_for_repo(
+    repo: str,
+    github_api_key: str | None = None,
+    allowed_registries: list[RegistryEnum] | None = None,
+) -> list[RepoDependency] | RepoFailure:
+    try:
+        # Get deps
+        repo_deps = get_repo_upstream_dependency_list(
+            url=repo,
+            github_api_key=github_api_key,
+            allowed_registries=allowed_registries,
+        )
+
+        # Handle failure
+        if not repo_deps:
+            return RepoFailure(
+                repo=repo,
+                exception="Failed to parse repo owner and name.",
+            )
+
+    except Exception as e:
+        # Handle failure
+        return RepoFailure(
+            repo=repo,
+            exception=str(e),
+        )
+
+    # Store deps
+    this_repo_deps = []
+    for dep in repo_deps:
+        this_repo_deps.append(
+            RepoDependency(
+                repo=repo,
+                upstream_dep_registry=dep.registry.value,
+                upstream_dep_name=dep.name,
+                upstream_dep_version=dep.version,
+            ),
+        )
+
+    return this_repo_deps
+
+
+def get_upstream_dependencies_for_repos(
+    repos: list[str],
+    github_api_key: str | None = None,
+    allowed_registries: list[RegistryEnum] | None = None,
+) -> tuple[list[RepoDependency], list[RepoFailure]]:
+    """
+    Get the upstream dependencies for a list of repos.
+
+    Parameters
+    ----------
+    repos: list[str]
+        The list of repos to get the upstream dependencies for.
+    github_api_key: str, optional
+        The GitHub API key to use for the request.
+        If not provided, will use the GITHUB_TOKEN env variable.
+    allowed_registries: list[RegistryEnum], optional
+        The list of allowed registries to return.
+        If not provided, will return all registries.
+
+    Returns
+    -------
+    tuple[list[RepoDependency], list[RepoFailure]]
+        The list of upstream dependencies for the repos.
+        The list of failed repos.
+    """
+    # Filter out duplicates
+    repos = list(set(repos))
+
+    # Log diff
+    log.info(
+        f"Filtered out {len(repos) - len(set(repos))} duplicate repos.",
+    )
+
+    # Filter out non-github repos
+    github_repos = [repo for repo in repos if "github.com" in repo]
+
+    # Log diff
+    log.info(
+        f"Filtered out {len(repos) - len(github_repos)} non-GitHub repos.",
+    )
+
+    # Create partial with args
+    partial_get_upstream_dependencies_for_repo = partial(
+        _get_upstream_dependencies_for_repo,
+        github_api_key=github_api_key,
+        allowed_registries=allowed_registries,
+    )
+
+    # Get deps
+    all_deps: list[RepoDependency] = []
+    failed: list[RepoFailure] = []
+    total_succeeded = 0
+    for repo in tqdm(
+        github_repos,
+        desc="Getting upstream dependencies",
+    ):
+        # Get repo results
+        repo_results = partial_get_upstream_dependencies_for_repo(repo)
+
+        # Handle failure
+        if isinstance(repo_results, RepoFailure):
+            failed.append(repo_results)
+            continue
+
+        # Store deps
+        all_deps.extend(repo_results)
+
+        # Update success
+        total_succeeded += 1
+
+    # Log state
+    log.info(f"Total succeeded: {total_succeeded}")
+    log.info(f"Total found upstream dependencies: {len(all_deps)}")
+    log.info(f"Total failed: {len(failed)}")
+
+    # Return deps
+    return all_deps, failed

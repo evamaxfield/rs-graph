@@ -4,9 +4,13 @@ import logging
 import shutil
 from datetime import datetime
 
+import pandas as pd
 import typer
 
 from rs_graph.bin.typer_utils import setup_logger
+from rs_graph.data.github import (
+    get_upstream_dependencies_for_repos,
+)
 from rs_graph.data.joss import get_joss_dataset
 
 ###############################################################################
@@ -50,15 +54,36 @@ def joss(
 
 
 @app.command()
-def f1000(
-    output_filepath: str = "f1000-short-paper-details.parquet",
+def get_upstream_deps_from_repos_dataset(
+    repos_dataset_path: str = "joss-short-paper-details.parquet",
+    repos_column: str = "repo",
+    output_filepath_for_successful_repos: str = "joss-upstream-deps.parquet",
+    output_filepath_for_failed_repos: str = "joss-upstream-deps-failed.parquet",
     debug: bool = False,
 ) -> None:
-    """Download the F1000 dataset."""
+    """Get upstream dependencies from repos."""
     # Setup logger
     setup_logger(debug=debug)
 
-    raise NotImplementedError()
+    # Read repos dataset
+    repos_dataset = pd.read_parquet(repos_dataset_path)
+
+    # Get upstream deps
+    upstream_deps, failed = get_upstream_dependencies_for_repos(
+        repos=repos_dataset[repos_column].tolist(),
+    )
+
+    # Convert to dataframe
+    upstream_deps_df = pd.DataFrame([d.to_dict() for d in upstream_deps])
+    failed_df = pd.DataFrame([f.to_dict() for f in failed])
+
+    # Store upstream deps
+    upstream_deps_df.to_parquet(output_filepath_for_successful_repos)
+    log.info(f"Stored upstream deps to: '{output_filepath_for_successful_repos}'")
+
+    # Store failed repos
+    failed_df.to_parquet(output_filepath_for_failed_repos)
+    log.info(f"Stored failed repos to: '{output_filepath_for_failed_repos}'")
 
 
 ###############################################################################

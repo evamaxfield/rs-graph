@@ -25,6 +25,7 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
+  "backoff>=2,<3",
   "dataclasses-json>=0.6,<1",
   "ghapi>=1,<2",
   "pandas",
