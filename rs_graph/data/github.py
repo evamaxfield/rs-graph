@@ -26,6 +26,20 @@ class RepoParts:
 
 
 def get_repo_parts_from_url(url: str) -> RepoParts | None:
+    """
+    Best effort to get the repo parts from a URL.
+
+    Parameters
+    ----------
+    url: str
+        The URL to the repo.
+
+    Returns
+    -------
+    RepoParts | None
+        The repo parts.
+        If the parts cannot be parsed, returns None.
+    """
     # Handle no http
     if not url.startswith("http"):
         url = f"https://{url}"
@@ -50,14 +64,20 @@ def get_repo_parts_from_url(url: str) -> RepoParts | None:
 
 
 class RegistryEnum(Enum):
-    PYPI = "pip"
-    NPMJS = "npm"
-    ACTIONS = "actions"
-    RUBYGEMS = "rubygems"
-    MAVEN = "maven"
-    GO = "go"
     CARGO = "rust"
+    COMPOSER = "composer"
     NUGET = "nuget"
+    ACTIONS = "actions"
+    GO = "go"
+    MAVEN = "maven"
+    NPM = "npm"
+    PIP = "pip"
+    PNPM = "pnpm"
+    PUB = "pub"
+    POETRY = "poetry"
+    RUBYGEMS = "rubygems"
+    SWIFT = "swift"
+    YARN = "yarn"
 
 
 @dataclass
@@ -72,6 +92,30 @@ def get_repo_upstream_dependency_list(
     url: str,
     github_api_key: str | None = None,
 ) -> list[DependencyDetails] | None:
+    """
+    Get the upstream dependency list for a repo.
+
+    Parameters
+    ----------
+    url: str
+        The URL to the repo.
+    github_api_key: str, optional
+        The GitHub API key to use for the request.
+        If not provided, will use the GITHUB_TOKEN env variable.
+
+    Returns
+    -------
+    list[DependencyDetails] | None
+        The list of upstream dependencies for the repo.
+        If the repo is not found or partitioning the repo parts fails, returns None.
+
+    Notes
+    -----
+    This function uses the GitHub API to get the upstream dependency list.
+    See https://docs.github.com/en/rest/dependency-graph/sboms for more info.
+
+    Supported package registries: https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/about-the-dependency-graph#supported-package-ecosystems
+    """
     # Setup API
     if github_api_key:
         api = GhApi(token=github_api_key)
@@ -121,3 +165,4 @@ def get_repo_upstream_dependency_list(
 # TODO:
 # handle value errors for unknown registry
 # handle non-github-urls
+# handle HTTP404NotFoundError
