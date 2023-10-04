@@ -8,13 +8,12 @@ import pandas as pd
 import typer
 
 from rs_graph.bin.typer_utils import setup_logger
-from rs_graph.data import load_rs_graph_repos_dataset
+from rs_graph.data import DATA_FILES_DIR, load_rs_graph_repos_dataset
 from rs_graph.data.github import (
     get_upstream_dependencies_for_repos,
 )
 from rs_graph.data.joss import get_joss_dataset as _get_joss_dataset
 from rs_graph.data.softwarex import get_softwarex_dataset as _get_softwarex_dataset
-from rs_graph.data import DATA_FILES_DIR
 
 ###############################################################################
 
