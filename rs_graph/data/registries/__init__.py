@@ -5,6 +5,7 @@ from enum import Enum
 
 ###############################################################################
 
+
 class RegistryEnum(Enum):
     CARGO = "rust"
     COMPOSER = "composer"
@@ -21,9 +22,11 @@ class RegistryEnum(Enum):
     SWIFT = "swift"
     YARN = "yarn"
 
+
 @dataclass(frozen=True)
 class AnalysisRegistries:
     values: list[RegistryEnum]
+
 
 REGISTRIES_FOR_ANALYSIS = AnalysisRegistries(
     values=[
