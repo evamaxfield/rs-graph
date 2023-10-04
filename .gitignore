@@ -116,3 +116,4 @@ ENV/
 joss-short-paper-details.parquet
 joss-upstream-deps-failed.parquet
 joss-upstream-deps.parquet
+softwarex-short-paper-details.parquet

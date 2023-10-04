@@ -8,6 +8,7 @@ import pandas as pd
 import typer
 
 from rs_graph.bin.typer_utils import setup_logger
+from rs_graph.data import load_rs_graph_repos_dataset
 from rs_graph.data.github import (
     get_upstream_dependencies_for_repos,
 )
@@ -81,20 +82,15 @@ def get_softwarex_dataset(
         log.info(f"Copied SoftwareX dataset to: '{lib_storage_path}'")
 
 
-@app.command()
-def get_upstream_deps_from_repos_dataset(
-    repos_dataset_path: str = "joss-short-paper-details.parquet",
+def _get_upstream_deps_from_repos_dataset(
+    repos_dataset: pd.DataFrame,
     repos_column: str = "repo",
-    output_filepath_for_successful_repos: str = "joss-upstream-deps.parquet",
-    output_filepath_for_failed_repos: str = "joss-upstream-deps-failed.parquet",
+    output_filepath_for_successful_repos: str = "upstream-deps.parquet",
+    output_filepath_for_failed_repos: str = "upstream-deps-failed.parquet",
     debug: bool = False,
 ) -> None:
-    """Get upstream dependencies from repos."""
     # Setup logger
     setup_logger(debug=debug)
-
-    # Read repos dataset
-    repos_dataset = pd.read_parquet(repos_dataset_path)
 
     # Get upstream deps
     upstream_deps, failed = get_upstream_dependencies_for_repos(
@@ -112,6 +108,48 @@ def get_upstream_deps_from_repos_dataset(
     # Store failed repos
     failed_df.to_parquet(output_filepath_for_failed_repos)
     log.info(f"Stored failed repos to: '{output_filepath_for_failed_repos}'")
+
+
+@app.command()
+def get_upstream_deps_from_repos_dataset(
+    repos_dataset_path: str = "joss-short-paper-details.parquet",
+    repos_column: str = "repo",
+    output_filepath_for_successful_repos: str = "joss-upstream-deps.parquet",
+    output_filepath_for_failed_repos: str = "joss-upstream-deps-failed.parquet",
+    debug: bool = False,
+) -> None:
+    """Get upstream dependencies from repos."""
+    # Read repos dataset
+    repos_dataset = pd.read_parquet(repos_dataset_path)
+
+    # Process
+    _get_upstream_deps_from_repos_dataset(
+        repos_dataset=repos_dataset,
+        repos_column=repos_column,
+        output_filepath_for_successful_repos=output_filepath_for_successful_repos,
+        output_filepath_for_failed_repos=output_filepath_for_failed_repos,
+        debug=debug,
+    )
+
+
+@app.command()
+def get_upstream_repos_for_rs_graph_dataset(
+    output_filepath_for_successful_repos: str = "rs-graph-upstream-deps.parquet",
+    output_filepath_for_failed_repos: str = "rs-graph-upstream-deps-failed.parquet",
+    debug: bool = False,
+) -> None:
+    """Get upstream dependencies from repos."""
+    # Read repos dataset
+    repos_dataset = load_rs_graph_repos_dataset()
+
+    # Process
+    _get_upstream_deps_from_repos_dataset(
+        repos_dataset=repos_dataset,
+        repos_column="repo",
+        output_filepath_for_successful_repos=output_filepath_for_successful_repos,
+        output_filepath_for_failed_repos=output_filepath_for_failed_repos,
+        debug=debug,
+    )
 
 
 ###############################################################################

@@ -86,6 +86,14 @@ def _get_parent_repo_and_get_paper_details(
 
     # Ensure the schema is returned properly
     try:
+        # Check number of results
+        num_results = len(response_json["search-results"]["entry"])
+        if num_results != 1:
+            log.debug(
+                f"Unexpected number of results for repo: {repo_name} ({num_results})"
+            )
+            return None
+
         # Get the first result
         first_result = response_json["search-results"]["entry"][0]
 
@@ -164,7 +172,7 @@ def get_softwarex_dataset(
     total_errored = total_processed - len(processed_correctly)
 
     # Log total processed and errored
-    log.info(f"Total processed: {total_processed}")
+    log.info(f"Total succeeded: {len(processed_correctly)}")
     log.info(f"Total errored: {total_errored}")
 
     # Convert to dataframe and save
