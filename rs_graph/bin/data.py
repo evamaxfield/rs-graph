@@ -8,10 +8,12 @@ import pandas as pd
 import typer
 
 from rs_graph.bin.typer_utils import setup_logger
+from rs_graph.data import load_rs_graph_repos_dataset
 from rs_graph.data.github import (
     get_upstream_dependencies_for_repos,
 )
-from rs_graph.data.joss import get_joss_dataset
+from rs_graph.data.joss import get_joss_dataset as _get_joss_dataset
+from rs_graph.data.softwarex import get_softwarex_dataset as _get_softwarex_dataset
 
 ###############################################################################
 
@@ -25,7 +27,7 @@ app = typer.Typer()
 
 
 @app.command()
-def joss(
+def get_joss_dataset(
     output_filepath: str = "joss-short-paper-details.parquet",
     start_page: int = 1,
     copy_to_lib: bool = False,
@@ -36,7 +38,7 @@ def joss(
     setup_logger(debug=debug)
 
     # Download JOSS dataset
-    final_stored_dataset = get_joss_dataset(
+    final_stored_dataset = _get_joss_dataset(
         output_filepath=output_filepath,
         start_page=start_page,
     )
@@ -54,19 +56,41 @@ def joss(
 
 
 @app.command()
-def get_upstream_deps_from_repos_dataset(
-    repos_dataset_path: str = "joss-short-paper-details.parquet",
-    repos_column: str = "repo",
-    output_filepath_for_successful_repos: str = "joss-upstream-deps.parquet",
-    output_filepath_for_failed_repos: str = "joss-upstream-deps-failed.parquet",
+def get_softwarex_dataset(
+    output_filepath: str = "softwarex-short-paper-details.parquet",
+    copy_to_lib: bool = False,
     debug: bool = False,
 ) -> None:
-    """Get upstream dependencies from repos."""
+    """Download the SoftwareX dataset."""
     # Setup logger
     setup_logger(debug=debug)
 
-    # Read repos dataset
-    repos_dataset = pd.read_parquet(repos_dataset_path)
+    # Download SoftwareX dataset
+    final_stored_dataset = _get_softwarex_dataset(
+        output_filepath=output_filepath,
+    )
+    log.info(f"Stored SoftwareX dataset to: '{final_stored_dataset}'")
+
+    # Copy the final to the repo / library
+    if copy_to_lib:
+        current_date_str = datetime.now().date().isoformat()
+        lib_storage_path = f"rs_graph/data/files/softwarex-{current_date_str}.parquet"
+        shutil.copy2(
+            final_stored_dataset,
+            lib_storage_path,
+        )
+        log.info(f"Copied SoftwareX dataset to: '{lib_storage_path}'")
+
+
+def _get_upstream_deps_from_repos_dataset(
+    repos_dataset: pd.DataFrame,
+    repos_column: str = "repo",
+    output_filepath_for_successful_repos: str = "upstream-deps.parquet",
+    output_filepath_for_failed_repos: str = "upstream-deps-failed.parquet",
+    debug: bool = False,
+) -> None:
+    # Setup logger
+    setup_logger(debug=debug)
 
     # Get upstream deps
     upstream_deps, failed = get_upstream_dependencies_for_repos(
@@ -84,6 +108,48 @@ def get_upstream_deps_from_repos_dataset(
     # Store failed repos
     failed_df.to_parquet(output_filepath_for_failed_repos)
     log.info(f"Stored failed repos to: '{output_filepath_for_failed_repos}'")
+
+
+@app.command()
+def get_upstream_deps_from_repos_dataset(
+    repos_dataset_path: str = "joss-short-paper-details.parquet",
+    repos_column: str = "repo",
+    output_filepath_for_successful_repos: str = "joss-upstream-deps.parquet",
+    output_filepath_for_failed_repos: str = "joss-upstream-deps-failed.parquet",
+    debug: bool = False,
+) -> None:
+    """Get upstream dependencies from repos."""
+    # Read repos dataset
+    repos_dataset = pd.read_parquet(repos_dataset_path)
+
+    # Process
+    _get_upstream_deps_from_repos_dataset(
+        repos_dataset=repos_dataset,
+        repos_column=repos_column,
+        output_filepath_for_successful_repos=output_filepath_for_successful_repos,
+        output_filepath_for_failed_repos=output_filepath_for_failed_repos,
+        debug=debug,
+    )
+
+
+@app.command()
+def get_upstream_repos_for_rs_graph_dataset(
+    output_filepath_for_successful_repos: str = "rs-graph-upstream-deps.parquet",
+    output_filepath_for_failed_repos: str = "rs-graph-upstream-deps-failed.parquet",
+    debug: bool = False,
+) -> None:
+    """Get upstream dependencies from repos."""
+    # Read repos dataset
+    repos_dataset = load_rs_graph_repos_dataset()
+
+    # Process
+    _get_upstream_deps_from_repos_dataset(
+        repos_dataset=repos_dataset,
+        repos_column="repo",
+        output_filepath_for_successful_repos=output_filepath_for_successful_repos,
+        output_filepath_for_failed_repos=output_filepath_for_failed_repos,
+        debug=debug,
+    )
 
 
 ###############################################################################
