@@ -8,7 +8,7 @@ import pandas as pd
 import typer
 
 from rs_graph.bin.typer_utils import setup_logger
-from rs_graph.data import load_rs_graph_repos_dataset
+from rs_graph.data import DATA_FILES_DIR, load_rs_graph_repos_dataset
 from rs_graph.data.github import (
     get_upstream_dependencies_for_repos,
 )
@@ -24,6 +24,23 @@ log = logging.getLogger(__name__)
 app = typer.Typer()
 
 ###############################################################################
+
+
+def _copy_to_lib(
+    final_stored_dataset: str,
+    name_prefix: str,
+) -> None:
+    # Create lib storage path
+    lib_storage_path = (
+        DATA_FILES_DIR / f"{name_prefix}-{datetime.now().date().isoformat()}.parquet"
+    )
+
+    # Copy
+    shutil.copy2(
+        final_stored_dataset,
+        lib_storage_path,
+    )
+    log.info(f"Copied dataset to: '{lib_storage_path}'")
 
 
 @app.command()
@@ -46,13 +63,10 @@ def get_joss_dataset(
 
     # Copy the final to the repo / library
     if copy_to_lib:
-        current_date_str = datetime.now().date().isoformat()
-        lib_storage_path = f"rs_graph/data/files/joss-{current_date_str}.parquet"
-        shutil.copy2(
-            final_stored_dataset,
-            lib_storage_path,
+        _copy_to_lib(
+            final_stored_dataset=final_stored_dataset,
+            name_prefix="joss",
         )
-        log.info(f"Copied JOSS dataset to: '{lib_storage_path}'")
 
 
 @app.command()
@@ -73,13 +87,10 @@ def get_softwarex_dataset(
 
     # Copy the final to the repo / library
     if copy_to_lib:
-        current_date_str = datetime.now().date().isoformat()
-        lib_storage_path = f"rs_graph/data/files/softwarex-{current_date_str}.parquet"
-        shutil.copy2(
-            final_stored_dataset,
-            lib_storage_path,
+        _copy_to_lib(
+            final_stored_dataset=final_stored_dataset,
+            name_prefix="softwarex",
         )
-        log.info(f"Copied SoftwareX dataset to: '{lib_storage_path}'")
 
 
 def _get_upstream_deps_from_repos_dataset(
@@ -88,7 +99,7 @@ def _get_upstream_deps_from_repos_dataset(
     output_filepath_for_successful_repos: str = "upstream-deps.parquet",
     output_filepath_for_failed_repos: str = "upstream-deps-failed.parquet",
     debug: bool = False,
-) -> None:
+) -> tuple[str, str]:
     # Setup logger
     setup_logger(debug=debug)
 
@@ -108,6 +119,11 @@ def _get_upstream_deps_from_repos_dataset(
     # Store failed repos
     failed_df.to_parquet(output_filepath_for_failed_repos)
     log.info(f"Stored failed repos to: '{output_filepath_for_failed_repos}'")
+
+    return (
+        output_filepath_for_successful_repos,
+        output_filepath_for_failed_repos,
+    )
 
 
 @app.command()
@@ -136,6 +152,7 @@ def get_upstream_deps_from_repos_dataset(
 def get_upstream_repos_for_rs_graph_dataset(
     output_filepath_for_successful_repos: str = "rs-graph-upstream-deps.parquet",
     output_filepath_for_failed_repos: str = "rs-graph-upstream-deps-failed.parquet",
+    copy_to_lib: bool = False,
     debug: bool = False,
 ) -> None:
     """Get upstream dependencies from repos."""
@@ -143,13 +160,23 @@ def get_upstream_repos_for_rs_graph_dataset(
     repos_dataset = load_rs_graph_repos_dataset()
 
     # Process
-    _get_upstream_deps_from_repos_dataset(
+    (
+        output_filepath_for_successful_repos,
+        output_filepath_for_failed_repos,
+    ) = _get_upstream_deps_from_repos_dataset(
         repos_dataset=repos_dataset,
         repos_column="repo",
         output_filepath_for_successful_repos=output_filepath_for_successful_repos,
         output_filepath_for_failed_repos=output_filepath_for_failed_repos,
         debug=debug,
     )
+
+    # Copy the final to the repo / library
+    if copy_to_lib:
+        _copy_to_lib(
+            final_stored_dataset=output_filepath_for_successful_repos,
+            name_prefix="rs-graph-upstream-deps",
+        )
 
 
 ###############################################################################

@@ -9,6 +9,9 @@ import pandas as pd
 DATA_FILES_DIR = Path(__file__).parent / "files"
 JOSS_DATASET_PATH = DATA_FILES_DIR / "joss-2023-10-02.parquet"
 SOFTWAREX_DATASET_PATH = DATA_FILES_DIR / "softwarex-2023-10-03.parquet"
+RS_GRAPH_UPSTREAM_DEPS_PATH = (
+    DATA_FILES_DIR / "rs-graph-upstream-deps-2023-10-03.parquet"
+)
 
 ###############################################################################
 
@@ -43,3 +46,8 @@ def load_rs_graph_repos_dataset() -> pd.DataFrame:
     rs_graph = rs_graph.drop_duplicates(subset=["repo"], keep="first")
 
     return rs_graph
+
+
+def load_rs_graph_upstream_deps_dataset() -> pd.DataFrame:
+    """Load the base dataset."""
+    return pd.read_parquet(RS_GRAPH_UPSTREAM_DEPS_PATH)

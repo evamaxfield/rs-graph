@@ -2,7 +2,6 @@
 
 import logging
 from dataclasses import dataclass
-from enum import Enum
 from functools import partial
 
 import backoff
@@ -12,6 +11,8 @@ from fastcore.net import HTTP403ForbiddenError
 from ghapi.all import GhApi
 from parse import search
 from tqdm import tqdm
+
+from .registries import RegistryEnum
 
 ###############################################################################
 
@@ -66,23 +67,6 @@ def get_repo_parts_from_url(url: str) -> RepoParts | None:
 
     # Make mypy happy
     return None
-
-
-class RegistryEnum(Enum):
-    CARGO = "rust"
-    COMPOSER = "composer"
-    NUGET = "nuget"
-    ACTIONS = "actions"
-    GO = "go"
-    MAVEN = "maven"
-    NPM = "npm"
-    PIP = "pip"
-    PNPM = "pnpm"
-    PUB = "pub"
-    POETRY = "poetry"
-    RUBYGEMS = "rubygems"
-    SWIFT = "swift"
-    YARN = "yarn"
 
 
 @dataclass
