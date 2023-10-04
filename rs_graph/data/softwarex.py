@@ -8,10 +8,10 @@ import backoff
 import pandas as pd
 import requests
 from dataclasses_json import DataClassJsonMixin
-from tqdm import tqdm
 from dotenv import load_dotenv
-from ghapi.all import GhApi, paged
 from fastcore.net import HTTP403ForbiddenError
+from ghapi.all import GhApi, paged
+from tqdm import tqdm
 
 ###############################################################################
 
@@ -27,6 +27,7 @@ SOFTWAREX_PUBLISHED_PAPERS_ESTIMATE = 1100  # As of 2023-10-02
 
 ###############################################################################
 
+
 @dataclass
 class SoftwareXPaperResult(DataClassJsonMixin):
     repo: str
@@ -35,8 +36,10 @@ class SoftwareXPaperResult(DataClassJsonMixin):
     published_date: str
     _parent_repo_url: str | None
 
+
 class RateLimitError(Exception):
     pass
+
 
 @backoff.on_exception(
     backoff.expo,
@@ -51,7 +54,7 @@ def _get_parent_repo_and_get_paper_details(
     # Get Elsevier API key
     if not elsevier_api_key:
         elsevier_api_key = os.getenv("ELSEVIER_API_KEY")
-    
+
     # Get Elsevier repo details
     repo_details = github_api.repos.get(
         owner="ElsevierSoftwareX",
@@ -85,7 +88,7 @@ def _get_parent_repo_and_get_paper_details(
     try:
         # Get the first result
         first_result = response_json["search-results"]["entry"][0]
-        
+
         # Get the title, doi, and published date
         title = first_result["dc:title"]
         doi = first_result["prism:doi"]
@@ -155,7 +158,9 @@ def get_softwarex_dataset(
 
     # Get count of total processed and errored
     total_processed = len(all_paper_details)
-    processed_correctly = [paper.to_dict() for paper in all_paper_details if paper is not None]
+    processed_correctly = [
+        paper.to_dict() for paper in all_paper_details if paper is not None
+    ]
     total_errored = total_processed - len(processed_correctly)
 
     # Log total processed and errored
