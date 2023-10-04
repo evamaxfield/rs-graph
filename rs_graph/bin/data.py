@@ -11,7 +11,8 @@ from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.data.github import (
     get_upstream_dependencies_for_repos,
 )
-from rs_graph.data.joss import get_joss_dataset
+from rs_graph.data.joss import get_joss_dataset as _get_joss_dataset
+from rs_graph.data.softwarex import get_softwarex_dataset as _get_softwarex_dataset
 
 ###############################################################################
 
@@ -25,7 +26,7 @@ app = typer.Typer()
 
 
 @app.command()
-def joss(
+def get_joss_dataset(
     output_filepath: str = "joss-short-paper-details.parquet",
     start_page: int = 1,
     copy_to_lib: bool = False,
@@ -36,7 +37,7 @@ def joss(
     setup_logger(debug=debug)
 
     # Download JOSS dataset
-    final_stored_dataset = get_joss_dataset(
+    final_stored_dataset = _get_joss_dataset(
         output_filepath=output_filepath,
         start_page=start_page,
     )
@@ -51,6 +52,33 @@ def joss(
             lib_storage_path,
         )
         log.info(f"Copied JOSS dataset to: '{lib_storage_path}'")
+
+
+@app.command()
+def get_softwarex_dataset(
+    output_filepath: str = "softwarex-short-paper-details.parquet",
+    copy_to_lib: bool = False,
+    debug: bool = False,
+) -> None:
+    """Download the SoftwareX dataset."""
+    # Setup logger
+    setup_logger(debug=debug)
+
+    # Download SoftwareX dataset
+    final_stored_dataset = _get_softwarex_dataset(
+        output_filepath=output_filepath,
+    )
+    log.info(f"Stored SoftwareX dataset to: '{final_stored_dataset}'")
+
+    # Copy the final to the repo / library
+    if copy_to_lib:
+        current_date_str = datetime.now().date().isoformat()
+        lib_storage_path = f"rs_graph/data/files/softwarex-{current_date_str}.parquet"
+        shutil.copy2(
+            final_stored_dataset,
+            lib_storage_path,
+        )
+        log.info(f"Copied SoftwareX dataset to: '{lib_storage_path}'")
 
 
 @app.command()
