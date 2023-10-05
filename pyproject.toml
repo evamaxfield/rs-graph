@@ -25,16 +25,24 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-  "backoff>=2,<3",
+  # general
   "dataclasses-json>=0.6,<1",
-  "ghapi>=1,<2",
   "pandas",
-  "parse>=1,<2",
-  "pyarrow>=9",
+  "pandas",
   "python-dotenv>=1.0,<2",
-  "requests>=2,<3",
   "tqdm",
   "typer>=0.9.0",
+  # processing
+  "backoff>=2,<3",
+  "ghapi>=1,<2",
+  "parse>=1,<2",
+  "requests>=2,<3",
+  # viz
+  "bokeh>=2.1,<3",
+  "Jinja2==3.0.3",  # conflicts between networkx + bokeh + jupyter
+  "matplotlib>=3,<4",
+  "networkx>=3,<4",
+  "scipy>=1,<2",
 ]
 
 [project.urls]
