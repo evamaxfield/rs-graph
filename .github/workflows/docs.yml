@@ -1,0 +1,51 @@
+name: CI
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    # Create and Activate Conda Env
+    - uses: conda-incubator/setup-miniconda@v2
+      with:
+        activate-environment: rs-graph-quarto
+
+    # Install Deps
+    - name: Install Python and Conda Deps
+      run: |
+
+    # Install Quarto
+    - name: Set up Quarto
+      uses: quarto-dev/quarto-actions/setup@v2
+
+    # Install Tex Deps
+    - name: Install Text Deps
+      run: |
+        sudo apt-get install \
+          texlive-xetex \
+          texlive-fonts-recommended \
+          texlive-plain-generic
+
+    # Build Project
+    - name: Build Project
+      shell: bash -l {0}
+      run: |
+        just build
+      
+    # Publish to GH Pages
+    - name: Publish to GitHub Pages
+      uses: JamesIves/github-pages-deploy-action@v4
+      with:
+        folder: notebooks/_build/
