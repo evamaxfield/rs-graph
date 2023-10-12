@@ -1,4 +1,4 @@
-name: CI
+name: Quarto
 
 permissions:
   contents: write
@@ -25,7 +25,7 @@ jobs:
           texlive-fonts-recommended \
           texlive-plain-generic
 
-    # Setup Python
+    # Set up Python
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -34,6 +34,12 @@ jobs:
     # Install Quarto
     - name: Set up Quarto
       uses: quarto-dev/quarto-actions/setup@v2
+
+    # Set up Just
+    - name: Set up Just
+      uses: extractions/setup-just@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     # Install Project Deps
     - name: Install Dependencies
