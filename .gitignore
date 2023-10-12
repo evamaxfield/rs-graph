@@ -109,8 +109,20 @@ ENV/
 # mypy
 .mypy_cache/
 
+# ruff
+.ruff_cache/
+
 # VSCode
 .vscode
+
+# Quarto generated
+_build/
+.quarto/
+/.quarto/
+index.ipynb
+index.md
+index_files/
+index.tex
 
 # Project specific
 joss-short-paper-details.parquet

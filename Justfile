@@ -2,6 +2,9 @@
 default:
   just --list
 
+###############################################################################
+# Basic project and env management
+
 # clean all build, python, and lint files
 clean:
 	rm -fr dist
@@ -18,13 +21,30 @@ clean:
 install:
     pip install -e ".[dev,lint]"
 
-# update submodules
-update-submodules:
-    git submodule update --init --recursive
-
 # lint, format, and check all files
 lint:
 	pre-commit run --all-files
+
+###############################################################################
+# Quarto
+
+# store various dirs and filepaths
+NOTEBOOKS_DIR := justfile_directory() + "/notebooks/"
+FILE_URI := NOTEBOOKS_DIR + "viz.ipynb"
+BUILD_DIR := NOTEBOOKS_DIR + "_build/"
+
+# remove build files
+quarto-clean:
+	rm -fr {{BUILD_DIR}}
+	rm -fr {{NOTEBOOKS_DIR}}/.quarto
+
+# build page
+quarto-build:
+	quarto render {{FILE_URI}} --execute --to html
+	touch {{BUILD_DIR}}.nojekyll
+
+###############################################################################
+# Release and versioning
 
 # tag a new version
 tag-for-release version:

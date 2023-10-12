@@ -1,5 +1,7 @@
 # Research Software Graph
 
+🚀 [Rendered Interactive Graph](https://evamaxfield.github.io/rs-graph/) 🚀
+
 Graphing the dependencies (and dependents) of research software and their contributors.
 
 ## Current Status
@@ -12,7 +14,7 @@ Completed:
 - [x] Implemented functions to get the upstream dependencies from any GitHub Repository using the GitHub SBOM
 - [x] Cached the results of the above function to the repository.
   - NOTE: R / CRAN is not supported by GitHub SBOM
-- [ ] Visualize the dependency graph for intermediate results
+- [x] Visualize the dependency graph for intermediate results
 - [ ] Write wrappers around different registry APIs to return the source code repository URL for a given package name
 - [ ] Write recursive logic to get the entire dependency graph for a given repository
 
