@@ -17,19 +17,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    # Create and Activate Conda Env
-    - uses: conda-incubator/setup-miniconda@v2
-      with:
-        activate-environment: rs-graph-quarto
-
-    # Install Deps
-    - name: Install Python and Conda Deps
-      run: |
-
-    # Install Quarto
-    - name: Set up Quarto
-      uses: quarto-dev/quarto-actions/setup@v2
-
     # Install Tex Deps
     - name: Install Text Deps
       run: |
@@ -38,11 +25,25 @@ jobs:
           texlive-fonts-recommended \
           texlive-plain-generic
 
+    # Setup Python
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    # Install Quarto
+    - name: Set up Quarto
+      uses: quarto-dev/quarto-actions/setup@v2
+
+    # Install Project Deps
+    - name: Install Dependencies
+      run: |
+        just install
+
     # Build Project
     - name: Build Project
-      shell: bash -l {0}
       run: |
-        just build
+        just quarto-build
       
     # Publish to GH Pages
     - name: Publish to GitHub Pages

@@ -28,7 +28,7 @@ dependencies = [
   # general
   "dataclasses-json>=0.6,<1",
   "pandas",
-  "pandas",
+  "pyarrow",
   "python-dotenv>=1.0,<2",
   "tqdm",
   "typer>=0.9.0",
