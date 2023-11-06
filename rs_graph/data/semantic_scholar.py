@@ -1,21 +1,22 @@
 #!/usr/bin/env python
 
-import os
-import backoff
 import logging
+import os
+from dataclasses import dataclass
+from functools import partial
+
+from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
 from semanticscholar import SemanticScholar
 from semanticscholar.ApiRequester import ObjectNotFoundException
-from dataclasses import dataclass
-from dataclasses_json import DataClassJsonMixin
 from tqdm.contrib.concurrent import thread_map
-from functools import partial
 
 ###############################################################################
 
 log = logging.getLogger(__name__)
 
 ###############################################################################
+
 
 @dataclass
 class EmbeddingDetails(DataClassJsonMixin):
@@ -43,15 +44,16 @@ class ExtendedPaperDetails(DataClassJsonMixin):
     citation_count: int
 
 
-
-def _get_single_paper_details(doi: str, api: SemanticScholar) -> ExtendedPaperDetails | None:
+def _get_single_paper_details(
+    doi: str, api: SemanticScholar
+) -> ExtendedPaperDetails | None:
     try:
         # Get full paper details
         paper = api.get_paper(doi)
 
         # Construct in parts
         # Get author details
-        authors=[
+        authors = [
             AuthorDetails(
                 author_id=author.authorId,
                 name=author.name,
@@ -100,9 +102,7 @@ def get_extended_paper_details(
     api = SemanticScholar(api_key=os.getenv("SEMANTIC_SCHOLAR_API_KEY"))
 
     # Create partial function with api
-    partial_get_single_paper_details = partial(
-        _get_single_paper_details, api=api
-    )
+    partial_get_single_paper_details = partial(_get_single_paper_details, api=api)
 
     # Get all paper details
     results = thread_map(
