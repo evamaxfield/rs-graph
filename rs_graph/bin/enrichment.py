@@ -97,7 +97,7 @@ def get_repo_contributors(debug: bool = False) -> None:
     setup_logger(debug=debug)
 
     # Read repos dataset
-    rs_graph_repos = load_rs_graph_repos_dataset().sample(300)
+    rs_graph_repos = load_rs_graph_repos_dataset()
 
     # Get repo contributors
     repo_contributors = github.get_repo_contributors_for_repos(
