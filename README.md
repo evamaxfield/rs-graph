@@ -25,10 +25,12 @@ to the installed package directory (`rs_graph.data.files`).
         `rs-graph-enrichment get-upstreams`
     2. Get all of the extended paper details for the papers:
         `rs-graph-enrichment get-extended-paper-details`
+    3. Get top 30 contributors to each repository:
+        `rs-graph-enrichment get-repo-contributors`
     3. **TODO:** Train author name dedupe model:
-        `rs-graph-modeling train_author_deduper`
+        `rs-graph-modeling train-author-deduper`
     4.  Train github users dedupe model:
-        `rs-graph-modeling train_developer_deduper`
+        `rs-graph-modeling train-developer-deduper`
     5. **TODO:** Train author to github user linker model:
         `rs-graph-modeling train-author-to-developer-linker`
 
