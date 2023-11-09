@@ -3,9 +3,9 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from dataclasses_json import DataClassJsonMixin
 import numpy as np
 import pandas as pd
+from dataclasses_json import DataClassJsonMixin
 
 ###############################################################################
 
@@ -76,6 +76,7 @@ def load_rs_graph_embeddings_dataset() -> pd.DataFrame:
     embeddings["log_citation_count"] = np.log(embeddings.citation_count)
 
     return embeddings
+
 
 @dataclass
 class Contribution(DataClassJsonMixin):
