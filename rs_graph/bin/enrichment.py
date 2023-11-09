@@ -2,12 +2,11 @@
 
 import logging
 
+import pandas as pd
 import typer
 
-import pandas as pd
-
 from rs_graph.bin.typer_utils import setup_logger
-from rs_graph.data import load_rs_graph_repos_dataset, DATA_FILES_DIR
+from rs_graph.data import DATA_FILES_DIR, load_rs_graph_repos_dataset
 from rs_graph.data.enrichment import github, semantic_scholar
 
 ###############################################################################
@@ -58,7 +57,7 @@ def get_upstreams(debug: bool = False) -> None:
 def get_extended_paper_details(debug: bool = False) -> None:
     """
     Get the extended paper details for each paper in the dataset.
-    
+
     Be sure to set the `SEMANTIC_SCHOLAR_API_KEY` environment variable.
     """
     # Setup logger
@@ -85,6 +84,7 @@ def get_extended_paper_details(debug: bool = False) -> None:
     log.info(
         f"Stored extended paper details to: '{output_filepath_for_author_details}'"
     )
+
 
 ###############################################################################
 

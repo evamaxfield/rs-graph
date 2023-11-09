@@ -35,9 +35,7 @@ def copy_data_to_lib(
     name_prefix: str,
 ) -> None:
     # Create lib storage path
-    lib_storage_path = (
-        DATA_FILES_DIR / f"{name_prefix}.parquet"
-    )
+    lib_storage_path = DATA_FILES_DIR / f"{name_prefix}.parquet"
 
     # Copy
     shutil.copy2(

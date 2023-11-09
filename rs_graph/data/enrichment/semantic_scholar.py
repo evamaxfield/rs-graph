@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
-import backoff
 import logging
 import os
 from dataclasses import dataclass
 from functools import partial
 
+import backoff
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
 from semanticscholar import SemanticScholar
@@ -17,6 +17,7 @@ from tqdm.contrib.concurrent import thread_map
 log = logging.getLogger(__name__)
 
 ###############################################################################
+
 
 class AuthorOrder:
     FIRST = "first"

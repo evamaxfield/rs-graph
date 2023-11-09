@@ -177,11 +177,11 @@ def get_dataset(
 
     # Convert to dataframe
     df = pd.DataFrame(processed_correctly)
-    
+
     # Replace values where there is a better parent repo url
     df["repo"] = df["_parent_repo_url"].fillna(df["repo"])
     df = df.drop(columns=["_parent_repo_url"])
-    
+
     # Store
     df.to_parquet(output_filepath)
 

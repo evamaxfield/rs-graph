@@ -13,9 +13,7 @@ DATA_FILES_DIR = Path(__file__).parent / "files"
 DATASET_SOURCE_FILE_PATTERN = "-short-paper-details.parquet"
 
 # Other datasets are formed from enrichment and have hardcoded paths
-RS_GRAPH_UPSTREAM_DEPS_PATH = (
-    DATA_FILES_DIR / "rs-graph-upstream-deps.parquet"
-)
+RS_GRAPH_UPSTREAM_DEPS_PATH = DATA_FILES_DIR / "rs-graph-upstream-deps.parquet"
 RS_GRAPH_EXTENDED_PAPER_DETAILS_PATH = (
     DATA_FILES_DIR / "rs-graph-extended-paper-details.parquet"
 )
@@ -32,7 +30,7 @@ def load_rs_graph_repos_dataset() -> pd.DataFrame:
     datasets = []
     for dataset_file in dataset_files:
         datasets.append(pd.read_parquet(dataset_file))
-    
+
     # Concatenate
     rs_graph = pd.concat(datasets)
 
