@@ -4,27 +4,30 @@
 
 Graphing the dependencies (and dependents) of research software and their contributors.
 
-## Current Status
+## Setup
 
-Work in progress.
+* Install [Just](https://github.com/casey/just#packages)
+* Create a new Conda / Mamba Env (Python 3.11 preferred)
+* Install [pylbfgs](https://github.com/larsmans/pylbfgs): `conda install -c fgregg pylbfgs`
+* Install lib: `just install` (or `pip install .`)
 
-Completed:
+## Order of Data Operations
 
-- [x] Created dataset from JOSS API (~2100 papers with their repository URL)
-- [x] Implemented functions to get the upstream dependencies from any GitHub Repository using the GitHub SBOM
-- [x] Cached the results of the above function to the repository.
-  - NOTE: R / CRAN is not supported by GitHub SBOM
-- [x] Visualize the dependency graph for intermediate results
-- [ ] Write wrappers around different registry APIs to return the source code repository URL for a given package name
-- [ ] Write recursive logic to get the entire dependency graph for a given repository
+If this project was starting from scratch, the order of operations to recreate our work
+would be:
 
-### Update 2023-10-03
+**Note:** at each step of the process, the data or model is cached
+to the installed package directory (`rs_graph.data.files`).
 
-Nic and I got the SoftwareX journal articles added to the dataset. We now have ~2,600 papers with their repository URL.
-
-Updated short results:
-- ~6,800 unique npm packages (~47,000 total dependency relations)
-- ~3,200 unique PyPI packages (~25,000 total dependency relations)
-- ~700 unique cargo packages (~2,000 total dependency relations)
-
-Full data can be loaded using: `rs_graph.data.load_rs_graph_upstream_deps_dataset`
+1. Get all data sources using the command: `rs-graph-sources get-all`
+2. Options
+    1. Get all recursive upstream dependencies for the repos:
+        `rs-graph-enrichment get-upstreams`
+    2. Get all of the extended paper details for the papers:
+        `rs-graph-enrichment get-extended-paper-details`
+    3. **TODO:** Train author name dedupe model:
+        `rs-graph-modeling train-author-name-dedupe-model`
+    4. **TODO:** Train github users dedupe model:
+        `rs-graph-modeling train-github-users-dedupe-model`
+    5. **TODO:** Train author to github user linker model:
+        `rs-graph-modeling train-author-to-github-user-linker-model`

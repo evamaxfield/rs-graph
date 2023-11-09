@@ -1,46 +1,40 @@
-"""Preprocessing and availability of different datasets."""
+"""Stored dataset loaders."""
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 ###############################################################################
 
 DATA_FILES_DIR = Path(__file__).parent / "files"
-JOSS_DATASET_PATH = DATA_FILES_DIR / "joss-2023-10-02.parquet"
-SOFTWAREX_DATASET_PATH = DATA_FILES_DIR / "softwarex-2023-10-03.parquet"
+
+# Dataset sources are found via path globbing
+DATASET_SOURCE_FILE_PATTERN = "-short-paper-details.parquet"
+
+# Other datasets are formed from enrichment and have hardcoded paths
 RS_GRAPH_UPSTREAM_DEPS_PATH = (
-    DATA_FILES_DIR / "rs-graph-upstream-deps-2023-10-03.parquet"
+    DATA_FILES_DIR / "rs-graph-upstream-deps.parquet"
+)
+RS_GRAPH_EXTENDED_PAPER_DETAILS_PATH = (
+    DATA_FILES_DIR / "rs-graph-extended-paper-details.parquet"
 )
 
 ###############################################################################
 
 
-def load_joss_repos() -> pd.DataFrame:
-    """Load the JOSS dataset."""
-    return pd.read_parquet(JOSS_DATASET_PATH)
-
-
-def load_softwarex_repos() -> pd.DataFrame:
-    """Load the SoftwareX dataset."""
-    return pd.read_parquet(SOFTWAREX_DATASET_PATH)
-
-
 def load_rs_graph_repos_dataset() -> pd.DataFrame:
-    """Load the base dataset."""
-    # Load softwarex and use _parent_repo_url where possible otherwise use repo
-    softwarex_df = load_softwarex_repos()
-    softwarex_df["repo"] = softwarex_df["_parent_repo_url"].fillna(softwarex_df["repo"])
-    softwarex_df = softwarex_df.drop(columns=["_parent_repo_url"])
+    """Load the base dataset (all dataset sources)."""
+    # Find all dataset files
+    dataset_files = list(DATA_FILES_DIR.glob(f"*{DATASET_SOURCE_FILE_PATTERN}"))
 
-    # Concat
-    rs_graph = pd.concat(
-        [
-            load_joss_repos(),
-            softwarex_df,
-        ],
-        ignore_index=True,
-    )
+    # Load all datasets
+    datasets = []
+    for dataset_file in dataset_files:
+        datasets.append(pd.read_parquet(dataset_file))
+    
+    # Concatenate
+    rs_graph = pd.concat(datasets)
 
     # Drop duplicates and keep first
     rs_graph = rs_graph.drop_duplicates(subset=["repo"], keep="first")
@@ -48,6 +42,37 @@ def load_rs_graph_repos_dataset() -> pd.DataFrame:
     return rs_graph
 
 
-def load_rs_graph_upstream_deps_dataset() -> pd.DataFrame:
-    """Load the base dataset."""
+def load_rs_graph_upstream_dependencies_dataset() -> pd.DataFrame:
+    """Load the upstream dependencies dataset."""
     return pd.read_parquet(RS_GRAPH_UPSTREAM_DEPS_PATH)
+
+
+def load_rs_graph_extended_paper_details_dataset() -> pd.DataFrame:
+    """Load the extended paper details dataset."""
+    return pd.read_parquet(RS_GRAPH_EXTENDED_PAPER_DETAILS_PATH)
+
+
+def load_rs_graph_embeddings_dataset() -> pd.DataFrame:
+    """Load the extended papers details dataset then format to embeddings focus."""
+    # Load extended paper details
+    df = load_rs_graph_extended_paper_details_dataset()
+
+    # Load and process data
+    embedding_rows = []
+    for _, row in df.iterrows():
+        if row.embedding is not None:
+            embedding_rows.append(
+                {
+                    "url": row.url,
+                    "doi": row.doi,
+                    "title": row.title,
+                    "embedding": np.array(row.embedding["vector"]),
+                    "citation_count": row.citation_count,
+                }
+            )
+
+    # Convert to frame and store log citation count
+    embeddings = pd.DataFrame(embedding_rows).reset_index(drop=True)
+    embeddings["log_citation_count"] = np.log(embeddings.citation_count)
+
+    return df
