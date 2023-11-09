@@ -83,6 +83,8 @@ class Contribution(DataClassJsonMixin):
     repo: str
     doi: str
     author_position: int
+    co_authors: list[str]
+    embedding: list[float] | None
 
 
 @dataclass
@@ -93,16 +95,32 @@ class AuthorshipDetails(DataClassJsonMixin):
     contributions: list[Contribution]
 
 
-def load_rs_graph_author_contributions_dataset() -> pd.DataFrame:  # noqa: C901
+def _get_canonical_name(author_details: dict) -> str:
+    """Get the canonical name for an author."""
+    # Get longest name in aliases to use as "canonical name"
+    canonical_name = author_details["name"]
+    if author_details["aliases"] is not None:
+        for alias in author_details["aliases"]:
+            if len(alias) > len(canonical_name):
+                canonical_name = alias
+
+    return canonical_name
+
+
+def load_rs_graph_author_contributions_dataset() -> pd.DataFrame:
     # Load extended paper details dataset
     paper_details_df = load_rs_graph_extended_paper_details_dataset()
     repos_df = load_rs_graph_repos_dataset()
 
     # Create a look up table for each author
     all_author_contributions: dict[str, AuthorshipDetails] = {}
-    for _, author_row in paper_details_df.iterrows():
+    for _, paper_details in paper_details_df.iterrows():
         # Get DOI so we don't have to do a lot of getitems
-        doi = author_row["doi"]
+        doi = paper_details["doi"]
+
+        # Embedding or none
+        embedding_details = paper_details["embedding"]
+        embedding = None if embedding_details is None else embedding_details["vector"]
 
         # Get matching row in the repos dataset
         repo_row = repos_df.loc[repos_df.doi == doi]
@@ -114,17 +132,20 @@ def load_rs_graph_author_contributions_dataset() -> pd.DataFrame:  # noqa: C901
             repo_row = repo_row.iloc[0]
 
         # Iter each author
-        for author_details in author_row["authors"]:
+        for author_details in paper_details["authors"]:
             a_id = author_details["author_id"]
+
+            # Compute co-authors
+            co_authors = []
+            for co_author_details in paper_details["authors"]:
+                if co_author_details["author_id"] != a_id:
+                    co_author_canonical_name = _get_canonical_name(co_author_details)
+                    co_authors.append(co_author_canonical_name)
 
             # Add new author
             if a_id not in all_author_contributions:
                 # Get longest name in aliases to use as "cannonical name"
-                cannonical_name = author_details["name"]
-                if author_details["aliases"] is not None:
-                    for alias in author_details["aliases"]:
-                        if len(alias) > len(cannonical_name):
-                            cannonical_name = alias
+                canonical_name = _get_canonical_name(author_details)
 
                 # Convert aliases to set and "original author name"
                 aliases = (
@@ -136,7 +157,7 @@ def load_rs_graph_author_contributions_dataset() -> pd.DataFrame:  # noqa: C901
 
                 # Add new author
                 all_author_contributions[a_id] = AuthorshipDetails(
-                    name=cannonical_name,
+                    name=canonical_name,
                     aliases=aliases,
                     h_index=author_details["h_index"],
                     contributions=[
@@ -144,6 +165,8 @@ def load_rs_graph_author_contributions_dataset() -> pd.DataFrame:  # noqa: C901
                             repo=repo_row["repo"],
                             doi=doi,
                             author_position=author_details["author_position"],
+                            co_authors=co_authors,
+                            embedding=embedding,
                         )
                     ],
                 )
@@ -171,6 +194,8 @@ def load_rs_graph_author_contributions_dataset() -> pd.DataFrame:  # noqa: C901
                         repo=repo_row["repo"],
                         doi=doi,
                         author_position=author_details["author_position"],
+                        co_authors=co_authors,
+                        embedding=embedding,
                     )
                 )
 

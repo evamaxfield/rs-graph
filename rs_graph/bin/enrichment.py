@@ -85,6 +85,35 @@ def get_extended_paper_details(debug: bool = False) -> None:
         f"Stored extended paper details to: '{output_filepath_for_author_details}'"
     )
 
+@app.command()
+def get_repo_contributors(debug: bool = False) -> None:
+    """
+    Get the contributors for each repo in the dataset.
+
+    Be sure to set the `GITHUB_TOKEN` environment variable.
+    """
+    # Setup logger
+    setup_logger(debug=debug)
+
+    # Read repos dataset
+    rs_graph_repos = load_rs_graph_repos_dataset().sample(300)
+
+    # Get repo contributors
+    repo_contributors = github.get_repo_contributors_for_repos(
+        repo_urls=rs_graph_repos.repo.tolist(),
+    )
+
+    # Convert to dataframe
+    repo_contributors_df = pd.DataFrame([d.to_dict() for d in repo_contributors])
+
+    # Store repo contributors
+    output_filepath_for_repo_contributors = (
+        DATA_FILES_DIR / "rs-graph-repo-contributors.parquet"
+    )
+    repo_contributors_df.to_parquet(output_filepath_for_repo_contributors)
+    log.info(
+        f"Stored repo contributors to: '{output_filepath_for_repo_contributors}'"
+    )
 
 ###############################################################################
 

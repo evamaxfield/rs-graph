@@ -7,10 +7,12 @@ from functools import partial
 import backoff
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
-from fastcore.net import HTTP403ForbiddenError
+from functools import partial
+from fastcore.net import HTTP403ForbiddenError, HTTP404NotFoundError
 from ghapi.all import GhApi
 from parse import search
 from tqdm import tqdm
+from tqdm.contrib.concurrent import thread_map
 
 from ..registries import RegistryEnum
 
@@ -300,3 +302,156 @@ def get_upstream_dependencies_for_repos(
 
     # Return deps
     return all_deps, failed
+
+
+@dataclass
+class RepoContributorInfo(DataClassJsonMixin):
+    repo: str
+    username: str
+    name: str | None
+    company: str | None
+    email: str | None
+    location: str | None
+    bio: str | None
+    co_contributors: tuple[str]
+
+
+@backoff.on_exception(
+    backoff.expo,
+    (HTTP403ForbiddenError),
+    max_time=300,
+)
+def _get_user_info_from_login(
+    login: str,
+    api: GhApi,
+    repo_url: str,
+    co_contributors: tuple[str],
+) -> list[RepoContributorInfo] | None:
+    # Get contributor info
+    try:
+        user_info = api.users.get_by_username(username=login)
+
+        # Remove login from co-contributors
+        co_contributor_logins = tuple(
+            co_contrib
+            for co_contrib in co_contributors
+            if co_contrib != login
+        )
+
+        # Store info
+        return RepoContributorInfo(
+            repo=repo_url,
+            username=login,
+            name=user_info["name"],
+            company=user_info["company"],
+            email=user_info["email"],
+            location=user_info["location"],
+            bio=user_info["bio"],
+            co_contributors=co_contributor_logins,
+        )
+
+    except HTTP404NotFoundError:
+        return None
+
+
+@backoff.on_exception(
+    backoff.expo,
+    (HTTP403ForbiddenError),
+    max_time=300,
+)
+def get_repo_contributors(
+    repo_url: str,
+    github_api_key: str | None = None,
+    top_n: int = 30,
+) -> list[RepoContributorInfo] | None:
+    # Setup API
+    if github_api_key:
+        api = GhApi(token=github_api_key)
+    else:
+        # Load env
+        load_dotenv()
+        api = GhApi()
+
+    # Get repo parts
+    repo_parts = get_repo_parts_from_url(repo_url)
+
+    # Handle failed parse
+    if not repo_parts:
+        log.debug(f"Failed to parse repo parts from url: '{repo_url}'")
+        return None
+    
+    # Get contributors
+    try:
+        contributors = api.repos.list_contributors(
+            owner=repo_parts.owner,
+            repo=repo_parts.repo,
+            per_page=top_n,
+        )
+    except HTTP404NotFoundError:
+        log.debug(f"Failed to find repo: '{repo_url}'")
+        return None
+    
+    # Construct partial for threading
+    partial_get_user_info_from_login = partial(
+        _get_user_info_from_login,
+        api=api,
+        repo_url=repo_url,
+        co_contributors=tuple(contrib["login"] for contrib in contributors),
+    )
+
+    # Get user infos
+    contributor_infos = thread_map(
+        partial_get_user_info_from_login,
+        (contrib["login"] for contrib in contributors),
+        leave=False,
+        desc="Getting user info",
+    )
+
+    # Filter out none
+    contributor_infos = [info for info in contributor_infos if info is not None]
+
+    return contributor_infos
+
+
+def get_repo_contributors_for_repos(
+    repo_urls: list[str],
+    github_api_key: str | None = None,
+    top_n: int = 30,
+) -> list[RepoContributorInfo] | None:
+    # Filter out duplicates
+    repos = list(set(repo_urls))
+
+    # Log diff
+    log.info(
+        f"Filtered out {len(repos) - len(set(repos))} duplicate repos.",
+    )
+
+    # Filter out non-github repos
+    github_repos = [repo for repo in repos if "github.com" in repo]
+
+    # Log diff
+    log.info(
+        f"Filtered out {len(repos) - len(github_repos)} non-GitHub repos.",
+    )
+
+    # Get contributors
+    all_contributors = []
+    for repo in tqdm(
+        github_repos,
+        desc="Getting contributors",
+    ):
+        # Get contributors
+        repo_contributors = get_repo_contributors(
+            repo_url=repo,
+            github_api_key=github_api_key,
+            top_n=top_n,
+        )
+
+        # Handle failure
+        if not repo_contributors:
+            continue
+
+        # Store contributors
+        all_contributors.extend(repo_contributors)
+
+    return all_contributors
