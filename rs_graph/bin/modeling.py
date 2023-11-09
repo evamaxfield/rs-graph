@@ -3,12 +3,11 @@
 import logging
 
 import dedupe
-import pandas as pd
 import numpy as np
 import typer
 
 from rs_graph.bin.typer_utils import setup_logger
-from rs_graph.data import DATA_FILES_DIR, load_rs_graph_author_contributions_dataset
+from rs_graph.data import load_rs_graph_author_contributions_dataset
 
 ###############################################################################
 
@@ -20,14 +19,16 @@ app = typer.Typer()
 
 ###############################################################################
 
+
 def _cosine_diff_or_none_comparator(
     a: np.ndarray | None,
     b: np.ndarray | None,
 ) -> float:
     if a is None or b is None:
         return 0.5  # "random"
-    
+
     return 1 - (np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+
 
 @app.command()
 def train_author_deduper(debug: bool = False) -> None:
@@ -64,7 +65,7 @@ def train_author_deduper(debug: bool = False) -> None:
             "co_authors": tuple(co_authors),
             "mean_embedding": mean_embedding,
         }
-    
+
     # Variables for dedupe
     variables = [
         {"field": "name", "type": "Name"},
@@ -88,7 +89,7 @@ def train_author_deduper(debug: bool = False) -> None:
 
 
 @app.command()
-def test():
+def test() -> None:
     print("blah")
 
 

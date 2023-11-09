@@ -85,6 +85,7 @@ def get_extended_paper_details(debug: bool = False) -> None:
         f"Stored extended paper details to: '{output_filepath_for_author_details}'"
     )
 
+
 @app.command()
 def get_repo_contributors(debug: bool = False) -> None:
     """
@@ -111,9 +112,8 @@ def get_repo_contributors(debug: bool = False) -> None:
         DATA_FILES_DIR / "rs-graph-repo-contributors.parquet"
     )
     repo_contributors_df.to_parquet(output_filepath_for_repo_contributors)
-    log.info(
-        f"Stored repo contributors to: '{output_filepath_for_repo_contributors}'"
-    )
+    log.info(f"Stored repo contributors to: '{output_filepath_for_repo_contributors}'")
+
 
 ###############################################################################
 

@@ -7,7 +7,6 @@ from functools import partial
 import backoff
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
-from functools import partial
 from fastcore.net import HTTP403ForbiddenError, HTTP404NotFoundError
 from ghapi.all import GhApi
 from parse import search
@@ -313,7 +312,7 @@ class RepoContributorInfo(DataClassJsonMixin):
     email: str | None
     location: str | None
     bio: str | None
-    co_contributors: tuple[str]
+    co_contributors: tuple[str, ...]
 
 
 @backoff.on_exception(
@@ -325,7 +324,7 @@ def _get_user_info_from_login(
     login: str,
     api: GhApi,
     repo_url: str,
-    co_contributors: tuple[str],
+    co_contributors: tuple[str, ...],
 ) -> list[RepoContributorInfo] | None:
     # Get contributor info
     try:
@@ -333,9 +332,7 @@ def _get_user_info_from_login(
 
         # Remove login from co-contributors
         co_contributor_logins = tuple(
-            co_contrib
-            for co_contrib in co_contributors
-            if co_contrib != login
+            co_contrib for co_contrib in co_contributors if co_contrib != login
         )
 
         # Store info
@@ -379,7 +376,7 @@ def get_repo_contributors(
     if not repo_parts:
         log.debug(f"Failed to parse repo parts from url: '{repo_url}'")
         return None
-    
+
     # Get contributors
     try:
         contributors = api.repos.list_contributors(
@@ -390,7 +387,7 @@ def get_repo_contributors(
     except HTTP404NotFoundError:
         log.debug(f"Failed to find repo: '{repo_url}'")
         return None
-    
+
     # Construct partial for threading
     partial_get_user_info_from_login = partial(
         _get_user_info_from_login,
@@ -417,7 +414,7 @@ def get_repo_contributors_for_repos(
     repo_urls: list[str],
     github_api_key: str | None = None,
     top_n: int = 30,
-) -> list[RepoContributorInfo] | None:
+) -> list[RepoContributorInfo]:
     # Filter out duplicates
     repos = list(set(repo_urls))
 
