@@ -73,4 +73,4 @@ def load_rs_graph_embeddings_dataset() -> pd.DataFrame:
     embeddings = pd.DataFrame(embedding_rows).reset_index(drop=True)
     embeddings["log_citation_count"] = np.log(embeddings.citation_count)
 
-    return df
+    return embeddings

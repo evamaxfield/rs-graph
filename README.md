@@ -31,3 +31,10 @@ to the installed package directory (`rs_graph.data.files`).
         `rs-graph-modeling train-github-users-dedupe-model`
     5. **TODO:** Train author to github user linker model:
         `rs-graph-modeling train-author-to-github-user-linker-model`
+
+## TODO
+
+1. Create a `load_rs_graph_authorship_dataset` function building off of the code in the `joss-authorship-credit.ipynb` notebook.
+2. Create an enrichment function for getting all of the contributors (or at least the top 20) for each repo.
+3. Create a google drive for storing the data and a Just command / python command for backing up already processed data.
+4. Work on the dedupe models, starting with github username dedupe.
