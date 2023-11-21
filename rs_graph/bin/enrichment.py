@@ -101,7 +101,7 @@ def get_repo_contributors(debug: bool = False) -> None:
 
     # Get repo contributors
     repo_contributors = github.get_repo_contributors_for_repos(
-        repo_urls=rs_graph_repos.repo.tolist(),
+        repo_urls=rs_graph_repos.repo.sample(100).tolist(),
     )
 
     # Convert to dataframe

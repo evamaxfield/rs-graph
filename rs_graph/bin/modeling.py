@@ -3,14 +3,13 @@
 import logging
 
 import dedupe
-import numpy as np
 import pandas as pd
 import typer
 
 from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.data import (
     DATA_FILES_DIR,
-    load_rs_graph_author_contributions_dataset,
+    RS_GRAPH_DEDUPED_REPO_CONTRIBUTORS_PATH,
     load_rs_graph_repo_contributors_dataset,
 )
 
@@ -25,72 +24,72 @@ app = typer.Typer()
 ###############################################################################
 
 
-def _cosine_diff_or_none_comparator(
-    a: np.ndarray | None,
-    b: np.ndarray | None,
-) -> float:
-    if a is None or b is None:
-        return 0.5  # "random"
+def _clustered_devs_dataframe_to_storage_ready(
+    clustered_unique_devs_df: pd.DataFrame,
+) -> None:
+    # Prepare final dataset that is ready for linkage
+    log.info("Preparing final dataset for linkage...")
+    processed_rows = []
+    for cluster_id, group in clustered_unique_devs_df.groupby("cluster_id"):
+        # Get canonical username (longest username)
+        canonical_username = ""
+        for username in group.username:
+            if len(username) > len(canonical_username):
+                canonical_username = username
 
-    return 1 - (np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+        # Get all usernames
+        all_usernames = group.username.to_list()
 
+        # Get all repos
+        all_repos = set()
+        for repos in group.repos:
+            all_repos.update(repos)
 
-@app.command()
-def train_author_deduper(debug: bool = False) -> None:
-    # Setup logging
-    setup_logger(debug=debug)
+        # Get all names
+        all_names = {name for name in group.name if name is not None}
 
-    # Load the author contributions dataset
-    author_contributions = load_rs_graph_author_contributions_dataset()
+        # Get all companies
+        all_companies = {company for company in group.company if company is not None}
 
-    # Format as records dict
-    author_records = {}
-    for _, row in author_contributions.sample(500).iterrows():
-        # Get all co authors from all contributions
-        co_authors = set()
-        for contribution in row.contributions:
-            co_authors.update(set(contribution["co_authors"]))
+        # Get all emails
+        all_emails = {email for email in group.email if email is not None}
 
-        # Get all embeddings of contributed papers as np arrays
-        contribution_embeddings = []
-        for contribution in row.contributions:
-            if contribution["embedding"] is not None:
-                contribution_embeddings.append(np.array(contribution["embedding"]))
-
-        # Take mean
-        if len(contribution_embeddings) > 0:
-            mean_embedding = np.mean(np.stack(contribution_embeddings), axis=0)
-        else:
-            mean_embedding = None
-
-        # Create new record
-        author_records[row.author_id] = {
-            "name": row["name"],
-            "aliases": tuple(row.aliases),
-            "co_authors": tuple(co_authors),
-            "mean_embedding": mean_embedding,
+        # Get all locations
+        all_locations = {
+            location for location in group.location if location is not None
         }
 
-    # Variables for dedupe
-    variables = [
-        {"field": "name", "type": "Name"},
-        {"field": "aliases", "type": "Set"},
-        {"field": "co_authors", "type": "Set"},
-        {
-            "field": "mean_embedding",
-            "type": "Custom",
-            "comparator": _cosine_diff_or_none_comparator,
-        },
-    ]
+        # Get all bios
+        all_bios = {bio for bio in group.bio if bio is not None}
 
-    # Create deduper
-    deduper = dedupe.Dedupe(variables)
+        # Get all co-contributors
+        all_co_contributors = set()
+        for co_contributors in group.co_contributors:
+            all_co_contributors.update(co_contributors)
 
-    # Create training pairs
-    deduper.prepare_training(author_records, sample_size=400)
+        # Add to processed rows
+        processed_rows.append(
+            {
+                "canonical_username": canonical_username,
+                "usernames": all_usernames,
+                "repos": all_repos,
+                "names": all_names,
+                "companies": all_companies,
+                "emails": all_emails,
+                "locations": all_locations,
+                "bios": all_bios,
+                "co_contributors": all_co_contributors,
+                "cluster_id": cluster_id,
+            }
+        )
 
-    # Start training
-    dedupe.console_label(deduper)
+    # Convert to dataframe
+    processed_rows_df = pd.DataFrame(processed_rows)
+    processed_rows_df.to_parquet(RS_GRAPH_DEDUPED_REPO_CONTRIBUTORS_PATH)
+    log.info(
+        f"Stored deduped repo contributors to: "
+        f"'{RS_GRAPH_DEDUPED_REPO_CONTRIBUTORS_PATH}'"
+    )
 
 
 @app.command()
@@ -218,6 +217,9 @@ def train_developer_deduper(debug: bool = False) -> None:
     log.info(f"Number of deduped 'unique devs': {n_clusters}")
     diff = len(unique_devs_df) - n_clusters
     log.info(f"Difference: {diff} ({diff / len(unique_devs_df) * 100:.2f}%)")
+
+    # Prepare final dataset that is ready for linkage
+    _clustered_devs_dataframe_to_storage_ready(clustered_unique_devs_df)
 
 
 ###############################################################################

@@ -20,6 +20,9 @@ RS_GRAPH_EXTENDED_PAPER_DETAILS_PATH = (
     DATA_FILES_DIR / "rs-graph-extended-paper-details.parquet"
 )
 RS_GRAPH_REPO_CONTRIBUTORS_PATH = DATA_FILES_DIR / "rs-graph-repo-contributors.parquet"
+RS_GRAPH_DEDUPED_REPO_CONTRIBUTORS_PATH = (
+    DATA_FILES_DIR / "rs-graph-deduped-repo-contributors.parquet"
+)
 
 ###############################################################################
 
@@ -216,3 +219,8 @@ def load_rs_graph_author_contributions_dataset() -> pd.DataFrame:
 def load_rs_graph_repo_contributors_dataset() -> pd.DataFrame:
     """Load the repo contributors dataset."""
     return pd.read_parquet(RS_GRAPH_REPO_CONTRIBUTORS_PATH)
+
+
+def load_rs_graph_deduped_repo_contributors_dataset() -> pd.DataFrame:
+    """Load the deduped repo contributors dataset."""
+    return pd.read_parquet(RS_GRAPH_DEDUPED_REPO_CONTRIBUTORS_PATH)
