@@ -11,6 +11,16 @@ Graphing the dependencies (and dependents) of research software and their contri
 * Install [pylbfgs](https://github.com/larsmans/pylbfgs): `conda install -c fgregg pylbfgs`
 * Install lib: `just install` (or `pip install .`)
 
+### Data Download
+
+There is a lot of pre-processed data stored on a GCS bucket. To download it, run:
+
+```bash
+rs-graph-data download
+```
+
+This will always download the latest version of the data (as pushed by @evamaxfield).
+
 ## Order of Data Operations
 
 If this project was starting from scratch, the order of operations to recreate our work
