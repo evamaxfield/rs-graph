@@ -29,6 +29,7 @@ dynamic = ["version"]
 dependencies = [
   # general
   "dataclasses-json>=0.6,<1",
+  "gcsfs>=2023.10.0",
   "pandas",
   "pyarrow",
   "python-dotenv>=1.0,<2",

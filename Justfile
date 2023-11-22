@@ -65,7 +65,8 @@ release:
 default_region := "us-central1"
 key_guid := replace_regex(uuid(), "([a-z0-9]{8})(.*)", "$1")
 default_key := clean(join(justfile_directory(), ".keys/dev.json"))
-default_project := "rs-graph"
+default_project := "sci-software-graph"
+default_bucket := "gs://sci-software-graph-data-store"
 
 # run gcloud login
 login:
@@ -113,4 +114,5 @@ enable-services project=default_project:
 # setup all resources
 setup-infra project=default_project:
 	just enable-services {{project}}
-	-\gcloud storage buckets create gs://rs-graph-data-store
+	-\gcloud storage buckets create {{default_bucket}}
+	gcloud storage buckets add-iam-policy-binding {{default_bucket}} --member=allUsers --role=roles/storage.objectViewer

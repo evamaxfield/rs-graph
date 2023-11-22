@@ -115,6 +115,9 @@ ENV/
 # VSCode
 .vscode
 
+# keys
+.keys
+
 # Quarto generated
 _build/
 .quarto/
