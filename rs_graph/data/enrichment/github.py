@@ -413,7 +413,7 @@ def get_repo_contributors(
 def get_repo_contributors_for_repos(
     repo_urls: list[str],
     github_api_key: str | None = None,
-    top_n: int = 5,
+    top_n: int = 30,
 ) -> list[RepoContributorInfo]:
     # Filter out duplicates
     repos = list(set(repo_urls))
