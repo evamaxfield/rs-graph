@@ -1,12 +1,10 @@
 #!/usr/bin/env python
 
 import logging
-from pathlib import Path
 
 import typer
 
 from rs_graph.bin.typer_utils import setup_logger
-from rs_graph.data import DATA_FILES_DIR
 
 ###############################################################################
 
