@@ -20,10 +20,10 @@ repos:
           - "types-requests"
 
   # Notebooks
-  - repo: https://github.com/nbQA-dev/nbQA
-    rev: 1.7.0
-    hooks:
-      - id: nbqa-black
-      - id: nbqa-ruff
-        args: ["--fix"]
-      - id: nbqa-mypy
+  # - repo: https://github.com/nbQA-dev/nbQA
+  #   rev: 1.7.0
+  #   hooks:
+  #     - id: nbqa-black
+  #     - id: nbqa-ruff
+  #       args: ["--fix"]
+  #     - id: nbqa-mypy

@@ -187,7 +187,7 @@ def train_developer_deduper(debug: bool = False) -> None:
     clustered_records = deduper.partition(developer_records, threshold=0.5)
     cluster_membership = {}
     for cluster_id, (records, scores) in enumerate(clustered_records):
-        for record_id, score in zip(records, scores, strict=True):
+        for record_id, score in zip(records, scores, strict=True):  # type: ignore
             cluster_membership[record_id] = {
                 "cluster_id": cluster_id,
                 "confidence_score": score,

@@ -13,7 +13,7 @@ name = "rs-graph"
 description = "Exploring research software"
 keywords = []
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.9"
 license = { text = "MIT License" }
 authors = [
   { email = "evamaxfieldbrown@gmail.com", name = "Eva Maxfield Brown" },
@@ -21,6 +21,8 @@ authors = [
 classifiers = [
   "Development Status :: 4 - Beta",
   "Natural Language :: English",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
 ]
 dynamic = ["version"]
@@ -69,6 +71,7 @@ dev = [
 # entry points
 # https://peps.python.org/pep-0621/#entry-points
 [project.entry-points."console_scripts"]
+rs-graph-data = "rs_graph.bin.data:main"
 rs-graph-sources = "rs_graph.bin.sources:main"
 rs-graph-enrichment = "rs_graph.bin.enrichment:main"
 rs-graph-modeling = "rs_graph.bin.modeling:main"
