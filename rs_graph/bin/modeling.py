@@ -10,6 +10,9 @@ from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.data import (
     DATA_FILES_DIR,
     RS_GRAPH_DEDUPED_REPO_CONTRIBUTORS_PATH,
+    RS_GRAPH_LINKED_AUTHORS_DEVS_PATH,
+    load_rs_graph_author_contributions_dataset,
+    load_rs_graph_deduped_repo_contributors_dataset,
     load_rs_graph_repo_contributors_dataset,
 )
 
@@ -220,6 +223,143 @@ def train_developer_deduper(debug: bool = False) -> None:
 
     # Prepare final dataset that is ready for linkage
     _clustered_devs_dataframe_to_storage_ready(clustered_unique_devs_df)
+
+
+@app.command()
+def train_author_developer_linker(debug: bool = False) -> None:
+    # Setup logging
+    setup_logger(debug=debug)
+
+    # Load the repo contributors dataset
+    log.info("Loading developer contributions dataset...")
+    devs = load_rs_graph_deduped_repo_contributors_dataset()
+
+    # Load the author contributions dataset
+    log.info("Loading author contributions dataset...")
+    authors = load_rs_graph_author_contributions_dataset()
+
+    # Construct dataframe of author details ready for processing
+    log.info("Constructing author details dataframe...")
+    authors_ready_rows = []
+    for _, author in authors.iterrows():
+        repos = {contribution["repo"] for contribution in author.contributions}
+
+        authors_ready_rows.append(
+            {
+                "name": author["name"],
+                "secondary_name": author["name"],  # username comparison
+                "repos": tuple(repos),
+            }
+        )
+
+    # Make frame
+    authors_ready = pd.DataFrame(authors_ready_rows)
+
+    # Construct dataframe of developer details ready for processing
+    log.info("Constructing developer details dataframe...")
+    devs_ready_rows = []
+    for _, dev in devs.iterrows():
+        canonical_name = ""
+        for name in dev.names:
+            if len(name) > len(canonical_name):
+                canonical_name = name
+
+        # Catch no names for person
+        # use username
+        if len(canonical_name) == 0:
+            canonical_name = dev.canonical_username
+
+        devs_ready_rows.append(
+            {
+                "name": canonical_name,
+                "secondary_name": dev.canonical_username,
+                "repos": tuple(dev.repos),
+            }
+        )
+
+    # Make frame
+    devs_ready = pd.DataFrame(devs_ready_rows)
+
+    # Convert both to records orientation
+    author_records = {i: row.to_dict() for i, row in authors_ready.iterrows()}
+    dev_records = {i: row.to_dict() for i, row in devs_ready.iterrows()}
+
+    # Linker fields
+    fields = [
+        # author given name <--> github given name (or fallback github username)
+        # both string diff and name diff
+        {"field": "name", "type": "String"},
+        {"field": "name", "type": "Name"},
+        # author given name <--> github username
+        {"field": "secondary_name", "type": "String"},
+        # set repos authored (via JOSS / softwareX) <--> set repos contributed
+        {"field": "repos", "type": "Set"},
+    ]
+
+    # Create linker
+    linker = dedupe.RecordLink(fields)
+
+    # Find which dataset had less records
+    # and create sample size using 80% of dataset size
+    min_dataset_size = min(len(author_records), len(dev_records))
+    sample_size = int(min_dataset_size * 0.8)
+
+    # Prepare training samples
+    log.info("Preparing training samples...")
+    linker.prepare_training(author_records, dev_records, sample_size=sample_size)
+
+    # Start annotating
+    dedupe.console_label(linker)
+
+    # Train the model
+    linker.train()
+
+    # Save the model training settings
+    train_settings_filepath = (
+        DATA_FILES_DIR / "author-dev-linker-training-settings.json"
+    )
+    with open(train_settings_filepath, "w") as f:
+        linker.write_training(f)
+
+    # Save the model clustering settings / weights
+    cluster_settings_filepath = (
+        DATA_FILES_DIR / "author-dev-linker-cluster-settings.pkl"
+    )
+    with open(cluster_settings_filepath, "wb") as f:
+        linker.write_settings(f)
+
+    # Join the records
+    linked_records = linker.join(author_records, dev_records, threshold=0.0)
+
+    # Store linked records
+    linked_details_rows = []
+    for (author_id, dev_id), confidence in linked_records:
+        # Get matching author and dev
+        author = authors.loc[author_id]
+        dev = devs.loc[dev_id]
+
+        # Create linked record
+        linked_details_rows.append(
+            {
+                "author_id": author.author_id,
+                "name": author["name"],
+                "h_index": author.h_index,
+                "usernames": dev.usernames,
+                "repos": dev.repos,
+                "confidence": confidence,
+            }
+        )
+
+    # Make frame
+    linked_details = pd.DataFrame(linked_details_rows)
+
+    # Store linked details
+    linked_details.to_parquet(RS_GRAPH_LINKED_AUTHORS_DEVS_PATH)
+    log.info(f"Stored linked author-devs to: " f"'{RS_GRAPH_LINKED_AUTHORS_DEVS_PATH}'")
+
+    # Log n linked
+    n_linked = linked_details.author_id.nunique()
+    log.info(f"Number of linked authors and devs: {n_linked}")
 
 
 ###############################################################################

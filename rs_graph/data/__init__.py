@@ -23,6 +23,9 @@ RS_GRAPH_REPO_CONTRIBUTORS_PATH = DATA_FILES_DIR / "rs-graph-repo-contributors.p
 RS_GRAPH_DEDUPED_REPO_CONTRIBUTORS_PATH = (
     DATA_FILES_DIR / "rs-graph-deduped-repo-contributors.parquet"
 )
+RS_GRAPH_LINKED_AUTHORS_DEVS_PATH = (
+    DATA_FILES_DIR / "rs-graph-linked-authors-devs.parquet"
+)
 
 ###############################################################################
 
@@ -224,3 +227,8 @@ def load_rs_graph_repo_contributors_dataset() -> pd.DataFrame:
 def load_rs_graph_deduped_repo_contributors_dataset() -> pd.DataFrame:
     """Load the deduped repo contributors dataset."""
     return pd.read_parquet(RS_GRAPH_DEDUPED_REPO_CONTRIBUTORS_PATH)
+
+
+def load_rs_graph_linked_authors_devs_dataset() -> pd.DataFrame:
+    """Load the linked authors devs dataset."""
+    return pd.read_parquet(RS_GRAPH_LINKED_AUTHORS_DEVS_PATH)
