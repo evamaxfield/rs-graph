@@ -255,6 +255,8 @@ def train_author_developer_linker(debug: bool = False) -> None:
     # Make frame
     authors_ready = pd.DataFrame(authors_ready_rows)
 
+    # TODO: use None for no name and attach "has missing"
+
     # Construct dataframe of developer details ready for processing
     log.info("Constructing developer details dataframe...")
     devs_ready_rows = []
