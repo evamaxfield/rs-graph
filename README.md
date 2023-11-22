@@ -29,14 +29,5 @@ to the installed package directory (`rs_graph.data.files`).
         `rs-graph-enrichment get-repo-contributors`
     4.  Train github users dedupe model:
         `rs-graph-modeling train-developer-deduper`
-    5. **TODO:** Train author to github user linker model:
-        `rs-graph-modeling train-author-to-developer-linker`
-
-## TODO
-
-1. Create a google drive for storing the data and a Just command / python command for backing up already processed data.
-2. Work on the dedupe models
-    1. developer deduper is partially done
-    1. need to do a lot of annotation and understand the thresholding.
-    2. need to do the same for author name dedupe
-3. ask github nicely to increase the rate limit for the github api
+    5. Train author to github user linker model:
+        `rs-graph-modeling train-author-developer-linker`
