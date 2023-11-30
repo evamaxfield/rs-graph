@@ -5,6 +5,8 @@ import logging
 import dedupe
 import pandas as pd
 import typer
+from sentence_transformers import SentenceTransformer
+from sentence_transformers.util import cos_sim
 from tqdm import tqdm
 
 from rs_graph.bin.typer_utils import setup_logger
@@ -30,7 +32,7 @@ app = typer.Typer()
 
 @app.command()
 def create_developer_deduper_dataset_for_annotation(  # noqa: C901
-    n_random_other: int = 5,
+    top_n_similar: int = 3,
     debug: bool = False,
 ) -> None:
     # Setup logging
@@ -64,76 +66,95 @@ def create_developer_deduper_dataset_for_annotation(  # noqa: C901
     # Reform as df
     unique_devs_df = pd.DataFrame(unique_devs)
 
-    # We are trying to create a dataset with the following columns
-    # developer 1, developer 2, and a column full of None values called "match"
-    # The developer 1 and developer 2 columns will be populated with a string join
-    # of the developer's username, their name (if they have one)
-    # their repos (if they have any), their co-contributors (if they have any)
-    # their company (if they have one), their email (if they have one)
-    # their location (if they have one), and their bio (if they have one)
-    # and their bio (if they have one).
-
-    # We will add rows to this dataset by iterating over each row and
-    # taking a random sample of n other rows and add them as a row to the dataset
-    # i.e. the iterated row will be developer 1 and the random sample will be
-    # developer 2.
-    dev_comparisons = []
-    for i, dev_1_details in tqdm(unique_devs_df.iterrows(), desc="Iterating over devs"):
+    # Start the dev comparisons details
+    prepped_devs_list = []
+    for _, dev_details in tqdm(unique_devs_df.iterrows(), desc="Iterating over devs"):
         # Remove none values and store as dict
-        dev_1_details_dict = {}
-        for key, value in dev_1_details.to_dict().items():
-            if value is not None:
-                dev_1_details_dict[key] = value
+        dev_details_dict = {}
+        for key, value in dev_details.to_dict().items():
+            dev_details_dict[key] = value
 
         # Construct string
-        dev_1_values_list = []
-        for key, value in dev_1_details_dict.items():
+        dev_values_list = []
+        for key, value in dev_details_dict.items():
             if isinstance(value, tuple):
                 value = ", ".join(value)
-            dev_1_values_list.append(f"{key}: {value};")
+
+            dev_values_list.append(f"{key}: {value};")
 
         # Construct string
-        dev_1_values_str = " ".join(dev_1_values_list)
+        prepped_devs_list.append("\n".join(dev_values_list))
 
-        # Create a new dataframe with dev 1 removed
-        other_devs_df = unique_devs_df.drop(i)
+    # Create embeddings for each dev
+    log.info("Creating embeddings for each dev...")
+    model = SentenceTransformer("BAAI/bge-base-en-v1.5")
+    dev_embeddings = model.encode(
+        prepped_devs_list,
+        show_progress_bar=True,
+    )
 
-        # Get a random sample of n other developers
-        other_devs = other_devs_df.sample(n=n_random_other)
+    # Construct pairwise similarity matrix
+    log.info("Constructing pairwise similarity matrix...")
+    pairwise_similarity_matrix: list[list[float]] = []
+    for i, dev_embedding in tqdm(
+        enumerate(dev_embeddings), desc="Iterating over dev embeddings"
+    ):
+        pairwise_similarity_matrix.append([])
+        for other_dev_embedding in dev_embeddings:
+            # Cosine similarity
+            similarity = cos_sim(dev_embedding, other_dev_embedding)
+            pairwise_similarity_matrix[i].append(similarity.item())
 
-        # Add a row for each other dev
-        for _, other_dev in other_devs.iterrows():
-            # Remove none values and store as dict
-            other_dev_details_dict = {}
-            for key, value in other_dev.to_dict().items():
-                if value is not None:
-                    other_dev_details_dict[key] = value
+    # Using the constructed pairwise similarity matrix
+    # Get top n most similar devs using cosine similarity
+    # for every dev (not including themselves)
+    # And finally construct the dev comparison dataframe
+    dev_comparison_rows = []
+    log.info(f"Getting top {top_n_similar} most similar devs...")
+    for i in tqdm(
+        range(len(prepped_devs_list)),
+        desc="Iterating over dev embeddings",
+    ):
+        # Get top n most similar devs
+        top_n_similar_devs = sorted(
+            [
+                (j, similarity)
+                for j, similarity in enumerate(pairwise_similarity_matrix[i])
+                if i != j
+            ],
+            key=lambda x: x[1],
+            reverse=True,
+        )[:top_n_similar]
 
-            # Construct string
-            other_dev_values_list = []
-            for key, value in other_dev_details_dict.items():
-                if isinstance(value, tuple):
-                    value = ", ".join(value)
-                other_dev_values_list.append(f"{key}: {value};")
+        # Get the dev details
+        dev_details = prepped_devs_list[i]
 
-            # Construct string
-            other_dev_values_str = " ".join(other_dev_values_list)
-
-            # Create row
-            dev_comparisons.append(
+        # Get the top n most similar dev details
+        top_n_similar_dev_details = []
+        for j, similarity in top_n_similar_devs:
+            top_n_similar_dev_details.append(
                 {
-                    "developer_1": dev_1_values_str,
-                    "developer_2": other_dev_values_str,
-                    "match": None,
+                    "similarity": similarity,
+                    "details": prepped_devs_list[j],
+                }
+            )
+
+        # Add to dev comparison rows
+        for other_dev_details in top_n_similar_dev_details:
+            dev_comparison_rows.append(
+                {
+                    "dev_1_details": dev_details,
+                    "dev_2_details": other_dev_details["details"],
+                    "similarity": other_dev_details["similarity"],
                 }
             )
 
     # Convert to dataframe
-    dev_comparisons_df = pd.DataFrame(dev_comparisons)
+    dev_comparison_df = pd.DataFrame(dev_comparison_rows)
 
     # Store to disk
     output_filepath = DATA_FILES_DIR / "developer-deduper-annotation-dataset.csv"
-    dev_comparisons_df.to_csv(output_filepath, index=False)
+    dev_comparison_df.to_csv(output_filepath, index=False)
 
 
 def _clustered_devs_dataframe_to_storage_ready(
