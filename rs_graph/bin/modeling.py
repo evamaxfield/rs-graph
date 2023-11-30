@@ -30,22 +30,13 @@ app = typer.Typer()
 ###############################################################################
 
 
-@app.command()
-def create_developer_deduper_dataset_for_annotation(  # noqa: C901
-    top_n_similar: int = 3,
-    debug: bool = False,
-) -> None:
-    # Setup logging
-    setup_logger(debug=debug)
-
-    # Load the repo contributors dataset
-    log.info("Loading developer contributions dataset...")
-    developer_contributions = load_rs_graph_repo_contributors_dataset()
-
+def _get_unique_devs_frame_from_dev_contributions(
+    dev_contributions_df: pd.DataFrame,
+) -> pd.DataFrame:
     # Each row should be a unique person
     log.info("Getting unique developers frame...")
     unique_devs = []
-    for username, group in developer_contributions.groupby("username"):
+    for username, group in dev_contributions_df.groupby("username"):
         flat_co_contribs = []
         for co_contribs in group.co_contributors:
             flat_co_contribs.extend(co_contribs)
@@ -64,56 +55,87 @@ def create_developer_deduper_dataset_for_annotation(  # noqa: C901
         )
 
     # Reform as df
-    unique_devs_df = pd.DataFrame(unique_devs)
+    return pd.DataFrame(unique_devs)
 
-    # Start the dev comparisons details
-    prepped_devs_list = []
-    for _, dev_details in tqdm(unique_devs_df.iterrows(), desc="Iterating over devs"):
+
+def _dataframe_to_joined_str_items(
+    df: pd.DataFrame,
+    tqdm_desc: str,
+) -> list[str]:
+    joined_str_list = []
+    for _, row in tqdm(df.iterrows(), desc=tqdm_desc):
         # Remove none values and store as dict
-        dev_details_dict = {}
-        for key, value in dev_details.to_dict().items():
-            dev_details_dict[key] = value
+        details = row.to_dict()
+        details = {key: value for key, value in details.items() if value is not None}
 
         # Construct string
         dev_values_list = []
-        for key, value in dev_details_dict.items():
+        for key, value in details.items():
             if isinstance(value, tuple):
                 value = ", ".join(value)
 
             dev_values_list.append(f"{key}: {value};")
 
         # Construct string
-        prepped_devs_list.append("\n".join(dev_values_list))
+        joined_str_list.append("\n".join(dev_values_list))
+
+    return joined_str_list
+
+
+@app.command()
+def create_developer_deduper_dataset_for_annotation(
+    top_n_similar: int = 3,
+    model_name: str = "BAAI/bge-base-en-v1.5",
+    debug: bool = False,
+) -> None:
+    # Setup logging
+    setup_logger(debug=debug)
+
+    # Load the repo contributors dataset
+    log.info("Loading developer contributions dataset...")
+    developer_contributions = load_rs_graph_repo_contributors_dataset()
+
+    # Get unique devs frame
+    unique_devs_df = _get_unique_devs_frame_from_dev_contributions(
+        developer_contributions,
+    )
+
+    # Start the dev comparisons details
+    prepped_devs_list = _dataframe_to_joined_str_items(
+        unique_devs_df,
+        tqdm_desc="Converting dev details to strings...",
+    )
 
     # Create embeddings for each dev
     log.info("Creating embeddings for each dev...")
-    model = SentenceTransformer("BAAI/bge-base-en-v1.5")
+    model = SentenceTransformer(model_name)
     dev_embeddings = model.encode(
         prepped_devs_list,
         show_progress_bar=True,
     )
 
     # Construct pairwise similarity matrix
-    log.info("Constructing pairwise similarity matrix...")
     pairwise_similarity_matrix: list[list[float]] = []
-    for i, dev_embedding in tqdm(
-        enumerate(dev_embeddings), desc="Iterating over dev embeddings"
+    for dev_embedding in tqdm(
+        dev_embeddings,
+        desc="Calculating pairwise similarity matrix",
     ):
-        pairwise_similarity_matrix.append([])
+        this_dev_similarity_row = []
         for other_dev_embedding in dev_embeddings:
             # Cosine similarity
             similarity = cos_sim(dev_embedding, other_dev_embedding)
-            pairwise_similarity_matrix[i].append(similarity.item())
+            this_dev_similarity_row.append(similarity.item())
+
+        pairwise_similarity_matrix.append(this_dev_similarity_row)
 
     # Using the constructed pairwise similarity matrix
     # Get top n most similar devs using cosine similarity
     # for every dev (not including themselves)
     # And finally construct the dev comparison dataframe
     dev_comparison_rows = []
-    log.info(f"Getting top {top_n_similar} most similar devs...")
     for i in tqdm(
         range(len(prepped_devs_list)),
-        desc="Iterating over dev embeddings",
+        desc="Constructing dev comparison rows",
     ):
         # Get top n most similar devs
         top_n_similar_devs = sorted(
@@ -155,6 +177,146 @@ def create_developer_deduper_dataset_for_annotation(  # noqa: C901
     # Store to disk
     output_filepath = DATA_FILES_DIR / "developer-deduper-annotation-dataset.csv"
     dev_comparison_df.to_csv(output_filepath, index=False)
+
+
+@app.command()
+def create_author_developer_linker_dataset_for_annotation(
+    top_n_similar: int = 5,
+    model_name: str = "BAAI/bge-base-en-v1.5",
+    debug: bool = False,
+) -> None:
+    # Setup logging
+    setup_logger(debug=debug)
+
+    # Load the repo contributors dataset
+    log.info("Loading developer contributions dataset...")
+    devs = load_rs_graph_repo_contributors_dataset()
+
+    # Get unique devs frame
+    unique_devs_df = _get_unique_devs_frame_from_dev_contributions(
+        devs,
+    )
+
+    # Load the author contributions dataset
+    log.info("Loading author contributions dataset...")
+    authors = load_rs_graph_author_contributions_dataset()
+
+    # Create lookup for repo to authors
+    repo_to_authors: dict[str, set[str]] = {}
+    for _, author in authors.iterrows():
+        for contribution in author.contributions:
+            repo_to_authors.setdefault(contribution["repo"], set()).add(author["name"])
+
+    # Construct dataframe of author details ready for processing
+    log.info("Constructing author details dataframe...")
+    authors_ready_rows = []
+    for _, author in authors.iterrows():
+        repos = {contribution["repo"] for contribution in author.contributions}
+
+        # Get all co-authors
+        all_co_authors = set()
+        for repo in repos:
+            all_co_authors.update(repo_to_authors[repo])
+
+        # Add new author
+        authors_ready_rows.append(
+            {
+                "name": author["name"],
+                "repos": tuple(repos),
+                "co_authors": tuple(all_co_authors),
+            }
+        )
+
+    # Make frame
+    authors_ready = pd.DataFrame(authors_ready_rows)
+
+    # Prep devs and authors details for embedding and then comparison
+    prepped_devs_list = _dataframe_to_joined_str_items(
+        unique_devs_df,
+        tqdm_desc="Converting dev details to strings...",
+    )
+    prepped_authors_list = _dataframe_to_joined_str_items(
+        authors_ready,
+        tqdm_desc="Converting author details to strings...",
+    )
+
+    # Create embeddings for each dev
+    log.info("Creating embeddings for each dev...")
+    model = SentenceTransformer(model_name)
+    dev_embeddings = model.encode(
+        prepped_devs_list,
+        show_progress_bar=True,
+    )
+
+    # Create embeddings for each author
+    log.info("Creating embeddings for each author...")
+    author_embeddings = model.encode(
+        prepped_authors_list,
+        show_progress_bar=True,
+    )
+
+    # Construct pairwise similarity matrix
+    pairwise_similarity_matrix: list[list[float]] = []
+    for dev_embedding in tqdm(
+        dev_embeddings,
+        desc="Calculating pairwise similarity matrix",
+    ):
+        this_dev_similarity_row = []
+        for author_embedding in author_embeddings:
+            # Cosine similarity
+            similarity = cos_sim(dev_embedding, author_embedding)
+            this_dev_similarity_row.append(similarity.item())
+
+        pairwise_similarity_matrix.append(this_dev_similarity_row)
+
+    # Using the constructed pairwise similarity matrix
+    # Get top n most similar authors using cosine similarity
+    # for every dev
+    # And finally construct the author-dev comparison dataframe
+    author_dev_comparison_rows = []
+    for i in tqdm(
+        range(len(prepped_devs_list)),
+        desc="Constructing author-dev comparison rows",
+    ):
+        # Get top n most similar authors
+        top_n_similar_authors = sorted(
+            (
+                (j, similarity)
+                for j, similarity in enumerate(pairwise_similarity_matrix[i])
+            ),
+            key=lambda x: x[1],
+            reverse=True,
+        )[:top_n_similar]
+
+        # Get the dev details
+        dev_details = prepped_devs_list[i]
+
+        # Get the top n most similar author details
+        top_n_similar_author_details = []
+        for j, similarity in top_n_similar_authors:
+            top_n_similar_author_details.append(
+                {
+                    "similarity": similarity,
+                    "details": prepped_authors_list[j],
+                }
+            )
+
+        # Add to dev comparison rows
+        for author_details in top_n_similar_author_details:
+            author_dev_comparison_rows.append(
+                {
+                    "dev_details": dev_details,
+                    "author_details": author_details["details"],
+                    "similarity": author_details["similarity"],
+                }
+            )
+
+    # Convert to dataframe
+    author_dev_comparison_df = pd.DataFrame(author_dev_comparison_rows)
+
+    # Store to disk
+    output_filepath = DATA_FILES_DIR / "author-dev-linker-annotation-dataset.csv"
+    author_dev_comparison_df.to_csv(output_filepath, index=False)
 
 
 def _clustered_devs_dataframe_to_storage_ready(
