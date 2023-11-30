@@ -5,6 +5,7 @@ import logging
 import dedupe
 import pandas as pd
 import typer
+from tqdm import tqdm
 
 from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.data import (
@@ -25,6 +26,114 @@ log = logging.getLogger(__name__)
 app = typer.Typer()
 
 ###############################################################################
+
+
+@app.command()
+def create_developer_deduper_dataset_for_annotation(  # noqa: C901
+    n_random_other: int = 5,
+    debug: bool = False,
+) -> None:
+    # Setup logging
+    setup_logger(debug=debug)
+
+    # Load the repo contributors dataset
+    log.info("Loading developer contributions dataset...")
+    developer_contributions = load_rs_graph_repo_contributors_dataset()
+
+    # Each row should be a unique person
+    log.info("Getting unique developers frame...")
+    unique_devs = []
+    for username, group in developer_contributions.groupby("username"):
+        flat_co_contribs = []
+        for co_contribs in group.co_contributors:
+            flat_co_contribs.extend(co_contribs)
+
+        unique_devs.append(
+            {
+                "username": username,
+                "repos": tuple(group.repo),
+                "name": group["name"].iloc[0],
+                "company": group.company.iloc[0],
+                "email": group.email.iloc[0],
+                "location": group.location.iloc[0],
+                "bio": group.bio.iloc[0],
+                "co_contributors": tuple(flat_co_contribs),
+            }
+        )
+
+    # Reform as df
+    unique_devs_df = pd.DataFrame(unique_devs)
+
+    # We are trying to create a dataset with the following columns
+    # developer 1, developer 2, and a column full of None values called "match"
+    # The developer 1 and developer 2 columns will be populated with a string join
+    # of the developer's username, their name (if they have one)
+    # their repos (if they have any), their co-contributors (if they have any)
+    # their company (if they have one), their email (if they have one)
+    # their location (if they have one), and their bio (if they have one)
+    # and their bio (if they have one).
+
+    # We will add rows to this dataset by iterating over each row and
+    # taking a random sample of n other rows and add them as a row to the dataset
+    # i.e. the iterated row will be developer 1 and the random sample will be
+    # developer 2.
+    dev_comparisons = []
+    for i, dev_1_details in tqdm(unique_devs_df.iterrows(), desc="Iterating over devs"):
+        # Remove none values and store as dict
+        dev_1_details_dict = {}
+        for key, value in dev_1_details.to_dict().items():
+            if value is not None:
+                dev_1_details_dict[key] = value
+
+        # Construct string
+        dev_1_values_list = []
+        for key, value in dev_1_details_dict.items():
+            if isinstance(value, tuple):
+                value = ", ".join(value)
+            dev_1_values_list.append(f"{key}: {value};")
+
+        # Construct string
+        dev_1_values_str = " ".join(dev_1_values_list)
+
+        # Create a new dataframe with dev 1 removed
+        other_devs_df = unique_devs_df.drop(i)
+
+        # Get a random sample of n other developers
+        other_devs = other_devs_df.sample(n=n_random_other)
+
+        # Add a row for each other dev
+        for _, other_dev in other_devs.iterrows():
+            # Remove none values and store as dict
+            other_dev_details_dict = {}
+            for key, value in other_dev.to_dict().items():
+                if value is not None:
+                    other_dev_details_dict[key] = value
+
+            # Construct string
+            other_dev_values_list = []
+            for key, value in other_dev_details_dict.items():
+                if isinstance(value, tuple):
+                    value = ", ".join(value)
+                other_dev_values_list.append(f"{key}: {value};")
+
+            # Construct string
+            other_dev_values_str = " ".join(other_dev_values_list)
+
+            # Create row
+            dev_comparisons.append(
+                {
+                    "developer_1": dev_1_values_str,
+                    "developer_2": other_dev_values_str,
+                    "match": None,
+                }
+            )
+
+    # Convert to dataframe
+    dev_comparisons_df = pd.DataFrame(dev_comparisons)
+
+    # Store to disk
+    output_filepath = DATA_FILES_DIR / "developer-deduper-annotation-dataset.csv"
+    dev_comparisons_df.to_csv(output_filepath, index=False)
 
 
 def _clustered_devs_dataframe_to_storage_ready(
