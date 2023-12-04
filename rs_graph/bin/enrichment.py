@@ -99,18 +99,21 @@ def get_repo_contributors(debug: bool = False) -> None:
     # Read repos dataset
     rs_graph_repos = load_rs_graph_repos_dataset()
 
+    # Store repo contributors
+    output_filepath_for_repo_contributors = (
+        DATA_FILES_DIR / "rs-graph-repo-contributors.parquet"
+    )
+
     # Get repo contributors
     repo_contributors = github.get_repo_contributors_for_repos(
         repo_urls=rs_graph_repos.repo.tolist(),
+        cache_file=output_filepath_for_repo_contributors,
     )
 
     # Convert to dataframe
     repo_contributors_df = pd.DataFrame([d.to_dict() for d in repo_contributors])
 
     # Store repo contributors
-    output_filepath_for_repo_contributors = (
-        DATA_FILES_DIR / "rs-graph-repo-contributors.parquet"
-    )
     repo_contributors_df.to_parquet(output_filepath_for_repo_contributors)
     log.info(f"Stored repo contributors to: '{output_filepath_for_repo_contributors}'")
 

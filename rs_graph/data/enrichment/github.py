@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from functools import partial
+import pandas as pd
+from pathlib import Path
 
 import backoff
 from dataclasses_json import DataClassJsonMixin
@@ -13,7 +16,6 @@ from fastcore.net import HTTP403ForbiddenError, HTTP404NotFoundError
 from ghapi.all import GhApi
 from parse import search
 from tqdm import tqdm
-from tqdm.contrib.concurrent import thread_map
 
 from ..registries import RegistryEnum
 
@@ -337,6 +339,9 @@ def _get_user_info_from_login(
             co_contrib for co_contrib in co_contributors if co_contrib != login
         )
 
+        # Sleep before return to avoid rate limit
+        time.sleep(2)
+
         # Store info
         return RepoContributorInfo(
             repo=repo_url,
@@ -390,21 +395,18 @@ def get_repo_contributors(
         log.debug(f"Failed to find repo: '{repo_url}'")
         return None
 
-    # Construct partial for threading
-    partial_get_user_info_from_login = partial(
-        _get_user_info_from_login,
-        api=api,
-        repo_url=repo_url,
-        co_contributors=tuple(contrib["login"] for contrib in contributors),
-    )
-
     # Get user infos
-    contributor_infos = thread_map(
-        partial_get_user_info_from_login,
-        (contrib["login"] for contrib in contributors),
-        leave=False,
-        desc="Getting user info",
-    )
+    contributor_infos = []
+    for contrib in tqdm(contributors, desc="Getting user info", leave=False):
+        # Get user info
+        contributor_infos.append(
+            _get_user_info_from_login(
+                contrib["login"],
+                api=api,
+                repo_url=repo_url,
+                co_contributors=tuple(contrib["login"] for contrib in contributors),
+            )
+        )
 
     # Filter out none
     contributor_infos = [info for info in contributor_infos if info is not None]
@@ -416,6 +418,8 @@ def get_repo_contributors_for_repos(
     repo_urls: list[str],
     github_api_key: str | None = None,
     top_n: int = 30,
+    cache_file: str | Path = "repo_contributors.parquet",
+    cache_every: int = 10,
 ) -> list[RepoContributorInfo]:
     # Filter out duplicates
     repos = list(set(repo_urls))
@@ -435,9 +439,10 @@ def get_repo_contributors_for_repos(
 
     # Get contributors
     all_contributors = []
-    for repo in tqdm(
-        github_repos,
+    for i, repo in tqdm(
+        enumerate(github_repos),
         desc="Getting contributors",
+        total=len(github_repos),
     ):
         # Get contributors
         repo_contributors = get_repo_contributors(
@@ -452,5 +457,13 @@ def get_repo_contributors_for_repos(
 
         # Store contributors
         all_contributors.extend(repo_contributors)
+
+        # Store to cache
+        if i % cache_every == 0:
+            log.debug(f"Storing to cache: '{cache_file}'")
+            # Convert to dataframe and store to parquet
+            pd.DataFrame(
+                [d.to_dict() for d in all_contributors],
+            ).to_parquet(cache_file)
 
     return all_contributors

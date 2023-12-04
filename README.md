@@ -41,3 +41,23 @@ to the installed package directory (`rs_graph.data.files`).
         `rs-graph-modeling train-developer-deduper`
     5. Train author to github user linker model:
         `rs-graph-modeling train-author-developer-linker`
+
+
+## GitHub User and Author Entity Matching Model
+
+### Annotation
+
+In order to construct an annotation set, we generated an embedding
+for each GitHub user and author using the basic information we had available
+for them (for GitHub users this includes their 
+username, the repos of interest, their provided name, their co-contributors, etc.; 
+for authors this included their name, the repos of interest, and their co-authors).
+We then created an annotation dataset by getting the top 5 most similar authors for each
+GitHub user in our set. We then manually annotated each of these pairs as either a 
+match or not a match.
+
+In general, our annotation criteria stated that we needed at least two points of 
+agreement between the two entities to consider them a match. For example, if the 
+GitHub user and the author had the same name and had a repo in common, we would 
+consider them a match; if they had the same name and a co-contributor's GitHub username 
+seemed similar to a co-author's name, we would consider them a match.
