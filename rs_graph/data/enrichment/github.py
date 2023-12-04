@@ -6,10 +6,10 @@ import logging
 import time
 from dataclasses import dataclass
 from functools import partial
-import pandas as pd
 from pathlib import Path
 
 import backoff
+import pandas as pd
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
 from fastcore.net import HTTP403ForbiddenError, HTTP404NotFoundError
