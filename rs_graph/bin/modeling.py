@@ -72,9 +72,11 @@ def _dataframe_to_joined_str_items(
 
     joined_str_dict = {}
     for _, row in tqdm(df.iterrows(), desc=tqdm_desc):
-        # Remove none values and store as dict
+        # Convert to dict and convert None values to "None" string
         details = row.to_dict()
-        details = {key: value for key, value in details.items() if value is not None}
+        for key, value in details.items():
+            if value is None:
+                details[key] = str(value)
 
         # Construct string
         dev_values_list = []
@@ -265,6 +267,9 @@ def create_author_developer_linker_dataset_for_annotation(  # noqa: C901
             # Add to all co-authors
             all_co_authors.update(co_author_names)
 
+        # Remove self from co-authors
+        all_co_authors.discard(author["name"])
+
         # Add new author
         authors_ready_rows.append(
             {
@@ -277,6 +282,12 @@ def create_author_developer_linker_dataset_for_annotation(  # noqa: C901
 
     # Make frame
     authors_ready = pd.DataFrame(authors_ready_rows)
+
+    # Only include the username, name, repos, and co_contributors columns
+    # in the unique devs dataframe
+    unique_devs_df = unique_devs_df[
+        ["username", "name", "email", "repos", "co_contributors"]
+    ].copy()
 
     # Prep devs and authors details for embedding and then comparison
     prepped_devs_dict = _dataframe_to_joined_str_items(
