@@ -67,6 +67,8 @@ Annotation criteria for entity matches are:
 2.  there is no co-author (names) or co-contributor (usernames) which look
     like a potentially better match.
 
+3. if there is uncertainty, err on the side of `False`
+
 #### Examples
 
 ##### No Match -- No Name Provided, GitHub Username or Email not Similar to Author Name
