@@ -38,7 +38,6 @@ class EmbeddingDetails(DataClassJsonMixin):
 class AuthorDetails(DataClassJsonMixin):
     author_id: str
     name: str
-    aliases: list[str]
     affiliations: list[str] | None
     h_index: int
     author_position: str
@@ -85,7 +84,6 @@ def _get_single_paper_details(
                 AuthorDetails(
                     author_id=author.authorId,
                     name=author.name,
-                    aliases=author.aliases,
                     affiliations=author.affiliations,
                     h_index=author.hIndex,
                     author_position=author_position,

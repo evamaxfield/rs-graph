@@ -24,22 +24,19 @@ DATA_FILES_DIR = Path(__file__).parent / "files"
 DATASET_SOURCE_FILE_PATTERN = "-short-paper-details.parquet"
 
 # Other datasets are formed from enrichment and have hardcoded paths
-RS_GRAPH_UPSTREAM_DEPS_PATH = DATA_FILES_DIR / "rs-graph-upstream-deps.parquet"
-RS_GRAPH_EXTENDED_PAPER_DETAILS_PATH = (
-    DATA_FILES_DIR / "rs-graph-extended-paper-details.parquet"
-)
-RS_GRAPH_REPO_CONTRIBUTORS_PATH = DATA_FILES_DIR / "rs-graph-repo-contributors.parquet"
-RS_GRAPH_DEDUPED_REPO_CONTRIBUTORS_PATH = (
-    DATA_FILES_DIR / "rs-graph-deduped-repo-contributors.parquet"
-)
-RS_GRAPH_LINKED_AUTHORS_DEVS_PATH = (
-    DATA_FILES_DIR / "rs-graph-linked-authors-devs.parquet"
-)
+UPSTREAM_DEPS_PATH = DATA_FILES_DIR / "upstream-deps.parquet"
+EXTENDED_PAPER_DETAILS_PATH = DATA_FILES_DIR / "extended-paper-details.parquet"
+REPO_CONTRIBUTORS_PATH = DATA_FILES_DIR / "repo-contributors.parquet"
+LINKED_AUTHORS_DEVS_PATH = DATA_FILES_DIR / "linked-authors-devs.parquet"
+
+# Annotated datasets
+ANNOTATED_AUTHOR_DEV_EM_IRR_PATH = DATA_FILES_DIR / "annotated-author-dev-em-irr.csv"
+ANNOTATED_AUTHOR_DEV_EM_PATH = DATA_FILES_DIR / "annotated-author-dev-em.csv"
 
 ###############################################################################
 
 
-def load_rs_graph_repos_dataset() -> pd.DataFrame:
+def load_basic_repos_dataset() -> pd.DataFrame:
     """Load the base dataset (all dataset sources)."""
     # Find all dataset files
     dataset_files = list(DATA_FILES_DIR.glob(f"*{DATASET_SOURCE_FILE_PATTERN}"))
@@ -58,20 +55,20 @@ def load_rs_graph_repos_dataset() -> pd.DataFrame:
     return rs_graph
 
 
-def load_rs_graph_upstream_dependencies_dataset() -> pd.DataFrame:
+def load_upstream_dependencies_dataset() -> pd.DataFrame:
     """Load the upstream dependencies dataset."""
-    return pd.read_parquet(RS_GRAPH_UPSTREAM_DEPS_PATH)
+    return pd.read_parquet(UPSTREAM_DEPS_PATH)
 
 
-def load_rs_graph_extended_paper_details_dataset() -> pd.DataFrame:
+def load_extended_paper_details_dataset() -> pd.DataFrame:
     """Load the extended paper details dataset."""
-    return pd.read_parquet(RS_GRAPH_EXTENDED_PAPER_DETAILS_PATH)
+    return pd.read_parquet(EXTENDED_PAPER_DETAILS_PATH)
 
 
-def load_rs_graph_embeddings_dataset() -> pd.DataFrame:
+def load_embeddings_dataset() -> pd.DataFrame:
     """Load the extended papers details dataset then format to embeddings focus."""
     # Load extended paper details
-    df = load_rs_graph_extended_paper_details_dataset()
+    df = load_extended_paper_details_dataset()
 
     # Load and process data
     embedding_rows = []
@@ -106,27 +103,14 @@ class Contribution(DataClassJsonMixin):
 @dataclass
 class AuthorshipDetails(DataClassJsonMixin):
     name: str
-    aliases: set[str]
     h_index: int
     contributions: list[Contribution]
 
 
-def _get_canonical_name(author_details: dict) -> str:
-    """Get the canonical name for an author."""
-    # Get longest name in aliases to use as "canonical name"
-    canonical_name = author_details["name"]
-    if author_details["aliases"] is not None:
-        for alias in author_details["aliases"]:
-            if len(alias) > len(canonical_name):
-                canonical_name = alias
-
-    return canonical_name
-
-
-def load_rs_graph_author_contributions_dataset() -> pd.DataFrame:
+def load_author_contributions_dataset() -> pd.DataFrame:
     # Load extended paper details dataset
-    paper_details_df = load_rs_graph_extended_paper_details_dataset()
-    repos_df = load_rs_graph_repos_dataset()
+    paper_details_df = load_extended_paper_details_dataset()
+    repos_df = load_basic_repos_dataset()
 
     # Create a look up table for each author
     all_author_contributions: dict[str, AuthorshipDetails] = {}
@@ -155,26 +139,13 @@ def load_rs_graph_author_contributions_dataset() -> pd.DataFrame:
             co_authors = []
             for co_author_details in paper_details["authors"]:
                 if co_author_details["author_id"] != a_id:
-                    co_author_canonical_name = _get_canonical_name(co_author_details)
-                    co_authors.append(co_author_canonical_name)
+                    co_authors.append(co_author_details["name"])
 
             # Add new author
             if a_id not in all_author_contributions:
-                # Get longest name in aliases to use as "cannonical name"
-                canonical_name = _get_canonical_name(author_details)
-
-                # Convert aliases to set and "original author name"
-                aliases = (
-                    set(author_details["aliases"])
-                    if author_details["aliases"] is not None
-                    else set()
-                )
-                aliases.add(author_details["name"])
-
                 # Add new author
                 all_author_contributions[a_id] = AuthorshipDetails(
-                    name=canonical_name,
-                    aliases=aliases,
+                    name=author_details["name"],
                     h_index=author_details["h_index"],
                     contributions=[
                         Contribution(
@@ -191,18 +162,6 @@ def load_rs_graph_author_contributions_dataset() -> pd.DataFrame:
             else:
                 # Get existing author
                 existing_author_details = all_author_contributions[a_id]
-
-                # Always add new aliases
-                if author_details["aliases"] is not None:
-                    existing_author_details.aliases.update(author_details["aliases"])
-
-                # Always add possibly new name to aliases
-                existing_author_details.aliases.add(author_details["name"])
-
-                # Update cannonical name if need be
-                for alias in existing_author_details.aliases:
-                    if len(alias) > len(existing_author_details.name):
-                        existing_author_details.name = alias
 
                 # Add new contribution
                 existing_author_details.contributions.append(
@@ -228,16 +187,21 @@ def load_rs_graph_author_contributions_dataset() -> pd.DataFrame:
     return all_author_details_df
 
 
-def load_rs_graph_repo_contributors_dataset() -> pd.DataFrame:
+def load_repo_contributors_dataset() -> pd.DataFrame:
     """Load the repo contributors dataset."""
-    return pd.read_parquet(RS_GRAPH_REPO_CONTRIBUTORS_PATH)
+    return pd.read_parquet(REPO_CONTRIBUTORS_PATH)
 
 
-def load_rs_graph_deduped_repo_contributors_dataset() -> pd.DataFrame:
-    """Load the deduped repo contributors dataset."""
-    return pd.read_parquet(RS_GRAPH_DEDUPED_REPO_CONTRIBUTORS_PATH)
+def load_annotated_author_dev_em_irr_dataset() -> pd.DataFrame:
+    """Load the annotated author dev em irr dataset."""
+    return pd.read_csv(ANNOTATED_AUTHOR_DEV_EM_IRR_PATH)
 
 
-def load_rs_graph_linked_authors_devs_dataset() -> pd.DataFrame:
+def load_annotated_author_dev_em_dataset() -> pd.DataFrame:
+    """Load the full annotated author dev em dataset."""
+    return pd.read_csv(ANNOTATED_AUTHOR_DEV_EM_PATH)
+
+
+def load_linked_authors_devs_dataset() -> pd.DataFrame:
     """Load the linked authors devs dataset."""
-    return pd.read_parquet(RS_GRAPH_LINKED_AUTHORS_DEVS_PATH)
+    return pd.read_parquet(LINKED_AUTHORS_DEVS_PATH)

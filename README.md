@@ -8,7 +8,6 @@ Graphing the dependencies (and dependents) of research software and their contri
 
 * Install [Just](https://github.com/casey/just#packages)
 * Create a new Conda / Mamba Env (Python 3.11 preferred)
-* Install [pylbfgs](https://github.com/larsmans/pylbfgs): `conda install -c fgregg pylbfgs`
 * Install lib: `just install` (or `pip install .`)
 
 ### Data Download
@@ -37,11 +36,8 @@ to the installed package directory (`rs_graph.data.files`).
         `rs-graph-enrichment get-extended-paper-details`
     3. Get top 30 contributors to each repository:
         `rs-graph-enrichment get-repo-contributors`
-    4.  Train github users dedupe model:
-        `rs-graph-modeling train-developer-deduper`
-    5. Train author to github user linker model:
-        `rs-graph-modeling train-author-developer-linker`
-
+    4. Train author to github user entity matching model:
+        `rs-graph-modeling train-author-developer-em`
 
 ## GitHub User and Author Entity Matching Model
 
@@ -68,6 +64,12 @@ Annotation criteria for entity matches are:
     like a potentially better match.
 
 3. if there is uncertainty, err on the side of `False`
+
+### Results of IRR
+
+Inter-rater Reliability (Fleiss Kappa): 0.925595238095238 (Almost perfect agreement)
+
+To reproduce this result run: `rs-graph-modeling calculate-irr-for-author-dev-em-annotation`
 
 #### Examples
 

@@ -6,7 +6,7 @@ import pandas as pd
 import typer
 
 from rs_graph.bin.typer_utils import setup_logger
-from rs_graph.data import DATA_FILES_DIR, load_rs_graph_repos_dataset
+from rs_graph.data import DATA_FILES_DIR, load_basic_repos_dataset
 from rs_graph.data.enrichment import github, semantic_scholar
 
 ###############################################################################
@@ -27,7 +27,7 @@ def get_upstreams(debug: bool = False) -> None:
     setup_logger(debug=debug)
 
     # Read repos dataset
-    rs_graph_repos = load_rs_graph_repos_dataset()
+    rs_graph_repos = load_basic_repos_dataset()
 
     # Get upstream deps
     upstream_deps, failed = github.get_upstream_dependencies_for_repos(
@@ -64,7 +64,7 @@ def get_extended_paper_details(debug: bool = False) -> None:
     setup_logger(debug=debug)
 
     # Read repos dataset
-    rs_graph_repos = load_rs_graph_repos_dataset()
+    rs_graph_repos = load_basic_repos_dataset()
 
     # Get extended paper details
     extended_paper_details = semantic_scholar.get_extended_paper_details(
@@ -97,7 +97,7 @@ def get_repo_contributors(debug: bool = False) -> None:
     setup_logger(debug=debug)
 
     # Read repos dataset
-    rs_graph_repos = load_rs_graph_repos_dataset()
+    rs_graph_repos = load_basic_repos_dataset()
 
     # Store repo contributors
     output_filepath_for_repo_contributors = (
