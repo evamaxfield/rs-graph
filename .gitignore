@@ -137,3 +137,6 @@ rs-graph-upstream-deps.parquet
 
 # Ignore all files in the data/files/ directory
 rs_graph/data/files/*
+author-dev-em-annotation-dataset.csv
+author-dev-em-annotation-dataset-irr.csv
+author-dev-em-confusion-matrix.png

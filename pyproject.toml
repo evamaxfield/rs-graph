@@ -49,7 +49,9 @@ dependencies = [
   "networkx>=3,<4",
   "scipy>=1,<2",
   "umap-learn[plot]>=0.5.4,<1",
-  # statistics
+  # statistics and ml
+  "scikit-learn>=1,<2",
+  "skops==0.9.0",
   "statsmodels>=0.14,<1",
 ]
 

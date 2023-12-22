@@ -27,7 +27,6 @@ DATASET_SOURCE_FILE_PATTERN = "-short-paper-details.parquet"
 UPSTREAM_DEPS_PATH = DATA_FILES_DIR / "upstream-deps.parquet"
 EXTENDED_PAPER_DETAILS_PATH = DATA_FILES_DIR / "extended-paper-details.parquet"
 REPO_CONTRIBUTORS_PATH = DATA_FILES_DIR / "repo-contributors.parquet"
-LINKED_AUTHORS_DEVS_PATH = DATA_FILES_DIR / "linked-authors-devs.parquet"
 
 # Annotated datasets
 ANNOTATED_AUTHOR_DEV_EM_IRR_PATH = DATA_FILES_DIR / "annotated-author-dev-em-irr.csv"
@@ -200,8 +199,3 @@ def load_annotated_author_dev_em_irr_dataset() -> pd.DataFrame:
 def load_annotated_author_dev_em_dataset() -> pd.DataFrame:
     """Load the full annotated author dev em dataset."""
     return pd.read_csv(ANNOTATED_AUTHOR_DEV_EM_PATH)
-
-
-def load_linked_authors_devs_dataset() -> pd.DataFrame:
-    """Load the linked authors devs dataset."""
-    return pd.read_parquet(LINKED_AUTHORS_DEVS_PATH)

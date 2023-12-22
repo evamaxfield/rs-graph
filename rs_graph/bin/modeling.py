@@ -8,16 +8,22 @@ import pandas as pd
 import typer
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.util import cos_sim
+from sklearn.linear_model import LogisticRegressionCV
+from sklearn.metrics import ConfusionMatrixDisplay, precision_recall_fscore_support
+from sklearn.model_selection import train_test_split
+from skops import io as sk_io
 from statsmodels.stats.inter_rater import aggregate_raters, fleiss_kappa
 from tqdm import tqdm
 
 from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.data import (
-    DATA_FILES_DIR,
+    AUTHOR_DEV_EM_MODEL_PATH,
+    load_annotated_author_dev_em_dataset,
     load_annotated_author_dev_em_irr_dataset,
     load_author_contributions_dataset,
     load_repo_contributors_dataset,
 )
+from rs_graph.modeling import DEFAULT_AUTHOR_DEV_EMBEDDING_MODEL_NAME
 
 ###############################################################################
 
@@ -308,12 +314,14 @@ def create_author_developer_em_dataset_for_annotation(  # noqa: C901
     author_dev_comparison_df = pd.DataFrame(author_dev_comparison_rows)
 
     # Store to disk
-    output_filepath = DATA_FILES_DIR / "author-dev-em-annotation-dataset.csv"
+    output_filepath = "author-dev-em-annotation-dataset.csv"
     author_dev_comparison_df.to_csv(output_filepath, index=False)
+    log.info(f"Stored to {output_filepath}")
 
 
 @app.command()
 def create_irr_subset_for_author_dev_em_annotation(
+    full_annotation_dataset_path: str = "author-dev-em-annotation-dataset.csv",
     n: int = 100,
     debug: bool = False,
 ) -> None:
@@ -322,9 +330,7 @@ def create_irr_subset_for_author_dev_em_annotation(
 
     # Load the author-dev EM annotation dataset
     log.info("Loading author-dev EM annotation dataset...")
-    author_dev_em_annotation_df = pd.read_csv(
-        DATA_FILES_DIR / "author-dev-em-annotation-dataset.csv",
-    )
+    author_dev_em_annotation_df = pd.read_csv(full_annotation_dataset_path)
 
     # Set seed
     np.random.seed(12)
@@ -334,8 +340,9 @@ def create_irr_subset_for_author_dev_em_annotation(
     random_rows = author_dev_em_annotation_df.sample(n=n)
 
     # Store to disk
-    output_filepath = DATA_FILES_DIR / "author-dev-em-annotation-dataset-irr.csv"
+    output_filepath = "author-dev-em-annotation-dataset-irr.csv"
     random_rows.to_csv(output_filepath, index=False)
+    log.info(f"Stored to {output_filepath}")
 
 
 @app.command()
@@ -401,6 +408,144 @@ def calculate_irr_for_author_dev_em_annotation(
         print()
         print("-" * 40)
         print()
+
+
+def _from_details_to_dicts(
+    dev_details: str,
+    author_details: str,
+    model: SentenceTransformer,
+) -> dict[str, float]:
+    # Split into items then into dict
+    dev_items = dev_details.replace("\n", "").split(";")
+    author_items = author_details.replace("\n", "").split(";")
+    dev_dict = {
+        pair[0].strip(): pair[1].strip()
+        for pair in [item.split(":", 1) for item in dev_items]
+        if len(pair) == 2
+    }
+    author_dict = {
+        pair[0].strip(): pair[1].strip()
+        for pair in [item.split(":", 1) for item in author_items]
+        if len(pair) == 2
+    }
+
+    # Remove "repos" keys
+    dev_dict.pop("repos", None)
+    author_dict.pop("repos", None)
+
+    # Create embedding for each part
+    dev_values_embeddings = model.encode(
+        list(dev_dict.values()),
+        show_progress_bar=False,
+    ).tolist()
+    author_values_embeddings = model.encode(
+        list(author_dict.values()),
+        show_progress_bar=False,    
+    ).tolist()
+    dev_embedding_dict = dict(
+        zip(
+            dev_dict.keys(),
+            dev_values_embeddings,
+            strict=True,
+        )
+    )
+    author_embedding_dict = dict(
+        zip(
+            author_dict.keys(),
+            author_values_embeddings,
+            strict=True,
+        )
+    )
+
+    # Create interactions by creating pairwise combinations
+    this_x = {}
+    for dev_key, dev_value in dev_embedding_dict.items():
+        for author_key, author_value in author_embedding_dict.items():
+            pairwise_key = f"dev-{dev_key}---author-{author_key}"
+            for i, dev_i_v in enumerate(dev_value):
+                this_x[f"{pairwise_key}---dim-{i}"] = dev_i_v * author_value[i]
+
+    return this_x
+
+
+@app.command()
+def train_author_dev_em_model(
+    embedding_model_name: str = DEFAULT_AUTHOR_DEV_EMBEDDING_MODEL_NAME,
+    debug: bool = False,
+) -> None:
+    # Setup logging
+    setup_logger(debug=debug)
+
+    # Load the author-dev EM annotation dataset
+    log.info("Loading author-dev EM annotation dataset...")
+    annotated_data = load_annotated_author_dev_em_dataset()
+
+    # Print value counts of "match"
+    print("Match value counts: ")
+    print(annotated_data.match.value_counts())
+    print()
+
+    # Init embedding model
+    embedding_model = SentenceTransformer(embedding_model_name)
+
+    # Process each row
+    proccessed_features = []
+    for _, row in tqdm(
+        annotated_data.iterrows(),
+        total=len(annotated_data),
+        desc="Getting embedding features for each annotated pair",
+    ):
+        # Add to list
+        proccessed_features.append(
+            _from_details_to_dicts(
+                row.dev_details,
+                row.author_details,
+                embedding_model,
+            )
+        )
+
+    # Create dataframe and copy over labels
+    prepped_df = pd.DataFrame(proccessed_features)
+    prepped_df["match"] = annotated_data.match
+
+    # Train test split
+    x_train, x_test, y_train, y_test = train_test_split(
+        prepped_df.drop(columns=["match"]),
+        prepped_df.match,
+        test_size=0.2,
+        stratify=prepped_df.match,
+        shuffle=True,
+        random_state=12,
+    )
+
+    # Train model
+    log.info("Training classifier...")
+    classifier = LogisticRegressionCV(
+        cv=10,
+        max_iter=1000,
+        random_state=12,
+        class_weight="balanced",
+    ).fit(x_train, y_train)
+
+    # Save model
+    log.info("Saving classifier...")
+    sk_io.dump(classifier, AUTHOR_DEV_EM_MODEL_PATH)
+
+    # Evaluate model
+    log.info("Evaluating classifier...")
+    y_pred = classifier.predict(x_test)
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        y_test, y_pred, average="weighted"
+    )
+    log.info(f"pre: {precision}, " f"rec: {recall}, " f"f1: {f1}")
+
+    # Get confusion matrix plot
+    confusion = ConfusionMatrixDisplay.from_predictions(y_test, y_pred)
+
+    # Save confusion matrix plot
+    matrix_save_path = "author-dev-em-confusion-matrix.png"
+    confusion.figure_.savefig(matrix_save_path)
+    log.info(f"Confusion matrix saved to {matrix_save_path}")
 
 
 ###############################################################################
