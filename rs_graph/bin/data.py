@@ -6,6 +6,7 @@ from datetime import date
 
 import typer
 from dataclasses_json import DataClassJsonMixin
+from dotenv import load_dotenv
 from gcsfs import GCSFileSystem
 
 from rs_graph.bin.typer_utils import setup_logger
@@ -33,6 +34,9 @@ def upload(debug: bool = False) -> None:
     """
     # Setup logger
     setup_logger(debug=debug)
+
+    # Load env
+    load_dotenv()
 
     # Init GCSFileSystem
     fs = GCSFileSystem(project=GCS_PROJECT_ID)
