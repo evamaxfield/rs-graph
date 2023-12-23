@@ -17,13 +17,15 @@ from tqdm import tqdm
 
 from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.data import (
-    AUTHOR_DEV_EM_MODEL_PATH,
     load_annotated_author_dev_em_dataset,
     load_annotated_author_dev_em_irr_dataset,
     load_author_contributions_dataset,
     load_repo_contributors_dataset,
 )
-from rs_graph.modeling import DEFAULT_AUTHOR_DEV_EMBEDDING_MODEL_NAME
+from rs_graph.modeling import (
+    AUTHOR_DEV_EM_MODEL_PATH,
+    DEFAULT_AUTHOR_DEV_EMBEDDING_MODEL_NAME,
+)
 
 ###############################################################################
 
@@ -440,7 +442,7 @@ def _from_details_to_dicts(
     ).tolist()
     author_values_embeddings = model.encode(
         list(author_dict.values()),
-        show_progress_bar=False,    
+        show_progress_bar=False,
     ).tolist()
     dev_embedding_dict = dict(
         zip(
