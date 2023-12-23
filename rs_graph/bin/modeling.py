@@ -138,10 +138,6 @@ def create_author_developer_em_dataset_for_annotation(  # noqa: C901
     author_id_to_name_dict: dict[str, str] = {}
     remade_authors = []
     for _, author in authors.iterrows():
-        # Get uuid4 if author has no author id
-        if author.author_id is None:
-            author.author_id = str(uuid4())
-
         for contribution in author.contributions:
             if contribution["repo"] not in repo_to_authors:
                 repo_to_authors[contribution["repo"]] = set()
@@ -471,7 +467,7 @@ def _from_details_to_dicts(
 
 
 @app.command()
-def train_author_dev_em_model(
+def train_author_dev_em_classifier(
     embedding_model_name: str = DEFAULT_AUTHOR_DEV_EMBEDDING_MODEL_NAME,
     debug: bool = False,
 ) -> None:

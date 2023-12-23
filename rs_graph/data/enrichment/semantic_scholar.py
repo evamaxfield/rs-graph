@@ -6,6 +6,7 @@ import logging
 import os
 from dataclasses import dataclass
 from functools import partial
+from uuid import uuid4
 
 import backoff
 from dataclasses_json import DataClassJsonMixin
@@ -70,6 +71,10 @@ def _get_single_paper_details(
         # Get author details
         authors = []
         for i, author in enumerate(paper.authors):
+            # Get uuid4 if author has no author id
+            if author.authorId is None:
+                author.authorId = str(uuid4())
+
             if i == 0:
                 if len(paper.authors) > 1:
                     author_position = AuthorOrder.FIRST

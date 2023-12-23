@@ -37,7 +37,7 @@ to the installed package directory (`rs_graph.data.files`).
     3. Get top 30 contributors to each repository:
         `rs-graph-enrichment get-repo-contributors`
     4. Train author to github user entity matching model:
-        `rs-graph-modeling train-author-developer-em`
+        `rs-graph-modeling train-author-developer-em-classifier`
 
 ## GitHub User and Author Entity Matching Model
 
