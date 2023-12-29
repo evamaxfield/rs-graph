@@ -118,7 +118,7 @@ def _get_all_dataset_sources(
         n_workers=1,
         machine_type="n1-standard-1",
         preemptible=True,
-        docker_image="gcr.io/evamaxfield/rs-graph:latest",
+        docker_image="ghcr.io/evamaxfield/rs-graph:latest",
     )
 
     # Adaptive between 1 and the number of github api keys
