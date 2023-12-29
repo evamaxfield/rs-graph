@@ -1,20 +1,20 @@
 #!/usr/bin/env python
 
-from pathlib import Path
 import json
 import logging
-from datetime import datetime
+import os
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 
 import typer
-from prefect import task, Flow
+from dask_cloudprovider.gcp import GCPCluster
 from dotenv import load_dotenv
-import os
+from prefect import Flow
+from prefect_dask.task_runners import DaskTaskRunner
 
 from rs_graph.bin.typer_utils import setup_logger
-from rs_graph.data import sources, REMOTE_STORAGE_BUCKET
-from dask_cloudprovider.gcp import GCPCluster
-from prefect_dask.task_runners import DaskTaskRunner
+from rs_graph.data import REMOTE_STORAGE_BUCKET, sources
 
 ###############################################################################
 
@@ -22,10 +22,12 @@ log = logging.getLogger(__name__)
 
 ###############################################################################
 
+
 @dataclass
 class DatasetSource:
     name: str
     required_parameters: list[str]
+
 
 ALL_DATASET_SOURCES_DETAILS_LUT = {
     "joss": DatasetSource(
@@ -47,16 +49,17 @@ app = typer.Typer()
 
 ###############################################################################
 
+
 def _get_all_dataset_sources(
     gcp_project_id: str = "sci-software-graph",
     gh_api_keys_file: str = ".github-tokens.json",
     remote_storage_bucket: str = REMOTE_STORAGE_BUCKET,
     remote_storage_prefix: str = "",
     debug: bool = False,
-) -> None:
+) -> dict[str, str]:
     """
     Download all source datasets.
-    
+
     Parameters
     ----------
     gcp_project_id: str
@@ -69,6 +72,11 @@ def _get_all_dataset_sources(
         The prefix to add to the stored datasets.
     debug: bool
         Whether or not to run in debug mode.
+
+    Returns
+    -------
+    stored_datasets: dict[str, str]
+        A mapping of dataset names to their storage paths.
     """
     # Very github api keys file
     if not Path(gh_api_keys_file).exists():
@@ -79,7 +87,7 @@ def _get_all_dataset_sources(
 
     # Determine prefix
     if len(remote_storage_prefix) == 0:
-        utcnow = datetime.utcnow().replace(microsecond=0).isoformat()
+        datetime.utcnow().replace(microsecond=0).isoformat()
         remote_storage_prefix = "distributed-{utcnow}"
     elif remote_storage_prefix.startswith("/"):
         remote_storage_prefix = remote_storage_prefix.strip("/")
@@ -97,7 +105,7 @@ def _get_all_dataset_sources(
     # Load github api keys
     with open(gh_api_keys_file) as f:
         global_parameters["github_api_keys"] = json.load(f)
-    
+
     # Load dotenv and get elsevier api key
     load_dotenv()
     global_parameters["elsevier_api_key"] = os.getenv("ELSEVIER_API_KEY")
@@ -150,6 +158,7 @@ def _get_all_dataset_sources(
     # Return stored datasets
     return stored_datasets
 
+
 @app.command()
 def get_all_dataset_sources(
     gcp_project_id: str = "sci-software-graph",
@@ -160,7 +169,7 @@ def get_all_dataset_sources(
 ) -> None:
     """
     Download all source datasets.
-    
+
     Parameters
     ----------
     gcp_project_id: str
@@ -181,6 +190,7 @@ def get_all_dataset_sources(
         remote_storage_prefix=remote_storage_prefix,
         debug=debug,
     )
+
 
 ###############################################################################
 
