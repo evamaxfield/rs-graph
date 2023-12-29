@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from dataclasses import dataclass
 
-import backoff
 import pandas as pd
 import requests
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
-from fastcore.net import HTTP403ForbiddenError
 from ghapi.all import GhApi, paged
+from prefect import flow, task
 from tqdm import tqdm
 
 ###############################################################################
@@ -43,16 +43,18 @@ class RateLimitError(Exception):
     pass
 
 
-@backoff.on_exception(
-    backoff.expo,
-    (HTTP403ForbiddenError, RateLimitError),
-    max_time=300,
-)
+@task(retries=5, retry_delay_seconds=[5, 15, 45, 90, 180])
 def _get_parent_repo_and_get_paper_details(
     repo_name: str,
-    github_api: GhApi,
+    github_api_key: str | None,
     elsevier_api_key: str | None,
 ) -> SoftwareXPaperResult | None:
+    # Setup API
+    if github_api_key:
+        github_api = GhApi(token=github_api_key)
+    else:
+        github_api = GhApi()
+
     # Get Elsevier API key
     if not elsevier_api_key:
         elsevier_api_key = os.getenv("ELSEVIER_API_KEY")
@@ -119,17 +121,28 @@ def _get_parent_repo_and_get_paper_details(
     )
 
 
+@flow(name="get-softwarex-dataset")
 def get_dataset(
     output_filepath: str = "softwarex-short-paper-details.parquet",
-    github_api_key: str | None = None,
+    github_api_keys: str | list[str] | None = None,
     elsevier_api_key: str | None = None,
 ) -> str:
     # Load env
     load_dotenv()
 
+    # Get github api keys
+    if github_api_keys:
+        if isinstance(github_api_keys, str):
+            with open(github_api_keys) as f:
+                loaded_github_api_keys = json.load(f)
+        else:
+            loaded_github_api_keys = github_api_keys
+    else:
+        loaded_github_api_keys = None
+
     # Setup API
-    if github_api_key:
-        github_api = GhApi(token=github_api_key)
+    if loaded_github_api_keys and len(loaded_github_api_keys) > 0:
+        github_api = GhApi(token=loaded_github_api_keys[0])
     else:
         github_api = GhApi()
 
@@ -154,14 +167,14 @@ def get_dataset(
 
     # Get original parent repo for each elsevier repo and get paper details
     all_paper_details = []
-    for repo_name in tqdm(
-        all_softwarex_repos,
+    for i, repo_name in tqdm(
+        enumerate(all_softwarex_repos),
         desc="Getting SoftwareX paper details",
     ):
         # Get paper details
         paper_details = _get_parent_repo_and_get_paper_details(
             repo_name=repo_name,
-            github_api=github_api,
+            github_api_key=loaded_github_api_keys[i % len(loaded_github_api_keys)],
             elsevier_api_key=elsevier_api_key,
         )
         all_paper_details.append(paper_details)

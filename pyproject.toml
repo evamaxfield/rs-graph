@@ -37,8 +37,12 @@ dependencies = [
   "typer>=0.9.0",
   # processing
   "backoff>=2,<3",
+  "dask[distributed]>=2023.10.1",
+  "dask-cloudprovider[gcp]>=2022.10.0",
   "ghapi>=1,<2",
   "parse>=1,<2",
+  "prefect>=2.14,<3",
+  "prefect-dask>=0.2.6",
   "requests>=2,<3",
   "semanticscholar==0.5.0",
   "sentence-transformers>=2,<3",
@@ -79,6 +83,7 @@ rs-graph-data = "rs_graph.bin.data:main"
 rs-graph-sources = "rs_graph.bin.sources:main"
 rs-graph-enrichment = "rs_graph.bin.enrichment:main"
 rs-graph-modeling = "rs_graph.bin.modeling:main"
+rs-graph-distributed = "rs_graph.bin.distributed:main"
 
 # build settings
 # https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html

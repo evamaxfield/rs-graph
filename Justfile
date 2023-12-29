@@ -56,10 +56,7 @@ release:
 	git push --follow-tags
 
 ###############################################################################
-# Infra / Data Storage
-
-###############################################################################
-# API Server Deployment
+# Infra / Data Storage / Compute
 
 # Default region for infrastructures
 default_region := "us-central1"
@@ -109,10 +106,22 @@ switch-project project=default_project:
 enable-services project=default_project:
 	gcloud services enable cloudresourcemanager.googleapis.com
 	gcloud services enable \
-		storage.googleapis.com
+		storage.googleapis.com \
+		compute.googleapis.com \
+		artifactregistry.googleapis.com
 
 # setup all resources
 setup-infra project=default_project:
 	just enable-services {{project}}
 	-\gcloud storage buckets create {{default_bucket}}
 	gcloud storage buckets add-iam-policy-binding {{default_bucket}} --member=allUsers --role=roles/storage.objectViewer
+
+DOCKER_IMAGE_NAME := "evamaxfield/rs-graph"
+
+# build docker image locally
+build-docker:
+	docker build --tag {{DOCKER_IMAGE_NAME}} {{justfile_directory()}}
+
+# run docker in interactive mode with bash
+run-docker-it:
+	docker run --rm -it {{DOCKER_IMAGE_NAME}} bash

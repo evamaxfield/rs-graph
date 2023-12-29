@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import pandas as pd
 import requests
 from dataclasses_json import DataClassJsonMixin
+from prefect import flow, task
 from tqdm import tqdm
 
 ###############################################################################
@@ -33,6 +34,7 @@ class JOSSPaperResults(DataClassJsonMixin):
     published_date: str
 
 
+@task
 def _process_joss_results_page(
     results: list[dict],
 ) -> tuple[list[JOSSPaperResults | None], bool]:
@@ -62,6 +64,7 @@ def _process_joss_results_page(
     return processed_results, continue_next
 
 
+@flow(name="get-joss-dataset")
 def get_dataset(
     output_filepath: str = "joss-short-paper-details.parquet",
     start_page: int = 1,

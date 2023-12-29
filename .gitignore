@@ -134,6 +134,7 @@ joss-upstream-deps.parquet
 softwarex-short-paper-details.parquet
 rs-graph-upstream-deps-failed.parquet
 rs-graph-upstream-deps.parquet
+.github-tokens.json
 
 # Ignore all files in the data/files/ directory
 rs_graph/data/files/*
