@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+import coiled
 import typer
-from dask_cloudprovider.gcp import GCPCluster
 from dotenv import load_dotenv
 from prefect import Flow
 from prefect_dask.task_runners import DaskTaskRunner
@@ -51,7 +51,6 @@ app = typer.Typer()
 
 
 def _get_all_dataset_sources(
-    gcp_project_id: str = "sci-software-graph",
     gh_api_keys_file: str = ".github-tokens.json",
     remote_storage_bucket: str = REMOTE_STORAGE_BUCKET,
     remote_storage_prefix: str = "",
@@ -62,8 +61,6 @@ def _get_all_dataset_sources(
 
     Parameters
     ----------
-    gcp_project_id: str
-        The GCP project ID to use.
     gh_api_keys_file: str
         The path to the JSON file which stores a list of GitHub PATs.
     remote_storage_bucket: str
@@ -113,13 +110,10 @@ def _get_all_dataset_sources(
 
     # Create dask cloudprovider gcp
     log.info("Creating GCP cluster")
-    with GCPCluster(
-        projectid=gcp_project_id,
-        zone="us-central1-a",
+    with coiled.Cluster(
         n_workers=1,
-        machine_type="n1-standard-1",
-        preemptible=True,
-        docker_image="ghcr.io/evamaxfield/rs-graph:distributed",
+        worker_vm_types=["n1-standard-1"],
+        container="ghcr.io/evamaxfield/rs-graph:distributed",
     ) as cluster:
         # Adaptive between 1 and the number of github api keys
         cluster.adapt(
@@ -161,7 +155,6 @@ def _get_all_dataset_sources(
 
 @app.command()
 def get_all_dataset_sources(
-    gcp_project_id: str = "sci-software-graph",
     gh_api_keys_file: str = ".github-tokens.json",
     remote_storage_bucket: str = REMOTE_STORAGE_BUCKET,
     remote_storage_prefix: str = "",
@@ -172,8 +165,6 @@ def get_all_dataset_sources(
 
     Parameters
     ----------
-    gcp_project_id: str
-        The GCP project ID to use.
     gh_api_keys_file: str
         The path to the JSON file which stores a list of GitHub PATs.
     remote_storage_bucket: str
@@ -184,7 +175,6 @@ def get_all_dataset_sources(
         Whether or not to run in debug mode.
     """
     _get_all_dataset_sources(
-        gcp_project_id=gcp_project_id,
         gh_api_keys_file=gh_api_keys_file,
         remote_storage_bucket=remote_storage_bucket,
         remote_storage_prefix=remote_storage_prefix,
