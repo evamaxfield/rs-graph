@@ -105,6 +105,7 @@ def _get_all_dataset_sources(
     # Load github api keys
     with open(gh_api_keys_file) as f:
         global_parameters["github_api_keys"] = json.load(f)
+        log.info(f"Loaded {len(global_parameters['github_api_keys'])} GitHub API keys")
 
     # Load dotenv and get elsevier api key
     load_dotenv()
@@ -112,51 +113,50 @@ def _get_all_dataset_sources(
 
     # Create dask cloudprovider gcp
     log.info("Creating GCP cluster")
-    cluster = GCPCluster(
-        project=gcp_project_id,
+    with GCPCluster(
+        projectid=gcp_project_id,
         zone="us-central1-a",
         n_workers=1,
         machine_type="n1-standard-1",
         preemptible=True,
-        docker_image="ghcr.io/evamaxfield/rs-graph:latest",
-    )
+        docker_image="ghcr.io/evamaxfield/rs-graph:distributed",
+    ) as cluster:
+        # Adaptive between 1 and the number of github api keys
+        cluster.adapt(
+            minimum=1,
+            maximum=len(global_parameters["github_api_keys"]),
+        )
 
-    # Adaptive between 1 and the number of github api keys
-    cluster.adapt(
-        minimum=1,
-        maximum=len(global_parameters["github_api_keys"]),
-    )
+        # Log cluster dashboard
+        log.info(f"Cluster dashboard: {cluster.dashboard_link}")
 
-    # Log cluster dashboard
-    log.info(f"Cluster dashboard: {cluster.dashboard_link}")
+        # Setup prefect
+        stored_datasets = {}
+        with Flow(
+            "get_all_dataset_sources",
+            task_runner=DaskTaskRunner(cluster=cluster),
+        ) as flow:
+            # Get all dataset sources
+            for source_name, source_details in ALL_DATASET_SOURCES_DETAILS_LUT.items():
+                # Get the dataset loader function from the module
+                source_module = getattr(sources, source_name)
 
-    # Setup prefect
-    stored_datasets = {}
-    with Flow(
-        "get_all_dataset_sources",
-        task_runner=DaskTaskRunner(cluster=cluster),
-    ) as flow:
-        # Get all dataset sources
-        for source_name, source_details in ALL_DATASET_SOURCES_DETAILS_LUT.items():
-            # Get the dataset loader function from the module
-            source_module = getattr(sources, source_name)
+                # Get the dataset
+                dataset_path = source_module.get_dataset(
+                    output_filepath=remote_storage_path,
+                    **{
+                        k: v
+                        for k, v in global_parameters.items()
+                        if k in source_details.required_parameters
+                    },
+                )
+                stored_datasets[source_name] = dataset_path
 
-            # Get the dataset
-            dataset_path = source_module.get_dataset(
-                output_filepath=remote_storage_path,
-                **{
-                    k: v
-                    for k, v in global_parameters.items()
-                    if k in source_details.required_parameters
-                },
-            )
-            stored_datasets[source_name] = dataset_path
+        # Run flow
+        flow.run()
 
-    # Run flow
-    flow.run()
-
-    # Return stored datasets
-    return stored_datasets
+        # Return stored datasets
+        return stored_datasets
 
 
 @app.command()

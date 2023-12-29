@@ -4,9 +4,7 @@ FROM python:3.11-slim
 ENV PYTHONUNBUFFERED True
 
 # Copy local code to the container image.
-ENV APP_HOME /app
-WORKDIR $APP_HOME
-COPY . ./
+COPY . .rs-graph-lib-source/
 
 # Install git and tree
 RUN apt-get -y update && apt-get -y install \
@@ -14,4 +12,4 @@ RUN apt-get -y update && apt-get -y install \
     software-properties-common
 
 # Install dependencies
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir .rs-graph-lib-source/

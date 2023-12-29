@@ -36,7 +36,6 @@ dependencies = [
   "tqdm",
   "typer>=0.9.0",
   # processing
-  "backoff>=2,<3",
   "dask[distributed]>=2023.10.1",
   "dask-cloudprovider[gcp]>=2022.10.0",
   "ghapi>=1,<2",
@@ -45,18 +44,8 @@ dependencies = [
   "prefect-dask>=0.2.6",
   "requests>=2,<3",
   "semanticscholar==0.5.0",
-  "sentence-transformers>=2,<3",
   # viz
-  "altair>=5,<6",
   "bokeh>=3,<4",
-  "matplotlib>=3,<4",
-  "networkx>=3,<4",
-  "scipy>=1,<2",
-  "umap-learn[plot]>=0.5.4,<1",
-  # statistics and ml
-  "scikit-learn>=1,<2",
-  "skops==0.9.0",
-  "statsmodels>=0.14,<1",
 ]
 
 [project.urls]
@@ -68,6 +57,19 @@ Documentation = "https://evamaxfield.github.io/rs-graph"
 # extra dependencies
 # https://peps.python.org/pep-0621/#dependencies-optional-dependencies
 [project.optional-dependencies]
+all = [
+  "sentence-transformers>=2,<3",
+  # viz
+  "altair>=5,<6",
+  "matplotlib>=3,<4",
+  "networkx>=3,<4",
+  "scipy>=1,<2",
+  "umap-learn[plot]>=0.5.4,<1",
+  # statistics and ml
+  "scikit-learn>=1,<2",
+  "skops==0.9.0",
+  "statsmodels>=0.14,<1",
+]
 lint = [
   "pre-commit>=2.20.0",
 ]
