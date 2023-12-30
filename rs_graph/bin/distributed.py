@@ -5,13 +5,13 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
 from pathlib import Path
+from typing import Any
 
 import coiled
 import typer
 from dotenv import load_dotenv
-from prefect import Flow
-from prefect_dask.task_runners import DaskTaskRunner
 
 from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.data import REMOTE_STORAGE_BUCKET, sources
@@ -27,19 +27,23 @@ log = logging.getLogger(__name__)
 class DatasetSource:
     name: str
     required_parameters: list[str]
+    result_filename: str
 
 
 ALL_DATASET_SOURCES_DETAILS_LUT = {
     "joss": DatasetSource(
         name="joss",
         required_parameters=[],
+        result_filename="data-source-joss.parquet",
     ),
     "softwarex": DatasetSource(
         name="softwarex",
         required_parameters=[
             "github_api_keys",
             "elsevier_api_key",
+            "use_distributed",
         ],
+        result_filename="data-source-softwarex.parquet",
     ),
 }
 
@@ -50,107 +54,48 @@ app = typer.Typer()
 ###############################################################################
 
 
-def _get_all_dataset_sources(
-    gh_api_keys_file: str = ".github-tokens.json",
-    remote_storage_bucket: str = REMOTE_STORAGE_BUCKET,
-    remote_storage_prefix: str = "",
-    debug: bool = False,
-) -> dict[str, str]:
+def _get_dataset_sources_download_functions(
+    agg_params: dict[str, Any],
+    remote_storage_prefix: str,
+) -> list[partial]:
     """
     Download all source datasets.
 
     Parameters
     ----------
-    gh_api_keys_file: str
-        The path to the JSON file which stores a list of GitHub PATs.
-    remote_storage_bucket: str
-        The cloud storage bucket to store the datasets in.
+    agg_params: dict[str, Any]
+        The preprocessed global parameters to pass to various functions
     remote_storage_prefix: str
         The prefix to add to the stored datasets.
-    debug: bool
-        Whether or not to run in debug mode.
 
     Returns
     -------
-    stored_datasets: dict[str, str]
-        A mapping of dataset names to their storage paths.
+    tasks: list[partial]
+        The individual get dataset functions ready to run.
     """
-    # Very github api keys file
-    if not Path(gh_api_keys_file).exists():
-        raise FileNotFoundError(f"GitHub API keys file not found: '{gh_api_keys_file}'")
+    # Get all dataset sources
+    partial_funcs = []
+    for source_name, source_details in ALL_DATASET_SOURCES_DETAILS_LUT.items():
+        # Get the dataset loader function from the module
+        source_module = getattr(sources, source_name)
 
-    # Handle debug
-    setup_logger(debug=debug)
+        # Create full path
+        this_func_out_fp = f"{remote_storage_prefix}/{source_details.result_filename}"
 
-    # Determine prefix
-    if len(remote_storage_prefix) == 0:
-        datetime.utcnow().replace(microsecond=0).isoformat()
-        remote_storage_prefix = "distributed-{utcnow}"
-    elif remote_storage_prefix.startswith("/"):
-        remote_storage_prefix = remote_storage_prefix.strip("/")
-    elif remote_storage_prefix.endswith("/"):
-        remote_storage_prefix = remote_storage_prefix.rstrip("/")
-
-    # Handle final path
-    remote_storage_path = f"{remote_storage_bucket}/sources/{remote_storage_prefix}/"
-    log.info(f"Storing datasets to: '{remote_storage_path}'")
-
-    # Load global parameters
-    log.info("Loading global parameters")
-    global_parameters = {}
-
-    # Load github api keys
-    with open(gh_api_keys_file) as f:
-        global_parameters["github_api_keys"] = json.load(f)
-        log.info(f"Loaded {len(global_parameters['github_api_keys'])} GitHub API keys")
-
-    # Load dotenv and get elsevier api key
-    load_dotenv()
-    global_parameters["elsevier_api_key"] = os.getenv("ELSEVIER_API_KEY")
-
-    # Create dask cloudprovider gcp
-    log.info("Creating GCP cluster")
-    with coiled.Cluster(
-        n_workers=1,
-        worker_vm_types=["n1-standard-1"],
-        container="ghcr.io/evamaxfield/rs-graph:distributed",
-    ) as cluster:
-        # Adaptive between 1 and the number of github api keys
-        cluster.adapt(
-            minimum=1,
-            maximum=len(global_parameters["github_api_keys"]),
+        # Get the dataset
+        partial_funcs.append(
+            partial(
+                source_module.get_dataset,
+                output_filepath=this_func_out_fp,
+                **{
+                    k: v
+                    for k, v in agg_params.items()
+                    if k in source_details.required_parameters
+                },
+            )
         )
 
-        # Log cluster dashboard
-        log.info(f"Cluster dashboard: {cluster.dashboard_link}")
-
-        # Setup prefect
-        stored_datasets = {}
-        with Flow(
-            "get_all_dataset_sources",
-            task_runner=DaskTaskRunner(cluster=cluster),
-        ) as flow:
-            # Get all dataset sources
-            for source_name, source_details in ALL_DATASET_SOURCES_DETAILS_LUT.items():
-                # Get the dataset loader function from the module
-                source_module = getattr(sources, source_name)
-
-                # Get the dataset
-                dataset_path = source_module.get_dataset(
-                    output_filepath=remote_storage_path,
-                    **{
-                        k: v
-                        for k, v in global_parameters.items()
-                        if k in source_details.required_parameters
-                    },
-                )
-                stored_datasets[source_name] = dataset_path
-
-        # Run flow
-        flow.run()
-
-        # Return stored datasets
-        return stored_datasets
+    return partial_funcs
 
 
 @app.command()
@@ -174,12 +119,77 @@ def get_all_dataset_sources(
     debug: bool
         Whether or not to run in debug mode.
     """
-    _get_all_dataset_sources(
-        gh_api_keys_file=gh_api_keys_file,
-        remote_storage_bucket=remote_storage_bucket,
-        remote_storage_prefix=remote_storage_prefix,
-        debug=debug,
+    # Handle debug
+    setup_logger(debug=debug)
+
+    # Very github api keys file
+    if not Path(gh_api_keys_file).exists():
+        raise FileNotFoundError(f"GitHub API keys file not found: '{gh_api_keys_file}'")
+
+    # Determine prefix
+    if len(remote_storage_prefix) == 0:
+        utcnow = datetime.utcnow().replace(microsecond=0).isoformat()
+        remote_storage_prefix = f"distributed-{utcnow}".replace(":", "-")
+    elif remote_storage_prefix.startswith("/"):
+        remote_storage_prefix = remote_storage_prefix.strip("/")
+    elif remote_storage_prefix.endswith("/"):
+        remote_storage_prefix = remote_storage_prefix.rstrip("/")
+
+    # Handle final path
+    full_storage_prefix = f"{remote_storage_bucket}/sources/{remote_storage_prefix}"
+    log.info(f"Storing datasets to: '{full_storage_prefix}'")
+
+    # Load global parameters
+    log.info("Loading global parameters")
+    agg_params = {}
+
+    # Load github api keys
+    with open(gh_api_keys_file) as f:
+        agg_params["github_api_keys"] = json.load(f)
+        log.info(f"Loaded {len(agg_params['github_api_keys'])} GitHub API keys")
+
+    # Load dotenv and get elsevier api key
+    load_dotenv()
+    agg_params["elsevier_api_key"] = os.getenv("ELSEVIER_API_KEY")
+
+    # Add use_distributed flag
+    agg_params["use_distributed"] = True
+
+    # Get the list of functions to submit to cluster
+    partial_funcs = _get_dataset_sources_download_functions(
+        agg_params=agg_params,
+        remote_storage_prefix=full_storage_prefix,
     )
+
+    # Create flow
+    log.info("Creating GCP cluster")
+    with coiled.Cluster(
+        n_workers=1,
+        worker_vm_types=["n1-standard-1"],
+        container="ghcr.io/evamaxfield/rs-graph:distributed",
+    ) as cluster:
+        # with LocalCluster(
+        #     n_workers=len(agg_params["github_api_keys"]),
+        #     threads_per_worker=1,
+        #     processes=False,
+        # ) as cluster:
+        # Set up adaptive
+        log.info("Setting up adaptive")
+        cluster.adapt(minimum=1, maximum=len(agg_params["github_api_keys"]))
+
+        # Log dashboard address
+        log.info(f"Dask dashboard address: {cluster.dashboard_link}")
+
+        # Get client
+        client = cluster.get_client()
+
+        # Submit all funcs
+        log.info("Submitting all tasks")
+        tasks = [client.submit(func) for func in partial_funcs]
+
+        # Gather / wait for all
+        log.info("Gathering all tasks")
+        client.gather(tasks)
 
 
 ###############################################################################
@@ -190,4 +200,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    app()
+    main()

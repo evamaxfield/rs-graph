@@ -7,12 +7,14 @@ import logging
 import os
 from dataclasses import dataclass
 
+import backoff
 import pandas as pd
 import requests
 from dataclasses_json import DataClassJsonMixin
+from distributed import worker_client
 from dotenv import load_dotenv
+from fastcore.net import HTTP403ForbiddenError
 from ghapi.all import GhApi, paged
-from prefect import flow, task
 from tqdm import tqdm
 
 ###############################################################################
@@ -43,7 +45,11 @@ class RateLimitError(Exception):
     pass
 
 
-@task(retries=5, retry_delay_seconds=[5, 15, 45, 90, 180])
+@backoff.on_exception(
+    backoff.expo,
+    (HTTP403ForbiddenError, RateLimitError),
+    max_time=300,
+)
 def _get_parent_repo_and_get_paper_details(
     repo_name: str,
     github_api_key: str | None,
@@ -121,11 +127,11 @@ def _get_parent_repo_and_get_paper_details(
     )
 
 
-@flow(name="get-softwarex-dataset")
 def get_dataset(
     output_filepath: str = "softwarex-short-paper-details.parquet",
     github_api_keys: str | list[str] | None = None,
     elsevier_api_key: str | None = None,
+    use_distributed: bool = False,
 ) -> str:
     # Load env
     load_dotenv()
@@ -165,19 +171,43 @@ def get_dataset(
         only_repo_names = [repo["name"] for repo in page]
         all_softwarex_repos.extend(only_repo_names)
 
-    # Get original parent repo for each elsevier repo and get paper details
-    all_paper_details = []
-    for i, repo_name in tqdm(
-        enumerate(all_softwarex_repos),
-        desc="Getting SoftwareX paper details",
-    ):
+    # Handle distributed
+    if use_distributed:
+        with worker_client() as client:
+            # Submit all
+            futures = client.map(
+                _get_parent_repo_and_get_paper_details,
+                all_softwarex_repos,
+                [
+                    loaded_github_api_keys[i % len(loaded_github_api_keys)]
+                    for i in range(len(all_softwarex_repos))
+                ],
+                [elsevier_api_key] * len(all_softwarex_repos),
+            )
+
+            # Gather all
+            all_paper_details = client.gather(futures)
+
+    # Handle processing in series
+    else:
+        all_paper_details = []
+
         # Get paper details
-        paper_details = _get_parent_repo_and_get_paper_details(
-            repo_name=repo_name,
-            github_api_key=loaded_github_api_keys[i % len(loaded_github_api_keys)],
-            elsevier_api_key=elsevier_api_key,
-        )
-        all_paper_details.append(paper_details)
+        for i, repo_name in tqdm(
+            enumerate(all_softwarex_repos),
+            desc="Getting SoftwareX paper details",
+            total=len(all_softwarex_repos),
+        ):
+            # Otherwise, run locally
+            all_paper_details.append(
+                _get_parent_repo_and_get_paper_details(
+                    repo_name=repo_name,
+                    github_api_key=loaded_github_api_keys[
+                        i % len(loaded_github_api_keys)
+                    ],
+                    elsevier_api_key=elsevier_api_key,
+                )
+            )
 
     # Get count of total processed and errored
     total_processed = len(all_paper_details)
