@@ -1,3 +1,5 @@
+ARG EXTRA_DEPS=base
+
 FROM python:3.11-slim
 
 # Allow statements and log messages to immediately appear in the Knative logs
@@ -12,4 +14,4 @@ RUN apt-get -y update && apt-get -y install \
     software-properties-common
 
 # Install dependencies
-RUN pip install --no-cache-dir .rs-graph-lib-source/
+RUN pip install --no-cache-dir .rs-graph-lib-source[${EXTRA_DEPS}]
