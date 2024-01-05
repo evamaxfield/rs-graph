@@ -1,6 +1,6 @@
-ARG EXTRA_DEPS=base
-
 FROM python:3.11-slim
+
+ARG EXTRA_DEPS=base
 
 # Allow statements and log messages to immediately appear in the Knative logs
 ENV PYTHONUNBUFFERED True
