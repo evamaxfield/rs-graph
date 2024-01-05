@@ -76,5 +76,5 @@ jobs:
           push: true
           tags: ${{ matrix.deps }}.${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args:
-            - EXTRA_DEPS=${{ matrix.deps }}
+          build-args: |
+            EXTRA_DEPS=${{ matrix.deps }}
