@@ -1,13 +1,17 @@
 #!/usr/bin/env python
 
 import logging
+import os
 
+import coiled
 import pandas as pd
 import typer
+from dotenv import load_dotenv
 
-from rs_graph.bin.typer_utils import setup_logger
+from rs_graph.bin.typer_utils import setup_defaults, setup_logger
 from rs_graph.data import DATA_FILES_DIR, load_basic_repos_dataset
 from rs_graph.data.enrichment import github, semantic_scholar
+from rs_graph.distributed_utils import use_coiled
 
 ###############################################################################
 
@@ -61,15 +65,33 @@ def get_extended_paper_details(debug: bool = False) -> None:
     Be sure to set the `SEMANTIC_SCHOLAR_API_KEY` environment variable.
     """
     # Setup logger
-    setup_logger(debug=debug)
+    storage_prefix = setup_defaults(debug=debug)
 
     # Read repos dataset
     rs_graph_repos = load_basic_repos_dataset()
 
+    # Get semantic_scholar_api_key
+    load_dotenv()
+    semantic_scholar_api_key = os.environ.get("SEMANTIC_SCHOLAR_API_KEY")
+
     # Get extended paper details
-    extended_paper_details = semantic_scholar.get_extended_paper_details(
-        paper_dois=rs_graph_repos.doi.tolist(),
+    @coiled.function(
+        container="ghcr.io/evamaxfield/rs-graph:distributed.enrichment",
+        vm_type="n1-standard-1",
+        local=not use_coiled(),
     )
+    def wrapped_get_paper_details() -> list:
+        return semantic_scholar.get_extended_paper_details(
+            paper_dois=rs_graph_repos.doi.tolist(),
+            semantic_scholar_api_key=semantic_scholar_api_key,
+        )
+
+    if use_coiled():
+        # Set adaptive limit
+        wrapped_get_paper_details.cluster.adapt(minimum=1, maximum=48)
+
+    # Get extended paper details
+    extended_paper_details = wrapped_get_paper_details()
 
     # Convert to dataframe
     extended_paper_details_df = pd.DataFrame(
@@ -77,9 +99,14 @@ def get_extended_paper_details(debug: bool = False) -> None:
     )
 
     # Store extended paper details
-    output_filepath_for_author_details = (
-        DATA_FILES_DIR / "rs-graph-extended-paper-details.parquet"
-    )
+    if storage_prefix:
+        output_filepath_for_author_details = (
+            f"{storage_prefix}/rs-graph-extended-paper-details.parquet"
+        )
+    else:
+        output_filepath_for_author_details = str(
+            DATA_FILES_DIR / "rs-graph-extended-paper-details.parquet"
+        )
     extended_paper_details_df.to_parquet(output_filepath_for_author_details)
     log.info(
         f"Stored extended paper details to: '{output_filepath_for_author_details}'"

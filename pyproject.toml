@@ -53,9 +53,12 @@ Documentation = "https://evamaxfield.github.io/rs-graph"
 base = []
 data-sources = [
   "ghapi>=1,<2",
+]
+enrichment = [
+  "ghapi>=1,<2",
   "semanticscholar==0.5.0",
 ]
-nlp = [
+modeling = [
   "sentence-transformers>=2,<3",
   # viz
   "altair>=5,<6",

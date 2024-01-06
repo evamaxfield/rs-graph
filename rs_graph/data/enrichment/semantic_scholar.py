@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import backoff
 from dataclasses_json import DataClassJsonMixin
+from distributed import worker_client
 from dotenv import load_dotenv
 from semanticscholar import SemanticScholar
 from semanticscholar.ApiRequester import ObjectNotFoundException
@@ -58,14 +59,18 @@ class ExtendedPaperDetails(DataClassJsonMixin):
 @backoff.on_exception(
     backoff.expo,
     Exception,
-    max_time=10,
+    max_time=16,
 )
 def _get_single_paper_details(
-    doi: str, api: SemanticScholar
+    doi: str, semantic_scholar_api: SemanticScholar | str
 ) -> ExtendedPaperDetails | None:
     try:
+        # Handle api
+        if isinstance(semantic_scholar_api, str):
+            semantic_scholar_api = SemanticScholar(semantic_scholar_api)
+
         # Get full paper details
-        paper = api.get_paper(doi)
+        paper = semantic_scholar_api.get_paper(doi)
 
         # Construct in parts
         # Get author details
@@ -122,23 +127,47 @@ def _get_single_paper_details(
 
 def get_extended_paper_details(
     paper_dois: list[str] | str,
+    semantic_scholar_api_key: str | None = None,
 ) -> list[ExtendedPaperDetails]:
     # Handle single paper
     if isinstance(paper_dois, str):
         paper_dois = [paper_dois]
 
     # Load env and create semantic scholar api
-    load_dotenv()
-    api = SemanticScholar(api_key=os.getenv("SEMANTIC_SCHOLAR_API_KEY"))
-
-    # Create partial function with api
-    partial_get_single_paper_details = partial(_get_single_paper_details, api=api)
+    if not semantic_scholar_api_key:
+        load_dotenv()
+        semantic_scholar_api_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
 
     # Get all paper details
-    results = thread_map(
-        partial_get_single_paper_details,
-        paper_dois,
-    )
+    try:
+        with worker_client() as client:
+            # Create partial function with api
+            partial_get_single_paper_details = partial(
+                _get_single_paper_details,
+                semantic_scholar_api=semantic_scholar_api_key,
+            )
+
+            futures = client.map(
+                partial_get_single_paper_details,
+                paper_dois,
+            )
+            results = client.gather(futures)
+
+    # Run locally
+    except ValueError:
+        # Create single api to pass to thread_map
+        semantic_scholar_api = SemanticScholar(semantic_scholar_api_key)
+
+        # Create partial function with api
+        partial_get_single_paper_details = partial(
+            _get_single_paper_details,
+            semantic_scholar_api=semantic_scholar_api,
+        )
+
+        results = thread_map(
+            partial_get_single_paper_details,
+            paper_dois,
+        )
 
     # Filter out Nones
     return [result for result in results if result is not None]

@@ -14,8 +14,14 @@ from dataclasses_json import DataClassJsonMixin
 from distributed import worker_client
 from dotenv import load_dotenv
 from fastcore.net import HTTP403ForbiddenError
-from ghapi.all import GhApi, paged
 from tqdm import tqdm
+
+try:
+    from ghapi.all import GhApi, paged
+except ImportError as e:
+    raise ImportError(
+        "Please install data-sources dependencies: pip install rs-graph[data-sources]"
+    ) from e
 
 ###############################################################################
 
@@ -131,7 +137,6 @@ def get_dataset(
     output_filepath: str = "softwarex-short-paper-details.parquet",
     github_api_keys: str | list[str] | None = None,
     elsevier_api_key: str | None = None,
-    use_distributed: bool = False,
 ) -> str:
     # Load env
     load_dotenv()
@@ -172,7 +177,7 @@ def get_dataset(
         all_softwarex_repos.extend(only_repo_names)
 
     # Handle distributed
-    if use_distributed:
+    try:
         with worker_client() as client:
             # Submit all
             futures = client.map(
@@ -189,7 +194,7 @@ def get_dataset(
             all_paper_details = client.gather(futures)
 
     # Handle processing in series
-    else:
+    except ValueError:
         all_paper_details = []
 
         # Get paper details

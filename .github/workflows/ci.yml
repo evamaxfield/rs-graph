@@ -38,7 +38,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        deps: ["base", "data-sources", "nlp"]
+        deps: ["base", "data-sources", "enrichment", "modeling"]
     # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
       contents: read
