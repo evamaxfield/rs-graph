@@ -78,7 +78,9 @@ def _get_single_paper_details(
         for i, author in enumerate(paper.authors):
             # Get uuid4 if author has no author id
             if author.authorId is None:
-                author.authorId = str(uuid4())
+                prepared_author_id = str(uuid4())
+            else:
+                prepared_author_id = author.authorId
 
             if i == 0:
                 if len(paper.authors) > 1:
@@ -92,7 +94,7 @@ def _get_single_paper_details(
 
             authors.append(
                 AuthorDetails(
-                    author_id=author.authorId,
+                    author_id=prepared_author_id,
                     name=author.name,
                     affiliations=author.affiliations,
                     h_index=author.hIndex,
