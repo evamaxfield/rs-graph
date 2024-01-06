@@ -4,4 +4,4 @@ import os
 
 
 def use_coiled() -> bool:
-    return bool(os.environ.get("USE_COILED", False))
+    return os.environ.get("USE_COILED", "False") == "True"

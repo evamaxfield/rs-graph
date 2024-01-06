@@ -44,7 +44,7 @@ def _get_single_dataset(
     # Setup function / handle distributed
     @coiled.function(
         container="ghcr.io/evamaxfield/rs-graph:distributed.data-sources",
-        vm_type="n1-standard-2",
+        vm_type="n1-standard-1",
         local=not use_coiled(),
     )
     def get_dataset_func() -> str:

@@ -67,7 +67,7 @@ def _get_single_paper_details(
     try:
         # Handle api
         if isinstance(semantic_scholar_api, str):
-            semantic_scholar_api = SemanticScholar(semantic_scholar_api)
+            semantic_scholar_api = SemanticScholar(api_key=semantic_scholar_api)
 
         # Get full paper details
         paper = semantic_scholar_api.get_paper(doi)
@@ -156,7 +156,7 @@ def get_extended_paper_details(
     # Run locally
     except ValueError:
         # Create single api to pass to thread_map
-        semantic_scholar_api = SemanticScholar(semantic_scholar_api_key)
+        semantic_scholar_api = SemanticScholar(api_key=semantic_scholar_api_key)
 
         # Create partial function with api
         partial_get_single_paper_details = partial(

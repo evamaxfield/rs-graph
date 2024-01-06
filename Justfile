@@ -19,7 +19,7 @@ clean:
 
 # install with all deps
 install:
-    pip install -e ".[data-sources,nlp,dev,lint]"
+    pip install -e ".[data-sources,enrichment,modeling,dev,lint]"
 
 # lint, format, and check all files
 lint:

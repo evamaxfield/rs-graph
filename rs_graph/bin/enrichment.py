@@ -6,7 +6,6 @@ import os
 import coiled
 import pandas as pd
 import typer
-from dotenv import load_dotenv
 
 from rs_graph.bin.typer_utils import setup_defaults, setup_logger
 from rs_graph.data import DATA_FILES_DIR, load_basic_repos_dataset
@@ -71,27 +70,34 @@ def get_extended_paper_details(debug: bool = False) -> None:
     rs_graph_repos = load_basic_repos_dataset()
 
     # Get semantic_scholar_api_key
-    load_dotenv()
     semantic_scholar_api_key = os.environ.get("SEMANTIC_SCHOLAR_API_KEY")
 
-    # Get extended paper details
-    @coiled.function(
-        container="ghcr.io/evamaxfield/rs-graph:distributed.enrichment",
-        vm_type="n1-standard-1",
-        local=not use_coiled(),
-    )
-    def wrapped_get_paper_details() -> list:
-        return semantic_scholar.get_extended_paper_details(
-            paper_dois=rs_graph_repos.doi.tolist(),
-            semantic_scholar_api_key=semantic_scholar_api_key,
-        )
-
+    # Handle distributed
     if use_coiled():
+        # Get extended paper details
+        @coiled.function(
+            container="ghcr.io/evamaxfield/rs-graph:distributed.enrichment",
+            vm_type="n1-standard-1",
+            local=not use_coiled(),
+        )
+        def wrapped_get_paper_details() -> list:
+            return semantic_scholar.get_extended_paper_details(
+                paper_dois=rs_graph_repos.doi.tolist(),
+                semantic_scholar_api_key=semantic_scholar_api_key,
+            )
+
         # Set adaptive limit
         wrapped_get_paper_details.cluster.adapt(minimum=1, maximum=48)
 
-    # Get extended paper details
-    extended_paper_details = wrapped_get_paper_details()
+        # Get extended paper details
+        extended_paper_details = wrapped_get_paper_details()
+
+    # Run locally
+    else:
+        extended_paper_details = semantic_scholar.get_extended_paper_details(
+            paper_dois=rs_graph_repos.doi.tolist(),
+            semantic_scholar_api_key=semantic_scholar_api_key,
+        )
 
     # Convert to dataframe
     extended_paper_details_df = pd.DataFrame(
