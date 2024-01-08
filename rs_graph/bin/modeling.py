@@ -8,10 +8,6 @@ import pandas as pd
 import typer
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.util import cos_sim
-from sklearn.linear_model import LogisticRegressionCV
-from sklearn.metrics import ConfusionMatrixDisplay, precision_recall_fscore_support
-from sklearn.model_selection import train_test_split
-from skops import io as sk_io
 from statsmodels.stats.inter_rater import aggregate_raters, fleiss_kappa
 from tqdm import tqdm
 
@@ -23,7 +19,6 @@ from rs_graph.data import (
     load_repo_contributors_dataset,
 )
 from rs_graph.modeling import (
-    AUTHOR_DEV_EM_MODEL_PATH,
     DEFAULT_AUTHOR_DEV_EMBEDDING_MODEL_NAME,
 )
 
@@ -40,9 +35,19 @@ app = typer.Typer()
 
 def _get_unique_devs_frame_from_dev_contributions(
     dev_contributions_df: pd.DataFrame,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, dict[str, set[str]]]:
     # Each row should be a unique person
     log.info("Getting unique developers frame...")
+
+    # Make repo to dev lut
+    repo_to_devs_lut: dict[str, set[str]] = {}
+    for _, dev in dev_contributions_df.iterrows():
+        for repo in dev.repo:
+            if repo not in repo_to_devs_lut:
+                repo_to_devs_lut[repo] = set()
+
+            repo_to_devs_lut[repo].add(dev.username)
+
     unique_devs = []
     for username, group in dev_contributions_df.groupby("username"):
         flat_co_contribs = []
@@ -63,7 +68,58 @@ def _get_unique_devs_frame_from_dev_contributions(
         )
 
     # Reform as df
-    return pd.DataFrame(unique_devs)
+    return pd.DataFrame(unique_devs), repo_to_devs_lut
+
+
+def _get_authors_with_co_author_frame_from_author_contributions(
+    author_contributions_df: pd.DataFrame,
+) -> tuple[pd.DataFrame, dict[str, set[str]]]:
+    # Each row should be a unique person
+    log.info("Getting unique authors frame...")
+
+    # Make repo to author LUT
+    repo_to_author_ids_lut: dict[str, set[str]] = {}
+    for _, author in author_contributions_df.iterrows():
+        for contribution in author.contributions:
+            if contribution["repo"] not in repo_to_author_ids_lut:
+                repo_to_author_ids_lut[contribution["repo"]] = set()
+
+            repo_to_author_ids_lut[contribution["repo"]].add(author.author_id)
+
+    # Construct unique authors with co_authors frame
+    unique_authors = []
+    for _, author in author_contributions_df.iterrows():
+        # Get all co-authors
+        all_co_authors = set()
+        for contribution in author.contributions:
+            # Get author ids from repo_to_authors
+            co_author_ids = repo_to_author_ids_lut[contribution["repo"]]
+
+            # Get names from author_id_to_name_dict
+            co_author_names = {
+                author_contributions_df.loc[
+                    author_contributions_df.author_id == author_id
+                ].iloc[0]["name"]
+                for author_id in co_author_ids
+            }
+
+            # Add to all co-authors
+            all_co_authors.update(co_author_names)
+
+        # Remove self from co-authors
+        all_co_authors.discard(author["name"])
+
+        unique_authors.append(
+            {
+                "author_id": author.author_id,
+                "name": author["name"],
+                "repos": tuple(c["repo"] for c in author.contributions),
+                "co_authors": tuple(all_co_authors),
+            }
+        )
+
+    # Reform as df
+    return pd.DataFrame(unique_authors), repo_to_author_ids_lut
 
 
 def _dataframe_to_joined_str_items(
@@ -122,16 +178,16 @@ def create_author_developer_em_dataset_for_annotation(  # noqa: C901
 
     # Load the repo contributors dataset
     log.info("Loading developer contributions dataset...")
-    devs = load_repo_contributors_dataset()
+    devs = load_repo_contributors_dataset().sample(200)
 
     # Get unique devs frame
-    unique_devs_df = _get_unique_devs_frame_from_dev_contributions(
+    unique_devs_df, _ = _get_unique_devs_frame_from_dev_contributions(
         devs,
     )
 
     # Load the author contributions dataset
     log.info("Loading author contributions dataset...")
-    authors = load_author_contributions_dataset()
+    authors = load_author_contributions_dataset().sample(500)
 
     # Create lookup for repo to authors
     repo_to_authors: dict[str, set[str]] = {}
@@ -293,6 +349,7 @@ def create_author_developer_em_dataset_for_annotation(  # noqa: C901
         for author_id, similarity in top_n_similar_authors:
             top_n_similar_author_details.append(
                 {
+                    "author_id": author_id,
                     "similarity": similarity,
                     "details": prepped_authors_dict[author_id],
                 }
@@ -302,6 +359,8 @@ def create_author_developer_em_dataset_for_annotation(  # noqa: C901
         for repo_related_author_details in top_n_similar_author_details:
             author_dev_comparison_rows.append(
                 {
+                    "github_id": full_dev_details.username,
+                    "semantic_scholar_id": repo_related_author_details["author_id"],
                     "dev_details": dev_details,
                     "author_details": repo_related_author_details["details"],
                     "similarity": repo_related_author_details["similarity"],
@@ -310,6 +369,11 @@ def create_author_developer_em_dataset_for_annotation(  # noqa: C901
 
     # Convert to dataframe
     author_dev_comparison_df = pd.DataFrame(author_dev_comparison_rows)
+
+    # Remove rows with no semantic scholar id
+    author_dev_comparison_df = author_dev_comparison_df.dropna(
+        subset=["semantic_scholar_id"]
+    )
 
     # Store to disk
     output_filepath = "author-dev-em-annotation-dataset.csv"
@@ -408,64 +472,6 @@ def calculate_irr_for_author_dev_em_annotation(
         print()
 
 
-def _from_details_to_dicts(
-    dev_details: str,
-    author_details: str,
-    model: SentenceTransformer,
-) -> dict[str, float]:
-    # Split into items then into dict
-    dev_items = dev_details.replace("\n", "").split(";")
-    author_items = author_details.replace("\n", "").split(";")
-    dev_dict = {
-        pair[0].strip(): pair[1].strip()
-        for pair in [item.split(":", 1) for item in dev_items]
-        if len(pair) == 2
-    }
-    author_dict = {
-        pair[0].strip(): pair[1].strip()
-        for pair in [item.split(":", 1) for item in author_items]
-        if len(pair) == 2
-    }
-
-    # Remove "repos" keys
-    dev_dict.pop("repos", None)
-    author_dict.pop("repos", None)
-
-    # Create embedding for each part
-    dev_values_embeddings = model.encode(
-        list(dev_dict.values()),
-        show_progress_bar=False,
-    ).tolist()
-    author_values_embeddings = model.encode(
-        list(author_dict.values()),
-        show_progress_bar=False,
-    ).tolist()
-    dev_embedding_dict = dict(
-        zip(
-            dev_dict.keys(),
-            dev_values_embeddings,
-            strict=True,
-        )
-    )
-    author_embedding_dict = dict(
-        zip(
-            author_dict.keys(),
-            author_values_embeddings,
-            strict=True,
-        )
-    )
-
-    # Create interactions by creating pairwise combinations
-    this_x = {}
-    for dev_key, dev_value in dev_embedding_dict.items():
-        for author_key, author_value in author_embedding_dict.items():
-            pairwise_key = f"dev-{dev_key}---author-{author_key}"
-            for i, dev_i_v in enumerate(dev_value):
-                this_x[f"{pairwise_key}---dim-{i}"] = dev_i_v * author_value[i]
-
-    return this_x
-
-
 @app.command()
 def train_author_dev_em_classifier(
     embedding_model_name: str = DEFAULT_AUTHOR_DEV_EMBEDDING_MODEL_NAME,
@@ -478,72 +484,91 @@ def train_author_dev_em_classifier(
     log.info("Loading author-dev EM annotation dataset...")
     annotated_data = load_annotated_author_dev_em_dataset()
 
+    # Load devs dataset
+    log.info("Loading developer contributions dataset...")
+    devs = load_repo_contributors_dataset()
+
+    # Load authors dataset
+    log.info("Loading author contributions dataset...")
+    authors = load_author_contributions_dataset()
+
+    # Get matching dev rows from annotated dataset
+    annotated_devs = devs.loc[devs.username.isin(annotated_data.github_id)]
+
+    # Get unique devs frame
+    unique_devs_df, repo_to_devs_lut = _get_unique_devs_frame_from_dev_contributions(
+        annotated_devs,
+    )
+
+    print(unique_devs_df.sample(4))
+
+    # Get matching author rows from annotated dataset
+    annotated_authors = authors.loc[
+        authors.author_id.astype(str).isin(
+            annotated_data.semantic_scholar_id.astype(str)
+        )
+    ]
+
+    # Get unique authors frame
+    (
+        unique_authors_df,
+        repos_to_authors_lut,
+    ) = _get_authors_with_co_author_frame_from_author_contributions(
+        annotated_authors,
+    )
+
+    print(unique_authors_df.sample(4))
+
     # Print value counts of "match"
-    print("Match value counts: ")
-    print(annotated_data.match.value_counts())
-    print()
+    # print("Match value counts: ")
+    # print(annotated_data.match.value_counts())
+    # print()
 
     # Init embedding model
-    embedding_model = SentenceTransformer(embedding_model_name)
-
-    # Process each row
-    proccessed_features = []
-    for _, row in tqdm(
-        annotated_data.iterrows(),
-        total=len(annotated_data),
-        desc="Getting embedding features for each annotated pair",
-    ):
-        # Add to list
-        proccessed_features.append(
-            _from_details_to_dicts(
-                row.dev_details,
-                row.author_details,
-                embedding_model,
-            )
-        )
+    # embedding_model = SentenceTransformer(embedding_model_name)
 
     # Create dataframe and copy over labels
-    prepped_df = pd.DataFrame(proccessed_features)
-    prepped_df["match"] = annotated_data.match
+    # prepped_df = pd.DataFrame(proccessed_features)
+    # prepped_df["match"] = annotated_data.match
 
-    # Train test split
-    x_train, x_test, y_train, y_test = train_test_split(
-        prepped_df.drop(columns=["match"]),
-        prepped_df.match,
-        test_size=0.2,
-        stratify=prepped_df.match,
-        shuffle=True,
-        random_state=12,
-    )
+    # # Train test split
+    # x_train, x_test, y_train, y_test = train_test_split(
+    #     prepped_df.drop(columns=["match"]),
+    #     prepped_df.match,
+    #     test_size=0.2,
+    #     stratify=prepped_df.match,
+    #     shuffle=True,
+    #     random_state=12,
+    # )
 
-    # Train model
-    log.info("Training classifier...")
-    classifier = LogisticRegressionCV(
-        cv=10,
-        max_iter=1000,
-        random_state=12,
-        class_weight="balanced",
-    ).fit(x_train, y_train)
+    # # Train model
+    # log.info("Training classifier...")
+    # classifier = LogisticRegressionCV(
+    #     cv=10,
+    #     max_iter=1000,
+    #     random_state=12,
+    #     class_weight="balanced",
+    # ).fit(x_train, y_train)
 
-    # Save model
-    log.info("Saving classifier...")
-    sk_io.dump(classifier, AUTHOR_DEV_EM_MODEL_PATH)
+    # # Save model
+    # log.info("Saving classifier...")
+    # sk_io.dump(classifier, AUTHOR_DEV_EM_MODEL_PATH)
 
-    # Evaluate model
-    log.info("Evaluating classifier...")
-    y_pred = classifier.predict(x_test)
-    precision, recall, f1, _ = precision_recall_fscore_support(
-        y_test, y_pred, average="weighted"
-    )
-    log.info(f"pre: {precision}, " f"rec: {recall}, " f"f1: {f1}")
+    # # Evaluate model
+    # log.info("Evaluating classifier...")
+    # y_pred = classifier.predict(x_test)
+    # precision, recall, f1, _ = precision_recall_fscore_support(
+    #     y_test, y_pred, average="weighted"
+    # )
+    # log.info(f"pre: {precision}, " f"rec: {recall}, " f"f1: {f1}")
 
-    # Get confusion matrix plot
-    confusion = ConfusionMatrixDisplay.from_predictions(y_test, y_pred)
+    # # Get confusion matrix plot
+    # confusion = ConfusionMatrixDisplay.from_predictions(y_test, y_pred)
 
-    # Save confusion matrix plot
-    matrix_save_path = "author-dev-em-confusion-matrix.png"
-    confusion.figure_.savefig(matrix_save_path)
-    log.info(f"Confusion matrix saved to {matrix_save_path}")
+    # # Save confusion matrix plot
+    # matrix_save_path = "author-dev-em-confusion-matrix.png"
+    # confusion.figure_.savefig(matrix_save_path)
+    # log.info(f"Confusion matrix saved to {matrix_save_path}")
 
 
 ###############################################################################

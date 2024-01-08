@@ -101,6 +101,7 @@ def download(debug: bool = False) -> None:
         # Convert only the directory name to a date
         date.fromisoformat(d.split("/")[-1])
         for d in fs.ls(REMOTE_STORAGE_BUCKET)
+        if "remote" not in d
     ]
 
     # Get most recent date
