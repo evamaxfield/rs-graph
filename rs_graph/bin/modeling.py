@@ -47,7 +47,6 @@ class GitHubUserModelingColumns:
     username = "username"
     name = "name"
     email = "email"
-    co_contributors = "co_contributors"
 
 
 ALL_GITHUB_USER_MODELING_COLUMNS = [
@@ -57,7 +56,6 @@ ALL_GITHUB_USER_MODELING_COLUMNS = [
 
 class AuthorModelingColumns:
     name = "name"
-    co_authors = "co_authors"
 
 
 ALL_AUTHOR_MODELING_COLUMNS = [
@@ -507,7 +505,7 @@ def calculate_irr_for_author_dev_em_annotation(
 
 
 @app.command()
-def train_author_dev_em_classifier(
+def train_author_dev_em_classifier(  # noqa: C901
     embedding_model_name: str = DEFAULT_AUTHOR_DEV_EMBEDDING_MODEL_NAME,
     debug: bool = False,
 ) -> None:
@@ -587,14 +585,13 @@ def train_author_dev_em_classifier(
     embedding_model = SentenceTransformer(embedding_model_name)
 
     # For each pair of dev and author details, create embeddings
-    features_to_embed: dict[str, list[str]] = {
-        "match_values": [],
-        "dev_details": [],
-        "author_details": [],
-    }
+    match_values = []
+    dev_features: dict[str, list[str]] = {}
+    author_features: dict[str, list[str]] = {}
     for pair in tqdm(
         paired_dev_author_details,
         desc="Prepping for feature embedding",
+        total=len(paired_dev_author_details),
     ):
         # Get dev and author details
         dev_details = pair["dev_details"]
@@ -609,64 +606,94 @@ def train_author_dev_em_classifier(
             if isinstance(author_details[col], Iterable):
                 author_details[col] = ", ".join(author_details[col])
 
-        # Get dev and author details as strings
-        dev_details_str = "\n".join(
-            f"{key}: {value};" for key, value in dev_details.to_dict().items()
-        )
-        author_details_str = "\n".join(
-            f"{key}: {value};" for key, value in author_details.to_dict().items()
-        )
+        # For each dev column, add a column with that feature name
+        # and the value as a string
+        for col in dev_details.index:
+            feature_name = f"dev-{col}"
+            if feature_name not in dev_features:
+                dev_features[feature_name] = []
+
+            dev_features[feature_name].append(str(dev_details[col]))
+
+        # For each author column, add a column with that feature name
+        # and the value as a string
+        for col in author_details.index:
+            feature_name = f"author-{col}"
+            if feature_name not in author_features:
+                author_features[feature_name] = []
+
+            author_features[feature_name].append(str(author_details[col]))
 
         # Add to features to embed
-        features_to_embed["match_values"].append(pair["match"])
-        features_to_embed["dev_details"].append(dev_details_str)
-        features_to_embed["author_details"].append(author_details_str)
+        match_values.append(pair["match"])
 
     # Create embeddings
     log.info("Creating embeddings...")
-    embedded_dev_details = embedding_model.encode(
-        features_to_embed["dev_details"],
-        show_progress_bar=True,
-    )
-    embedded_author_details = embedding_model.encode(
-        features_to_embed["author_details"],
-        show_progress_bar=True,
-    )
+
+    # For each feature, create embeddings and store into new dict
+    embedded_dev_features = {}
+    for feature_name, feature_values in tqdm(
+        dev_features.items(),
+        desc="Embedding dev features",
+        total=len(dev_features),
+    ):
+        # Create embeddings
+        embedded_dev_features[feature_name] = embedding_model.encode(
+            feature_values,
+            show_progress_bar=True,
+        )
+
+    embedded_author_features = {}
+    for feature_name, feature_values in tqdm(
+        author_features.items(),
+        desc="Embedding author features",
+        total=len(author_features),
+    ):
+        # Create embeddings
+        embedded_author_features[feature_name] = embedding_model.encode(
+            feature_values,
+            show_progress_bar=True,
+        )
 
     # Multiply embeddings
-    embedded_features = []
-    for match, dev_embedding, author_embedding in tqdm(
-        zip(
-            features_to_embed["match_values"],
-            embedded_dev_details.tolist(),
-            embedded_author_details.tolist(),
-            strict=True,
-        ),
-        desc="Multiplying embeddings",
-        total=len(features_to_embed["match_values"]),
+    embedded_features: dict[str, np.array] = {}
+    for dev_feature_name, dev_embedded_values in tqdm(
+        embedded_dev_features.items(),
+        desc="Pairwise multiply embeddings",
+        total=len(embedded_dev_features),
     ):
-        # Multiply embeddings
-        interaction_embedding = np.array(dev_embedding) * np.array(author_embedding)
+        for (
+            author_feature_name,
+            author_embedded_values,
+        ) in embedded_author_features.items():
+            # Add to embedded features
+            embedded_features[f"{dev_feature_name}--{author_feature_name}"] = (
+                dev_embedded_values * author_embedded_values
+            )
 
-        # Multiply embeddings
-        embedded_features.append(
+    # Iter and create rows
+    fully_unpacked_embedded_features = []
+    for example_i in range(len(match_values)):
+        this_row = {}
+        for feature_name, feature_values in embedded_features.items():
+            for dim_i, dim_val in enumerate(feature_values[example_i]):
+                this_row[f"{feature_name}--embed-{dim_i}"] = dim_val
+
+        fully_unpacked_embedded_features.append(
             {
-                **{
-                    f"embed-{i}": v
-                    for i, v in enumerate(interaction_embedding.tolist())
-                },
-                "match": match,
+                **this_row,
+                "match": match_values[example_i],
             }
         )
 
     # Create dataframe and copy over labels
-    prepped_df = pd.DataFrame(embedded_features)
+    prepped_df = pd.DataFrame(fully_unpacked_embedded_features)
 
     # Train test split
     x_train, x_test, y_train, y_test = train_test_split(
         prepped_df.drop(columns=["match"]),
         prepped_df.match,
-        test_size=0.4,
+        test_size=0.25,
         stratify=prepped_df.match,
         shuffle=True,
         random_state=12,
@@ -678,7 +705,7 @@ def train_author_dev_em_classifier(
         cv=10,
         max_iter=1000,
         random_state=12,
-        class_weight="balanced",
+        # class_weight="balanced",
     ).fit(x_train, y_train)
 
     # Save model
@@ -689,7 +716,7 @@ def train_author_dev_em_classifier(
     log.info("Evaluating classifier...")
     y_pred = classifier.predict(x_test)
     precision, recall, f1, _ = precision_recall_fscore_support(
-        y_test, y_pred, pos_label="match"
+        y_test, y_pred, pos_label="match", average="binary"
     )
     log.info(f"pre: {precision}, " f"rec: {recall}, " f"f1: {f1}")
 
