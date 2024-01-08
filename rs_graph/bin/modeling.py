@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import logging
+from collections.abc import Iterable
 from uuid import uuid4
 
 import numpy as np
@@ -8,6 +9,14 @@ import pandas as pd
 import typer
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.util import cos_sim
+from sklearn.linear_model import LogisticRegressionCV
+from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    RocCurveDisplay,
+    precision_recall_fscore_support,
+)
+from sklearn.model_selection import train_test_split
+from skops import io as sk_io
 from statsmodels.stats.inter_rater import aggregate_raters, fleiss_kappa
 from tqdm import tqdm
 
@@ -19,6 +28,7 @@ from rs_graph.data import (
     load_repo_contributors_dataset,
 )
 from rs_graph.modeling import (
+    AUTHOR_DEV_EM_MODEL_PATH,
     DEFAULT_AUTHOR_DEV_EMBEDDING_MODEL_NAME,
 )
 
@@ -29,6 +39,30 @@ log = logging.getLogger(__name__)
 ###############################################################################
 
 app = typer.Typer()
+
+###############################################################################
+
+
+class GitHubUserModelingColumns:
+    username = "username"
+    name = "name"
+    email = "email"
+    co_contributors = "co_contributors"
+
+
+ALL_GITHUB_USER_MODELING_COLUMNS = [
+    v for k, v in GitHubUserModelingColumns.__dict__.items() if "__" not in k
+]
+
+
+class AuthorModelingColumns:
+    name = "name"
+    co_authors = "co_authors"
+
+
+ALL_AUTHOR_MODELING_COLUMNS = [
+    v for k, v in AuthorModelingColumns.__dict__.items() if "__" not in k
+]
 
 ###############################################################################
 
@@ -496,11 +530,9 @@ def train_author_dev_em_classifier(
     annotated_devs = devs.loc[devs.username.isin(annotated_data.github_id)]
 
     # Get unique devs frame
-    unique_devs_df, repo_to_devs_lut = _get_unique_devs_frame_from_dev_contributions(
+    unique_devs_df, _ = _get_unique_devs_frame_from_dev_contributions(
         annotated_devs,
     )
-
-    print(unique_devs_df.sample(4))
 
     # Get matching author rows from annotated dataset
     annotated_authors = authors.loc[
@@ -512,63 +544,171 @@ def train_author_dev_em_classifier(
     # Get unique authors frame
     (
         unique_authors_df,
-        repos_to_authors_lut,
+        _,
     ) = _get_authors_with_co_author_frame_from_author_contributions(
         annotated_authors,
     )
 
-    print(unique_authors_df.sample(4))
+    # Get paired dev and author details with the match value
+    paired_dev_author_details = []
+    for _, row in tqdm(
+        annotated_data.iterrows(),
+        desc="Pairing dev and author details",
+        total=len(annotated_data),
+    ):
+        # Get dev details
+        dev_details = unique_devs_df.loc[unique_devs_df.username == row.github_id].iloc[
+            0
+        ]
+
+        # Get author details
+        author_details = unique_authors_df.loc[
+            unique_authors_df.author_id.astype(str) == str(row.semantic_scholar_id)
+        ].iloc[0]
+
+        # Keep only columns of interest
+        dev_details = dev_details[ALL_GITHUB_USER_MODELING_COLUMNS]
+        author_details = author_details[ALL_AUTHOR_MODELING_COLUMNS]
+
+        # Add to paired dev author details
+        paired_dev_author_details.append(
+            {
+                "dev_details": dev_details,
+                "author_details": author_details,
+                "match": row.match,
+            }
+        )
 
     # Print value counts of "match"
-    # print("Match value counts: ")
-    # print(annotated_data.match.value_counts())
-    # print()
+    print("Match value counts: ")
+    print(annotated_data.match.value_counts())
 
     # Init embedding model
-    # embedding_model = SentenceTransformer(embedding_model_name)
+    embedding_model = SentenceTransformer(embedding_model_name)
+
+    # For each pair of dev and author details, create embeddings
+    features_to_embed: dict[str, list[str]] = {
+        "match_values": [],
+        "dev_details": [],
+        "author_details": [],
+    }
+    for pair in tqdm(
+        paired_dev_author_details,
+        desc="Prepping for feature embedding",
+    ):
+        # Get dev and author details
+        dev_details = pair["dev_details"]
+        author_details = pair["author_details"]
+
+        # Convert iterable columns to strings
+        for col in dev_details.index:
+            if isinstance(dev_details[col], Iterable):
+                dev_details[col] = ", ".join(dev_details[col])
+
+        for col in author_details.index:
+            if isinstance(author_details[col], Iterable):
+                author_details[col] = ", ".join(author_details[col])
+
+        # Get dev and author details as strings
+        dev_details_str = "\n".join(
+            f"{key}: {value};" for key, value in dev_details.to_dict().items()
+        )
+        author_details_str = "\n".join(
+            f"{key}: {value};" for key, value in author_details.to_dict().items()
+        )
+
+        # Add to features to embed
+        features_to_embed["match_values"].append(pair["match"])
+        features_to_embed["dev_details"].append(dev_details_str)
+        features_to_embed["author_details"].append(author_details_str)
+
+    # Create embeddings
+    log.info("Creating embeddings...")
+    embedded_dev_details = embedding_model.encode(
+        features_to_embed["dev_details"],
+        show_progress_bar=True,
+    )
+    embedded_author_details = embedding_model.encode(
+        features_to_embed["author_details"],
+        show_progress_bar=True,
+    )
+
+    # Multiply embeddings
+    embedded_features = []
+    for match, dev_embedding, author_embedding in tqdm(
+        zip(
+            features_to_embed["match_values"],
+            embedded_dev_details.tolist(),
+            embedded_author_details.tolist(),
+            strict=True,
+        ),
+        desc="Multiplying embeddings",
+        total=len(features_to_embed["match_values"]),
+    ):
+        # Multiply embeddings
+        interaction_embedding = np.array(dev_embedding) * np.array(author_embedding)
+
+        # Multiply embeddings
+        embedded_features.append(
+            {
+                **{
+                    f"embed-{i}": v
+                    for i, v in enumerate(interaction_embedding.tolist())
+                },
+                "match": match,
+            }
+        )
 
     # Create dataframe and copy over labels
-    # prepped_df = pd.DataFrame(proccessed_features)
-    # prepped_df["match"] = annotated_data.match
+    prepped_df = pd.DataFrame(embedded_features)
 
-    # # Train test split
-    # x_train, x_test, y_train, y_test = train_test_split(
-    #     prepped_df.drop(columns=["match"]),
-    #     prepped_df.match,
-    #     test_size=0.2,
-    #     stratify=prepped_df.match,
-    #     shuffle=True,
-    #     random_state=12,
-    # )
+    # Train test split
+    x_train, x_test, y_train, y_test = train_test_split(
+        prepped_df.drop(columns=["match"]),
+        prepped_df.match,
+        test_size=0.4,
+        stratify=prepped_df.match,
+        shuffle=True,
+        random_state=12,
+    )
 
-    # # Train model
-    # log.info("Training classifier...")
-    # classifier = LogisticRegressionCV(
-    #     cv=10,
-    #     max_iter=1000,
-    #     random_state=12,
-    #     class_weight="balanced",
-    # ).fit(x_train, y_train)
+    # Train model
+    log.info("Training classifier...")
+    classifier = LogisticRegressionCV(
+        cv=10,
+        max_iter=1000,
+        random_state=12,
+        class_weight="balanced",
+    ).fit(x_train, y_train)
 
-    # # Save model
-    # log.info("Saving classifier...")
-    # sk_io.dump(classifier, AUTHOR_DEV_EM_MODEL_PATH)
+    # Save model
+    log.info("Saving classifier...")
+    sk_io.dump(classifier, AUTHOR_DEV_EM_MODEL_PATH)
 
-    # # Evaluate model
-    # log.info("Evaluating classifier...")
-    # y_pred = classifier.predict(x_test)
-    # precision, recall, f1, _ = precision_recall_fscore_support(
-    #     y_test, y_pred, average="weighted"
-    # )
-    # log.info(f"pre: {precision}, " f"rec: {recall}, " f"f1: {f1}")
+    # Evaluate model
+    log.info("Evaluating classifier...")
+    y_pred = classifier.predict(x_test)
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        y_test, y_pred, pos_label="match"
+    )
+    log.info(f"pre: {precision}, " f"rec: {recall}, " f"f1: {f1}")
 
-    # # Get confusion matrix plot
-    # confusion = ConfusionMatrixDisplay.from_predictions(y_test, y_pred)
+    # Get confusion matrix plot
+    confusion = ConfusionMatrixDisplay.from_predictions(y_test, y_pred)
 
-    # # Save confusion matrix plot
-    # matrix_save_path = "author-dev-em-confusion-matrix.png"
-    # confusion.figure_.savefig(matrix_save_path)
-    # log.info(f"Confusion matrix saved to {matrix_save_path}")
+    # Save confusion matrix plot
+    matrix_save_path = "author-dev-em-confusion-matrix.png"
+    confusion.figure_.savefig(matrix_save_path)
+    log.info(f"Confusion matrix saved to {matrix_save_path}")
+
+    # Get ROC curve plot
+    y_pred_conf = classifier.decision_function(x_test)
+    roc_curve = RocCurveDisplay.from_predictions(y_test, y_pred_conf, pos_label="match")
+
+    # Save ROC curve plot
+    roc_save_path = "author-dev-em-roc-curve.png"
+    roc_curve.figure_.savefig(roc_save_path)
+    log.info(f"ROC curve saved to {roc_save_path}")
 
 
 ###############################################################################

@@ -141,3 +141,4 @@ rs_graph/data/files/*
 author-dev-em-annotation-dataset.csv
 author-dev-em-annotation-dataset-irr.csv
 author-dev-em-confusion-matrix.png
+author-dev-em-roc-curve.png
