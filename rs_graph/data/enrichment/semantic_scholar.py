@@ -136,9 +136,9 @@ def get_extended_paper_details(
         paper_dois = [paper_dois]
 
     # Load env and create semantic scholar api
-    if not semantic_scholar_api_key:
+    if semantic_scholar_api_key is None:
         load_dotenv()
-        semantic_scholar_api_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
+        semantic_scholar_api_key = os.environ["SEMANTIC_SCHOLAR_API_KEY"]
 
     # Get all paper details
     try:

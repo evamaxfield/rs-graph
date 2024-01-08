@@ -70,7 +70,7 @@ def get_extended_paper_details(debug: bool = False) -> None:
     rs_graph_repos = load_basic_repos_dataset()
 
     # Get semantic_scholar_api_key
-    semantic_scholar_api_key = os.environ.get("SEMANTIC_SCHOLAR_API_KEY")
+    semantic_scholar_api_key = os.environ["SEMANTIC_SCHOLAR_API_KEY"]
 
     # Handle distributed
     if use_coiled():
