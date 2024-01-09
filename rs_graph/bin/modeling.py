@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import logging
-from collections.abc import Iterable
 from uuid import uuid4
 
 import numpy as np
@@ -30,6 +29,7 @@ from rs_graph.data import (
 from rs_graph.modeling import (
     AUTHOR_DEV_EM_MODEL_PATH,
     DEFAULT_AUTHOR_DEV_EMBEDDING_MODEL_NAME,
+    get_dev_author_interaction_embeddings,
 )
 
 ###############################################################################
@@ -39,28 +39,6 @@ log = logging.getLogger(__name__)
 ###############################################################################
 
 app = typer.Typer()
-
-###############################################################################
-
-
-class GitHubUserModelingColumns:
-    username = "username"
-    name = "name"
-    email = "email"
-
-
-ALL_GITHUB_USER_MODELING_COLUMNS = [
-    v for k, v in GitHubUserModelingColumns.__dict__.items() if "__" not in k
-]
-
-
-class AuthorModelingColumns:
-    name = "name"
-
-
-ALL_AUTHOR_MODELING_COLUMNS = [
-    v for k, v in AuthorModelingColumns.__dict__.items() if "__" not in k
-]
 
 ###############################################################################
 
@@ -505,7 +483,7 @@ def calculate_irr_for_author_dev_em_annotation(
 
 
 @app.command()
-def train_author_dev_em_classifier(  # noqa: C901
+def train_author_dev_em_classifier(
     embedding_model_name: str = DEFAULT_AUTHOR_DEV_EMBEDDING_MODEL_NAME,
     debug: bool = False,
 ) -> None:
@@ -515,6 +493,10 @@ def train_author_dev_em_classifier(  # noqa: C901
     # Load the author-dev EM annotation dataset
     log.info("Loading author-dev EM annotation dataset...")
     annotated_data = load_annotated_author_dev_em_dataset()
+
+    # Print value counts of "match"
+    print("Match value counts: ")
+    print(annotated_data.match.value_counts())
 
     # Load devs dataset
     log.info("Loading developer contributions dataset...")
@@ -564,10 +546,6 @@ def train_author_dev_em_classifier(  # noqa: C901
             unique_authors_df.author_id.astype(str) == str(row.semantic_scholar_id)
         ].iloc[0]
 
-        # Keep only columns of interest
-        dev_details = dev_details[ALL_GITHUB_USER_MODELING_COLUMNS]
-        author_details = author_details[ALL_AUTHOR_MODELING_COLUMNS]
-
         # Add to paired dev author details
         paired_dev_author_details.append(
             {
@@ -577,124 +555,26 @@ def train_author_dev_em_classifier(  # noqa: C901
             }
         )
 
-    # Print value counts of "match"
-    print("Match value counts: ")
-    print(annotated_data.match.value_counts())
+    # Convert to dataframe
+    paired_dev_author_details_df = pd.DataFrame(paired_dev_author_details)
 
     # Init embedding model
     embedding_model = SentenceTransformer(embedding_model_name)
 
-    # For each pair of dev and author details, create embeddings
-    match_values = []
-    dev_features: dict[str, list[str]] = {}
-    author_features: dict[str, list[str]] = {}
-    for pair in tqdm(
-        paired_dev_author_details,
-        desc="Prepping for feature embedding",
-        total=len(paired_dev_author_details),
-    ):
-        # Get dev and author details
-        dev_details = pair["dev_details"]
-        author_details = pair["author_details"]
-
-        # Convert iterable columns to strings
-        for col in dev_details.index:
-            if isinstance(dev_details[col], Iterable):
-                dev_details[col] = ", ".join(dev_details[col])
-
-        for col in author_details.index:
-            if isinstance(author_details[col], Iterable):
-                author_details[col] = ", ".join(author_details[col])
-
-        # For each dev column, add a column with that feature name
-        # and the value as a string
-        for col in dev_details.index:
-            feature_name = f"dev-{col}"
-            if feature_name not in dev_features:
-                dev_features[feature_name] = []
-
-            dev_features[feature_name].append(str(dev_details[col]))
-
-        # For each author column, add a column with that feature name
-        # and the value as a string
-        for col in author_details.index:
-            feature_name = f"author-{col}"
-            if feature_name not in author_features:
-                author_features[feature_name] = []
-
-            author_features[feature_name].append(str(author_details[col]))
-
-        # Add to features to embed
-        match_values.append(pair["match"])
-
-    # Create embeddings
-    log.info("Creating embeddings...")
-
-    # For each feature, create embeddings and store into new dict
-    embedded_dev_features = {}
-    for feature_name, feature_values in tqdm(
-        dev_features.items(),
-        desc="Embedding dev features",
-        total=len(dev_features),
-    ):
-        # Create embeddings
-        embedded_dev_features[feature_name] = embedding_model.encode(
-            feature_values,
-            show_progress_bar=True,
-        )
-
-    embedded_author_features = {}
-    for feature_name, feature_values in tqdm(
-        author_features.items(),
-        desc="Embedding author features",
-        total=len(author_features),
-    ):
-        # Create embeddings
-        embedded_author_features[feature_name] = embedding_model.encode(
-            feature_values,
-            show_progress_bar=True,
-        )
-
-    # Multiply embeddings
-    embedded_features: dict[str, np.array] = {}
-    for dev_feature_name, dev_embedded_values in tqdm(
-        embedded_dev_features.items(),
-        desc="Pairwise multiply embeddings",
-        total=len(embedded_dev_features),
-    ):
-        for (
-            author_feature_name,
-            author_embedded_values,
-        ) in embedded_author_features.items():
-            # Add to embedded features
-            embedded_features[f"{dev_feature_name}--{author_feature_name}"] = (
-                dev_embedded_values * author_embedded_values
-            )
-
-    # Iter and create rows
-    fully_unpacked_embedded_features = []
-    for example_i in range(len(match_values)):
-        this_row = {}
-        for feature_name, feature_values in embedded_features.items():
-            for dim_i, dim_val in enumerate(feature_values[example_i]):
-                this_row[f"{feature_name}--embed-{dim_i}"] = dim_val
-
-        fully_unpacked_embedded_features.append(
-            {
-                **this_row,
-                "match": match_values[example_i],
-            }
-        )
-
-    # Create dataframe and copy over labels
-    prepped_df = pd.DataFrame(fully_unpacked_embedded_features)
+    # Get dev-author interaction embeddings
+    log.info("Getting dev-author interaction embeddings...")
+    embeddings = get_dev_author_interaction_embeddings(
+        devs=paired_dev_author_details_df["dev_details"].tolist(),
+        authors=paired_dev_author_details_df["author_details"].tolist(),
+        embedding_model=embedding_model,
+    )
 
     # Train test split
     x_train, x_test, y_train, y_test = train_test_split(
-        prepped_df.drop(columns=["match"]),
-        prepped_df.match,
+        embeddings,
+        annotated_data.match,
         test_size=0.25,
-        stratify=prepped_df.match,
+        stratify=annotated_data.match,
         shuffle=True,
         random_state=12,
     )
