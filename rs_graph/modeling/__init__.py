@@ -17,10 +17,10 @@ log = logging.getLogger(__name__)
 ###############################################################################
 
 # Trained models
-AUTHOR_DEV_EM_MODEL_PATH = DATA_FILES_DIR / "author-dev-em-model.skops"
+DEV_AUTHOR_EM_MODEL_PATH = DATA_FILES_DIR / "dev-author-em-model.skops"
 
 # Default global values
-DEFAULT_AUTHOR_DEV_EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+DEFAULT_DEV_AUTHOR_EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
 ###############################################################################
 
@@ -49,7 +49,7 @@ ALL_AUTHOR_MODELING_COLUMNS = [
 
 def load_base_dev_author_em_model() -> LogisticRegressionCV:
     """Load the author dev em model."""
-    return sk_io.load(AUTHOR_DEV_EM_MODEL_PATH)
+    return sk_io.load(DEV_AUTHOR_EM_MODEL_PATH)
 
 
 def _check_and_init_dev_author_interaction_embedding(
@@ -62,7 +62,7 @@ def _check_and_init_dev_author_interaction_embedding(
     | pd.Series
     | dict[str, str | None],
     embedding_model: str
-    | SentenceTransformer = DEFAULT_AUTHOR_DEV_EMBEDDING_MODEL_NAME,
+    | SentenceTransformer = DEFAULT_DEV_AUTHOR_EMBEDDING_MODEL_NAME,
 ) -> tuple[
     list[dict[str, str | None]],
     list[dict[str, str | None]],
@@ -119,7 +119,7 @@ def get_dev_author_interaction_embeddings(
     | pd.Series
     | dict[str, str | None],
     embedding_model: str
-    | SentenceTransformer = DEFAULT_AUTHOR_DEV_EMBEDDING_MODEL_NAME,
+    | SentenceTransformer = DEFAULT_DEV_AUTHOR_EMBEDDING_MODEL_NAME,
 ) -> list[list[float]]:
     # Check and initialize
     devs, authors, embed_model = _check_and_init_dev_author_interaction_embedding(
@@ -196,7 +196,7 @@ def get_dev_author_interaction_embeddings(
     return joint_interaction_embeddings
 
 
-def predict_author_dev_matches(
+def predict_dev_author_matches(
     devs: Sequence[pd.Series]
     | Sequence[dict[str, str | None]]
     | pd.Series
@@ -206,7 +206,7 @@ def predict_author_dev_matches(
     | pd.Series
     | dict[str, str | None],
     embedding_model: str
-    | SentenceTransformer = DEFAULT_AUTHOR_DEV_EMBEDDING_MODEL_NAME,
+    | SentenceTransformer = DEFAULT_DEV_AUTHOR_EMBEDDING_MODEL_NAME,
     clf_model: LogisticRegressionCV | None = None,
 ) -> list[str] | str:
     # Check and initialize

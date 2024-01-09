@@ -36,8 +36,8 @@ to the installed package directory (`rs_graph.data.files`).
         `rs-graph-enrichment get-extended-paper-details`
     3. Get top 30 contributors to each repository:
         `rs-graph-enrichment get-repo-contributors`
-    4. Train author to github user entity matching model:
-        `rs-graph-modeling train-author-developer-em-classifier`
+    4. Train github user to author entity matching model:
+        `rs-graph-modeling train-developer-author-em-classifier`
 
 ## GitHub User and Author Entity Matching Model
 
@@ -69,7 +69,7 @@ Annotation criteria for entity matches are:
 
 Inter-rater Reliability (Fleiss Kappa): 0.925595238095238 (Almost perfect agreement)
 
-To reproduce this result run: `rs-graph-modeling calculate-irr-for-author-dev-em-annotation`
+To reproduce this result run: `rs-graph-modeling calculate-irr-for-dev-author-em-annotation`
 
 #### Examples
 

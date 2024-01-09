@@ -21,14 +21,14 @@ from tqdm import tqdm
 
 from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.data import (
-    load_annotated_author_dev_em_dataset,
-    load_annotated_author_dev_em_irr_dataset,
+    load_annotated_dev_author_em_dataset,
+    load_annotated_dev_author_em_irr_dataset,
     load_author_contributions_dataset,
     load_repo_contributors_dataset,
 )
 from rs_graph.modeling import (
-    AUTHOR_DEV_EM_MODEL_PATH,
-    DEFAULT_AUTHOR_DEV_EMBEDDING_MODEL_NAME,
+    DEFAULT_DEV_AUTHOR_EMBEDDING_MODEL_NAME,
+    DEV_AUTHOR_EM_MODEL_PATH,
     get_dev_author_interaction_embeddings,
 )
 
@@ -178,7 +178,7 @@ def _dataframe_to_joined_str_items(
 
 
 @app.command()
-def create_author_developer_em_dataset_for_annotation(  # noqa: C901
+def create_developer_author_em_dataset_for_annotation(  # noqa: C901
     top_n_similar: int = 3,
     model_name: str = "multi-qa-MiniLM-L6-cos-v1",
     debug: bool = False,
@@ -306,10 +306,10 @@ def create_author_developer_em_dataset_for_annotation(  # noqa: C901
 
     # For dev, get the authors with shared repos,
     # then take the top n most similar authors
-    author_dev_comparison_rows = []
+    dev_author_comparison_rows = []
     for username, dev_details in tqdm(
         prepped_devs_dict.items(),
-        desc="Constructing author-dev comparison rows",
+        desc="Constructing dev-author comparison rows",
     ):
         # Get the dev embedding
         dev_embedding = dev_embeddings_dict[username]
@@ -365,9 +365,9 @@ def create_author_developer_em_dataset_for_annotation(  # noqa: C901
                 }
             )
 
-        # Add to author-dev comparison rows
+        # Add to dev-author comparison rows
         for repo_related_author_details in top_n_similar_author_details:
-            author_dev_comparison_rows.append(
+            dev_author_comparison_rows.append(
                 {
                     "github_id": full_dev_details.username,
                     "semantic_scholar_id": repo_related_author_details["author_id"],
@@ -378,55 +378,55 @@ def create_author_developer_em_dataset_for_annotation(  # noqa: C901
             )
 
     # Convert to dataframe
-    author_dev_comparison_df = pd.DataFrame(author_dev_comparison_rows)
+    dev_author_comparison_df = pd.DataFrame(dev_author_comparison_rows)
 
     # Remove rows with no semantic scholar id
-    author_dev_comparison_df = author_dev_comparison_df.dropna(
+    dev_author_comparison_df = dev_author_comparison_df.dropna(
         subset=["semantic_scholar_id"]
     )
 
     # Store to disk
-    output_filepath = "author-dev-em-annotation-dataset.csv"
-    author_dev_comparison_df.to_csv(output_filepath, index=False)
+    output_filepath = "dev-author-em-annotation-dataset.csv"
+    dev_author_comparison_df.to_csv(output_filepath, index=False)
     log.info(f"Stored to {output_filepath}")
 
 
 @app.command()
-def create_irr_subset_for_author_dev_em_annotation(
-    full_annotation_dataset_path: str = "author-dev-em-annotation-dataset.csv",
+def create_irr_subset_for_dev_author_em_annotation(
+    full_annotation_dataset_path: str = "dev-author-em-annotation-dataset.csv",
     n: int = 100,
     debug: bool = False,
 ) -> None:
     # Setup logging
     setup_logger(debug=debug)
 
-    # Load the author-dev EM annotation dataset
-    log.info("Loading author-dev EM annotation dataset...")
-    author_dev_em_annotation_df = pd.read_csv(full_annotation_dataset_path)
+    # Load the dev-author EM annotation dataset
+    log.info("Loading dev-author EM annotation dataset...")
+    dev_author_em_annotation_df = pd.read_csv(full_annotation_dataset_path)
 
     # Set seed
     np.random.seed(12)
 
     # Get n random rows
     log.info(f"Getting {n} random rows...")
-    random_rows = author_dev_em_annotation_df.sample(n=n)
+    random_rows = dev_author_em_annotation_df.sample(n=n)
 
     # Store to disk
-    output_filepath = "author-dev-em-annotation-dataset-irr.csv"
+    output_filepath = "dev-author-em-annotation-dataset-irr.csv"
     random_rows.to_csv(output_filepath, index=False)
     log.info(f"Stored to {output_filepath}")
 
 
 @app.command()
-def calculate_irr_for_author_dev_em_annotation(
+def calculate_irr_for_dev_author_em_annotation(
     debug: bool = False,
 ) -> None:
     # Setup logging
     setup_logger(debug=debug)
 
-    # Load the author-dev EM annotation dataset
-    log.info("Loading author-dev EM annotation dataset...")
-    irr_df = load_annotated_author_dev_em_irr_dataset()
+    # Load the dev-author EM annotation dataset
+    log.info("Loading dev-author EM annotation dataset...")
+    irr_df = load_annotated_dev_author_em_irr_dataset()
 
     # Make a frame of _just_ the annotations
     annotations = irr_df[["eva-match", "lindsey-match", "nic-match"]]
@@ -483,16 +483,16 @@ def calculate_irr_for_author_dev_em_annotation(
 
 
 @app.command()
-def train_author_dev_em_classifier(
-    embedding_model_name: str = DEFAULT_AUTHOR_DEV_EMBEDDING_MODEL_NAME,
+def train_dev_author_em_classifier(
+    embedding_model_name: str = DEFAULT_DEV_AUTHOR_EMBEDDING_MODEL_NAME,
     debug: bool = False,
 ) -> None:
     # Setup logging
     setup_logger(debug=debug)
 
-    # Load the author-dev EM annotation dataset
-    log.info("Loading author-dev EM annotation dataset...")
-    annotated_data = load_annotated_author_dev_em_dataset()
+    # Load the dev-author EM annotation dataset
+    log.info("Loading dev-author EM annotation dataset...")
+    annotated_data = load_annotated_dev_author_em_dataset()
 
     # Print value counts of "match"
     print("Match value counts: ")
@@ -590,7 +590,7 @@ def train_author_dev_em_classifier(
 
     # Save model
     log.info("Saving classifier...")
-    sk_io.dump(classifier, AUTHOR_DEV_EM_MODEL_PATH)
+    sk_io.dump(classifier, DEV_AUTHOR_EM_MODEL_PATH)
 
     # Evaluate model
     log.info("Evaluating classifier...")
@@ -604,7 +604,7 @@ def train_author_dev_em_classifier(
     confusion = ConfusionMatrixDisplay.from_predictions(y_test, y_pred)
 
     # Save confusion matrix plot
-    matrix_save_path = "author-dev-em-confusion-matrix.png"
+    matrix_save_path = "dev-author-em-confusion-matrix.png"
     confusion.figure_.savefig(matrix_save_path)
     log.info(f"Confusion matrix saved to {matrix_save_path}")
 
@@ -613,7 +613,7 @@ def train_author_dev_em_classifier(
     roc_curve = RocCurveDisplay.from_predictions(y_test, y_pred_conf, pos_label="match")
 
     # Save ROC curve plot
-    roc_save_path = "author-dev-em-roc-curve.png"
+    roc_save_path = "dev-author-em-roc-curve.png"
     roc_curve.figure_.savefig(roc_save_path)
     log.info(f"ROC curve saved to {roc_save_path}")
 

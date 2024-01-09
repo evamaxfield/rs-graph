@@ -29,8 +29,8 @@ EXTENDED_PAPER_DETAILS_PATH = DATA_FILES_DIR / "extended-paper-details.parquet"
 REPO_CONTRIBUTORS_PATH = DATA_FILES_DIR / "repo-contributors.parquet"
 
 # Annotated datasets
-ANNOTATED_AUTHOR_DEV_EM_IRR_PATH = DATA_FILES_DIR / "annotated-author-dev-em-irr.csv"
-ANNOTATED_AUTHOR_DEV_EM_PATH = DATA_FILES_DIR / "annotated-author-dev-em.csv"
+ANNOTATED_DEV_AUTHOR_EM_IRR_PATH = DATA_FILES_DIR / "annotated-dev-author-em-irr.csv"
+ANNOTATED_DEV_AUTHOR_EM_PATH = DATA_FILES_DIR / "annotated-dev-author-em.csv"
 
 ###############################################################################
 
@@ -191,11 +191,11 @@ def load_repo_contributors_dataset() -> pd.DataFrame:
     return pd.read_parquet(REPO_CONTRIBUTORS_PATH)
 
 
-def load_annotated_author_dev_em_irr_dataset() -> pd.DataFrame:
+def load_annotated_dev_author_em_irr_dataset() -> pd.DataFrame:
     """Load the annotated author dev em irr dataset."""
-    return pd.read_csv(ANNOTATED_AUTHOR_DEV_EM_IRR_PATH)
+    return pd.read_csv(ANNOTATED_DEV_AUTHOR_EM_IRR_PATH)
 
 
-def load_annotated_author_dev_em_dataset() -> pd.DataFrame:
+def load_annotated_dev_author_em_dataset() -> pd.DataFrame:
     """Load the full annotated author dev em dataset."""
-    return pd.read_csv(ANNOTATED_AUTHOR_DEV_EM_PATH)
+    return pd.read_csv(ANNOTATED_DEV_AUTHOR_EM_PATH)

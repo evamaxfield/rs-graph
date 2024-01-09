@@ -142,3 +142,7 @@ author-dev-em-annotation-dataset.csv
 author-dev-em-annotation-dataset-irr.csv
 author-dev-em-confusion-matrix.png
 author-dev-em-roc-curve.png
+dev-author-em-annotation-dataset.csv
+dev-author-em-annotation-dataset-irr.csv
+dev-author-em-confusion-matrix.png
+dev-author-em-roc-curve.png
