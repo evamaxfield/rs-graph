@@ -27,7 +27,6 @@ from rs_graph.data import (
     load_repo_contributors_dataset,
 )
 from rs_graph.modeling import (
-    DEFAULT_DEV_AUTHOR_EMBEDDING_MODEL_NAME,
     DEV_AUTHOR_EM_MODEL_PATH,
     get_dev_author_interaction_embeddings,
 )
@@ -484,7 +483,6 @@ def calculate_irr_for_dev_author_em_annotation(
 
 @app.command()
 def train_dev_author_em_classifier(
-    embedding_model_name: str = DEFAULT_DEV_AUTHOR_EMBEDDING_MODEL_NAME,
     debug: bool = False,
 ) -> None:
     # Setup logging
@@ -558,15 +556,11 @@ def train_dev_author_em_classifier(
     # Convert to dataframe
     paired_dev_author_details_df = pd.DataFrame(paired_dev_author_details)
 
-    # Init embedding model
-    embedding_model = SentenceTransformer(embedding_model_name)
-
     # Get dev-author interaction embeddings
     log.info("Getting dev-author interaction embeddings...")
     embeddings = get_dev_author_interaction_embeddings(
         devs=paired_dev_author_details_df["dev_details"].tolist(),
         authors=paired_dev_author_details_df["author_details"].tolist(),
-        embedding_model=embedding_model,
     )
 
     # Train test split

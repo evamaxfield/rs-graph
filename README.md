@@ -38,6 +38,8 @@ to the installed package directory (`rs_graph.data.files`).
         `rs-graph-enrichment get-repo-contributors`
     4. Train github user to author entity matching model:
         `rs-graph-modeling train-developer-author-em-classifier`
+    5. Match devs and authors using trained predictive model:
+        `rs-graph-enrichment match-devs-and-authors`
 
 ## GitHub User and Author Entity Matching Model
 

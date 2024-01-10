@@ -27,6 +27,7 @@ DATASET_SOURCE_FILE_PATTERN = "-short-paper-details.parquet"
 UPSTREAM_DEPS_PATH = DATA_FILES_DIR / "upstream-deps.parquet"
 EXTENDED_PAPER_DETAILS_PATH = DATA_FILES_DIR / "extended-paper-details.parquet"
 REPO_CONTRIBUTORS_PATH = DATA_FILES_DIR / "repo-contributors.parquet"
+MATCHED_DEV_AUTHOR_IDS_PATH = DATA_FILES_DIR / "matched-dev-author-ids.parquet"
 
 # Annotated datasets
 ANNOTATED_DEV_AUTHOR_EM_IRR_PATH = DATA_FILES_DIR / "annotated-dev-author-em-irr.csv"
@@ -199,3 +200,17 @@ def load_annotated_dev_author_em_irr_dataset() -> pd.DataFrame:
 def load_annotated_dev_author_em_dataset() -> pd.DataFrame:
     """Load the full annotated author dev em dataset."""
     return pd.read_csv(ANNOTATED_DEV_AUTHOR_EM_PATH)
+
+
+def load_matched_dev_author_ids_dataset() -> pd.DataFrame:
+    """Load the matched dev author ids dataset."""
+    authors = load_author_contributions_dataset()
+    matched_dev_authors = pd.read_parquet(MATCHED_DEV_AUTHOR_IDS_PATH)
+
+    # Merge on author_id
+    matched_dev_authors = matched_dev_authors.merge(
+        authors,
+        on="author_id",
+    )
+
+    return matched_dev_authors

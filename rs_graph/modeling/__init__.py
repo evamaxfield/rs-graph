@@ -53,14 +53,8 @@ def load_base_dev_author_em_model() -> LogisticRegressionCV:
 
 
 def _check_and_init_dev_author_interaction_embedding(
-    devs: Sequence[pd.Series]
-    | Sequence[dict[str, str | None]]
-    | pd.Series
-    | dict[str, str | None],
-    authors: Sequence[pd.Series]
-    | Sequence[dict[str, str | None]]
-    | pd.Series
-    | dict[str, str | None],
+    devs: Sequence[pd.Series] | Sequence[dict[str, str | None]],
+    authors: Sequence[pd.Series] | Sequence[dict[str, str | None]],
     embedding_model: str
     | SentenceTransformer = DEFAULT_DEV_AUTHOR_EMBEDDING_MODEL_NAME,
 ) -> tuple[
@@ -68,12 +62,6 @@ def _check_and_init_dev_author_interaction_embedding(
     list[dict[str, str | None]],
     SentenceTransformer,
 ]:
-    # Wrap single dev and author in list
-    if isinstance(devs, pd.Series | dict):
-        devs = [devs]
-    if isinstance(authors, pd.Series | dict):
-        authors = [authors]
-
     # Load embedding model
     if isinstance(embedding_model, str):
         embed_model = SentenceTransformer(embedding_model)
@@ -110,16 +98,11 @@ def _check_and_init_dev_author_interaction_embedding(
 
 
 def get_dev_author_interaction_embeddings(
-    devs: Sequence[pd.Series]
-    | Sequence[dict[str, str | None]]
-    | pd.Series
-    | dict[str, str | None],
-    authors: Sequence[pd.Series]
-    | Sequence[dict[str, str | None]]
-    | pd.Series
-    | dict[str, str | None],
+    devs: Sequence[pd.Series] | Sequence[dict[str, str | None]],
+    authors: Sequence[pd.Series] | Sequence[dict[str, str | None]],
     embedding_model: str
     | SentenceTransformer = DEFAULT_DEV_AUTHOR_EMBEDDING_MODEL_NAME,
+    show_progress_bar: bool = True,
 ) -> list[list[float]]:
     # Check and initialize
     devs, authors, embed_model = _check_and_init_dev_author_interaction_embedding(
@@ -162,16 +145,16 @@ def get_dev_author_interaction_embeddings(
     # Encode all pairs
     dev_author_interaction_embeddings = {}
     for interaction_embed_name, interaction_embed_pairs in dev_author_str_pairs.items():
-        log.info(f"Encoding: '{interaction_embed_name}'")
+        log.debug(f"Encoding: '{interaction_embed_name}'")
 
         # Encode
         encode_dev_values = embed_model.encode(
             interaction_embed_pairs["dev"],
-            show_progress_bar=True,
+            show_progress_bar=show_progress_bar,
         )
         encode_author_values = embed_model.encode(
             interaction_embed_pairs["author"],
-            show_progress_bar=True,
+            show_progress_bar=show_progress_bar,
         )
 
         # Multiply
@@ -197,18 +180,14 @@ def get_dev_author_interaction_embeddings(
 
 
 def predict_dev_author_matches(
-    devs: Sequence[pd.Series]
-    | Sequence[dict[str, str | None]]
-    | pd.Series
-    | dict[str, str | None],
-    authors: Sequence[pd.Series]
-    | Sequence[dict[str, str | None]]
-    | pd.Series
-    | dict[str, str | None],
+    devs: Sequence[pd.Series] | Sequence[dict[str, str | None]],
+    authors: Sequence[pd.Series] | Sequence[dict[str, str | None]],
     embedding_model: str
     | SentenceTransformer = DEFAULT_DEV_AUTHOR_EMBEDDING_MODEL_NAME,
     clf_model: LogisticRegressionCV | None = None,
-) -> list[str] | str:
+    additional_return_proba: bool = False,
+    show_progress_bar: bool = True,
+) -> tuple[list[str], None] | tuple[list[str], list[float]]:
     # Check and initialize
     devs, authors, embed_model = _check_and_init_dev_author_interaction_embedding(
         devs=devs,
@@ -221,6 +200,7 @@ def predict_dev_author_matches(
         devs=devs,
         authors=authors,
         embedding_model=embed_model,
+        show_progress_bar=show_progress_bar,
     )
 
     # Load model if not provided
@@ -230,8 +210,11 @@ def predict_dev_author_matches(
     # Predict
     predictions = clf_model.predict(joint_interaction_embeddings)
 
-    # If only one prediction, return as string
-    if len(predictions) == 1:
-        return predictions[0]
+    # Predict proba
+    if additional_return_proba:
+        probas = clf_model.predict_proba(joint_interaction_embeddings)
+        # We only care about the "positive" / "match" proba
+        proba_match = probas[:, 0]
+        return predictions.tolist(), proba_match.tolist()
 
-    return predictions.tolist()
+    return predictions.tolist(), None
