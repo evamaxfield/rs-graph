@@ -67,7 +67,7 @@ Annotation criteria for entity matches are:
 
 3. if there is uncertainty, err on the side of `False`
 
-### Results of IRR
+#### Results of IRR
 
 Inter-rater Reliability (Fleiss Kappa): 0.925595238095238 (Almost perfect agreement)
 
@@ -117,6 +117,16 @@ looks similar to the author name in `author_details`. Additionally, within the
 author details we see no co-authors with a name that looks like a better match
 for the current `dev_details` under consideration.
 
-#### Results of IRR
+### Model Training
 
-TODO
+We created pairwise interaction features between the devs userame, name, and email, and the author name. Before creating the interaction, we created embeddings for each of the four values above using sentence transformers. After interaction we are left with three features (username * name), (name * name), and (email * name). We then trained a logistic regression model on these features to predict whether or not the dev and author are the same person.
+
+### Model Evaluation
+
+We evaluated the model using 10-fold cross validation. We achieved an average F1 score of 0.97.
+
+![Dev Author Entity Matching Model Confusion Matrix](./docs/dev-author-confusion-matrix-docs.png)
+
+### Model Application
+
+We then applied the model across pairs of authors and devs which have worked on the same repositories. In doing so, we found ~3,200 matches between authors and devs.
