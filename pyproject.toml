@@ -40,7 +40,7 @@ dependencies = [
   "ghapi>=1,<2",
   "parse>=1,<2",
   "requests>=2,<3",
-  "semanticscholar==0.5.0",
+  "semanticscholar>=0.7,<1",
   "sentence-transformers>=2,<3",
   # viz
   "altair>=5,<6",

@@ -51,7 +51,7 @@ class ExtendedPaperDetails(DataClassJsonMixin):
     doi: str
     title: str
     authors: list[AuthorDetails]
-    embedding: EmbeddingDetails | None
+    abstract: str
     citation_count: int
 
 
@@ -73,7 +73,9 @@ def _get_single_paper_details(
         for i, author in enumerate(paper.authors):
             # Get uuid4 if author has no author id
             if author.authorId is None:
-                author.authorId = str(uuid4())
+                processed_author_id = str(uuid4())
+            else:
+                processed_author_id = author.authorId
 
             if i == 0:
                 if len(paper.authors) > 1:
@@ -87,22 +89,13 @@ def _get_single_paper_details(
 
             authors.append(
                 AuthorDetails(
-                    author_id=author.authorId,
+                    author_id=processed_author_id,
                     name=author.name,
                     affiliations=author.affiliations,
                     h_index=author.hIndex,
                     author_position=author_position,
                 )
             )
-
-        # Get embedding details
-        if paper.embedding is not None:
-            embedding_details = EmbeddingDetails(
-                model=paper.embedding["model"],
-                vector=paper.embedding["vector"],
-            )
-        else:
-            embedding_details = None
 
         # Return parsed object
         return ExtendedPaperDetails(
@@ -111,7 +104,7 @@ def _get_single_paper_details(
             doi=doi,
             title=paper.title,
             authors=authors,
-            embedding=embedding_details,
+            abstract=paper.abstract,
             citation_count=paper.citationCount,
         )
 
