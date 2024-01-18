@@ -65,7 +65,17 @@ def _get_single_paper_details(
 ) -> ExtendedPaperDetails | None:
     try:
         # Get full paper details
-        paper = api.get_paper(doi)
+        paper = api.get_paper(
+            doi,
+            fields=[
+                "corpusId",
+                "title",
+                "authors",
+                "url",
+                "abstract",
+                "citationCount",
+            ]
+        )
 
         # Construct in parts
         # Get author details
@@ -115,6 +125,7 @@ def _get_single_paper_details(
 
 def get_extended_paper_details(
     paper_dois: list[str] | str,
+    filter_out_nones: bool = True,
 ) -> list[ExtendedPaperDetails]:
     # Handle single paper
     if isinstance(paper_dois, str):
@@ -122,7 +133,7 @@ def get_extended_paper_details(
 
     # Load env and create semantic scholar api
     load_dotenv()
-    api = SemanticScholar(api_key=os.getenv("SEMANTIC_SCHOLAR_API_KEY"))
+    api = SemanticScholar(api_key=os.environ["SEMANTIC_SCHOLAR_API_KEY"])
 
     # Create partial function with api
     partial_get_single_paper_details = partial(_get_single_paper_details, api=api)
@@ -134,4 +145,8 @@ def get_extended_paper_details(
     )
 
     # Filter out Nones
-    return [result for result in results if result is not None]
+    if filter_out_nones:
+        return [result for result in results if result is not None]
+
+    # Return results
+    return results
