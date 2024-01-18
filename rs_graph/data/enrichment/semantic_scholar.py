@@ -74,7 +74,7 @@ def _get_single_paper_details(
                 "url",
                 "abstract",
                 "citationCount",
-            ]
+            ],
         )
 
         # Construct in parts
