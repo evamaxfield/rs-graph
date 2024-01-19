@@ -19,6 +19,9 @@ from tqdm.contrib.concurrent import thread_map
 
 log = logging.getLogger(__name__)
 
+# Stop "httpx" from logging
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 ###############################################################################
 
 
@@ -51,7 +54,11 @@ class ExtendedPaperDetails(DataClassJsonMixin):
     doi: str
     title: str
     authors: list[AuthorDetails]
-    abstract: str
+    abstract: str | None
+    tldr: str
+    topics: list[str]
+    primary_topic: str | None
+    secondary_topic: str | None
     citation_count: int
 
 
@@ -74,6 +81,8 @@ def _get_single_paper_details(
                 "url",
                 "abstract",
                 "citationCount",
+                "tldr",
+                "s2FieldsOfStudy",
             ],
         )
 
@@ -107,6 +116,13 @@ def _get_single_paper_details(
                 )
             )
 
+        # Process topics
+        topics = []
+        for topic in paper.s2FieldsOfStudy:
+            topic_cat = topic["category"]
+            if topic_cat not in topics:
+                topics.append(topic_cat)
+
         # Return parsed object
         return ExtendedPaperDetails(
             corpus_id=paper.corpusId,
@@ -116,6 +132,10 @@ def _get_single_paper_details(
             authors=authors,
             abstract=paper.abstract,
             citation_count=paper.citationCount,
+            tldr=paper.tldr["text"] if paper.tldr is not None else None,
+            topics=topics,
+            primary_topic=topics[0] if len(topics) > 0 else None,
+            secondary_topic=topics[1] if len(topics) > 1 else None,
         )
 
     # Handle any error and return None
