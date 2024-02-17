@@ -1,23 +1,24 @@
-import pandas as pd
-import numpy as np
-from pathlib import Path
-import shutil
 import os
-from dotenv import load_dotenv
-from sklearn.model_selection import train_test_split
-from sentence_transformers import SentenceTransformer
 import random
-from tabulate import tabulate
-from sklearn.linear_model import LogisticRegressionCV
+import shutil
 import time
-from sklearn.metrics import precision_recall_fscore_support, accuracy_score
-from tqdm import tqdm
-import datasets
-from itertools import combinations
-from transformers import pipeline, Pipeline
-from autotrain.trainers.text_classification.__main__ import train as ft_train
 from dataclasses import dataclass
+from itertools import combinations
+from pathlib import Path
+
+import datasets
+import numpy as np
+import pandas as pd
+from autotrain.trainers.text_classification.__main__ import train as ft_train
 from dataclasses_json import DataClassJsonMixin
+from dotenv import load_dotenv
+from sentence_transformers import SentenceTransformer
+from sklearn.linear_model import LogisticRegressionCV
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+from sklearn.model_selection import train_test_split
+from tabulate import tabulate
+from tqdm import tqdm
+from transformers import Pipeline, pipeline
 
 ###############################################################################
 
@@ -75,7 +76,7 @@ FINE_TUNE_COMMAND_DICT = {
     "project_name": str(DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH),
     "text_column": "text",
     "target_column": "label",
-    "train_split": "test",
+    "train_split": "train",
     "valid_split": "valid",
     "epochs": 1,
     "lr": 5e-5,
@@ -110,6 +111,7 @@ valid_df, test_df = train_test_split(
 num_classes = dev_author_full_details["match"].nunique()
 class_labels = list(dev_author_full_details["match"].unique())
 
+
 def convert_split_details_to_text_input_dataset(
     df: pd.DataFrame,
     fieldset: tuple[str, ...],
@@ -117,25 +119,33 @@ def convert_split_details_to_text_input_dataset(
     # Construct the model input strings
     rows = []
     for _, row in df.iterrows():
-        dev_extras = "\n".join([
-            f"{field.strip('dev_')}: {row[field]}"
-            for field in fieldset if field.startswith("dev_")
-        ])
-        author_extras = "\n".join([
-            f"{field.strip('author_')}: {row[field]}"
-            for field in fieldset if field.startswith("author_")
-        ])
+        dev_extras = "\n".join(
+            [
+                f"{field.strip('dev_')}: {row[field]}"
+                for field in fieldset
+                if field.startswith("dev_")
+            ]
+        )
+        author_extras = "\n".join(
+            [
+                f"{field.strip('author_')}: {row[field]}"
+                for field in fieldset
+                if field.startswith("author_")
+            ]
+        )
         model_str_input = model_str_input_template.format(
             dev_name=row["dev_name"],
             dev_extras=dev_extras,
             author_name=row["author_name"],
             author_extras=author_extras,
         )
-        rows.append({
-            "text": model_str_input.strip(),
-            "label": row["match"],
-        })    
-    
+        rows.append(
+            {
+                "text": model_str_input.strip(),
+                "label": row["match"],
+            }
+        )
+
     # Construct features for the dataset
     features = datasets.Features(
         text=datasets.Value("string"),
@@ -155,6 +165,7 @@ def convert_split_details_to_text_input_dataset(
         ),
     )
 
+
 @dataclass
 class EvaluationResults(DataClassJsonMixin):
     fieldset: str
@@ -164,6 +175,7 @@ class EvaluationResults(DataClassJsonMixin):
     recall: float
     f1: float
     time_pred: float
+
 
 def evaluate(
     model: LogisticRegressionCV | Pipeline,
@@ -213,6 +225,7 @@ def evaluate(
         time_pred=perf_time,
     )
 
+
 # Train semantic logit models
 results = []
 for fieldset in tqdm(
@@ -223,25 +236,36 @@ for fieldset in tqdm(
     print(f"Working on fieldset: '{fieldset}'")
     try:
         # Create the datasets
-        fieldset_train_df, fieldset_train_ds = convert_split_details_to_text_input_dataset(
+        (
+            fieldset_train_df,
+            fieldset_train_ds,
+        ) = convert_split_details_to_text_input_dataset(
             train_df,
             fieldset,
         )
-        fieldset_valid_df, fieldset_valid_ds = convert_split_details_to_text_input_dataset(
+        (
+            fieldset_valid_df,
+            fieldset_valid_ds,
+        ) = convert_split_details_to_text_input_dataset(
             valid_df,
             fieldset,
         )
-        fieldset_test_df, fieldset_test_ds = convert_split_details_to_text_input_dataset(
+        (
+            fieldset_test_df,
+            fieldset_test_ds,
+        ) = convert_split_details_to_text_input_dataset(
             test_df,
             fieldset,
         )
 
         # Store as dataset dict
-        fieldset_ds_dict = datasets.DatasetDict({
-            "train": fieldset_train_ds,
-            "valid": fieldset_valid_ds,
-            "test": fieldset_test_ds,
-        })
+        fieldset_ds_dict = datasets.DatasetDict(
+            {
+                "train": fieldset_train_ds,
+                "valid": fieldset_valid_ds,
+                "test": fieldset_test_ds,
+            }
+        )
 
         # Print example input
         print("Example input:")
@@ -315,12 +339,14 @@ for fieldset in tqdm(
 
             except Exception as e:
                 print(f"Error during: {this_iter_model_name}, Error: {e}")
-                results.append({
-                    "fieldset": fieldset,
-                    "model": this_iter_model_name,
-                    "error_level": "semantic model training",
-                    "error": str(e),
-                })
+                results.append(
+                    {
+                        "fieldset": fieldset,
+                        "model": this_iter_model_name,
+                        "error_level": "semantic model training",
+                        "error": str(e),
+                    }
+                )
 
         # Train each fine-tuned model
         for model_short_name, hf_model_path in tqdm(
@@ -354,8 +380,6 @@ for fieldset in tqdm(
                     task="text-classification",
                     model=str(DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH),
                     tokenizer=str(DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH),
-                    padding=True,
-                    truncation=True,
                 )
                 results.append(
                     evaluate(
@@ -367,21 +391,24 @@ for fieldset in tqdm(
 
             except Exception as e:
                 print(f"Error during: {this_iter_model_name}, Error: {e}")
-                results.append({
-                    "fieldset": fieldset,
-                    "model": this_iter_model_name,
-                    "error_level": "fine-tune model training",
-                    "error": str(e),
-                })
-
+                results.append(
+                    {
+                        "fieldset": fieldset,
+                        "model": this_iter_model_name,
+                        "error_level": "fine-tune model training",
+                        "error": str(e),
+                    }
+                )
 
     except Exception as e:
         print(f"Error during: {fieldset}, Error: {e}")
-        results.append({
-            "fieldset": fieldset,
-            "error_level": "dataset creation",
-            "error": str(e),
-        })
+        results.append(
+            {
+                "fieldset": fieldset,
+                "error_level": "dataset creation",
+                "error": str(e),
+            }
+        )
 
     print()
 
@@ -390,12 +417,14 @@ for fieldset in tqdm(
     results_df = results_df.sort_values(by="f1", ascending=False).reset_index(drop=True)
     results_df.to_csv("all-model-results.csv", index=False)
     print("Current standings")
-    print(tabulate(
-        results_df.head(10),
-        headers="keys",
-        tablefmt="psql",
-        showindex=False,
-    ))
+    print(
+        tabulate(
+            results_df.head(10),
+            headers="keys",
+            tablefmt="psql",
+            showindex=False,
+        )
+    )
 
     print()
 
@@ -408,9 +437,11 @@ results_df = pd.DataFrame(results)
 results_df = results_df.sort_values(by="f1", ascending=False).reset_index(drop=True)
 results_df.to_csv("all-model-results.csv", index=False)
 print("Final standings")
-print(tabulate(
-    results_df.head(10),
-    headers="keys",
-    tablefmt="psql",
-    showindex=False,
-))
+print(
+    tabulate(
+        results_df.head(10),
+        headers="keys",
+        tablefmt="psql",
+        showindex=False,
+    )
+)
