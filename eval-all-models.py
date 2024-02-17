@@ -38,7 +38,7 @@ BASE_MODELS = {
 
 # Optional fields to create combinations
 OPTIONAL_DATA_FIELDS = [
-    "dev_username",
+    "dev_name",
     "dev_email",
     "dev_bio",
     "dev_co_contributors",
@@ -53,10 +53,13 @@ for i in range(1, len(OPTIONAL_DATA_FIELDS) + 1):
     OPTIONAL_DATA_FIELDSETS.extend(list(combinations(OPTIONAL_DATA_FIELDS, i)))
 
 # Basic template for model input
+# We choose username and name because they are always available
+# All other optional fields are added for experimentation because
+# Users may not always have them
 model_str_input_template = """
 # Developer Details
 
-name: {dev_name}
+username: {dev_username}
 {dev_extras}
 
 ---
@@ -134,7 +137,7 @@ def convert_split_details_to_text_input_dataset(
             ]
         )
         model_str_input = model_str_input_template.format(
-            dev_name=row["dev_name"],
+            dev_username=row["dev_username"],
             dev_extras=dev_extras,
             author_name=row["author_name"],
             author_extras=author_extras,
@@ -292,6 +295,10 @@ for fieldset in tqdm(
             desc="Semantic logit models",
             leave=False,
         ):
+            # Set seed
+            np.random.seed(12)
+            random.seed(12)
+
             this_iter_model_name = f"semantic-logit-{model_short_name}"
             print()
             print(f"Working on: {this_iter_model_name}")
