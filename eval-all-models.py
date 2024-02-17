@@ -1,7 +1,9 @@
 import pandas as pd
 import numpy as np
-from dotenv import load_dotenv
+from pathlib import Path
+import shutil
 import os
+from dotenv import load_dotenv
 from sklearn.model_selection import train_test_split
 from sentence_transformers import SentenceTransformer
 import random
@@ -12,6 +14,10 @@ from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 from tqdm import tqdm
 import datasets
 from itertools import combinations
+from transformers import pipeline, Pipeline
+from autotrain.trainers.text_classification.__main__ import train as ft_train
+from dataclasses import dataclass
+from dataclasses_json import DataClassJsonMixin
 
 ###############################################################################
 
@@ -20,12 +26,12 @@ load_dotenv()
 
 # Models used for testing, both fine-tune and semantic logit
 BASE_MODELS = {
-    # "gte": "thenlper/gte-base",
-    # "bge": "BAAI/bge-base-en-v1.5",
+    "gte": "thenlper/gte-base",
+    "bge": "BAAI/bge-base-en-v1.5",
     "deberta": "microsoft/deberta-v3-base",
     "bert-multilingual": "google-bert/bert-base-multilingual-cased",
-    # "mpnet": "sentence-transformers/all-mpnet-base-v2",
-    # "bert-uncased": "google-bert/bert-base-uncased",
+    "mpnet": "sentence-transformers/all-mpnet-base-v2",
+    "bert-uncased": "google-bert/bert-base-uncased",
     "distilbert": "distilbert/distilbert-base-uncased",
 }
 
@@ -59,6 +65,23 @@ name: {dev_name}
 name: {author_name}
 {author_extras}
 """.strip()
+
+# Fine-tune default settings
+DEFAULT_HF_DATASET_PATH = "evamxb/dev-author-em-dataset"
+DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH = Path("autotrain-text-classification-temp/")
+FINE_TUNE_COMMAND_DICT = {
+    "data_path": DEFAULT_HF_DATASET_PATH,
+    "token": os.environ["HF_AUTH_TOKEN"],
+    "project_name": str(DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH),
+    "text_column": "text",
+    "target_column": "label",
+    "train_split": "test",
+    "valid_split": "valid",
+    "epochs": 1,
+    "lr": 5e-5,
+    "auto_find_batch_size": True,
+    "seed": 12,
+}
 
 # Set seed
 np.random.seed(12)
@@ -132,6 +155,64 @@ def convert_split_details_to_text_input_dataset(
         ),
     )
 
+@dataclass
+class EvaluationResults(DataClassJsonMixin):
+    fieldset: str
+    model: str
+    accuracy: float
+    precision: float
+    recall: float
+    f1: float
+    time_pred: float
+
+def evaluate(
+    model: LogisticRegressionCV | Pipeline,
+    x_test: list[np.ndarray] | list[str],
+    y_test: list[str],
+) -> EvaluationResults:
+    # Evaluate the model
+    print("Evaluating model")
+
+    # Recore perf time
+    start_time = time.time()
+    y_pred = model.predict(x_test)
+    perf_time = (time.time() - start_time) / len(y_test)
+
+    # Get the actual predictions from Pipeline
+    if isinstance(model, Pipeline):
+        y_pred = [pred["label"] for pred in y_pred]
+
+    # Metrics
+    accuracy = accuracy_score(
+        y_test,
+        y_pred,
+    )
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        y_test,
+        y_pred,
+        average="binary",
+        pos_label="match",
+    )
+
+    # Print results
+    print(
+        f"Accuracy: {accuracy}, "
+        f"Precision: {precision}, "
+        f"Recall: {recall}, "
+        f"F1: {f1}, "
+        f"Time/Pred: {perf_time}"
+    )
+
+    return EvaluationResults(
+        fieldset=fieldset,
+        model=this_iter_model_name,
+        accuracy=accuracy,
+        precision=precision,
+        recall=recall,
+        f1=f1,
+        time_pred=perf_time,
+    )
+
 # Train semantic logit models
 results = []
 for fieldset in tqdm(
@@ -172,17 +253,20 @@ for fieldset in tqdm(
         print()
 
         # Push to hub
-        # fieldset_ds_dict.push_to_hub(
-        #     "dev-author-em-dataset",
-        #     private=True,
-        #     token=os.environ["HF_AUTH_TOKEN"],
-        #     commit_message="Fieldset: {fieldset}",
-        # )
+        print("Pushing this fieldset to hub")
+        fieldset_ds_dict.push_to_hub(
+            DEFAULT_HF_DATASET_PATH,
+            private=True,
+            token=os.environ["HF_AUTH_TOKEN"],
+        )
+        print()
+        print()
 
         # Train each semantic logit model
         for model_short_name, hf_model_path in tqdm(
             BASE_MODELS.items(),
             desc="Semantic logit models",
+            leave=False,
         ):
             this_iter_model_name = f"semantic-logit-{model_short_name}"
             print()
@@ -219,42 +303,13 @@ for fieldset in tqdm(
                 )
 
                 # Evaluate model
-                print("Evaluating model")
-
-                # Recore perf time
-                start_time = time.time()
-                y_pred = clf.predict(fieldset_test_df["embedding"].tolist())
-                perf_time = (time.time() - start_time) / len(fieldset_test_df)
-
-                # Metrics
-                accuracy = accuracy_score(
-                    fieldset_test_df["label"],
-                    y_pred,
+                results.append(
+                    evaluate(
+                        clf,
+                        fieldset_test_df["embedding"].tolist(),
+                        fieldset_test_df["label"].tolist(),
+                    ).to_dict(),
                 )
-                precision, recall, f1, _ = precision_recall_fscore_support(
-                    fieldset_test_df["label"],
-                    y_pred,
-                    average="binary",
-                    pos_label="match",
-                )
-                print(
-                    f"Accuracy: {accuracy}, "
-                    f"Precision: {precision}, "
-                    f"Recall: {recall}, "
-                    f"F1: {f1}, "
-                    f"Time/Pred: {perf_time}"
-                )
-
-                # Store results
-                results.append({
-                    "fieldset": fieldset,
-                    "model": this_iter_model_name,
-                    "accuracy": accuracy,
-                    "precision": precision,
-                    "recall": recall,
-                    "f1": f1,
-                    "time/pred": perf_time,
-                })
 
                 print()
 
@@ -266,6 +321,59 @@ for fieldset in tqdm(
                     "error_level": "semantic model training",
                     "error": str(e),
                 })
+
+        # Train each fine-tuned model
+        for model_short_name, hf_model_path in tqdm(
+            BASE_MODELS.items(),
+            desc="Fine-tune models",
+            leave=False,
+        ):
+            # Set seed
+            np.random.seed(12)
+            random.seed(12)
+
+            this_iter_model_name = f"fine-tune-{model_short_name}"
+            print()
+            print(f"Working on: {this_iter_model_name}")
+            try:
+                # Delete existing temp storage if exists
+                if DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH.exists():
+                    shutil.rmtree(DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH)
+
+                # Update the fine-tune command dict
+                this_iter_command_dict = FINE_TUNE_COMMAND_DICT.copy()
+                this_iter_command_dict["model"] = hf_model_path
+
+                # Train the model
+                ft_train(
+                    this_iter_command_dict,
+                )
+
+                # Evaluate the model
+                ft_transformer_pipe = pipeline(
+                    task="text-classification",
+                    model=str(DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH),
+                    tokenizer=str(DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH),
+                    padding=True,
+                    truncation=True,
+                )
+                results.append(
+                    evaluate(
+                        ft_transformer_pipe,
+                        fieldset_test_df["text"].tolist(),
+                        fieldset_test_df["label"].tolist(),
+                    ).to_dict(),
+                )
+
+            except Exception as e:
+                print(f"Error during: {this_iter_model_name}, Error: {e}")
+                results.append({
+                    "fieldset": fieldset,
+                    "model": this_iter_model_name,
+                    "error_level": "fine-tune model training",
+                    "error": str(e),
+                })
+
 
     except Exception as e:
         print(f"Error during: {fieldset}, Error: {e}")
@@ -282,7 +390,12 @@ for fieldset in tqdm(
     results_df = results_df.sort_values(by="f1", ascending=False).reset_index(drop=True)
     results_df.to_csv("all-model-results.csv", index=False)
     print("Current standings")
-    print(tabulate(results_df, headers="keys", tablefmt="psql", showindex=False))
+    print(tabulate(
+        results_df.head(10),
+        headers="keys",
+        tablefmt="psql",
+        showindex=False,
+    ))
 
     print()
 
@@ -295,4 +408,9 @@ results_df = pd.DataFrame(results)
 results_df = results_df.sort_values(by="f1", ascending=False).reset_index(drop=True)
 results_df.to_csv("all-model-results.csv", index=False)
 print("Final standings")
-print(tabulate(results_df, headers="keys", tablefmt="psql", showindex=False))
+print(tabulate(
+    results_df.head(10),
+    headers="keys",
+    tablefmt="psql",
+    showindex=False,
+))
