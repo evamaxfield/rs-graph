@@ -2,6 +2,7 @@
 
 import logging
 from uuid import uuid4
+import random
 
 import numpy as np
 import pandas as pd
@@ -179,15 +180,20 @@ def _dataframe_to_joined_str_items(
 @app.command()
 def create_developer_author_em_dataset_for_annotation(  # noqa: C901
     top_n_similar: int = 3,
+    seed: int = 12,
     model_name: str = "multi-qa-MiniLM-L6-cos-v1",
     debug: bool = False,
 ) -> None:
     # Setup logging
     setup_logger(debug=debug)
 
+    # Set seed
+    random.seed(seed)
+    np.random.seed(seed)
+
     # Load the repo contributors dataset
     log.info("Loading developer contributions dataset...")
-    devs = load_repo_contributors_dataset().sample(200)
+    devs = load_repo_contributors_dataset()
 
     # Get unique devs frame
     unique_devs_df, _ = _get_unique_devs_frame_from_dev_contributions(
@@ -196,7 +202,7 @@ def create_developer_author_em_dataset_for_annotation(  # noqa: C901
 
     # Load the author contributions dataset
     log.info("Loading author contributions dataset...")
-    authors = load_author_contributions_dataset().sample(500)
+    authors = load_author_contributions_dataset()
 
     # Create lookup for repo to authors
     repo_to_authors: dict[str, set[str]] = {}
@@ -382,6 +388,12 @@ def create_developer_author_em_dataset_for_annotation(  # noqa: C901
     # Remove rows with no semantic scholar id
     dev_author_comparison_df = dev_author_comparison_df.dropna(
         subset=["semantic_scholar_id"]
+    )
+
+    # Shuffle the dataframe
+    dev_author_comparison_df = dev_author_comparison_df.sample(
+        frac=1,
+        random_state=seed,
     )
 
     # Store to disk
