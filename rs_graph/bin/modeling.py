@@ -204,6 +204,9 @@ def create_developer_author_em_dataset_for_annotation(  # noqa: C901
     log.info("Loading author contributions dataset...")
     authors = load_author_contributions_dataset()
 
+    # Drop authors without an author_id
+    authors = authors.dropna(subset=["author_id"])
+
     # Create lookup for repo to authors
     repo_to_authors: dict[str, set[str]] = {}
     author_id_to_name_dict: dict[str, str] = {}
