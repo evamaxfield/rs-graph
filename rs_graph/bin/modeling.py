@@ -8,26 +8,14 @@ import pandas as pd
 import typer
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.util import cos_sim
-from sklearn.linear_model import LogisticRegressionCV
-from sklearn.metrics import (
-    ConfusionMatrixDisplay,
-    RocCurveDisplay,
-    precision_recall_fscore_support,
-)
-from sklearn.model_selection import train_test_split
-from skops import io as sk_io
 from statsmodels.stats.inter_rater import aggregate_raters, fleiss_kappa
 from tqdm import tqdm
 
 from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.data import (
-    load_multi_annotator_dev_author_em_irr_dataset,
     load_author_contributions_dataset,
+    load_multi_annotator_dev_author_em_irr_dataset,
     load_repo_contributors_dataset,
-)
-from rs_graph.modeling import (
-    DEV_AUTHOR_EM_MODEL_PATH,
-    get_dev_author_interaction_embeddings,
 )
 
 ###############################################################################

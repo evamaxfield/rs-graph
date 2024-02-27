@@ -14,12 +14,20 @@ from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 from sklearn.linear_model import LogisticRegressionCV
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support, ConfusionMatrixDisplay
+from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    accuracy_score,
+    precision_recall_fscore_support,
+)
 from sklearn.model_selection import train_test_split
 from tabulate import tabulate
 from tqdm import tqdm
 from transformers import Pipeline, pipeline
-from rs_graph.data import load_author_contributions_dataset, load_repo_contributors_dataset
+
+from rs_graph.data import (
+    load_author_contributions_dataset,
+    load_repo_contributors_dataset,
+)
 
 ###############################################################################
 
@@ -47,7 +55,7 @@ OPTIONAL_DATA_FIELDS = [
 ]
 
 # Create all combinations
-OPTIONAL_DATA_FIELDSETS = [
+OPTIONAL_DATA_FIELDSETS: list[tuple[str, ...]] = [
     (),  # include no optional data
 ]
 for i in range(1, len(OPTIONAL_DATA_FIELDS) + 1):
@@ -104,13 +112,17 @@ random.seed(12)
 ###############################################################################
 
 # Load data
-dev_author_full_details = pd.read_csv("rs_graph/data/files/annotated-dev-author-em-dataset-terra.csv")
+dev_author_full_details = pd.read_csv(
+    "rs_graph/data/files/annotated-dev-author-em-dataset-terra.csv"
+)
 
 # Drop any rows with na
 dev_author_full_details = dev_author_full_details.dropna()
 
 # Cast semantic_scholar_id to string
-dev_author_full_details["semantic_scholar_id"] = dev_author_full_details["semantic_scholar_id"].astype(str)
+dev_author_full_details["semantic_scholar_id"] = dev_author_full_details[
+    "semantic_scholar_id"
+].astype(str)
 
 # Load the authors dataset
 authors = load_author_contributions_dataset()
@@ -121,7 +133,8 @@ authors = authors[["author_id", "name"]].dropna()
 # Load the repos dataset to get to devs
 repos = load_repo_contributors_dataset()
 
-# Get unique devs by grouping by username and then taking the first email and first "name"
+# Get unique devs by grouping by username
+# and then taking the first email and first "name"
 devs = repos.groupby("username").first().reset_index()
 
 # Drop everything but the username, name, and email
@@ -132,7 +145,9 @@ full_dataset = []
 for _, row in dev_author_full_details.iterrows():
     try:
         # Get the author details
-        author_details = authors[authors["author_id"] == row["semantic_scholar_id"]].iloc[0]
+        author_details = authors[
+            authors["author_id"] == row["semantic_scholar_id"]
+        ].iloc[0]
 
         # Get the dev details
         dev_details = devs[devs["username"] == row["github_id"]].iloc[0]
@@ -169,7 +184,7 @@ valid_df, test_df = train_test_split(
 )
 
 # Create a dataframe where the rows are the different splits and there are three columns
-# one column is the split name, the other columns are the counts of the different classes
+# one column is the split name, the other columns are the counts of match
 split_counts = []
 for split_name, split_df in [
     ("train", train_df),
@@ -190,6 +205,7 @@ print()
 # Store class details required for feature construction
 num_classes = dev_author_full_details["match"].nunique()
 class_labels = list(dev_author_full_details["match"].unique())
+
 
 def convert_split_details_to_text_input_dataset(
     df: pd.DataFrame,

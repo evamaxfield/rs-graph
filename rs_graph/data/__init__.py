@@ -212,6 +212,7 @@ def load_multi_annotator_dev_author_em_irr_dataset() -> pd.DataFrame:
 
     return multi_annotator
 
+
 def load_matched_dev_author_ids_dataset() -> pd.DataFrame:
     """Load the matched dev author ids dataset."""
     authors = load_author_contributions_dataset()
