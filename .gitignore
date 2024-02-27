@@ -136,6 +136,7 @@ rs-graph-upstream-deps-failed.parquet
 rs-graph-upstream-deps.parquet
 .github-tokens.json
 autotrain-text-classification-temp
+model-eval-results/
 
 # Ignore all files in the data/files/ directory
 rs_graph/data/files/*
