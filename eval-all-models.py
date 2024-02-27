@@ -14,11 +14,20 @@ from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 from sklearn.linear_model import LogisticRegressionCV
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    accuracy_score,
+    precision_recall_fscore_support,
+)
 from sklearn.model_selection import train_test_split
 from tabulate import tabulate
 from tqdm import tqdm
 from transformers import Pipeline, pipeline
+
+from rs_graph.data import (
+    load_author_contributions_dataset,
+    load_repo_contributors_dataset,
+)
 
 ###############################################################################
 
@@ -27,26 +36,26 @@ load_dotenv()
 
 # Models used for testing, both fine-tune and semantic logit
 BASE_MODELS = {
-    "gte": "thenlper/gte-base",
-    "bge": "BAAI/bge-base-en-v1.5",
+    # "gte": "thenlper/gte-base",
+    # "bge": "BAAI/bge-base-en-v1.5",
     "deberta": "microsoft/deberta-v3-base",
     "bert-multilingual": "google-bert/bert-base-multilingual-cased",
-    "mpnet": "sentence-transformers/all-mpnet-base-v2",
+    # "mpnet": "sentence-transformers/all-mpnet-base-v2",
     "bert-uncased": "google-bert/bert-base-uncased",
-    "distilbert": "distilbert/distilbert-base-uncased",
+    # "distilbert": "distilbert/distilbert-base-uncased",
 }
 
 # Optional fields to create combinations
 OPTIONAL_DATA_FIELDS = [
     "dev_name",
     "dev_email",
-    "dev_bio",
-    "dev_co_contributors",
-    "author_co_authors",
+    # "dev_bio",
+    # "dev_co_contributors",
+    # "author_co_authors",
 ]
 
 # Create all combinations
-OPTIONAL_DATA_FIELDSETS = [
+OPTIONAL_DATA_FIELDSETS: list[tuple[str, ...]] = [
     (),  # include no optional data
 ]
 for i in range(1, len(OPTIONAL_DATA_FIELDS) + 1):
@@ -73,6 +82,7 @@ name: {author_name}
 # Fine-tune default settings
 DEFAULT_HF_DATASET_PATH = "evamxb/dev-author-em-dataset"
 DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH = Path("autotrain-text-classification-temp/")
+DEFAULT_MODEL_MAX_SEQ_LENGTH = 512
 FINE_TUNE_COMMAND_DICT = {
     "data_path": DEFAULT_HF_DATASET_PATH,
     "token": os.environ["HF_AUTH_TOKEN"],
@@ -85,7 +95,15 @@ FINE_TUNE_COMMAND_DICT = {
     "lr": 5e-5,
     "auto_find_batch_size": True,
     "seed": 12,
+    "max_seq_length": DEFAULT_MODEL_MAX_SEQ_LENGTH,
 }
+
+# Evaluation storage path
+EVAL_STORAGE_PATH = Path("model-eval-results/")
+
+# Delete prior results and then remake
+shutil.rmtree(EVAL_STORAGE_PATH, ignore_errors=True)
+EVAL_STORAGE_PATH.mkdir(exist_ok=True)
 
 # Set seed
 np.random.seed(12)
@@ -94,7 +112,62 @@ random.seed(12)
 ###############################################################################
 
 # Load data
-dev_author_full_details = pd.read_parquet("dev-author-em-full-details.parquet")
+dev_author_full_details = pd.read_csv(
+    "rs_graph/data/files/annotated-dev-author-em-dataset-terra.csv"
+)
+
+# Drop any rows with na
+dev_author_full_details = dev_author_full_details.dropna()
+
+# Cast semantic_scholar_id to string
+dev_author_full_details["semantic_scholar_id"] = dev_author_full_details[
+    "semantic_scholar_id"
+].astype(str)
+
+# Load the authors dataset
+authors = load_author_contributions_dataset()
+
+# Drop everything but the author_id and the name
+authors = authors[["author_id", "name"]].dropna()
+
+# Load the repos dataset to get to devs
+repos = load_repo_contributors_dataset()
+
+# Get unique devs by grouping by username
+# and then taking the first email and first "name"
+devs = repos.groupby("username").first().reset_index()
+
+# Drop everything but the username, name, and email
+devs = devs[["username", "name", "email"]]
+
+# For each row in terra, get the matching author and dev
+full_dataset = []
+for _, row in dev_author_full_details.iterrows():
+    try:
+        # Get the author details
+        author_details = authors[
+            authors["author_id"] == row["semantic_scholar_id"]
+        ].iloc[0]
+
+        # Get the dev details
+        dev_details = devs[devs["username"] == row["github_id"]].iloc[0]
+
+        # Add to the dataset
+        full_dataset.append(
+            {
+                "dev_username": row["github_id"],
+                "dev_name": dev_details["name"],
+                "dev_email": dev_details["email"],
+                "author_id": row["semantic_scholar_id"],
+                "author_name": author_details["name"],
+                "match": "match" if row["match"] else "no-match",
+            }
+        )
+    except Exception:
+        pass
+
+# Convert to dataframe
+dev_author_full_details = pd.DataFrame(full_dataset)
 
 # Create splits
 train_df, test_and_valid_df = train_test_split(
@@ -110,6 +183,25 @@ valid_df, test_df = train_test_split(
     stratify=test_and_valid_df["match"],
 )
 
+# Create a dataframe where the rows are the different splits and there are three columns
+# one column is the split name, the other columns are the counts of match
+split_counts = []
+for split_name, split_df in [
+    ("train", train_df),
+    ("valid", valid_df),
+    ("test", test_df),
+]:
+    split_counts.append(
+        {
+            "split": split_name,
+            **split_df["match"].value_counts().to_dict(),
+        }
+    )
+split_counts_df = pd.DataFrame(split_counts)
+print("Split counts:")
+print(split_counts_df)
+print()
+
 # Store class details required for feature construction
 num_classes = dev_author_full_details["match"].nunique()
 class_labels = list(dev_author_full_details["match"].unique())
@@ -124,14 +216,14 @@ def convert_split_details_to_text_input_dataset(
     for _, row in df.iterrows():
         dev_extras = "\n".join(
             [
-                f"{field.strip('dev_')}: {row[field]}"
+                f"{field.replace('dev_', '')}: {row[field]}"
                 for field in fieldset
                 if field.startswith("dev_")
             ]
         )
         author_extras = "\n".join(
             [
-                f"{field.strip('author_')}: {row[field]}"
+                f"{field.replace('author_', '')}: {row[field]}"
                 for field in fieldset
                 if field.startswith("author_")
             ]
@@ -184,6 +276,9 @@ def evaluate(
     model: LogisticRegressionCV | Pipeline,
     x_test: list[np.ndarray] | list[str],
     y_test: list[str],
+    model_name: str,
+    df: pd.DataFrame,
+    fieldset: str,
 ) -> EvaluationResults:
     # Evaluate the model
     print("Evaluating model")
@@ -216,6 +311,39 @@ def evaluate(
         f"Recall: {recall}, "
         f"F1: {f1}, "
         f"Time/Pred: {perf_time}"
+    )
+
+    # Create storage dir for model evals
+    this_model_eval_storage = EVAL_STORAGE_PATH / model_name
+    this_model_eval_storage.mkdir(exist_ok=True)
+
+    # Create sub-dir for fieldset
+    this_model_eval_storage = this_model_eval_storage / fieldset
+    this_model_eval_storage.mkdir(exist_ok=True)
+
+    # Create confusion matrix display
+    cm = ConfusionMatrixDisplay.from_predictions(
+        y_test,
+        y_pred,
+    )
+
+    # Save confusion matrix
+    cm.figure_.savefig(this_model_eval_storage / "confusion.png")
+
+    # Add a "predicted" column
+    df["predicted"] = y_pred
+
+    # Find rows of misclassifications
+    misclassifications = df[df["label"] != df["predicted"]]
+
+    # If "embedding" is in the columns, drop it
+    if "embedding" in misclassifications.columns:
+        misclassifications = misclassifications.drop(columns=["embedding"])
+
+    # Save misclassifications
+    misclassifications.to_csv(
+        this_model_eval_storage / "misclassifications.csv",
+        index=False,
     )
 
     return EvaluationResults(
@@ -339,6 +467,9 @@ for fieldset in tqdm(
                         clf,
                         fieldset_test_df["embedding"].tolist(),
                         fieldset_test_df["label"].tolist(),
+                        this_iter_model_name,
+                        fieldset_test_df,
+                        "-".join(fieldset),
                     ).to_dict(),
                 )
 
@@ -387,12 +518,18 @@ for fieldset in tqdm(
                     task="text-classification",
                     model=str(DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH),
                     tokenizer=str(DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH),
+                    padding=True,
+                    truncation=True,
+                    max_length=DEFAULT_MODEL_MAX_SEQ_LENGTH,
                 )
                 results.append(
                     evaluate(
                         ft_transformer_pipe,
                         fieldset_test_df["text"].tolist(),
                         fieldset_test_df["label"].tolist(),
+                        this_iter_model_name,
+                        fieldset_test_df,
+                        "-".join(fieldset),
                     ).to_dict(),
                 )
 

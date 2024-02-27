@@ -97,7 +97,6 @@ class Contribution(DataClassJsonMixin):
     doi: str
     author_position: int
     co_authors: list[str]
-    embedding: list[float] | None
 
 
 @dataclass
@@ -117,10 +116,6 @@ def load_author_contributions_dataset() -> pd.DataFrame:
     for _, paper_details in paper_details_df.iterrows():
         # Get DOI so we don't have to do a lot of getitems
         doi = paper_details["doi"]
-
-        # Embedding or none
-        embedding_details = paper_details["embedding"]
-        embedding = None if embedding_details is None else embedding_details["vector"]
 
         # Get matching row in the repos dataset
         repo_row = repos_df.loc[repos_df.doi == doi]
@@ -153,7 +148,6 @@ def load_author_contributions_dataset() -> pd.DataFrame:
                             doi=doi,
                             author_position=author_details["author_position"],
                             co_authors=co_authors,
-                            embedding=embedding,
                         )
                     ],
                 )
@@ -170,7 +164,6 @@ def load_author_contributions_dataset() -> pd.DataFrame:
                         doi=doi,
                         author_position=author_details["author_position"],
                         co_authors=co_authors,
-                        embedding=embedding,
                     )
                 )
 
@@ -197,9 +190,27 @@ def load_annotated_dev_author_em_irr_dataset() -> pd.DataFrame:
     return pd.read_csv(ANNOTATED_DEV_AUTHOR_EM_IRR_PATH)
 
 
-def load_annotated_dev_author_em_dataset() -> pd.DataFrame:
-    """Load the full annotated author dev em dataset."""
-    return pd.read_csv(ANNOTATED_DEV_AUTHOR_EM_PATH)
+def load_multi_annotator_dev_author_em_irr_dataset() -> pd.DataFrame:
+    """Load the multi-annotator author dev em irr dataset."""
+    # Load akhil and terra separately
+    akhil = pd.read_csv(DATA_FILES_DIR / "annotated-dev-author-em-dataset-akhil.csv")
+    terra = pd.read_csv(DATA_FILES_DIR / "annotated-dev-author-em-dataset-terra.csv")
+
+    # Keep only the first 1000 rows
+    akhil = akhil.head(1000)
+    terra = terra.head(1000)
+
+    # Drop columns from terra for merge
+    terra = terra.drop(columns=["dev_details", "author_details"])
+
+    # Merge on index
+    multi_annotator = akhil.merge(
+        terra,
+        on=["github_id", "semantic_scholar_id"],
+        suffixes=("_akhil", "_terra"),
+    )
+
+    return multi_annotator
 
 
 def load_matched_dev_author_ids_dataset() -> pd.DataFrame:

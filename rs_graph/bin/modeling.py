@@ -1,35 +1,22 @@
 #!/usr/bin/env python
 
 import logging
-from uuid import uuid4
 import random
+from uuid import uuid4
 
 import numpy as np
 import pandas as pd
 import typer
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.util import cos_sim
-from sklearn.linear_model import LogisticRegressionCV
-from sklearn.metrics import (
-    ConfusionMatrixDisplay,
-    RocCurveDisplay,
-    precision_recall_fscore_support,
-)
-from sklearn.model_selection import train_test_split
-from skops import io as sk_io
 from statsmodels.stats.inter_rater import aggregate_raters, fleiss_kappa
 from tqdm import tqdm
 
 from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.data import (
-    load_annotated_dev_author_em_dataset,
-    load_annotated_dev_author_em_irr_dataset,
     load_author_contributions_dataset,
+    load_multi_annotator_dev_author_em_irr_dataset,
     load_repo_contributors_dataset,
-)
-from rs_graph.modeling import (
-    DEV_AUTHOR_EM_MODEL_PATH,
-    get_dev_author_interaction_embeddings,
 )
 
 ###############################################################################
@@ -440,10 +427,10 @@ def calculate_irr_for_dev_author_em_annotation(
 
     # Load the dev-author EM annotation dataset
     log.info("Loading dev-author EM annotation dataset...")
-    irr_df = load_annotated_dev_author_em_irr_dataset()
+    irr_df = load_multi_annotator_dev_author_em_irr_dataset()
 
     # Make a frame of _just_ the annotations
-    annotations = irr_df[["eva-match", "lindsey-match", "nic-match"]]
+    annotations = irr_df[["match_terra", "match_akhil"]]
 
     # Aggregate
     agg_raters, _ = aggregate_raters(annotations)
@@ -473,12 +460,7 @@ def calculate_irr_for_dev_author_em_annotation(
 
     print("Differing Labels:")
     print("-" * 80)
-    diff_rows = irr_df.loc[
-        (
-            (irr_df["eva-match"] != irr_df["lindsey-match"])
-            | (irr_df["eva-match"] != irr_df["nic-match"])
-        )
-    ]
+    diff_rows = irr_df.loc[(irr_df["match_terra"] != irr_df["match_akhil"])]
     for _, row in diff_rows.iterrows():
         print("dev_details:")
         for line in row.dev_details.split("\n"):
@@ -489,7 +471,7 @@ def calculate_irr_for_dev_author_em_annotation(
             print(f"\t{line}")
         print()
         print("labels:")
-        print(row[["eva-match", "lindsey-match", "nic-match"]])
+        print(row[["match_terra", "match_akhil"]])
         print()
         print()
         print("-" * 40)
@@ -500,131 +482,7 @@ def calculate_irr_for_dev_author_em_annotation(
 def train_dev_author_em_classifier(
     debug: bool = False,
 ) -> None:
-    # Setup logging
-    setup_logger(debug=debug)
-
-    # Load the dev-author EM annotation dataset
-    log.info("Loading dev-author EM annotation dataset...")
-    annotated_data = load_annotated_dev_author_em_dataset()
-
-    # Print value counts of "match"
-    print("Match value counts: ")
-    print(annotated_data.match.value_counts())
-
-    # Load devs dataset
-    log.info("Loading developer contributions dataset...")
-    devs = load_repo_contributors_dataset()
-
-    # Load authors dataset
-    log.info("Loading author contributions dataset...")
-    authors = load_author_contributions_dataset()
-
-    # Get matching dev rows from annotated dataset
-    annotated_devs = devs.loc[devs.username.isin(annotated_data.github_id)]
-
-    # Get unique devs frame
-    unique_devs_df, _ = _get_unique_devs_frame_from_dev_contributions(
-        annotated_devs,
-    )
-
-    # Get matching author rows from annotated dataset
-    annotated_authors = authors.loc[
-        authors.author_id.astype(str).isin(
-            annotated_data.semantic_scholar_id.astype(str)
-        )
-    ]
-
-    # Get unique authors frame
-    (
-        unique_authors_df,
-        _,
-    ) = _get_authors_with_co_author_frame_from_author_contributions(
-        annotated_authors,
-    )
-
-    # Get paired dev and author details with the match value
-    paired_dev_author_details = []
-    for _, row in tqdm(
-        annotated_data.iterrows(),
-        desc="Pairing dev and author details",
-        total=len(annotated_data),
-    ):
-        # Get dev details
-        dev_details = unique_devs_df.loc[unique_devs_df.username == row.github_id].iloc[
-            0
-        ]
-
-        # Get author details
-        author_details = unique_authors_df.loc[
-            unique_authors_df.author_id.astype(str) == str(row.semantic_scholar_id)
-        ].iloc[0]
-
-        # Add to paired dev author details
-        paired_dev_author_details.append(
-            {
-                "dev_details": dev_details,
-                "author_details": author_details,
-                "match": row.match,
-            }
-        )
-
-    # Convert to dataframe
-    paired_dev_author_details_df = pd.DataFrame(paired_dev_author_details)
-
-    # Get dev-author interaction embeddings
-    log.info("Getting dev-author interaction embeddings...")
-    embeddings = get_dev_author_interaction_embeddings(
-        devs=paired_dev_author_details_df["dev_details"].tolist(),
-        authors=paired_dev_author_details_df["author_details"].tolist(),
-    )
-
-    # Train test split
-    x_train, x_test, y_train, y_test = train_test_split(
-        embeddings,
-        annotated_data.match,
-        test_size=0.25,
-        stratify=annotated_data.match,
-        shuffle=True,
-        random_state=12,
-    )
-
-    # Train model
-    log.info("Training classifier...")
-    classifier = LogisticRegressionCV(
-        cv=10,
-        max_iter=1000,
-        random_state=12,
-        # class_weight="balanced",
-    ).fit(x_train, y_train)
-
-    # Save model
-    log.info("Saving classifier...")
-    sk_io.dump(classifier, DEV_AUTHOR_EM_MODEL_PATH)
-
-    # Evaluate model
-    log.info("Evaluating classifier...")
-    y_pred = classifier.predict(x_test)
-    precision, recall, f1, _ = precision_recall_fscore_support(
-        y_test, y_pred, pos_label="match", average="binary"
-    )
-    log.info(f"pre: {precision}, " f"rec: {recall}, " f"f1: {f1}")
-
-    # Get confusion matrix plot
-    confusion = ConfusionMatrixDisplay.from_predictions(y_test, y_pred)
-
-    # Save confusion matrix plot
-    matrix_save_path = "dev-author-em-confusion-matrix.png"
-    confusion.figure_.savefig(matrix_save_path)
-    log.info(f"Confusion matrix saved to {matrix_save_path}")
-
-    # Get ROC curve plot
-    y_pred_conf = classifier.decision_function(x_test)
-    roc_curve = RocCurveDisplay.from_predictions(y_test, y_pred_conf, pos_label="match")
-
-    # Save ROC curve plot
-    roc_save_path = "dev-author-em-roc-curve.png"
-    roc_curve.figure_.savefig(roc_save_path)
-    log.info(f"ROC curve saved to {roc_save_path}")
+    pass
 
 
 ###############################################################################
