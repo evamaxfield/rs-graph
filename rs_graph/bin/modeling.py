@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 import logging
-from uuid import uuid4
 import random
+from uuid import uuid4
 
 import numpy as np
 import pandas as pd
