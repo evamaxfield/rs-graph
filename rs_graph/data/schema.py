@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 from datetime import datetime
+
 from pydantic import BaseModel
 
 ###############################################################################
 
+
 class Repository(BaseModel):
-    """
-    Stores the basic information for a source code repository.
-    """
+    """Stores the basic information for a source code repository."""
+
     uuid: str
     ecosystems_uuid: str
     url: str
@@ -32,10 +32,10 @@ class Repository(BaseModel):
     source_code_embedding_model_version: str
     cache_datetime: datetime
 
+
 class Developer(BaseModel):
-    """
-    Stores the basic information for a developer account.
-    """
+    """Stores the basic information for a developer account."""
+
     uuid: str
     ecosystems_uuid: str
     host: str
@@ -44,10 +44,10 @@ class Developer(BaseModel):
     email: str | None
     cache_datetime: datetime
 
+
 class Commit(BaseModel):
-    """
-    Stores commit details connected to a repository and developer.
-    """
+    """Stores commit details connected to a repository and developer."""
+
     uuid: str
     repository_uuid: Repository
     developer_uuid: Developer
@@ -61,19 +61,21 @@ class Commit(BaseModel):
     code_abs_change: int
     filenames_changed: str
 
+
 class RepositoryContributor(BaseModel):
-    """
-    Stores the connection between a repository and a developer.
-    """
+    """Stores the connection between a repository and a developer."""
+
     repository_uuid: Repository
     developer_uuid: Developer
     cache_datetime: datetime
 
+
 class Document(BaseModel):
     """
-    Stores paper, report, or other academic document details with connections 
+    Stores paper, report, or other academic document details with connections
     to Web of Science (WoS) and Semantic Scholar (S2) identifiers.
     """
+
     uuid: str
     wos_uuid: str
     s2_uuid: str
@@ -87,11 +89,13 @@ class Document(BaseModel):
     field_weighted_citation_impact: float | None
     cache_datetime: datetime
 
+
 class Researcher(BaseModel):
     """
     Stores researcher details with connections to Web of Science (WoS) and
     Semantic Scholar (S2) identifiers.
     """
+
     uuid: str
     wos_uuid: str
     s2_uuid: str
@@ -99,6 +103,7 @@ class Researcher(BaseModel):
     email: str | None
     h_index: int
     cache_datetime: datetime
+
 
 class ResearcherDocument(BaseModel):
     """
@@ -111,12 +116,14 @@ class ResearcherDocument(BaseModel):
     an NER model to extract names from the document text and thus we also store
     the model name and version.
     """
+
     researcher_uuid: Researcher
     document_uuid: Document
     position: str
-    model_name: str | None
-    model_version: str | None
+    acknowledgement_extraction_model_name: str | None
+    acknowledgement_extraction_model_version: str | None
     credit_roles: str
+
 
 class RepositoryDocument(BaseModel):
     """
@@ -127,11 +134,13 @@ class RepositoryDocument(BaseModel):
     This class additionally stores the source of the connection and the model
     name and version used to extract the connection (if needed).
     """
+
     repository_uuid: Repository
     document_uuid: Document
     source: str
-    model_name: str | None
-    model_version: str | None
+    repository_document_match_model_name: str | None
+    repository_document_match_model_version: str | None
+
 
 class DeveloperResearcher(BaseModel):
     """
@@ -142,29 +151,31 @@ class DeveloperResearcher(BaseModel):
     This class additionally stores the model name and version used to extract
     the connection (if needed).
     """
+
     developer_uuid: Developer
     researcher_uuid: Researcher
-    model_name: str | None
-    model_version: str | None
+    developer_researcher_match_model_name: str | None
+    developer_researcher_match_model_version: str | None
+
 
 class FundingSource(BaseModel):
-    """
-    Stores the basic information for a funding source (e.g. NSF, NIH).
-    """
+    """Stores the basic information for a funding source (e.g. NSF, NIH)."""
+
     uuid: str
     name: str
 
+
 class FundingInstance(BaseModel):
-    """
-    Stores the basic information for a single funding instance (e.g. grant).
-    """
+    """Stores the basic information for a single funding instance (e.g. grant)."""
+
     uuid: str
-    funding_source_uuid: str
+    funding_source: FundingSource
     title: str
     abstract: str
     amount: float
     funding_start_datetime: datetime
     funding_end_datetime: datetime
+
 
 class DocumentFundingInstance(BaseModel):
     """
@@ -175,11 +186,13 @@ class DocumentFundingInstance(BaseModel):
     This class additionally stores the source of the connection and the model
     name and version used to extract the connection (if needed).
     """
+
     document_uuid: Document
     funding_instance_uuid: FundingInstance
     source: str
-    model_name: str | None
-    model_version: str | None
+    funding_extraction_model_name: str | None
+    funding_extraction_model_version: str | None
+
 
 class RepositoryFundingInstance(BaseModel):
     """
@@ -190,30 +203,31 @@ class RepositoryFundingInstance(BaseModel):
     This class additionally stores the source of the connection and the model
     name and version used to extract the connection (if needed).
     """
+
     repository_uuid: Repository
     funding_instance_uuid: FundingInstance
     source: str
-    model_name: str | None
-    model_version: str | None
+    funding_extraction_model_name: str | None
+    funding_extraction_model_version: str | None
+
 
 ###############################################################################
-    
+
 if __name__ == "__main__":
     import erdantic as erd
 
-    # Get all model base classes dynamically
+    # Get list of models
     models = [
-        model for model in locals().values()
-        if isinstance(model, type) and issubclass(model, BaseModel)
+        obj for obj in locals().values()
+        # check if it is a class
+        if isinstance(obj, type)
+        and obj not in [datetime, BaseModel]
     ]
-
-    # Remove BaseModel from the list
-    models.remove(BaseModel)
-
-    # Call model_rebuild for all models
+    
+    # Call model rebuild on all models
     for model in models:
-        model.update_forward_refs(**locals())
+        model.model_rebuild()
 
     # Create diagram
-    diagram = erd.create(Repository)
+    diagram = erd.create(*models)
     diagram.draw("rs-graph-schema.png")
