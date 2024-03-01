@@ -8,6 +8,11 @@ from pydantic import BaseModel
 
 ###############################################################################
 
+class Host(BaseModel):
+    """Stores the basic information for a source code repository host."""
+
+    uuid: str
+    name: str
 
 class Repository(BaseModel):
     """Stores the basic information for a source code repository."""
@@ -15,21 +20,132 @@ class Repository(BaseModel):
     uuid: str
     ecosystems_uuid: str
     url: str
-    host: str
+    host: Host
     name: str
     description: str | None
-    star_count: int
-    fork_count: int
-    watcher_count: int
-    issue_count: int
-    pull_request_count: int
-    code_quality: float
-    development_distribution_score: float
     readme_uri: str
     license: str | None
     source_code_embedding_uri: str
     source_code_embedding_model_name: str
     source_code_embedding_model_version: str
+    repository_created_datetime: datetime
+    cache_datetime: datetime
+
+class RepositoryMetrics(BaseModel):
+    """
+    Store the metrics for a repository.
+
+    Notes
+    -----
+    This is stored as it's own table for simpler querying and because many
+    (if not most) of these metrics come from AUGUR / CHAOSS.
+
+    See Also
+    --------
+    AUGUR: https://github.com/chaoss/augur
+    CHAOSS: https://chaoss.community/
+    """
+
+    repository_uuid: Repository
+
+    # Popularity
+    total_star_count: int
+    mean_start_count_per_month: float
+    median_star_count_per_month: float
+    total_fork_count: int
+    mean_fork_count_per_month: float
+    median_fork_count_per_month: float
+
+    # Scores
+    elephant_factor: float
+    """https://chaoss.community/kb/metric-elephant-factor/"""
+    bus_factor: float
+    """https://chaoss.community/kb/metric-bus-factor/"""
+    license_coverage: float
+    """https://chaoss.community/kb/metric-license-coverage/"""
+    burstiness: float
+    """https://chaoss.community/kb/metric-burstiness/"""
+    development_distribution_score: float
+    """https://report.opensustain.tech/chapters/development-distribution-score.html"""
+
+    # Issues
+    total_issue_count: int
+    mean_new_issue_count_per_month: float
+    """https://chaoss.community/kb/metric-issues-new/"""
+    median_new_issue_count_per_month: float
+    """https://chaoss.community/kb/metric-issues-new/"""
+    mean_issues_closed_count_per_month: float
+    """https://chaoss.community/kb/metric-issues-closed/"""
+    median_issues_closed_count_per_month: float
+    """https://chaoss.community/kb/metric-issues-closed/"""
+    mean_issues_active_count_per_month: float
+    """https://chaoss.community/kb/metric-issues-active/"""
+    median_issues_active_count_per_month: float
+    """https://chaoss.community/kb/metric-issues-active/"""
+    mean_issue_response_time: float
+    """https://chaoss.community/kb/metric-issue-response-time/"""
+    median_issue_response_time: float
+    """https://chaoss.community/kb/metric-issue-response-time/"""
+    mean_issue_resolution_duration: float
+    """https://chaoss.community/kb/metric-issue-resolution-duration/"""
+    median_issue_resolution_duration: float
+    """https://chaoss.community/kb/metric-issue-resolution-duration/"""
+    mean_issue_age: float
+    """https://chaoss.community/kb/metric-issue-age/"""
+    median_issue_age: float
+    """https://chaoss.community/kb/metric-issue-age/"""
+
+    # Change Requests
+    total_change_request_count: int
+    """https://chaoss.community/kb/metric-change-requests/"""
+    mean_new_change_requests_count_per_month: float
+    """https://chaoss.community/kb/metric-change-requests-new/"""
+    median_new_change_requests_count_per_month: float
+    """https://chaoss.community/kb/metric-change-requests-new/"""
+    mean_change_request_closed_count_per_month: float
+    """https://chaoss.community/kb/metric-change-requests-closed/"""
+    median_change_request_closed_count_per_month: float
+    """https://chaoss.community/kb/metric-change-requests-closed/"""
+    mean_change_request_reviews: float
+    """https://chaoss.community/kb/metric-change-request-reviews/"""
+    median_change_request_reviews: float
+    """https://chaoss.community/kb/metric-change-request-reviews/"""
+    mean_change_request_duration: float
+    """https://chaoss.community/kb/metric-change-requests-duration/"""
+    median_change_request_duration: float
+    """https://chaoss.community/kb/metric-change-requests-duration/"""
+    mean_change_request_review_duration: float
+    """https://chaoss.community/kb/metric-change-request-review-duration/"""
+    median_change_request_review_duration: float
+    """https://chaoss.community/kb/metric-change-request-review-duration/"""
+    mean_change_request_accepted: float
+    """https://chaoss.community/kb/metric-change-requests-accepted/"""
+    median_change_request_accepted: float
+    """https://chaoss.community/kb/metric-change-requests-accepted/"""
+    mean_change_request_declined: float
+    """https://chaoss.community/kb/metric-change-requests-declined/"""
+    median_change_request_declined: float
+    """https://chaoss.community/kb/metric-change-requests-declined/"""
+    change_request_closure_ratio: float
+    """https://chaoss.community/kb/metric-change-request-closure-ratio/"""
+    change_request_acceptance_ratio: float
+    """https://chaoss.community/kb/metric-change-request-acceptance-ratio/"""
+    mean_change_request_commits: float
+    """https://chaoss.community/kb/metric-change-request-commits/"""
+    median_change_request_commits: float
+    """https://chaoss.community/kb/metric-change-request-commits/"""
+
+    # Releases
+    total_release_count: int
+    release_frequency: float
+    """https://chaoss.community/kb/metric-release-frequency/"""
+
+    # Code Change
+    mean_code_change_lines: float
+    """https://chaoss.community/kb/metric-code-changes-lines/"""
+    median_code_change_lines: float
+    """https://chaoss.community/kb/metric-code-changes-lines/"""
+
     cache_datetime: datetime
 
 
@@ -38,7 +154,7 @@ class Developer(BaseModel):
 
     uuid: str
     ecosystems_uuid: str
-    host: str
+    host: Host
     username: str
     name: str | None
     email: str | None
@@ -69,6 +185,11 @@ class RepositoryContributor(BaseModel):
     developer_uuid: Developer
     cache_datetime: datetime
 
+class Field(BaseModel):
+    """Stores the basic information for a field of study."""
+
+    uuid: str
+    name: str
 
 class Document(BaseModel):
     """
@@ -82,8 +203,8 @@ class Document(BaseModel):
     title: str
     abstract: str
     keywords: str | None
-    primary_field: str
-    secondary_field: str | None
+    primary_field: Field
+    secondary_field: Field | None
     published_datetime: datetime
     citation_count: int
     field_weighted_citation_impact: float | None
@@ -104,6 +225,17 @@ class Researcher(BaseModel):
     h_index: int
     cache_datetime: datetime
 
+class Position(BaseModel):
+    """Stores the basic information for a position (e.g. professor, postdoc)."""
+
+    uuid: str
+    name: str
+
+class CreditRole(BaseModel):
+    """Stores the basic information for a credit role (e.g. author, acknowledgee)."""
+
+    uuid: str
+    name: str
 
 class ResearcherDocument(BaseModel):
     """
@@ -119,11 +251,23 @@ class ResearcherDocument(BaseModel):
 
     researcher_uuid: Researcher
     document_uuid: Document
-    position: str
+    position: Position
     acknowledgement_extraction_model_name: str | None
     acknowledgement_extraction_model_version: str | None
-    credit_roles: str
 
+
+class ResearcherDocumentCreditRole(BaseModel):
+    """Stores the connection between a researcher, document, and credit role."""
+
+    researcher_uuid: Researcher
+    document_uuid: Document
+    credit_role_uuid: CreditRole
+
+class DatasetSource(BaseModel):
+    """Stores the basic information for a dataset source."""
+
+    uuid: str
+    name: str
 
 class RepositoryDocument(BaseModel):
     """
@@ -137,7 +281,7 @@ class RepositoryDocument(BaseModel):
 
     repository_uuid: Repository
     document_uuid: Document
-    source: str
+    source: DatasetSource
     repository_document_match_model_name: str | None
     repository_document_match_model_version: str | None
 
@@ -189,7 +333,7 @@ class DocumentFundingInstance(BaseModel):
 
     document_uuid: Document
     funding_instance_uuid: FundingInstance
-    source: str
+    source: DatasetSource
     funding_extraction_model_name: str | None
     funding_extraction_model_version: str | None
 
@@ -206,7 +350,7 @@ class RepositoryFundingInstance(BaseModel):
 
     repository_uuid: Repository
     funding_instance_uuid: FundingInstance
-    source: str
+    source: DatasetSource
     funding_extraction_model_name: str | None
     funding_extraction_model_version: str | None
 
