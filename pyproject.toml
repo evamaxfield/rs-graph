@@ -68,6 +68,8 @@ lint = [
   "pre-commit>=2.20.0",
 ]
 dev = [
+  "erdantic>=0.7,<1",
+  "pydantic>=2,<3",
   "ipython",
   "jupyterlab",
 ]
