@@ -196,9 +196,9 @@ def load_multi_annotator_dev_author_em_irr_dataset() -> pd.DataFrame:
     akhil = pd.read_csv(DATA_FILES_DIR / "annotated-dev-author-em-dataset-akhil.csv")
     terra = pd.read_csv(DATA_FILES_DIR / "annotated-dev-author-em-dataset-terra.csv")
 
-    # Keep only the first 1000 rows
-    akhil = akhil.head(1000)
-    terra = terra.head(1000)
+    # Keep only the first 2999 rows
+    akhil = akhil.head(2999)
+    terra = terra.head(2999)
 
     # Drop columns from terra for merge
     terra = terra.drop(columns=["dev_details", "author_details"])
