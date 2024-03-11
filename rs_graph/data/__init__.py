@@ -30,8 +30,19 @@ REPO_CONTRIBUTORS_PATH = DATA_FILES_DIR / "repo-contributors.parquet"
 MATCHED_DEV_AUTHOR_IDS_PATH = DATA_FILES_DIR / "matched-dev-author-ids.parquet"
 
 # Annotated datasets
-ANNOTATED_DEV_AUTHOR_EM_IRR_PATH = DATA_FILES_DIR / "annotated-dev-author-em-irr.csv"
-ANNOTATED_DEV_AUTHOR_EM_PATH = DATA_FILES_DIR / "annotated-dev-author-em.csv"
+ANNOTATED_DEV_AUTHOR_EM_PRACTICE_AKHIL_PATH = (
+    DATA_FILES_DIR / "annotated-dev-author-em-practice-akhil.csv"
+)
+ANNOTATED_DEV_AUTHOR_EM_PRACTICE_TERRA_PATH = (
+    DATA_FILES_DIR / "annotated-dev-author-em-practice-terra.csv"
+)
+ANNOTATED_DEV_AUTHOR_EM_UNRESOLVED_AKHIL_PATH = (
+    DATA_FILES_DIR / "annotated-dev-author-em-unresolved-akhil.csv"
+)
+ANNOTATED_DEV_AUTHOR_EM_UNRESOLVED_TERRA_PATH = (
+    DATA_FILES_DIR / "annotated-dev-author-em-unresolved-terra.csv"
+)
+ANNOTATED_DEV_AUTHOR_EM_PATH = DATA_FILES_DIR / "annotated-dev-author-em-resolved.csv"
 
 ###############################################################################
 
@@ -185,32 +196,40 @@ def load_repo_contributors_dataset() -> pd.DataFrame:
     return pd.read_parquet(REPO_CONTRIBUTORS_PATH)
 
 
-def load_annotated_dev_author_em_irr_dataset() -> pd.DataFrame:
-    """Load the annotated author dev em irr dataset."""
-    return pd.read_csv(ANNOTATED_DEV_AUTHOR_EM_IRR_PATH)
-
-
-def load_multi_annotator_dev_author_em_irr_dataset() -> pd.DataFrame:
+def load_multi_annotator_dev_author_em_irr_dataset(
+    use_full_dataset: bool = False,
+) -> pd.DataFrame:
     """Load the multi-annotator author dev em irr dataset."""
+    if use_full_dataset:
+        # Load akhil and terra separately
+        akhil = pd.read_csv(ANNOTATED_DEV_AUTHOR_EM_UNRESOLVED_AKHIL_PATH)
+        terra = pd.read_csv(ANNOTATED_DEV_AUTHOR_EM_UNRESOLVED_TERRA_PATH)
+
+        # Drop columns from terra for merge
+        terra = terra.drop(columns=["dev_details", "author_details"])
+
+        # Merge on index
+        return akhil.merge(
+            terra,
+            on=["github_id", "semantic_scholar_id"],
+            suffixes=("_akhil", "_terra"),
+        )
+
     # Load akhil and terra separately
-    akhil = pd.read_csv(DATA_FILES_DIR / "annotated-dev-author-em-dataset-akhil.csv")
-    terra = pd.read_csv(DATA_FILES_DIR / "annotated-dev-author-em-dataset-terra.csv")
+    akhil = pd.read_csv(ANNOTATED_DEV_AUTHOR_EM_PRACTICE_AKHIL_PATH)[:50]
+    terra = pd.read_csv(ANNOTATED_DEV_AUTHOR_EM_PRACTICE_TERRA_PATH)[:50]
 
-    # Keep only the first 2999 rows
-    akhil = akhil.head(2999)
-    terra = terra.head(2999)
-
-    # Drop columns from terra for merge
-    terra = terra.drop(columns=["dev_details", "author_details"])
-
-    # Merge on index
-    multi_annotator = akhil.merge(
+    # Merge on shared columns
+    return akhil.merge(
         terra,
-        on=["github_id", "semantic_scholar_id"],
+        on=["dev_details", "author_details"],
         suffixes=("_akhil", "_terra"),
     )
 
-    return multi_annotator
+
+def load_annotated_dev_author_em_dataset() -> pd.DataFrame:
+    """Load the annotated dev author em dataset."""
+    return pd.read_csv(ANNOTATED_DEV_AUTHOR_EM_PATH)
 
 
 def load_matched_dev_author_ids_dataset() -> pd.DataFrame:

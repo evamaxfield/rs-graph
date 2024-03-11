@@ -9,15 +9,26 @@ import pandas as pd
 import typer
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.util import cos_sim
+from sklearn.linear_model import LogisticRegressionCV
+from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    RocCurveDisplay,
+    precision_recall_fscore_support,
+)
+from sklearn.model_selection import train_test_split
+from skops import io as skio
 from statsmodels.stats.inter_rater import aggregate_raters, fleiss_kappa
 from tqdm import tqdm
 
 from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.data import (
+    DATA_FILES_DIR,
+    load_annotated_dev_author_em_dataset,
     load_author_contributions_dataset,
     load_multi_annotator_dev_author_em_irr_dataset,
     load_repo_contributors_dataset,
 )
+from rs_graph.modeling import DEV_AUTHOR_EM_MODEL_PATH
 
 ###############################################################################
 
@@ -66,57 +77,6 @@ def _get_unique_devs_frame_from_dev_contributions(
 
     # Reform as df
     return pd.DataFrame(unique_devs), repo_to_devs_lut
-
-
-def _get_authors_with_co_author_frame_from_author_contributions(
-    author_contributions_df: pd.DataFrame,
-) -> tuple[pd.DataFrame, dict[str, set[str]]]:
-    # Each row should be a unique person
-    log.info("Getting unique authors frame...")
-
-    # Make repo to author LUT
-    repo_to_author_ids_lut: dict[str, set[str]] = {}
-    for _, author in author_contributions_df.iterrows():
-        for contribution in author.contributions:
-            if contribution["repo"] not in repo_to_author_ids_lut:
-                repo_to_author_ids_lut[contribution["repo"]] = set()
-
-            repo_to_author_ids_lut[contribution["repo"]].add(author.author_id)
-
-    # Construct unique authors with co_authors frame
-    unique_authors = []
-    for _, author in author_contributions_df.iterrows():
-        # Get all co-authors
-        all_co_authors = set()
-        for contribution in author.contributions:
-            # Get author ids from repo_to_authors
-            co_author_ids = repo_to_author_ids_lut[contribution["repo"]]
-
-            # Get names from author_id_to_name_dict
-            co_author_names = {
-                author_contributions_df.loc[
-                    author_contributions_df.author_id == author_id
-                ].iloc[0]["name"]
-                for author_id in co_author_ids
-            }
-
-            # Add to all co-authors
-            all_co_authors.update(co_author_names)
-
-        # Remove self from co-authors
-        all_co_authors.discard(author["name"])
-
-        unique_authors.append(
-            {
-                "author_id": author.author_id,
-                "name": author["name"],
-                "repos": tuple(c["repo"] for c in author.contributions),
-                "co_authors": tuple(all_co_authors),
-            }
-        )
-
-    # Reform as df
-    return pd.DataFrame(unique_authors), repo_to_author_ids_lut
 
 
 def _dataframe_to_joined_str_items(
@@ -393,7 +353,7 @@ def create_developer_author_em_dataset_for_annotation(  # noqa: C901
 
 
 @app.command()
-def create_irr_subset_for_dev_author_em_annotation(
+def create_practice_subset_for_dev_author_em_annotation(
     full_annotation_dataset_path: str = "dev-author-em-annotation-dataset.csv",
     n: int = 100,
     debug: bool = False,
@@ -419,7 +379,9 @@ def create_irr_subset_for_dev_author_em_annotation(
 
 
 @app.command()
-def calculate_irr_for_dev_author_em_annotation(
+def calculate_irr_for_dev_author_em_annotation(  # noqa: C901
+    use_full_dataset: bool = False,
+    include_diff_rows: bool = False,
     debug: bool = False,
 ) -> None:
     # Setup logging
@@ -427,7 +389,7 @@ def calculate_irr_for_dev_author_em_annotation(
 
     # Load the dev-author EM annotation dataset
     log.info("Loading dev-author EM annotation dataset...")
-    irr_df = load_multi_annotator_dev_author_em_irr_dataset()
+    irr_df = load_multi_annotator_dev_author_em_irr_dataset(use_full_dataset)
 
     # Make a frame of _just_ the annotations
     annotations = irr_df[["match_terra", "match_akhil"]]
@@ -458,31 +420,210 @@ def calculate_irr_for_dev_author_em_annotation(
     )
     print()
 
-    print("Differing Labels:")
-    print("-" * 80)
-    diff_rows = irr_df.loc[(irr_df["match_terra"] != irr_df["match_akhil"])]
-    for _, row in diff_rows.iterrows():
-        print("dev_details:")
-        for line in row.dev_details.split("\n"):
-            print(f"\t{line}")
-        print()
-        print("author_details:")
-        for line in row.author_details.split("\n"):
-            print(f"\t{line}")
-        print()
-        print("labels:")
-        print(row[["match_terra", "match_akhil"]])
-        print()
-        print()
-        print("-" * 40)
-        print()
+    if include_diff_rows:
+        print("Differing Labels:")
+        print("-" * 80)
+        diff_rows = irr_df.loc[(irr_df["match_terra"] != irr_df["match_akhil"])]
+        for _, row in diff_rows.iterrows():
+            print("dev_details:")
+            for line in row.dev_details.split("\n"):
+                print(f"\t{line}")
+            print()
+            print("author_details:")
+            for line in row.author_details.split("\n"):
+                print(f"\t{line}")
+            print()
+            print("labels:")
+            print(row[["match_terra", "match_akhil"]])
+            print()
+            print()
+            print("-" * 40)
+            print()
 
 
 @app.command()
 def train_dev_author_em_classifier(
+    embedding_model: str = "microsoft/deberta-v3-base",
+    test_size: float = 0.2,
+    seed: int = 12,
+    confusion_matrix_save_name: str = "dev-author-em-confusion-matrix.png",
+    roc_curve_save_name: str = "dev-author-em-roc-curve.png",
+    misclassifications_save_name: str = "dev-author-em-misclassifications.csv",
     debug: bool = False,
 ) -> None:
-    pass
+    # Setup logging
+    setup_logger(debug=debug)
+
+    # Set seed
+    random.seed(seed)
+    np.random.seed(seed)
+
+    # Load the datasets
+    dev_author_full_details = load_annotated_dev_author_em_dataset()
+
+    # Cast semantic_scholar_id to string
+    dev_author_full_details["semantic_scholar_id"] = dev_author_full_details[
+        "semantic_scholar_id"
+    ].astype(str)
+
+    # Load the authors dataset
+    authors = load_author_contributions_dataset()
+
+    # Drop everything but the author_id and the name
+    authors = authors[["author_id", "name"]].dropna()
+
+    # Load the repos dataset to get to devs
+    repos = load_repo_contributors_dataset()
+
+    # Get unique devs by grouping by username
+    # and then taking the first email and first "name"
+    devs = repos.groupby("username").first().reset_index()
+
+    # For each row in terra, get the matching author and dev
+    log.info("Getting expanded details for each author and dev...")
+    constructed_rows = []
+    for _, row in dev_author_full_details.iterrows():
+        try:
+            # Get the author details
+            author_details = authors[
+                authors["author_id"] == row["semantic_scholar_id"]
+            ].iloc[0]
+
+            # Get the dev details
+            dev_details = devs[devs["username"] == row["github_id"]].iloc[0]
+
+            # Add to the dataset
+            constructed_rows.append(
+                {
+                    "dev_username": row["github_id"],
+                    "dev_name": dev_details["name"],
+                    "dev_email": dev_details["email"],
+                    "author_id": row["semantic_scholar_id"],
+                    "author_name": author_details["name"],
+                    "match": "match" if row["match"] else "no-match",
+                }
+            )
+        except Exception:
+            pass
+
+    # Convert to dataframe
+    expanded_details = pd.DataFrame(constructed_rows)
+
+    # Create embedding ready strings for each dev-author pair
+    log.info("Constructing dev-author comparison strings...")
+    template = """
+    ### Developer Details
+    
+    username: {dev_username}
+    name: {dev_name}
+    email: {dev_email}
+
+    ---
+
+    ### Author Details
+
+    name: {author_name}
+    """.strip()
+    prepped_rows = []
+    for _, row in expanded_details.iterrows():
+        prepped_rows.append(
+            {
+                "author_id": row["author_id"],
+                "dev_username": row["dev_username"],
+                "text": template.format(
+                    dev_username=row["dev_username"],
+                    dev_name=row["dev_name"],
+                    dev_email=row["dev_email"],
+                    author_name=row["author_name"],
+                ),
+                "label": row["match"],
+            }
+        )
+
+    # Convert to dataframe
+    prepped_data = pd.DataFrame(prepped_rows)
+
+    # Create embeddings for each dev-author string
+    log.info("Creating embeddings for each dev-author string...")
+    model = SentenceTransformer(embedding_model)
+    embeddings = model.encode(
+        prepped_data["text"].tolist(),
+        show_progress_bar=True,
+    )
+
+    # Convert embeddings from a single ndarray to a list of ndarrays
+    # so that we can add them to the dataframe
+    embeddings_list = [np.array(embedding) for embedding in embeddings.tolist()]
+    prepped_data["embedding"] = embeddings_list
+
+    # Create splits
+    log.info("Creating train and test splits...")
+    train_df, test_df = train_test_split(
+        prepped_data,
+        stratify=prepped_data["label"].tolist(),
+        test_size=test_size,
+        random_state=seed,
+        shuffle=True,
+    )
+
+    # Train a classifier
+    log.info("Training the classifier...")
+    clf = LogisticRegressionCV(
+        cv=10,
+        max_iter=3000,
+        random_state=seed,
+        class_weight="balanced",
+    ).fit(
+        train_df["embedding"].tolist(),
+        train_df["label"].tolist(),
+    )
+
+    # Store the model
+    log.info("Storing the classifier...")
+    skio.dump(clf, DEV_AUTHOR_EM_MODEL_PATH)
+
+    # Evaluate
+    log.info("Evaluating the classifier...")
+    y_pred = clf.predict(test_df["embedding"].tolist())
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        test_df["label"].tolist(),
+        y_pred,
+        average="binary",
+        pos_label="match",
+    )
+
+    # Print results
+    log.info(
+        f"Evaluation results -- "
+        f"Precision: {precision:.2f}, "
+        f"Recall: {recall:.2f}, "
+        f"F1: {f1:.2f}"
+    )
+
+    # Create confusion matrix and ROC curve
+    confusion_matrix = ConfusionMatrixDisplay.from_predictions(
+        test_df["label"].tolist(),
+        y_pred,
+    )
+    confusion_matrix_save_path = DATA_FILES_DIR / confusion_matrix_save_name
+    confusion_matrix.figure_.savefig(confusion_matrix_save_path)
+    roc_curve = RocCurveDisplay.from_estimator(
+        clf,
+        test_df["embedding"].tolist(),
+        test_df["label"].tolist(),
+    )
+    roc_curve_save_path = DATA_FILES_DIR / roc_curve_save_name
+    roc_curve.figure_.savefig(roc_curve_save_path)
+
+    # Add predicted values to test_df to find misclassifications
+    test_df["predicted"] = y_pred
+    misclassifications = test_df.loc[test_df["label"] != test_df["predicted"]]
+
+    # Store misclassifications
+    # Drop the embedding column
+    misclassifications = misclassifications.drop(columns=["embedding"])
+    misclassifications_save_path = DATA_FILES_DIR / misclassifications_save_name
+    misclassifications.to_csv(misclassifications_save_path, index=False)
 
 
 ###############################################################################

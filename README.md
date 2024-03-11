@@ -43,10 +43,11 @@ to the installed package directory (`rs_graph.data.files`).
 
 ## GitHub User and Author Entity Matching Model
 
-### IRR Annotation
+### Annotation
 
-From the 2023-12-12 upload of the full dataset, we randomly sampled 100 rows to
-use for three-way annotator-agreement and alignment.
+From the 2023-12-12 upload of the full dataset, we created a 50 example practice
+dataset to annotate first. In a single round of practice annotate we achieved a
+Fliess Kappa of 0.90 (almost perfect agreement).
 
 Annotation criteria for entity matches are:
 
@@ -67,11 +68,23 @@ Annotation criteria for entity matches are:
 
 3. if there is uncertainty, err on the side of `False`
 
+We then annotated a dataset of 3000 dev-author pairs following the same criteria as used in
+practice. After all 3000 dev-author pairs were annotated, we resolved any differences
+between annotations to form a single unified set of annotations for all 3000 pairs.
+
 #### Results of IRR
 
-Inter-rater Reliability (Fleiss Kappa): 0.925595238095238 (Almost perfect agreement)
+##### Results of Practice Dataset
+
+Inter-rater Reliability (Fleiss Kappa): 0.90 (Almost perfect agreement)
 
 To reproduce this result run: `rs-graph-modeling calculate-irr-for-dev-author-em-annotation`
+
+##### Results on Full 3000 Pair Dataset
+
+Inter-rater Reliability (Fliess Kappa): 0.90 (Almost perfect agreement)
+
+To reproduce this result run: `rs-graph-modeling calculate-irr-for-dev-author-em-annotation --use-full-dataset`
 
 #### Examples
 
@@ -117,16 +130,40 @@ looks similar to the author name in `author_details`. Additionally, within the
 author details we see no co-authors with a name that looks like a better match
 for the current `dev_details` under consideration.
 
-### Model Training
+### Model Training and Evaluation
 
-We created pairwise interaction features between the devs userame, name, and email, and the author name. Before creating the interaction, we created embeddings for each of the four values above using sentence transformers. After interaction we are left with three features (username * name), (name * name), and (email * name). We then trained a logistic regression model on these features to predict whether or not the dev and author are the same person.
+In total, we tested 224 model-feature combinations: 7 models,
+4 feature combinations ("dev username - author name", 
+"dev username and dev name - author name",
+"dev username and dev email - author name", and
+"dev username, dev name, and dev email - author name"),
+4 negative example sizes (to test for issues with extreme label imbalance),
+and 2 model types
+(Logistic Regression via Semantic Embeddings or Fine-tuning the Base Models).
 
-### Model Evaluation
+We used 60%, 20%, 20% (train, epoch eval, and test) splits for the data.
 
-We evaluated the model using 10-fold cross validation. We achieved an average F1 score of 0.97.
+Ultimately after all model training and evaluations completed we
+found these configurations to be the top 10:
 
-![Dev Author Entity Matching Model Confusion Matrix](./docs/dev-author-confusion-matrix-docs.png)
+TODO: include table
 
-### Model Application
+We observe that logistic regression from semantic embeddings produced by `deberta-v3` performed best
+(noting minimal difference between "dev username and dev name" and "dev username, dev name, and dev email").
 
-We then applied the model across pairs of authors and devs which have worked on the same repositories. In doing so, we found ~3,200 matches between authors and devs.
+For our final model, we trained these two models again, individually, and found that
+a the model with "dev username, dev name, and dev email" produced just barely better results than without dev email.
+
+Thus, the final model (semantic-logit, "dev username, dev name, and dev email" embedded with deberta v3) is made available.
+
+Evaluation Results for Final Model:
+- Precision: 0.93
+- Recall: 0.96
+- F1 (binary): 0.95
+
+<div style="width: 45%; display: inline-block; margin: 2.4%">
+    <img src="./docs/dev-author-em-confusion-matrix.png" alt="Dev Author Entity Matching Modeling Confusion Matrix" />
+</div>
+<div style="width: 45%; display: inline-block; margin: 2.4%">
+    <img src="./docs/dev-author-em-roc-curve.png" alt="Dev Author Entity Matching Model ROC Curve" />
+<div>

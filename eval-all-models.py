@@ -330,6 +330,7 @@ def evaluate(
         time_pred=perf_time,
     )
 
+
 # Iter through different dataset sizes
 for random_neg_sample_frac in tqdm(
     [0.1, 0.25, 0.5, 1],
@@ -337,7 +338,7 @@ for random_neg_sample_frac in tqdm(
 ):
     print("Randomly sampling negative examples with frac:", random_neg_sample_frac)
     frac_as_percent = int(random_neg_sample_frac * 100)
-    
+
     # Get all positive examples
     positive_examples = dev_author_full_details[
         dev_author_full_details["match"] == "match"
@@ -355,9 +356,9 @@ for random_neg_sample_frac in tqdm(
     )
 
     # Combine the two
-    random_neg_sampled_df = pd.concat([
-        positive_examples, sampled_negative_examples
-    ], ignore_index=True).reset_index(drop=True)
+    random_neg_sampled_df = pd.concat(
+        [positive_examples, sampled_negative_examples], ignore_index=True
+    ).reset_index(drop=True)
 
     # Create splits
     train_df, test_and_valid_df = train_test_split(
@@ -378,9 +379,9 @@ for random_neg_sample_frac in tqdm(
     negatives_not_in_sample = negative_examples[
         ~negative_examples.index.isin(sampled_negative_examples.index)
     ]
-    test_df = pd.concat([
-        test_df, negatives_not_in_sample
-    ], ignore_index=True).reset_index(drop=True)
+    test_df = pd.concat(
+        [test_df, negatives_not_in_sample], ignore_index=True
+    ).reset_index(drop=True)
 
     # Create a dataframe where the rows are the different splits
     # and there are three columns one column is the split name,
@@ -473,7 +474,8 @@ for random_neg_sample_frac in tqdm(
                 random.seed(12)
 
                 this_iter_model_name = (
-                    f"semantic-logit-{model_short_name}-random-neg-pct-{frac_as_percent}"
+                    f"semantic-logit-{model_short_name}"
+                    f"-random-neg-pct-{frac_as_percent}"
                 )
                 print()
                 print(f"Working on: {this_iter_model_name}")
@@ -609,7 +611,9 @@ for random_neg_sample_frac in tqdm(
 
         # Print results
         results_df = pd.DataFrame(results)
-        results_df = results_df.sort_values(by="f1", ascending=False).reset_index(drop=True)
+        results_df = results_df.sort_values(by="f1", ascending=False).reset_index(
+            drop=True
+        )
         results_df.to_csv("all-model-results.csv", index=False)
         print("Current standings")
         print(

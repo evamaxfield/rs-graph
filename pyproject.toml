@@ -41,12 +41,14 @@ dependencies = [
   "parse>=1,<2",
   "requests>=2,<3",
   "semanticscholar>=0.7,<1",
+  "sentencepiece>=0.2,<1",
   "sentence-transformers>=2,<3",
   # viz
   "altair>=5,<6",
   "bokeh>=3,<4",
   "matplotlib>=3,<4",
   "networkx>=3,<4",
+  "opinionated>=0.0.2,<0.1",
   "scipy>=1,<2",
   "umap-learn[plot]>=0.5.4,<1",
   # statistics and ml

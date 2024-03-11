@@ -8,11 +8,13 @@ from pydantic import BaseModel
 
 ###############################################################################
 
+
 class Host(BaseModel):
     """Stores the basic information for a source code repository host."""
 
     uuid: str
     name: str
+
 
 class Repository(BaseModel):
     """Stores the basic information for a source code repository."""
@@ -30,6 +32,7 @@ class Repository(BaseModel):
     source_code_embedding_model_version: str
     repository_created_datetime: datetime
     cache_datetime: datetime
+
 
 class RepositoryMetrics(BaseModel):
     """
@@ -185,11 +188,13 @@ class RepositoryContributor(BaseModel):
     developer_uuid: Developer
     cache_datetime: datetime
 
+
 class Field(BaseModel):
     """Stores the basic information for a field of study."""
 
     uuid: str
     name: str
+
 
 class Document(BaseModel):
     """
@@ -225,17 +230,20 @@ class Researcher(BaseModel):
     h_index: int
     cache_datetime: datetime
 
+
 class Position(BaseModel):
     """Stores the basic information for a position (e.g. professor, postdoc)."""
 
     uuid: str
     name: str
 
+
 class CreditRole(BaseModel):
     """Stores the basic information for a credit role (e.g. author, acknowledgee)."""
 
     uuid: str
     name: str
+
 
 class ResearcherDocument(BaseModel):
     """
@@ -263,11 +271,13 @@ class ResearcherDocumentCreditRole(BaseModel):
     document_uuid: Document
     credit_role_uuid: CreditRole
 
+
 class DatasetSource(BaseModel):
     """Stores the basic information for a dataset source."""
 
     uuid: str
     name: str
+
 
 class RepositoryDocument(BaseModel):
     """
@@ -362,15 +372,16 @@ if __name__ == "__main__":
 
     # Get list of models
     models = [
-        obj for obj in locals().values()
+        obj
+        for obj in locals().values()
         # check if it is a class
-        if isinstance(obj, type)
-        and obj not in [datetime, BaseModel]
+        if isinstance(obj, type) and obj not in [datetime, BaseModel]
     ]
-    
+
     # Call model rebuild on all models
     for model in models:
-        model.model_rebuild()
+        if hasattr(model, "model_rebuild"):
+            model.model_rebuild()
 
     # Create diagram
     diagram = erd.create(*models)
