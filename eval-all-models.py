@@ -36,13 +36,13 @@ load_dotenv()
 
 # Models used for testing, both fine-tune and semantic logit
 BASE_MODELS = {
-    # "gte": "thenlper/gte-base",
-    # "bge": "BAAI/bge-base-en-v1.5",
+    "gte": "thenlper/gte-base",
+    "bge": "BAAI/bge-base-en-v1.5",
     "deberta": "microsoft/deberta-v3-base",
-    # "bert-multilingual": "google-bert/bert-base-multilingual-cased",
-    # "mpnet": "sentence-transformers/all-mpnet-base-v2",
-    # "bert-uncased": "google-bert/bert-base-uncased",
-    # "distilbert": "distilbert/distilbert-base-uncased",
+    "bert-multilingual": "google-bert/bert-base-multilingual-cased",
+    "mpnet": "sentence-transformers/all-mpnet-base-v2",
+    "bert-uncased": "google-bert/bert-base-uncased",
+    "distilbert": "distilbert/distilbert-base-uncased",
 }
 
 # Optional fields to create combinations
@@ -462,77 +462,77 @@ for random_neg_sample_frac in tqdm(
             print()
             print()
 
-            # # Train each semantic logit model
-            # for model_short_name, hf_model_path in tqdm(
-            #     BASE_MODELS.items(),
-            #     desc="Semantic logit models",
-            #     leave=False,
-            # ):
-            #     # Set seed
-            #     np.random.seed(12)
-            #     random.seed(12)
+            # Train each semantic logit model
+            for model_short_name, hf_model_path in tqdm(
+                BASE_MODELS.items(),
+                desc="Semantic logit models",
+                leave=False,
+            ):
+                # Set seed
+                np.random.seed(12)
+                random.seed(12)
 
-            #     this_iter_model_name = (
-            #         f"semantic-logit-{model_short_name}-random-neg-pct-{frac_as_percent}"
-            #     )
-            #     print()
-            #     print(f"Working on: {this_iter_model_name}")
-            #     try:
-            #         # Init sentence transformer
-            #         sentence_transformer = SentenceTransformer(hf_model_path)
+                this_iter_model_name = (
+                    f"semantic-logit-{model_short_name}-random-neg-pct-{frac_as_percent}"
+                )
+                print()
+                print(f"Working on: {this_iter_model_name}")
+                try:
+                    # Init sentence transformer
+                    sentence_transformer = SentenceTransformer(hf_model_path)
 
-            #         # Preprocess all of the text to embeddings
-            #         print("Preprocessing text to embeddings")
-            #         fieldset_train_df["embedding"] = [
-            #             np.array(embed)
-            #             for embed in sentence_transformer.encode(
-            #                 fieldset_train_df["text"].tolist(),
-            #             ).tolist()
-            #         ]
-            #         fieldset_test_df["embedding"] = [
-            #             np.array(embed)
-            #             for embed in sentence_transformer.encode(
-            #                 fieldset_test_df["text"].tolist(),
-            #             ).tolist()
-            #         ]
+                    # Preprocess all of the text to embeddings
+                    print("Preprocessing text to embeddings")
+                    fieldset_train_df["embedding"] = [
+                        np.array(embed)
+                        for embed in sentence_transformer.encode(
+                            fieldset_train_df["text"].tolist(),
+                        ).tolist()
+                    ]
+                    fieldset_test_df["embedding"] = [
+                        np.array(embed)
+                        for embed in sentence_transformer.encode(
+                            fieldset_test_df["text"].tolist(),
+                        ).tolist()
+                    ]
 
-            #         # Train model
-            #         print("Training model")
-            #         clf = LogisticRegressionCV(
-            #             cv=10,
-            #             max_iter=3000,
-            #             random_state=12,
-            #             class_weight="balanced",
-            #         ).fit(
-            #             fieldset_train_df["embedding"].tolist(),
-            #             fieldset_train_df["label"].tolist(),
-            #         )
+                    # Train model
+                    print("Training model")
+                    clf = LogisticRegressionCV(
+                        cv=10,
+                        max_iter=3000,
+                        random_state=12,
+                        class_weight="balanced",
+                    ).fit(
+                        fieldset_train_df["embedding"].tolist(),
+                        fieldset_train_df["label"].tolist(),
+                    )
 
-            #         # Evaluate model
-            #         results.append(
-            #             evaluate(
-            #                 clf,
-            #                 fieldset_test_df["embedding"].tolist(),
-            #                 fieldset_test_df["label"].tolist(),
-            #                 this_iter_model_name,
-            #                 fieldset_test_df,
-            #                 "-".join(fieldset),
-            #                 random_neg_sample_frac,
-            #             ).to_dict(),
-            #         )
+                    # Evaluate model
+                    results.append(
+                        evaluate(
+                            clf,
+                            fieldset_test_df["embedding"].tolist(),
+                            fieldset_test_df["label"].tolist(),
+                            this_iter_model_name,
+                            fieldset_test_df,
+                            "-".join(fieldset),
+                            random_neg_sample_frac,
+                        ).to_dict(),
+                    )
 
-            #         print()
+                    print()
 
-            #     except Exception as e:
-            #         print(f"Error during: {this_iter_model_name}, Error: {e}")
-            #         results.append(
-            #             {
-            #                 "fieldset": fieldset,
-            #                 "model": this_iter_model_name,
-            #                 "error_level": "semantic model training",
-            #                 "error": str(e),
-            #             }
-            #         )
+                except Exception as e:
+                    print(f"Error during: {this_iter_model_name}, Error: {e}")
+                    results.append(
+                        {
+                            "fieldset": fieldset,
+                            "model": this_iter_model_name,
+                            "error_level": "semantic model training",
+                            "error": str(e),
+                        }
+                    )
 
             # Train each fine-tuned model
             for model_short_name, hf_model_path in tqdm(
