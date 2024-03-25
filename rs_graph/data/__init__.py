@@ -30,6 +30,8 @@ REPO_CONTRIBUTORS_PATH = DATA_FILES_DIR / "repo-contributors.parquet"
 MATCHED_DEV_AUTHOR_IDS_PATH = DATA_FILES_DIR / "matched-dev-author-ids.parquet"
 
 # Annotated datasets
+
+# Dev Author EM datasets
 ANNOTATED_DEV_AUTHOR_EM_PRACTICE_AKHIL_PATH = (
     DATA_FILES_DIR / "annotated-dev-author-em-practice-akhil.csv"
 )
@@ -43,6 +45,14 @@ ANNOTATED_DEV_AUTHOR_EM_UNRESOLVED_TERRA_PATH = (
     DATA_FILES_DIR / "annotated-dev-author-em-unresolved-terra.csv"
 )
 ANNOTATED_DEV_AUTHOR_EM_PATH = DATA_FILES_DIR / "annotated-dev-author-em-resolved.csv"
+
+# Repo Paper EM datasets
+ANNOTATED_REPO_PAPER_EM_PRACTICE_AKHIL_PATH = (
+    DATA_FILES_DIR / "annotated-repo-paper-em-practice-akhil.csv"
+)
+ANNOTATED_REPO_PAPER_EM_PRACTICE_TERRA_PATH = (
+    DATA_FILES_DIR / "annotated-repo-paper-em-practice-terra.csv"
+)
 
 ###############################################################################
 
@@ -244,3 +254,37 @@ def load_matched_dev_author_ids_dataset() -> pd.DataFrame:
     )
 
     return matched_dev_authors
+
+
+def load_multi_annotator_repo_paper_em_irr_dataset() -> pd.DataFrame:
+    """Load the multi-annotator repo paper em irr dataset."""
+    # Load akhil and terra separately
+    akhil = pd.read_csv(ANNOTATED_REPO_PAPER_EM_PRACTICE_AKHIL_PATH)
+    terra = pd.read_csv(ANNOTATED_REPO_PAPER_EM_PRACTICE_TERRA_PATH)
+
+    # Sort by "id_"
+    akhil = akhil.sort_values(by="id_")
+    terra = terra.sort_values(by="id_")
+
+    # If a row has a "remove" label in the "remove" column,
+    # then make the value in the "match" column, "remove"
+    akhil.loc[akhil["remove"] == "remove", "match"] = "remove"
+    terra.loc[terra["remove"] == "remove", "match"] = "remove"
+
+    # Drop the remove column
+    akhil = akhil.drop(columns=["remove"])
+    terra = terra.drop(columns=["remove"])
+
+    # Replace True and False values in "match" column with
+    # "match" and "no-match"
+    akhil.loc[akhil["match"] is True, "match"] = "match"
+    akhil.loc[akhil["match"] is False, "match"] = "no-match"
+    terra.loc[terra["match"] is True, "match"] = "match"
+    terra.loc[terra["match"] is False, "match"] = "no-match"
+
+    # Merge on shared columns
+    return akhil.merge(
+        terra,
+        on=["source", "id_", "paper_url", "repo_url"],
+        suffixes=("_akhil", "_terra"),
+    )

@@ -26,6 +26,7 @@ from rs_graph.data import (
     load_annotated_dev_author_em_dataset,
     load_author_contributions_dataset,
     load_multi_annotator_dev_author_em_irr_dataset,
+    load_multi_annotator_repo_paper_em_irr_dataset,
     load_repo_contributors_dataset,
 )
 from rs_graph.modeling import DEV_AUTHOR_EM_MODEL_PATH
@@ -378,8 +379,65 @@ def create_practice_subset_for_dev_author_em_annotation(
     log.info(f"Stored to {output_filepath}")
 
 
+def _interpret_fliess_kappa(v: float) -> str:
+    if v < 0:
+        return "No agreement"
+    if v < 0.2:
+        return "Poor agreement"
+    if v >= 0.2 and v < 0.4:
+        return "Fair agreement"
+    if v >= 0.4 and v < 0.6:
+        return "Moderate agreement"
+    if v >= 0.6 and v < 0.8:
+        return "Substantial agreement"
+    return "Almost perfect agreement"
+
+
+def _print_irr_stats(
+    irr_df: pd.DataFrame,
+    compare_col_one: str,
+    compare_col_two: str,
+    include_diff_rows: bool = False,
+) -> None:
+    # Make a frame of _just_ the annotations
+    annotations = irr_df[["match_terra", "match_akhil"]]
+
+    # Aggregate
+    agg_raters, _ = aggregate_raters(annotations)
+
+    # Calc Kappa's and return
+    kappa = fleiss_kappa(agg_raters)
+
+    # Run print
+    print(
+        f"Inter-rater Reliability (Fleiss Kappa): "
+        f"{kappa} ({_interpret_fliess_kappa(kappa)})"
+    )
+    print()
+
+    if include_diff_rows:
+        print("Differing Labels:")
+        print("-" * 80)
+        diff_rows = irr_df.loc[(irr_df["match_terra"] != irr_df["match_akhil"])]
+        for _, row in diff_rows.iterrows():
+            print(f"{compare_col_one}:")
+            for line in row[compare_col_one].split("\n"):
+                print(f"\t{line}")
+            print()
+            print(f"{compare_col_two}:")
+            for line in row[compare_col_two].split("\n"):
+                print(f"\t{line}")
+            print()
+            print("labels:")
+            print(row[["match_terra", "match_akhil"]])
+            print()
+            print()
+            print("-" * 40)
+            print()
+
+
 @app.command()
-def calculate_irr_for_dev_author_em_annotation(  # noqa: C901
+def calculate_irr_for_dev_author_em_annotation(
     use_full_dataset: bool = False,
     include_diff_rows: bool = False,
     debug: bool = False,
@@ -391,54 +449,12 @@ def calculate_irr_for_dev_author_em_annotation(  # noqa: C901
     log.info("Loading dev-author EM annotation dataset...")
     irr_df = load_multi_annotator_dev_author_em_irr_dataset(use_full_dataset)
 
-    # Make a frame of _just_ the annotations
-    annotations = irr_df[["match_terra", "match_akhil"]]
-
-    # Aggregate
-    agg_raters, _ = aggregate_raters(annotations)
-
-    # Calc Kappa's and return
-    kappa = fleiss_kappa(agg_raters)
-
-    def _interpret_score(v: float) -> str:
-        if v < 0:
-            return "No agreement"
-        if v < 0.2:
-            return "Poor agreement"
-        if v >= 0.2 and v < 0.4:
-            return "Fair agreement"
-        if v >= 0.4 and v < 0.6:
-            return "Moderate agreement"
-        if v >= 0.6 and v < 0.8:
-            return "Substantial agreement"
-        return "Almost perfect agreement"
-
-    # Run print
-    print(
-        f"Inter-rater Reliability (Fleiss Kappa): "
-        f"{kappa} ({_interpret_score(kappa)})"
+    _print_irr_stats(
+        irr_df=irr_df,
+        compare_col_one="dev_details",
+        compare_col_two="author_details",
+        include_diff_rows=include_diff_rows,
     )
-    print()
-
-    if include_diff_rows:
-        print("Differing Labels:")
-        print("-" * 80)
-        diff_rows = irr_df.loc[(irr_df["match_terra"] != irr_df["match_akhil"])]
-        for _, row in diff_rows.iterrows():
-            print("dev_details:")
-            for line in row.dev_details.split("\n"):
-                print(f"\t{line}")
-            print()
-            print("author_details:")
-            for line in row.author_details.split("\n"):
-                print(f"\t{line}")
-            print()
-            print("labels:")
-            print(row[["match_terra", "match_akhil"]])
-            print()
-            print()
-            print("-" * 40)
-            print()
 
 
 @app.command()
@@ -624,6 +640,26 @@ def train_dev_author_em_classifier(
     misclassifications = misclassifications.drop(columns=["embedding"])
     misclassifications_save_path = DATA_FILES_DIR / misclassifications_save_name
     misclassifications.to_csv(misclassifications_save_path, index=False)
+
+
+@app.command()
+def calculate_irr_for_repo_paper_em_annotation(
+    include_diff_rows: bool = False,
+    debug: bool = False,
+) -> None:
+    # Setup logging
+    setup_logger(debug=debug)
+
+    # Load the repo-paper EM annotation dataset
+    log.info("Loading repo-paper EM annotation dataset...")
+    repo_paper_em_irr_df = load_multi_annotator_repo_paper_em_irr_dataset()
+
+    _print_irr_stats(
+        irr_df=repo_paper_em_irr_df,
+        compare_col_one="paper_url",
+        compare_col_two="repo_url",
+        include_diff_rows=include_diff_rows,
+    )
 
 
 ###############################################################################
