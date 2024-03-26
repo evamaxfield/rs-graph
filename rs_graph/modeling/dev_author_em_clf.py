@@ -25,42 +25,66 @@ from tqdm import tqdm
 from transformers import Pipeline, pipeline
 
 from ..data import (
+    load_annotated_dev_author_em_dataset,
     load_author_contributions_dataset,
     load_repo_contributors_dataset,
 )
 
+# Models used for testing, both fine-tune and semantic logit
+BASE_MODELS = {
+    # "gte": "thenlper/gte-base",
+    # "bge": "BAAI/bge-base-en-v1.5",
+    # "deberta": "microsoft/deberta-v3-base",
+    "bert-multilingual": "google-bert/bert-base-multilingual-cased",
+    # "mpnet": "sentence-transformers/all-mpnet-base-v2",
+    # "bert-uncased": "google-bert/bert-base-uncased",
+    # "distilbert": "distilbert/distilbert-base-uncased",
+}
+
+# Optional fields to create combinations
+OPTIONAL_DATA_FIELDS = [
+    "dev_name",
+    # "dev_email",
+    # "dev_bio",
+    # "dev_co_contributors",
+    # "author_co_authors",
+]
+
+# Create all combinations
+OPTIONAL_DATA_FIELDSETS: list[tuple[str, ...]] = [
+    (),  # include no optional data
+]
+for i in range(1, len(OPTIONAL_DATA_FIELDS) + 1):
+    OPTIONAL_DATA_FIELDSETS.extend(list(combinations(OPTIONAL_DATA_FIELDS, i)))
+
+# Fine-tune default settings
+DEFAULT_HF_DATASET_PATH = "evamxb/dev-author-em-dataset"
+DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH = Path("autotrain-text-classification-temp/")
+DEFAULT_MODEL_MAX_SEQ_LENGTH = 256
+FINE_TUNE_COMMAND_DICT = {
+    "data_path": DEFAULT_HF_DATASET_PATH,
+    "token": os.environ["HF_AUTH_TOKEN"],
+    "project_name": str(DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH),
+    "text_column": "text",
+    "target_column": "label",
+    "train_split": "train",
+    "valid_split": "valid",
+    "epochs": 3,
+    "lr": 5e-5,
+    "auto_find_batch_size": True,
+    "seed": 12,
+    "max_seq_length": DEFAULT_MODEL_MAX_SEQ_LENGTH,
+}
+
+# Evaluation storage path
+EVAL_STORAGE_PATH = Path("model-eval-results/")
+
 ###############################################################################
 
-def train_and_eval_all_dev_author_em_classifiers() -> None:
+
+def train_and_eval_all_dev_author_em_classifiers() -> None:  # noqa: C901
     # Load environment variables
     load_dotenv()
-
-    # Models used for testing, both fine-tune and semantic logit
-    BASE_MODELS = {
-        "gte": "thenlper/gte-base",
-        # "bge": "BAAI/bge-base-en-v1.5",
-        # "deberta": "microsoft/deberta-v3-base",
-        "bert-multilingual": "google-bert/bert-base-multilingual-cased",
-        # "mpnet": "sentence-transformers/all-mpnet-base-v2",
-        # "bert-uncased": "google-bert/bert-base-uncased",
-        # "distilbert": "distilbert/distilbert-base-uncased",
-    }
-
-    # Optional fields to create combinations
-    OPTIONAL_DATA_FIELDS = [
-        "dev_name",
-        "dev_email",
-        # "dev_bio",
-        # "dev_co_contributors",
-        # "author_co_authors",
-    ]
-
-    # Create all combinations
-    OPTIONAL_DATA_FIELDSETS: list[tuple[str, ...]] = [
-        (),  # include no optional data
-    ]
-    for i in range(1, len(OPTIONAL_DATA_FIELDS) + 1):
-        OPTIONAL_DATA_FIELDSETS.extend(list(combinations(OPTIONAL_DATA_FIELDS, i)))
 
     # Basic template for model input
     # We choose username and name because they are always available
@@ -80,28 +104,6 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:
     {author_extras}
     """.strip()
 
-    # Fine-tune default settings
-    DEFAULT_HF_DATASET_PATH = "evamxb/dev-author-em-dataset"
-    DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH = Path("autotrain-text-classification-temp/")
-    DEFAULT_MODEL_MAX_SEQ_LENGTH = 256
-    FINE_TUNE_COMMAND_DICT = {
-        "data_path": DEFAULT_HF_DATASET_PATH,
-        "token": os.environ["HF_AUTH_TOKEN"],
-        "project_name": str(DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH),
-        "text_column": "text",
-        "target_column": "label",
-        "train_split": "train",
-        "valid_split": "valid",
-        "epochs": 3,
-        "lr": 5e-5,
-        "auto_find_batch_size": True,
-        "seed": 12,
-        "max_seq_length": DEFAULT_MODEL_MAX_SEQ_LENGTH,
-    }
-
-    # Evaluation storage path
-    EVAL_STORAGE_PATH = Path("model-eval-results/")
-
     # Delete prior results and then remake
     shutil.rmtree(EVAL_STORAGE_PATH, ignore_errors=True)
     EVAL_STORAGE_PATH.mkdir(exist_ok=True)
@@ -113,9 +115,7 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:
     ###############################################################################
 
     # Load data
-    dev_author_full_details = pd.read_csv(
-        "rs_graph/data/files/annotated-dev-author-em-dataset-resolved.csv"
-    )
+    dev_author_full_details = load_annotated_dev_author_em_dataset()
 
     # Drop any rows with na
     dev_author_full_details = dev_author_full_details.dropna()
@@ -137,9 +137,6 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:
     # Get unique devs by grouping by username
     # and then taking the first email and first "name"
     devs = repos.groupby("username").first().reset_index()
-
-    # Drop everything but the username, name, and email
-    devs = devs[["username", "name", "email"]]
 
     # For each row in terra, get the matching author and dev
     full_dataset = []
@@ -173,7 +170,6 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:
     # Store class details required for feature construction
     num_classes = dev_author_full_details["match"].nunique()
     class_labels = list(dev_author_full_details["match"].unique())
-
 
     def convert_split_details_to_text_input_dataset(
         df: pd.DataFrame,
@@ -228,7 +224,6 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:
             ),
         )
 
-
     @dataclass
     class EvaluationResults(DataClassJsonMixin):
         random_sample_frac: float
@@ -239,7 +234,6 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:
         recall: float
         f1: float
         time_pred: float
-
 
     def evaluate(
         model: LogisticRegressionCV | Pipeline,
@@ -284,7 +278,9 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:
         )
 
         # Create storage dir for model evals
-        this_model_eval_storage = EVAL_STORAGE_PATH / model_name
+        this_model_eval_storage = EVAL_STORAGE_PATH / (
+            "neg-sample-frac-" + str(random_sample_frac * 100)
+        )
         this_model_eval_storage.mkdir(exist_ok=True)
 
         # Create sub-dir for fieldset
@@ -293,6 +289,9 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:
         else:
             fieldset_dir_name = fieldset
         this_model_eval_storage = this_model_eval_storage / fieldset_dir_name
+        this_model_eval_storage.mkdir(exist_ok=True)
+
+        this_model_eval_storage = this_model_eval_storage / model_name
         this_model_eval_storage.mkdir(exist_ok=True)
 
         # Create confusion matrix display
@@ -331,14 +330,12 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:
             time_pred=perf_time,
         )
 
-
     # Iter through different dataset sizes
     for random_neg_sample_frac in tqdm(
         [0.1, 0.25, 0.5, 1],
         desc="Random neg sample fracs",
     ):
         print("Randomly sampling negative examples with frac:", random_neg_sample_frac)
-        frac_as_percent = int(random_neg_sample_frac * 100)
 
         # Get all positive examples
         positive_examples = dev_author_full_details[
@@ -474,10 +471,7 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:
                     np.random.seed(12)
                     random.seed(12)
 
-                    this_iter_model_name = (
-                        f"semantic-logit-{model_short_name}"
-                        f"-random-neg-pct-{frac_as_percent}"
-                    )
+                    this_iter_model_name = f"semantic-logit-{model_short_name}"
                     print()
                     print(f"Working on: {this_iter_model_name}")
                     try:
@@ -547,9 +541,7 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:
                     np.random.seed(12)
                     random.seed(12)
 
-                    this_iter_model_name = (
-                        f"fine-tune-{model_short_name}-random-neg-pct-{frac_as_percent}"
-                    )
+                    this_iter_model_name = f"fine-tune-{model_short_name}"
                     print()
                     print(f"Working on: {this_iter_model_name}")
                     try:
