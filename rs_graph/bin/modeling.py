@@ -456,6 +456,16 @@ def calculate_irr_for_dev_author_em_annotation(
         include_diff_rows=include_diff_rows,
     )
 
+@app.command()
+def train_and_eval_all_dev_author_em_classifiers(debug: bool = False) -> None:
+    from rs_graph.modeling.dev_author_em_clf import train_and_eval_all_dev_author_em_classifiers
+
+    # Setup logging
+    setup_logger(debug=debug)
+
+    # Train and evaluate all dev-author EM classifiers
+    train_and_eval_all_dev_author_em_classifiers()
+
 
 @app.command()
 def train_dev_author_em_classifier(
