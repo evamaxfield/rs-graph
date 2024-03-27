@@ -32,22 +32,22 @@ from ..data import (
 
 # Models used for testing, both fine-tune and semantic logit
 BASE_MODELS = {
-    # "gte": "thenlper/gte-base",
-    # "bge": "BAAI/bge-base-en-v1.5",
-    # "deberta": "microsoft/deberta-v3-base",
+    "gte": "thenlper/gte-base",
+    "bge": "BAAI/bge-base-en-v1.5",
+    "deberta": "microsoft/deberta-v3-base",
     "bert-multilingual": "google-bert/bert-base-multilingual-cased",
-    # "mpnet": "sentence-transformers/all-mpnet-base-v2",
-    # "bert-uncased": "google-bert/bert-base-uncased",
-    # "distilbert": "distilbert/distilbert-base-uncased",
+    "mpnet": "sentence-transformers/all-mpnet-base-v2",
+    "bert-uncased": "google-bert/bert-base-uncased",
+    "distilbert": "distilbert/distilbert-base-uncased",
 }
 
 # Optional fields to create combinations
 OPTIONAL_DATA_FIELDS = [
     "dev_name",
-    # "dev_email",
-    # "dev_bio",
-    # "dev_co_contributors",
-    # "author_co_authors",
+    "dev_email",
+    "dev_bio",
+    "dev_co_contributors",
+    "author_co_authors",
 ]
 
 # Create all combinations
@@ -63,7 +63,6 @@ DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH = Path("autotrain-text-classification-temp/"
 DEFAULT_MODEL_MAX_SEQ_LENGTH = 256
 FINE_TUNE_COMMAND_DICT = {
     "data_path": DEFAULT_HF_DATASET_PATH,
-    "token": os.environ["HF_AUTH_TOKEN"],
     "project_name": str(DEFAULT_FINE_TUNE_TEMP_STORAGE_PATH),
     "text_column": "text",
     "target_column": "label",
@@ -85,6 +84,7 @@ EVAL_STORAGE_PATH = Path("model-eval-results/")
 def train_and_eval_all_dev_author_em_classifiers() -> None:  # noqa: C901
     # Load environment variables
     load_dotenv()
+    FINE_TUNE_COMMAND_DICT["token"] = os.environ["HF_AUTH_TOKEN"]
 
     # Basic template for model input
     # We choose username and name because they are always available

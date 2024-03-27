@@ -459,7 +459,7 @@ def calculate_irr_for_dev_author_em_annotation(
 
 @app.command()
 def train_and_eval_all_dev_author_em_classifiers(debug: bool = False) -> None:
-    from rs_graph.modeling.dev_author_em_clf import (
+    from rs_graph.modeling.train_and_eval_all_dev_author_em_clf import (
         train_and_eval_all_dev_author_em_classifiers,
     )
 

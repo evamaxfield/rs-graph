@@ -26,24 +26,6 @@ lint:
 	pre-commit run --all-files
 
 ###############################################################################
-# Quarto
-
-# store various dirs and filepaths
-NOTEBOOKS_DIR := justfile_directory() + "/notebooks/"
-FILE_URI := NOTEBOOKS_DIR + "viz.ipynb"
-BUILD_DIR := NOTEBOOKS_DIR + "_build/"
-
-# remove build files
-quarto-clean:
-	rm -fr {{BUILD_DIR}}
-	rm -fr {{NOTEBOOKS_DIR}}/.quarto
-
-# build page
-quarto-build:
-	quarto render {{FILE_URI}} --execute --to html
-	touch {{BUILD_DIR}}.nojekyll
-
-###############################################################################
 # Release and versioning
 
 # tag a new version
@@ -58,13 +40,10 @@ release:
 ###############################################################################
 # Infra / Data Storage
 
-###############################################################################
-# API Server Deployment
-
 # Default region for infrastructures
 default_region := "us-central1"
 key_guid := replace_regex(uuid(), "([a-z0-9]{8})(.*)", "$1")
-default_key := clean(join(justfile_directory(), ".keys/dev.json"))
+default_key := justfile_directory() + "/.keys/dev.json"
 default_project := "sci-software-graph"
 default_bucket := "gs://sci-software-graph-data-store"
 
@@ -116,3 +95,16 @@ setup-infra project=default_project:
 	just enable-services {{project}}
 	-\gcloud storage buckets create {{default_bucket}}
 	gcloud storage buckets add-iam-policy-binding {{default_bucket}} --member=allUsers --role=roles/storage.objectViewer
+
+###############################################################################
+# Database Management
+
+db_path := justfile_directory() + "/rs_graph/data/files/rs-graph"
+
+# create a new migration
+db-migrate target="dev":
+	git update-index --really-refresh
+	sed -i "s|REPLACE_SQLITE_DB_PATH|{{db_path}}-{{target}}.db|g" {{justfile_directory()}}/alembic.ini
+	-alembic revision --autogenerate -m '$(git log -n 1 --pretty=format:"Git Commit: %h -- Message: %B")'
+	-alembic upgrade head
+	sed -i "s|{{db_path}}-{{target}}.db|REPLACE_SQLITE_DB_PATH|g" {{justfile_directory()}}/alembic.ini
