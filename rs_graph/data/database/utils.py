@@ -1,17 +1,18 @@
 #!/usr/bin/env python
 
-from rs_graph_db import constants
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine, select
+
+from rs_graph.data.database import constants
 
 ###############################################################################
 
 
 def get_engine(prod: bool = False) -> Engine:
     if prod:
-        return create_engine(f"sqlite:///{constants.PROD_DATABASE_FILENAME}")
+        return create_engine(f"sqlite:///{constants.PROD_DATABASE_FILEPATH}")
     else:
-        return create_engine(f"sqlite:///{constants.DEV_DATABASE_FILENAME}")
+        return create_engine(f"sqlite:///{constants.DEV_DATABASE_FILEPATH}")
 
 
 def get_or_add(model: SQLModel, session: Session) -> SQLModel:

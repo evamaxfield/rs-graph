@@ -10,7 +10,7 @@ from sqlmodel import Field, SQLModel, UniqueConstraint
 ###############################################################################
 
 
-class CodeHost(SQLModel, table=True):
+class CodeHost(SQLModel, table=True):  # type: ignore
     """Stores the basic information for a source code repository host."""
 
     __tablename__ = "code_host"
@@ -31,7 +31,7 @@ class CodeHost(SQLModel, table=True):
     )
 
 
-class Repository(SQLModel, table=True):
+class Repository(SQLModel, table=True):  # type: ignore
     """Stores the basic information for a source code repository."""
 
     # Primary Keys / Uniqueness
@@ -63,7 +63,7 @@ class Repository(SQLModel, table=True):
     )
 
 
-class Developer(SQLModel, table=True):
+class Developer(SQLModel, table=True):  # type: ignore
     """Stores the basic information for a developer account."""
 
     # Primary Keys / Uniqueness
@@ -89,7 +89,7 @@ class Developer(SQLModel, table=True):
     )
 
 
-class Commit(SQLModel, table=True):
+class Commit(SQLModel, table=True):  # type: ignore
     """Stores commit details connected to a repository and developer."""
 
     # Primary Keys / Uniqueness
@@ -119,7 +119,7 @@ class Commit(SQLModel, table=True):
     )
 
 
-class RepositoryContributor(SQLModel, table=True):
+class RepositoryContributor(SQLModel, table=True):  # type: ignore
     """Stores the connection between a repository and a developer."""
 
     __tablename__ = "repository_contributor"
@@ -140,7 +140,7 @@ class RepositoryContributor(SQLModel, table=True):
     )
 
 
-class FieldOfStudy(SQLModel, table=True):
+class FieldOfStudy(SQLModel, table=True):  # type: ignore
     """Stores the basic information for a field of study."""
 
     __tablename__ = "field_of_study"
@@ -158,7 +158,7 @@ class FieldOfStudy(SQLModel, table=True):
     )
 
 
-class Document(SQLModel, table=True):
+class Document(SQLModel, table=True):  # type: ignore
     """
     Stores paper, report, or other academic document details with connections
     to Web of Science (WoS) and Semantic Scholar (S2) identifiers.
@@ -189,7 +189,7 @@ class Document(SQLModel, table=True):
     )
 
 
-class Researcher(SQLModel, table=True):
+class Researcher(SQLModel, table=True):  # type: ignore
     """
     Stores researcher details with connections to Web of Science (WoS) and
     Semantic Scholar (S2) identifiers.
@@ -214,7 +214,7 @@ class Researcher(SQLModel, table=True):
     )
 
 
-class Position(SQLModel, table=True):
+class Position(SQLModel, table=True):  # type: ignore
     """Stores the basic information for a research position position."""
 
     # Primary Keys / Uniqueness
@@ -230,7 +230,7 @@ class Position(SQLModel, table=True):
     )
 
 
-class CreditRole(SQLModel, table=True):
+class CreditRole(SQLModel, table=True):  # type: ignore
     """Stores the basic information for a credit role (e.g. author, acknowledgee)."""
 
     __tablename__ = "credit_role"
@@ -248,7 +248,7 @@ class CreditRole(SQLModel, table=True):
     )
 
 
-class ResearcherDocument(SQLModel, table=True):
+class ResearcherDocument(SQLModel, table=True):  # type: ignore
     """
     Stores the connection between a researcher and a document.
 
@@ -283,7 +283,7 @@ class ResearcherDocument(SQLModel, table=True):
     )
 
 
-class ResearcherDocumentCreditRole(SQLModel, table=True):
+class ResearcherDocumentCreditRole(SQLModel, table=True):  # type: ignore
     """Stores the connection between a researcher, document, and credit role."""
 
     __tablename__ = "researcher_document_credit_role"
@@ -307,7 +307,7 @@ class ResearcherDocumentCreditRole(SQLModel, table=True):
     )
 
 
-class DatasetSource(SQLModel, table=True):
+class DatasetSource(SQLModel, table=True):  # type: ignore
     """Stores the basic information for a dataset source."""
 
     __tablename__ = "dataset_source"
@@ -325,7 +325,7 @@ class DatasetSource(SQLModel, table=True):
     )
 
 
-class RepositoryDocument(SQLModel, table=True):
+class RepositoryDocument(SQLModel, table=True):  # type: ignore
     """
     Stores the connection between a repository and a document.
 
@@ -358,7 +358,7 @@ class RepositoryDocument(SQLModel, table=True):
     )
 
 
-class DeveloperResearcher(SQLModel, table=True):
+class DeveloperResearcher(SQLModel, table=True):  # type: ignore
     """
     Stores the connection between a developer and a researcher.
 
@@ -390,7 +390,7 @@ class DeveloperResearcher(SQLModel, table=True):
     )
 
 
-class FundingSource(SQLModel, table=True):
+class FundingSource(SQLModel, table=True):  # type: ignore
     """Stores the basic information for a funding source (e.g. NSF, NIH)."""
 
     __tablename__ = "funding_source"
@@ -408,7 +408,7 @@ class FundingSource(SQLModel, table=True):
     )
 
 
-class FundingInstance(SQLModel, table=True):
+class FundingInstance(SQLModel, table=True):  # type: ignore
     """Stores the basic information for a single funding instance (e.g. grant)."""
 
     __tablename__ = "funding_instance"
@@ -435,7 +435,7 @@ class FundingInstance(SQLModel, table=True):
     )
 
 
-class DocumentFundingInstance(SQLModel, table=True):
+class DocumentFundingInstance(SQLModel, table=True):  # type: ignore
     """
     Stores the connection between a document and a funding instance.
 
@@ -470,7 +470,7 @@ class DocumentFundingInstance(SQLModel, table=True):
     )
 
 
-class RepositoryFundingInstance(SQLModel, table=True):
+class RepositoryFundingInstance(SQLModel, table=True):  # type: ignore
     """
     Stores the connection between a repository and a funding instance.
 
