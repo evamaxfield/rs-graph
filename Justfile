@@ -100,11 +100,12 @@ setup-infra project=default_project:
 # Database Management
 
 db_path := justfile_directory() + "/rs_graph/data/files/rs-graph"
+current_git_details := `git log -n 1 --pretty=format:"Git Commit: %h -- Message: %B"`
 
-# create a new migration
+# create a new migration (can only run if git is clean)
 db-migrate target="dev":
 	git update-index --really-refresh
 	sed -i "s|REPLACE_SQLITE_DB_PATH|{{db_path}}-{{target}}.db|g" {{justfile_directory()}}/alembic.ini
-	-alembic revision --autogenerate -m '$(git log -n 1 --pretty=format:"Git Commit: %h -- Message: %B")'
+	-alembic revision --autogenerate -m "{{current_git_details}}"
 	-alembic upgrade head
 	sed -i "s|{{db_path}}-{{target}}.db|REPLACE_SQLITE_DB_PATH|g" {{justfile_directory()}}/alembic.ini
