@@ -100,7 +100,7 @@ setup-infra project=default_project:
 # Database Management
 
 db_path := justfile_directory() + "/rs_graph/data/files/rs-graph"
-current_git_details := `git log -n 1 --pretty=format:"Git Commit: %h -- Message: %B"`
+current_git_details := `git log -n 1 --pretty=format:"Git Commit: %h"`
 
 # create a new migration (can only run if git is clean)
 db-migrate target="dev":
