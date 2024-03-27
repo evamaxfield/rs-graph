@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 
+from rs_graph_db import constants
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine, select
-
-from rs_graph_db import constants
 
 ###############################################################################
 
