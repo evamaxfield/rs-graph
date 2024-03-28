@@ -29,7 +29,7 @@ from rs_graph.data import (
     load_multi_annotator_repo_paper_em_irr_dataset,
     load_repo_contributors_dataset,
 )
-from rs_graph.modeling import DEV_AUTHOR_EM_MODEL_PATH
+from rs_graph.ml.dev_author_em_clf import DEV_AUTHOR_EM_CLASSIFIER_PATH, DEV_AUTHOR_EM_TEMPLATE, DEV_AUTHOR_EM_EMBEDDING_MODEL
 
 ###############################################################################
 
@@ -459,7 +459,7 @@ def calculate_irr_for_dev_author_em_annotation(
 
 @app.command()
 def train_and_eval_all_dev_author_em_classifiers(debug: bool = False) -> None:
-    from rs_graph.modeling.train_and_eval_all_dev_author_em_clf import (
+    from rs_graph.ml.train_and_eval_all_dev_author_em_clf import (
         train_and_eval_all_dev_author_em_classifiers,
     )
 
@@ -472,7 +472,7 @@ def train_and_eval_all_dev_author_em_classifiers(debug: bool = False) -> None:
 
 @app.command()
 def train_dev_author_em_classifier(
-    embedding_model: str = "microsoft/deberta-v3-base",
+    embedding_model: str = DEV_AUTHOR_EM_EMBEDDING_MODEL,
     test_size: float = 0.2,
     seed: int = 12,
     confusion_matrix_save_name: str = "dev-author-em-confusion-matrix.png",
@@ -540,26 +540,13 @@ def train_dev_author_em_classifier(
 
     # Create embedding ready strings for each dev-author pair
     log.info("Constructing dev-author comparison strings...")
-    template = """
-    ### Developer Details
-    
-    username: {dev_username}
-    name: {dev_name}
-    email: {dev_email}
-
-    ---
-
-    ### Author Details
-
-    name: {author_name}
-    """.strip()
     prepped_rows = []
     for _, row in expanded_details.iterrows():
         prepped_rows.append(
             {
                 "author_id": row["author_id"],
                 "dev_username": row["dev_username"],
-                "text": template.format(
+                "text": DEV_AUTHOR_EM_TEMPLATE.format(
                     dev_username=row["dev_username"],
                     dev_name=row["dev_name"],
                     dev_email=row["dev_email"],
@@ -609,7 +596,7 @@ def train_dev_author_em_classifier(
 
     # Store the model
     log.info("Storing the classifier...")
-    skio.dump(clf, DEV_AUTHOR_EM_MODEL_PATH)
+    skio.dump(clf, DEV_AUTHOR_EM_CLASSIFIER_PATH)
 
     # Evaluate
     log.info("Evaluating the classifier...")

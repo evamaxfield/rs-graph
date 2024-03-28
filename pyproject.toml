@@ -34,6 +34,7 @@ dependencies = [
   "python-dotenv>=1,<2",
   "tqdm>=4,<5",
   "typer>=0.9.0,<0.10",
+  "xarray>=2024.2.0",
   # processing
   "backoff>=2,<3",
   "ghapi>=1,<2",
@@ -59,6 +60,7 @@ dependencies = [
   "scikit-learn>=1,<2",
   "skops==0.9.0",
   "statsmodels>=0.14,<0.15",
+  # specific datasets
 ]
 
 [project.urls]

@@ -3,7 +3,7 @@
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from rs_graph.data.database import constants
+from . import constants
 
 ###############################################################################
 

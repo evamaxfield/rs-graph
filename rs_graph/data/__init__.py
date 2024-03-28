@@ -24,10 +24,8 @@ DATA_FILES_DIR = Path(__file__).parent / "files"
 DATASET_SOURCE_FILE_PATTERN = "-short-paper-details.parquet"
 
 # Other datasets are formed from enrichment and have hardcoded paths
-UPSTREAM_DEPS_PATH = DATA_FILES_DIR / "upstream-deps.parquet"
 EXTENDED_PAPER_DETAILS_PATH = DATA_FILES_DIR / "extended-paper-details.parquet"
 REPO_CONTRIBUTORS_PATH = DATA_FILES_DIR / "repo-contributors.parquet"
-MATCHED_DEV_AUTHOR_IDS_PATH = DATA_FILES_DIR / "matched-dev-author-ids.parquet"
 
 # Annotated datasets
 
@@ -76,40 +74,9 @@ def load_basic_repos_dataset() -> pd.DataFrame:
     return rs_graph
 
 
-def load_upstream_dependencies_dataset() -> pd.DataFrame:
-    """Load the upstream dependencies dataset."""
-    return pd.read_parquet(UPSTREAM_DEPS_PATH)
-
-
 def load_extended_paper_details_dataset() -> pd.DataFrame:
     """Load the extended paper details dataset."""
     return pd.read_parquet(EXTENDED_PAPER_DETAILS_PATH)
-
-
-def load_embeddings_dataset() -> pd.DataFrame:
-    """Load the extended papers details dataset then format to embeddings focus."""
-    # Load extended paper details
-    df = load_extended_paper_details_dataset()
-
-    # Load and process data
-    embedding_rows = []
-    for _, row in df.iterrows():
-        if row.embedding is not None:
-            embedding_rows.append(
-                {
-                    "url": row.url,
-                    "doi": row.doi,
-                    "title": row.title,
-                    "embedding": np.array(row.embedding["vector"]),
-                    "citation_count": row.citation_count,
-                }
-            )
-
-    # Convert to frame and store log citation count
-    embeddings = pd.DataFrame(embedding_rows).reset_index(drop=True)
-    embeddings["log_citation_count"] = np.log(embeddings.citation_count)
-
-    return embeddings
 
 
 @dataclass
@@ -240,20 +207,6 @@ def load_multi_annotator_dev_author_em_irr_dataset(
 def load_annotated_dev_author_em_dataset() -> pd.DataFrame:
     """Load the annotated dev author em dataset."""
     return pd.read_csv(ANNOTATED_DEV_AUTHOR_EM_PATH)
-
-
-def load_matched_dev_author_ids_dataset() -> pd.DataFrame:
-    """Load the matched dev author ids dataset."""
-    authors = load_author_contributions_dataset()
-    matched_dev_authors = pd.read_parquet(MATCHED_DEV_AUTHOR_IDS_PATH)
-
-    # Merge on author_id
-    matched_dev_authors = matched_dev_authors.merge(
-        authors,
-        on="author_id",
-    )
-
-    return matched_dev_authors
 
 
 def load_multi_annotator_repo_paper_em_irr_dataset() -> pd.DataFrame:
