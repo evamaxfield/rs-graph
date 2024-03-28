@@ -61,6 +61,7 @@ dependencies = [
   "skops==0.9.0",
   "statsmodels>=0.14,<0.15",
   # specific datasets
+  "allofplos>=1,<2",
 ]
 
 [project.urls]
