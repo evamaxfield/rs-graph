@@ -31,7 +31,7 @@ class PLOSDataSource(DataSource):
 
     @staticmethod
     def get_dataset(
-        **kwargs,
+        **kwargs: dict[str, str],
     ) -> list[RepositoryDocumentPair]:
         """Download the PLOS dataset."""
         raise NotImplementedError()

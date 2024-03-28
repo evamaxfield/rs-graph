@@ -107,7 +107,7 @@ def _process_elsevier_repo(
 class SoftwareXDataSource(DataSource):
     @staticmethod
     def get_dataset(
-        **kwargs,
+        **kwargs: dict[str, str],
     ) -> list[RepositoryDocumentPair]:
         """Download the SoftwareX dataset."""
         # Load env

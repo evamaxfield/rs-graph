@@ -21,8 +21,7 @@ class RepositoryDocumentPair(DataClassJsonMixin):
 class DataSource(Protocol):
     @staticmethod
     def get_dataset(
-        raise_on_error: bool = True,
-        **kwargs,
+        **kwargs: dict[str, str],
     ) -> list[RepositoryDocumentPair]:
         """Download the dataset."""
         raise NotImplementedError()

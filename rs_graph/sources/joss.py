@@ -52,7 +52,7 @@ class JOSSDataSource(DataSource):
 
     @staticmethod
     def get_dataset(
-        **kwargs,
+        **kwargs: dict[str, str],
     ) -> list[RepositoryDocumentPair]:
         """Download the JOSS dataset."""
         # Get all processed results
