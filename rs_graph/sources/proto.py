@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Protocol
 from dataclasses import dataclass
+from typing import Protocol
 
 from dataclasses_json import DataClassJsonMixin
 
@@ -19,10 +19,10 @@ class RepositoryDocumentPair(DataClassJsonMixin):
 
 
 class DataSource(Protocol):
-    
     @staticmethod
     def get_dataset(
         raise_on_error: bool = True,
         **kwargs,
     ) -> list[RepositoryDocumentPair]:
+        """Download the dataset."""
         raise NotImplementedError()

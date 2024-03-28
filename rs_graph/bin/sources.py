@@ -5,9 +5,9 @@ import pkgutil
 
 import typer
 
+from rs_graph import sources
 from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.data import DATA_FILES_DIR, DATASET_SOURCE_FILE_PATTERN
-from rs_graph import sources
 
 ###############################################################################
 

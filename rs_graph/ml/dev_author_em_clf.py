@@ -34,6 +34,7 @@ name: {author_name}
 
 ###############################################################################
 
+
 def load_dev_author_em_model() -> LogisticRegressionCV:
     """
     Load the author EM model.
@@ -46,6 +47,7 @@ def load_dev_author_em_model() -> LogisticRegressionCV:
     log.debug(f"Loading author EM model from {DEV_AUTHOR_EM_CLASSIFIER_PATH}")
     return skio.load(DEV_AUTHOR_EM_CLASSIFIER_PATH, trusted=True)
 
+
 def load_dev_author_em_embedding_model() -> SentenceTransformer:
     """
     Load the author EM embedding model.
@@ -57,6 +59,7 @@ def load_dev_author_em_embedding_model() -> SentenceTransformer:
     """
     log.debug(f"Loading author EM embedding model from {DEV_AUTHOR_EM_EMBEDDING_MODEL}")
     return SentenceTransformer(DEV_AUTHOR_EM_EMBEDDING_MODEL)
+
 
 def match_devs_and_authors(
     devs: list[DeveloperDetails],

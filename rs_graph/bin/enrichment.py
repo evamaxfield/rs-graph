@@ -114,6 +114,7 @@ def get_repo_contributors(debug: bool = False) -> None:
     repo_contributors_df.to_parquet(output_filepath_for_repo_contributors)
     log.info(f"Stored repo contributors to: '{output_filepath_for_repo_contributors}'")
 
+
 ###############################################################################
 
 

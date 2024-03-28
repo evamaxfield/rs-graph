@@ -29,7 +29,11 @@ from rs_graph.data import (
     load_multi_annotator_repo_paper_em_irr_dataset,
     load_repo_contributors_dataset,
 )
-from rs_graph.ml.dev_author_em_clf import DEV_AUTHOR_EM_CLASSIFIER_PATH, DEV_AUTHOR_EM_TEMPLATE, DEV_AUTHOR_EM_EMBEDDING_MODEL
+from rs_graph.ml.dev_author_em_clf import (
+    DEV_AUTHOR_EM_CLASSIFIER_PATH,
+    DEV_AUTHOR_EM_EMBEDDING_MODEL,
+    DEV_AUTHOR_EM_TEMPLATE,
+)
 
 ###############################################################################
 

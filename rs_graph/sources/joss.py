@@ -22,7 +22,6 @@ JOSS_PUBLISHED_PAPERS_URL_TEMPLATE = (
 
 
 class JOSSDataSource(DataSource):
-
     @staticmethod
     def _process_joss_results_page(
         results: list[dict],
@@ -55,9 +54,7 @@ class JOSSDataSource(DataSource):
     def get_dataset(
         **kwargs,
     ) -> list[RepositoryDocumentPair]:
-        """
-        Download the JOSS dataset.
-        """
+        """Download the JOSS dataset."""
         # Get all processed results
         processed_results = []
 
@@ -86,9 +83,10 @@ class JOSSDataSource(DataSource):
                 continue
 
             # Process page results
-            original_page_results, continue_next = JOSSDataSource._process_joss_results_page(
-                response.json()
-            )
+            (
+                original_page_results,
+                continue_next,
+            ) = JOSSDataSource._process_joss_results_page(response.json())
 
             # Increment total processed
             total_processed += len(original_page_results)

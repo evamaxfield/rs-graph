@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 
 import backoff
 import requests
@@ -11,9 +12,8 @@ from dotenv import load_dotenv
 from fastcore.net import HTTP403ForbiddenError
 from ghapi.all import GhApi, paged
 from tqdm import tqdm
-import time
 
-from .proto import RepositoryDocumentPair, DataSource
+from .proto import DataSource, RepositoryDocumentPair
 
 ###############################################################################
 
@@ -27,6 +27,7 @@ ELSEVIER_PAPER_SEARCH_URL_TEMPLATE = (
 )
 
 ###############################################################################
+
 
 class RateLimitError(Exception):
     pass
@@ -102,12 +103,13 @@ def _process_elsevier_repo(
         paper_doi=doi,
     )
 
-class SoftwareXDataSource(DataSource):
 
+class SoftwareXDataSource(DataSource):
     @staticmethod
     def get_dataset(
         **kwargs,
     ) -> list[RepositoryDocumentPair]:
+        """Download the SoftwareX dataset."""
         # Load env
         load_dotenv()
 
