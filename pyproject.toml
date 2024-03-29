@@ -60,8 +60,9 @@ dependencies = [
   "scikit-learn>=1,<2",
   "skops==0.9.0",
   "statsmodels>=0.14,<0.15",
-  # specific datasets
+  # specific datasets and data sources
   "allofplos>=1,<2",
+  "pyalex>=0.14,<0.15",
 ]
 
 [project.urls]
