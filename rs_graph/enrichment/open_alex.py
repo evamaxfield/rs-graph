@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-
 import pyalex
 
 #######################################################################################
@@ -12,10 +10,9 @@ DEFAULT_ALEX_EMAIL = "evamxb@uw.edu"
 
 #######################################################################################
 
+
 def _setup() -> None:
-    """
-    Set up a pool of polite workers for OpenAlex.
-    """
+    """Set up a pool of polite workers for OpenAlex."""
     # Add email for polite pool
     pyalex.config.email = DEFAULT_ALEX_EMAIL
 
@@ -24,10 +21,9 @@ def _setup() -> None:
     pyalex.config.retry_backoff_factor = 0.1
     pyalex.config.retry_http_codes = [429, 500, 503]
 
+
 def get_work_from_doi(doi: str) -> pyalex.Work:
-    """
-    Get work from a DOI.
-    """
+    """Get work from a DOI."""
     _setup()
 
     # Lowercase DOI
