@@ -1,4 +1,4 @@
-"""Top-level package for lazy_text_classifiers."""
+"""Top-level package for rs-graph."""
 
 from importlib.metadata import PackageNotFoundError, version
 
