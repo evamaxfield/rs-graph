@@ -105,7 +105,7 @@ def get_open_alex_author_from_id(author_id: str) -> pyalex.Author:
 
 def process_pair(
     doi: str,
-    dataset_source: models.DatasetSource,
+    dataset_source_name: str,
     session: Session,
 ) -> None:
     """Process a DOI."""
@@ -119,6 +119,10 @@ def process_pair(
         abstract_text = convert_from_inverted_index_abstract(
             open_alex_work["abstract_inverted_index"]
         )
+
+    # Create DatasetSource
+    dataset_source = models.DatasetSource(name=dataset_source_name)
+    dataset_source = db_utils.get_or_add(dataset_source, session)
 
     # Create the Document
     document = models.Document(
@@ -243,7 +247,7 @@ def process_pairs(
                 print(pair)
                 process_pair(
                     doi=pair.paper_doi,
-                    dataset_source=pair.source,
+                    dataset_source_name=pair.source,
                     session=session,
                 )
             except requests.exceptions.HTTPError as e:
