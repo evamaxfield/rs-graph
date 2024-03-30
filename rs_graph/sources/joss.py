@@ -105,6 +105,9 @@ class JOSSDataSource(DataSource):
             # Increment page
             current_page += 1
 
+            if current_page > 3:
+                break
+
             # Update progress
             log.info(f"Processed {total_processed} papers")
 

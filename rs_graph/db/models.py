@@ -42,8 +42,8 @@ class Document(SQLModel, table=True):  # type: ignore
     cited_by_count: int
     cited_by_percentile_year_min: int
     cited_by_percentile_year_max: int
-    abstract: str
     dataset_source_id: int = Field(foreign_key="dataset_source.id")
+    abstract: str | None = None
 
     # Updates
     created_datetime: datetime = Field(

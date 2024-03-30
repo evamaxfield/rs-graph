@@ -6,10 +6,13 @@ import time
 from datetime import date
 
 import pyalex
+import requests
 from sqlmodel import Session
+from tqdm import tqdm
 
 from ..db import models
 from ..db import utils as db_utils
+from ..sources.proto import RepositoryDocumentPair
 
 #######################################################################################
 
@@ -100,19 +103,22 @@ def get_open_alex_author_from_id(author_id: str) -> pyalex.Author:
     return pyalex.Authors()[author_id]
 
 
-def process_doi(
+def process_pair(
     doi: str,
-    session: Session,
     dataset_source: models.DatasetSource,
+    session: Session,
 ) -> None:
     """Process a DOI."""
     # Get the OpenAlex work
     open_alex_work = get_open_alex_work_from_doi(doi)
 
     # Convert inverted index abstract to string
-    abstract_text = convert_from_inverted_index_abstract(
-        open_alex_work["abstract_inverted_index"]
-    )
+    if open_alex_work["abstract_inverted_index"] is None:
+        abstract_text = None
+    else:
+        abstract_text = convert_from_inverted_index_abstract(
+            open_alex_work["abstract_inverted_index"]
+        )
 
     # Create the Document
     document = models.Document(
@@ -217,3 +223,29 @@ def process_doi(
             funding_instance_id=funding_instance.id,
         )
         db_utils.get_or_add(document_funding_instance, session)
+
+
+def process_pairs(
+    pairs: list[RepositoryDocumentPair],
+    prod: bool = False,
+) -> None:
+    """Process a list of DOIs."""
+    # Create db engine
+    engine = db_utils.get_engine(prod=prod)
+
+    # Init session
+    with Session(engine) as session:
+        for pair in tqdm(
+            pairs,
+            desc="Processing DOIs",
+        ):
+            try:
+                print(pair)
+                process_pair(
+                    doi=pair.paper_doi,
+                    dataset_source=pair.source,
+                    session=session,
+                )
+            except requests.exceptions.HTTPError as e:
+                if "404 Client Error" in str(e):
+                    print(f"DOI {pair.paper_doi} not found in OpenAlex")
