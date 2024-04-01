@@ -14,6 +14,7 @@ from tqdm import tqdm
 from ..db import models
 from ..db import utils as db_utils
 from ..sources.proto import RepositoryDocumentPair
+from ..types import ErrorResult
 
 #######################################################################################
 
@@ -236,10 +237,13 @@ def process_pair(
 def process_pairs(
     pairs: list[RepositoryDocumentPair],
     prod: bool = False,
-) -> None:
+) -> list[ErrorResult]:
     """Process a list of DOIs."""
     # Create db engine
     engine = db_utils.get_engine(prod=prod)
+
+    # Store errored results
+    errored_results = []
 
     # Init session
     for pair in tqdm(
@@ -253,16 +257,15 @@ def process_pairs(
                     dataset_source_name=pair.source,
                     session=session,
                 )
-            except requests.exceptions.HTTPError as e:
-                if "404 Client Error" in str(e):
-                    print(f"DOI {pair.paper_doi} not found in OpenAlex")
-            except db_exceptions.IntegrityError as e:
-                print(
-                    f"Something wrong with paper-repo, doi: "
-                    f"'{pair.paper_doi}', repo: '{pair.repo_url}'"
-                )
-                print(e)
             except Exception as e:
-                print("Something went wrong with the following pair:")
-                print(pair)
-                print(e)
+                # If something goes wrong with anything, rollback this pair's session
+                session.rollback()
+                errored_results.append(
+                    ErrorResult(
+                        identifier=f"{pair.source} -- {pair.paper_doi}",
+                        step="OpenAlex Processing",
+                        error=str(e),
+                    )
+                )
+    
+    return errored_results
