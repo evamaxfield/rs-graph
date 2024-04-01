@@ -6,8 +6,6 @@ import time
 from datetime import date
 
 import pyalex
-import requests
-from sqlalchemy import exc as db_exceptions
 from sqlmodel import Session
 from tqdm import tqdm
 
@@ -267,5 +265,5 @@ def process_pairs(
                         error=str(e),
                     )
                 )
-    
+
     return errored_results
