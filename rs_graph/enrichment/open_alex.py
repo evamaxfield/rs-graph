@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import random
 import time
 from dataclasses import dataclass
 from datetime import date
+from functools import partial
+from pathlib import Path
 
 import pyalex
 from dataclasses_json import DataClassJsonMixin
-from prefect import task
+from distributed import worker_client
 from sqlmodel import Session
 from tqdm import tqdm
 
@@ -25,10 +29,58 @@ log = logging.getLogger(__name__)
 #######################################################################################
 
 DEFAULT_ALEX_EMAIL = "evamxb@uw.edu"
-API_CALL_COUNT: int = 0
-API_CURRENT_DATE: date = date.today()
+
+
+@dataclass
+class OpenAlexAPICallStatus(DataClassJsonMixin):
+    call_count: int
+    current_date: str
+
+
+API_CALL_STATUS_FILEPATH = (
+    Path("~/.rs-graph/open_alex_api_call_status.json").expanduser().resolve()
+)
 
 #######################################################################################
+
+
+def _write_api_call_status(current_status: OpenAlexAPICallStatus) -> None:
+    """Write the API call status to disk."""
+    # Make dirs if needed
+    API_CALL_STATUS_FILEPATH.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(API_CALL_STATUS_FILEPATH, "w") as f:
+        json.dump(current_status.to_dict(), f)
+
+
+def _read_api_call_status() -> OpenAlexAPICallStatus:
+    """Read the API call status from disk."""
+    with open(API_CALL_STATUS_FILEPATH) as f:
+        current_status = OpenAlexAPICallStatus.from_dict(json.load(f))
+
+    # Check if current API status is out of date
+    if current_status.current_date != date.today().isoformat():
+        current_status = OpenAlexAPICallStatus(
+            call_count=0,
+            current_date=date.today().isoformat(),
+        )
+        _write_api_call_status(current_status=current_status)
+
+    return current_status
+
+
+def _create_api_call_status_file() -> OpenAlexAPICallStatus:
+    """Reset the API call status."""
+    # Check and setup call status
+    if not API_CALL_STATUS_FILEPATH.exists():
+        _write_api_call_status(
+            OpenAlexAPICallStatus(
+                call_count=0,
+                current_date=date.today().isoformat(),
+            )
+        )
+
+    return _read_api_call_status()
 
 
 def _setup() -> None:
@@ -41,28 +93,37 @@ def _setup() -> None:
     pyalex.config.retry_backoff_factor = 0.1
     pyalex.config.retry_http_codes = [429, 500, 503]
 
+    _create_api_call_status_file()
+
 
 def _increment_call_count_and_check() -> None:
     """Increment the API call count and check if we need to sleep."""
-    global API_CALL_COUNT, API_CURRENT_DATE
+    # Read latest
+    current_status = _read_api_call_status()
 
-    # If date has changed, reset count
-    if API_CURRENT_DATE != date.today():
-        API_CURRENT_DATE = date.today()
-        API_CALL_COUNT = 0
+    # Temporary log
+    if current_status.call_count % 1000 == 0:
+        log.info(f"OpenAlex Daily API call count: {current_status.call_count}")
 
-    # If we've made 80,000 calls in a single day raise an error
-    if API_CALL_COUNT >= 80_000:
+    # If we've made 80,000 calls in a single day
+    # pause all processing until tomorrow
+    if current_status.call_count >= 80_000:
         log.info("Sleeping until tomorrow to avoid OpenAlex API limit.")
-        while date.today() == API_CURRENT_DATE:
+        while date.today().isoformat() == current_status.current_date:
             time.sleep(120)
 
-        # Reset count
-        API_CALL_COUNT = 0
-        API_CURRENT_DATE = date.today()
+        # Reset the call count
+        current_status = OpenAlexAPICallStatus(
+            call_count=0,
+            current_date=date.today().isoformat(),
+        )
 
     # Increment count
-    API_CALL_COUNT += 1
+    current_status.call_count += 1
+    _write_api_call_status(current_status)
+
+    # Sleep for a random amount of time
+    time.sleep(random.uniform(0, 2))
 
 
 def get_open_alex_work_from_doi(doi: str) -> pyalex.Work:
@@ -93,7 +154,7 @@ def convert_from_inverted_index_abstract(abstract: dict) -> str:
     # }
     # Convert to:
     # "Despite growing interest in Open Access ..."
-    abstract_as_list: list[str | None] = [None] * 5000
+    abstract_as_list: list[str | None] = [None] * 10000
     for word, indices in abstract.items():
         for index in indices:
             abstract_as_list[index] = word
@@ -117,7 +178,6 @@ class SuccessfulResult(DataClassJsonMixin):
     source: str
 
 
-@task
 def process_pair(
     doi: str,
     dataset_source_name: str,
@@ -277,31 +337,37 @@ class OpenAlexProcessingResults(DataClassJsonMixin):
     errored_results: list[ErrorResult]
 
 
-@task
 def process_pairs(
     pairs: list[RepositoryDocumentPair],
     prod: bool = False,
 ) -> OpenAlexProcessingResults:
     """Process a list of DOIs."""
-    # Init session
-    futures = []
-    for pair in tqdm(
-        pairs,
-        desc="Processing DOIs",
-    ):
-        futures.append(
-            process_pair.submit(
-                doi=pair.doi,
-                dataset_source_name=pair.repository_name,
-                prod=prod,
+    # Check for / init worker client
+    process_pair_partial = partial(process_pair, prod=prod)
+    try:
+        with worker_client() as client:
+            futures = client.map(
+                process_pair_partial,
+                [pair.paper_doi for pair in pairs],
+                [pair.source for pair in pairs],
             )
-        )
+            results = client.gather(futures)
 
-    # Wait for all futures to complete
-    results = [future.result() for future in futures]
+    # If no worker, process locally
+    except ValueError:
+        results = [
+            process_pair_partial(doi=pair.paper_doi, dataset_source_name=pair.source)
+            for pair in tqdm(pairs, desc="Processing DOIs")
+        ]
 
     # Split results
-    return OpenAlexProcessingResults(
+    split_results = OpenAlexProcessingResults(
         successful_results=[r for r in results if isinstance(r, SuccessfulResult)],
         errored_results=[r for r in results if isinstance(r, ErrorResult)],
     )
+
+    # Log stats
+    log.info(f"Total processed: {len(pairs)}")
+    log.info(f"Total errored: {len(split_results.errored_results)}")
+
+    return split_results
