@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import logging
-from functools import partial
 from pathlib import Path
 
 import pandas as pd
@@ -79,12 +78,7 @@ def process_papers(
         pairs = SOURCE_MAP[source].get_dataset()
 
     # Process with open_alex
-    process_pairs_partial = partial(open_alex.process_pairs, prod=prod)
-    log.info(f"Processing {len(pairs)} repo-paper pairs...")
-    if use_dask:
-        results = client.submit(process_pairs_partial, pairs).result()
-    else:
-        results = process_pairs_partial(pairs)
+    results = open_alex.process_pairs(pairs, prod=prod)
 
     # Store to files
     success_results = pd.DataFrame([r.to_dict() for r in results.successful_results])

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pyalex
 from dataclasses_json import DataClassJsonMixin
-from distributed import worker_client
+from distributed import get_client
 from sqlmodel import Session
 from tqdm import tqdm
 
@@ -178,7 +178,7 @@ class SuccessfulResult(DataClassJsonMixin):
     source: str
 
 
-def process_pair(
+def process_doi(
     doi: str,
     dataset_source_name: str,
     prod: bool = False,
@@ -343,11 +343,11 @@ def process_pairs(
 ) -> OpenAlexProcessingResults:
     """Process a list of DOIs."""
     # Check for / init worker client
-    process_pair_partial = partial(process_pair, prod=prod)
+    process_doi_partial = partial(process_doi, prod=prod)
     try:
-        with worker_client() as client:
+        with get_client() as client:
             futures = client.map(
-                process_pair_partial,
+                process_doi_partial,
                 [pair.paper_doi for pair in pairs],
                 [pair.source for pair in pairs],
             )
@@ -356,7 +356,7 @@ def process_pairs(
     # If no worker, process locally
     except ValueError:
         results = [
-            process_pair_partial(doi=pair.paper_doi, dataset_source_name=pair.source)
+            process_doi_partial(doi=pair.paper_doi, dataset_source_name=pair.source)
             for pair in tqdm(pairs, desc="Processing DOIs")
         ]
 
