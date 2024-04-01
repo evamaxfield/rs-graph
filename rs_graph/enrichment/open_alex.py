@@ -7,9 +7,9 @@ from datetime import date
 
 import pyalex
 import requests
+from sqlalchemy import exc as db_exceptions
 from sqlmodel import Session
 from tqdm import tqdm
-from sqlalchemy import exc as db_exceptions
 
 from ..db import models
 from ..db import utils as db_utils
@@ -89,14 +89,14 @@ def convert_from_inverted_index_abstract(abstract: dict) -> str:
     # }
     # Convert to:
     # "Despite growing interest in Open Access ..."
-    abstract_as_list: list[str] = [None] * 5000
+    abstract_as_list: list[str | None] = [None] * 5000
     for word, indices in abstract.items():
         for index in indices:
             abstract_as_list[index] = word
 
     # Remove all extra Nones
-    abstract_as_list = [word for word in abstract_as_list if word is not None]
-    return " ".join(abstract_as_list)
+    abstract_as_list_of_str = [word for word in abstract_as_list if word is not None]
+    return " ".join(abstract_as_list_of_str)
 
 
 def get_open_alex_author_from_id(author_id: str) -> pyalex.Author:
@@ -257,7 +257,10 @@ def process_pairs(
                 if "404 Client Error" in str(e):
                     print(f"DOI {pair.paper_doi} not found in OpenAlex")
             except db_exceptions.IntegrityError as e:
-                print(f"Something wrong with paper-repo, doi: '{pair.paper_doi}', repo: '{pair.repo_url}'")
+                print(
+                    f"Something wrong with paper-repo, doi: "
+                    f"'{pair.paper_doi}', repo: '{pair.repo_url}'"
+                )
                 print(e)
             except Exception as e:
                 print("Something went wrong with the following pair:")
