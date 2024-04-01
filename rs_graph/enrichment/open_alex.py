@@ -9,6 +9,7 @@ import pyalex
 import requests
 from sqlmodel import Session
 from tqdm import tqdm
+from sqlalchemy import exc as db_exceptions
 
 from ..db import models
 from ..db import utils as db_utils
@@ -88,10 +89,13 @@ def convert_from_inverted_index_abstract(abstract: dict) -> str:
     # }
     # Convert to:
     # "Despite growing interest in Open Access ..."
-    abstract_as_list: list[str] = []
+    abstract_as_list: list[str] = [None] * 5000
     for word, indices in abstract.items():
         for index in indices:
             abstract_as_list[index] = word
+
+    # Remove all extra Nones
+    abstract_as_list = [word for word in abstract_as_list if word is not None]
     return " ".join(abstract_as_list)
 
 
@@ -159,7 +163,7 @@ def process_pair(
             topic_id=topic.id,
             score=topic_details["score"],
         )
-        db_utils.get_or_add(document_topic, session)
+        document_topic = db_utils.get_or_add(document_topic, session)
 
     # For each author, create the Researcher
     for author_details in open_alex_work["authorships"]:
@@ -187,7 +191,7 @@ def process_pair(
             position=author_details["author_position"],
             is_corresponding=author_details["is_corresponding"],
         )
-        db_utils.get_or_add(researcher_document, session)
+        researcher_document = db_utils.get_or_add(researcher_document, session)
 
         # Create the Institution
         for institution_details in author_details["institutions"]:
@@ -238,13 +242,12 @@ def process_pairs(
     engine = db_utils.get_engine(prod=prod)
 
     # Init session
-    with Session(engine) as session:
-        for pair in tqdm(
-            pairs,
-            desc="Processing DOIs",
-        ):
+    for pair in tqdm(
+        pairs,
+        desc="Processing DOIs",
+    ):
+        with Session(engine) as session:
             try:
-                print(pair)
                 process_pair(
                     doi=pair.paper_doi,
                     dataset_source_name=pair.source,
@@ -253,3 +256,10 @@ def process_pairs(
             except requests.exceptions.HTTPError as e:
                 if "404 Client Error" in str(e):
                     print(f"DOI {pair.paper_doi} not found in OpenAlex")
+            except db_exceptions.IntegrityError as e:
+                print(f"Something wrong with paper-repo, doi: '{pair.paper_doi}', repo: '{pair.repo_url}'")
+                print(e)
+            except Exception as e:
+                print("Something went wrong with the following pair:")
+                print(pair)
+                print(e)
