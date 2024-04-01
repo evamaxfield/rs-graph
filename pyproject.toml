@@ -91,6 +91,7 @@ rs-graph-data = "rs_graph.bin.data:main"
 rs-graph-sources = "rs_graph.bin.sources:main"
 rs-graph-enrichment = "rs_graph.bin.enrichment:main"
 rs-graph-modeling = "rs_graph.bin.modeling:main"
+rs-graph-pipelines = "rs_graph.bin.pipelines:main"
 
 # build settings
 # https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html

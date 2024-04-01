@@ -3,11 +3,9 @@
 import logging
 
 import pandas as pd
-import typer
 from prefect import flow, serve, task
 from prefect_dask.task_runners import DaskTaskRunner
 
-from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.enrichment import open_alex
 from rs_graph.sources.joss import JOSSDataSource
 from rs_graph.sources.proto import RepositoryDocumentPair
@@ -18,9 +16,6 @@ log = logging.getLogger(__name__)
 
 ###############################################################################
 
-app = typer.Typer()
-
-###############################################################################
 
 SOURCE_MAP = {
     "joss": JOSSDataSource,
@@ -67,11 +62,8 @@ def _process_papers(
     errored_results.to_parquet(errored_results_file)
 
 
-@app.command()
 def serve_pipelines() -> None:
     """Serve the pipelines."""
-    setup_logger()
-
     open_alex_processing_deploy = _process_papers.to_deployment(name="Paper Processing")
     serve(open_alex_processing_deploy)
 
@@ -80,8 +72,8 @@ def serve_pipelines() -> None:
 
 
 def main() -> None:
-    app()
+    serve_pipelines()
 
 
 if __name__ == "__main__":
-    app()
+    serve_pipelines()
