@@ -105,11 +105,9 @@ class JOSSDataSource(DataSource):
             # Increment page
             current_page += 1
 
-            if current_page > 3:
-                break
-
             # Update progress
-            log.info(f"Processed {total_processed} papers")
+            if total_processed % 100 == 0:
+                log.info(f"Processed {total_processed} papers")
 
         # Log final metrics
         log.info(f"Total processed: {total_processed}")

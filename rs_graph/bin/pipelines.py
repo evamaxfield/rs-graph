@@ -73,10 +73,14 @@ def process_papers(
         log.info(f"Dask cluster dashboard: {cluster.dashboard_link}")
 
     # Get the dataset
-    pairs = SOURCE_MAP[source].get_dataset()
+    if use_dask:
+        pairs = client.submit(SOURCE_MAP[source].get_dataset).result()
+    else:
+        pairs = SOURCE_MAP[source].get_dataset()
 
     # Process with open_alex
     process_pairs_partial = partial(open_alex.process_pairs, prod=prod)
+    log.info(f"Processing {len(pairs)} repo-paper pairs...")
     if use_dask:
         results = client.submit(process_pairs_partial, pairs).result()
     else:
