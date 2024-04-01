@@ -2,10 +2,10 @@
 
 import logging
 
-import typer
-from prefect import flow, task, serve
-from prefect_dask.task_runners import DaskTaskRunner
 import pandas as pd
+import typer
+from prefect import flow, serve, task
+from prefect_dask.task_runners import DaskTaskRunner
 
 from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.enrichment import open_alex
@@ -26,9 +26,11 @@ SOURCE_MAP = {
     "joss": JOSSDataSource,
 }
 
+
 @task
 def get_data(source: str) -> list[RepositoryDocumentPair]:
     return SOURCE_MAP[source].get_dataset()
+
 
 @flow(
     task_runner=DaskTaskRunner(
@@ -43,7 +45,6 @@ def _process_papers(
     prod: bool = False,
 ) -> None:
     """Get data from OpenAlex."""
-
     # If no filepaths provided, create them
     if success_results_file is None:
         success_results_file = f"{source}_success_results.parquet"
@@ -58,24 +59,25 @@ def _process_papers(
         pairs=dataset,
         prod=prod,
     )
-    
+
     # Store to files
     success_results = pd.DataFrame([r.to_dict() for r in results.successful_results])
     success_results.to_parquet(success_results_file)
     errored_results = pd.DataFrame([r.to_dict() for r in results.errored_results])
     errored_results.to_parquet(errored_results_file)
 
+
 @app.command()
 def serve_pipelines() -> None:
     """Serve the pipelines."""
     setup_logger()
 
-    open_alex_processing_deploy = _process_papers.to_deployment(
-        name="Paper Processing"
-    )
+    open_alex_processing_deploy = _process_papers.to_deployment(name="Paper Processing")
     serve(open_alex_processing_deploy)
 
+
 ###############################################################################
+
 
 def main() -> None:
     app()
