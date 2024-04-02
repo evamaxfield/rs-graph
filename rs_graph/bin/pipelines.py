@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pandas as pd
 import typer
-from distributed import Client, LocalCluster
 
 from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.data import DATA_FILES_DIR
@@ -61,21 +60,9 @@ def process_papers(
         errored_results_filepath = Path(errored_results_file)
 
     # Create dask client and cluster
-    if use_dask:
-        cluster = LocalCluster(
-            processes=False,
-            n_workers=1,
-            threads_per_worker=4,
-        )
-        client = Client(cluster)
-        # Log cluster dashboard link
-        log.info(f"Dask cluster dashboard: {cluster.dashboard_link}")
-
-    # Get the dataset
-    if use_dask:
-        pairs = client.submit(SOURCE_MAP[source].get_dataset).result()
-    else:
-        pairs = SOURCE_MAP[source].get_dataset()
+    pairs = SOURCE_MAP[source].get_dataset(
+        use_dask=use_dask,
+    )
 
     # Process with open_alex
     results = open_alex.process_pairs(pairs, prod=prod)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import random
 from pathlib import Path
 from xml.etree import ElementTree as ET  # noqa: N817
 
@@ -10,6 +11,7 @@ from allofplos.corpus.plos_corpus import get_corpus_dir
 from allofplos.update import main as get_latest_plos_corpus
 from tqdm import tqdm
 
+from ..utils.dask_functions import process_func
 from .proto import DataSource, RepositoryDocumentPair
 
 ###############################################################################
@@ -63,51 +65,64 @@ class PLOSDataSource(DataSource):
         return doi_container.text
 
     @staticmethod
+    def _process_xml(jats_xml_filepath: Path) -> RepositoryDocumentPair | None:
+        # Load the XML
+        try:
+            tree = ET.parse(jats_xml_filepath)
+            root = tree.getroot()
+        except ET.ParseError as e:
+            log.error(f"Error parsing XML file: '{jats_xml_filepath}': {e}")
+            return None
+
+        # Get the repository URL
+        repo_url = PLOSDataSource._get_article_repository_url(root)
+        if repo_url is None:
+            return None
+
+        # Get the journal info
+        paper_doi = PLOSDataSource._get_article_doi(root)
+        if paper_doi is None:
+            return None
+
+        # Add to successful results
+        return RepositoryDocumentPair(
+            source="plos",
+            repo_url=repo_url,
+            paper_doi=paper_doi,
+        )
+
+    @staticmethod
     def get_dataset(
+        use_dask: bool = False,
         **kwargs: dict[str, str],
     ) -> list[RepositoryDocumentPair]:
         """Download the PLOS dataset."""
-        # Store successful results
-        successful_results = []
-
         # Get all PLOS XMLs
-        plos_xmls = PLOSDataSource._get_plos_xmls()
+        plos_xmls = random.sample(PLOSDataSource._get_plos_xmls(), 5000)
 
         # Parse each XML
-        for jats_xml in tqdm(
-            plos_xmls,
-            desc="Processing PLOS JATS XMLs",
-        ):
-            # Load the XML
-            try:
-                tree = ET.parse(jats_xml)
-                root = tree.getroot()
-            except ET.ParseError as e:
-                log.error(f"Error parsing XML file: '{jats_xml}': {e}")
-                continue
-
-            # Get the repository URL
-            repo_url = PLOSDataSource._get_article_repository_url(root)
-            if repo_url is None:
-                continue
-
-            # Get the journal info
-            paper_doi = PLOSDataSource._get_article_doi(root)
-            if paper_doi is None:
-                continue
-
-            # Add to successful results
-            successful_results.append(
-                RepositoryDocumentPair(
-                    source="plos",
-                    repo_url=repo_url,
-                    paper_doi=paper_doi,
-                )
+        if use_dask:
+            results = process_func(
+                name="plos-jats-xml-processing",
+                func=PLOSDataSource._process_xml,
+                func_iterables=[plos_xmls],
+                cluster_kwargs={
+                    "processes": True,
+                    "n_workers": 4,
+                    "threads_per_worker": 1,
+                },
             )
+        else:
+            results = [
+                PLOSDataSource._process_xml(plos_xml)
+                for plos_xml in tqdm(plos_xmls, desc="Processing PLOS XMLs")
+            ]
+
+        # Filter out None results
+        successful_results = [result for result in results if result is not None]
 
         # Get count of total processed and errored
-        total_processed = len(successful_results)
-        total_errored = total_processed - len(successful_results)
+        total_errored = len(plos_xmls) - len(successful_results)
 
         # Log total processed and errored
         log.info(f"Total succeeded: {len(successful_results)}")
