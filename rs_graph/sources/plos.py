@@ -9,10 +9,10 @@ from xml.etree import ElementTree as ET  # noqa: N817
 
 from allofplos.corpus.plos_corpus import get_corpus_dir
 from allofplos.update import main as get_latest_plos_corpus
-from tqdm import tqdm
 
+from ..types import RepositoryDocumentPair
 from ..utils.dask_functions import process_func
-from .proto import DataSource, RepositoryDocumentPair
+from .proto import DataSource
 
 ###############################################################################
 
@@ -101,22 +101,16 @@ class PLOSDataSource(DataSource):
         plos_xmls = random.sample(PLOSDataSource._get_plos_xmls(), 5000)
 
         # Parse each XML
-        if use_dask:
-            results = process_func(
-                name="plos-jats-xml-processing",
-                func=PLOSDataSource._process_xml,
-                func_iterables=[plos_xmls],
-                cluster_kwargs={
-                    "processes": True,
-                    "n_workers": 4,
-                    "threads_per_worker": 1,
-                },
-            )
-        else:
-            results = [
-                PLOSDataSource._process_xml(plos_xml)
-                for plos_xml in tqdm(plos_xmls, desc="Processing PLOS XMLs")
-            ]
+        results = process_func(
+            name="plos-xml-processing",
+            func=PLOSDataSource._process_xml,
+            func_iterables=[plos_xmls],
+            cluster_kwargs={
+                "processes": True,
+                "threads_per_worker": 1,
+            },
+            use_dask=use_dask,
+        )
 
         # Filter out None results
         successful_results = [result for result in results if result is not None]

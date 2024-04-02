@@ -13,14 +13,13 @@ from pathlib import Path
 
 import pyalex
 from dataclasses_json import DataClassJsonMixin
-from distributed import get_client
 from sqlmodel import Session
-from tqdm import tqdm
 
 from ..db import models
 from ..db import utils as db_utils
 from ..sources.proto import RepositoryDocumentPair
 from ..types import ErrorResult
+from ..utils.dask_functions import process_func
 
 #######################################################################################
 
@@ -344,21 +343,19 @@ def process_pairs(
     """Process a list of DOIs."""
     # Check for / init worker client
     process_doi_partial = partial(process_doi, prod=prod)
-    try:
-        with get_client() as client:
-            futures = client.map(
-                process_doi_partial,
-                [pair.paper_doi for pair in pairs],
-                [pair.source for pair in pairs],
-            )
-            results = client.gather(futures)
-
-    # If no worker, process locally
-    except ValueError:
-        results = [
-            process_doi_partial(doi=pair.paper_doi, dataset_source_name=pair.source)
-            for pair in tqdm(pairs, desc="Processing DOIs")
-        ]
+    results = process_func(
+        name="open-alex-processing",
+        func=process_doi_partial,
+        func_iterables=[
+            [pair.paper_doi for pair in pairs],
+            [pair.source for pair in pairs],
+        ],
+        cluster_kwargs={
+            "processes": False,
+            "n_workers": 1,
+        },
+        use_dask=True,
+    )
 
     # Split results
     split_results = OpenAlexProcessingResults(

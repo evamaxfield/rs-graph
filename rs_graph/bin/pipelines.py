@@ -12,6 +12,7 @@ from rs_graph.enrichment import open_alex
 from rs_graph.sources.joss import JOSSDataSource
 from rs_graph.sources.plos import PLOSDataSource
 from rs_graph.sources.softwarex import SoftwareXDataSource
+from rs_graph.utils import code_host_parsing
 
 ###############################################################################
 
@@ -63,6 +64,9 @@ def process_papers(
     pairs = SOURCE_MAP[source].get_dataset(
         use_dask=use_dask,
     )
+
+    # Filter out non-GitHub Repo pairs
+    pairs = code_host_parsing.filter_repo_paper_pairs(pairs, use_dask=use_dask)
 
     # Process with open_alex
     results = open_alex.process_pairs(pairs, prod=prod)

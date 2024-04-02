@@ -1,8 +1,20 @@
 #!/usr/bin/env python
 
-from dataclasses import dataclass
+import logging
 
 from parse import Parser
+
+from ..types import (
+    CodeHostResult,
+    ExpandedRepositoryDocumentPair,
+    RepoParts,
+    RepositoryDocumentPair,
+)
+from .dask_functions import process_func
+
+#######################################################################################
+
+log = logging.getLogger(__name__)
 
 #######################################################################################
 
@@ -57,13 +69,6 @@ SOURCEFORGE_REPO_PARSER = Parser(
 )
 
 #######################################################################################
-
-
-@dataclass
-class CodeHostResult:
-    host: str
-    owner: str | None
-    name: str | None
 
 
 def _parse_github_urls(url: str) -> CodeHostResult | None:
@@ -159,3 +164,60 @@ def parse_code_host_url(url: str) -> CodeHostResult:
         raise ValueError("Could not parse code host URL")
 
     return result
+
+
+def _wrapped_parse_code_host_url(
+    repo_paper_pair: RepositoryDocumentPair,
+) -> ExpandedRepositoryDocumentPair | None:
+    try:
+        code_host_res = parse_code_host_url(repo_paper_pair.repo_url)
+
+        # Check if github
+        if (
+            code_host_res.host != "github"
+            or code_host_res.owner is None
+            or code_host_res.name is None
+        ):
+            return None
+
+        return ExpandedRepositoryDocumentPair(
+            source=repo_paper_pair.source,
+            repo_parts=RepoParts(
+                host=code_host_res.host,
+                owner=code_host_res.owner,
+                name=code_host_res.name,
+            ),
+            paper_doi=repo_paper_pair.paper_doi,
+            paper_extra_data=repo_paper_pair.paper_extra_data,
+        )
+
+    except ValueError:
+        return None
+
+
+def filter_repo_paper_pairs(
+    pairs: list[RepositoryDocumentPair],
+    use_dask: bool = False,
+) -> list[ExpandedRepositoryDocumentPair]:
+    # Filter each repo pair
+    # Accepting only GitHub full repository results
+    results = process_func(
+        name="code-host-parsing",
+        func=_wrapped_parse_code_host_url,
+        func_iterables=[pairs],
+        cluster_kwargs={
+            "processes": True,
+            "threads_per_worker": 1,
+        },
+        use_dask=use_dask,
+    )
+
+    # Filter out None results
+    successful_results = [result for result in results if result is not None]
+
+    # Log total succeeded and errored
+    total_errored = len(pairs) - len(successful_results)
+    log.info(f"Total succeeded: {len(successful_results)}")
+    log.info(f"Total errored: {total_errored}")
+
+    return successful_results

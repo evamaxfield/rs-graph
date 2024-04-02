@@ -13,7 +13,8 @@ from fastcore.net import HTTP403ForbiddenError
 from ghapi.all import GhApi, paged
 from tqdm import tqdm
 
-from .proto import DataSource, RepositoryDocumentPair
+from ..types import RepositoryDocumentPair
+from .proto import DataSource
 
 ###############################################################################
 

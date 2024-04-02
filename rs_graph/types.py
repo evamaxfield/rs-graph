@@ -27,3 +27,33 @@ class DeveloperDetails:
     username: str
     name: str | None
     email: str | None
+
+
+@dataclass
+class RepositoryDocumentPair(DataClassJsonMixin):
+    source: str
+    repo_url: str
+    paper_doi: str
+    paper_extra_data: dict | None = None
+
+
+@dataclass
+class CodeHostResult:
+    host: str
+    owner: str | None
+    name: str | None
+
+
+@dataclass
+class RepoParts(DataClassJsonMixin):
+    host: str
+    owner: str
+    name: str
+
+
+@dataclass
+class ExpandedRepositoryDocumentPair(DataClassJsonMixin):
+    source: str
+    repo_parts: RepoParts
+    paper_doi: str
+    paper_extra_data: dict | None = None

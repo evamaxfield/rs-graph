@@ -6,7 +6,8 @@ import logging
 
 import requests
 
-from .proto import DataSource, RepositoryDocumentPair
+from ..types import RepositoryDocumentPair
+from .proto import DataSource
 
 ###############################################################################
 

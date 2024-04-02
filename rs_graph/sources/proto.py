@@ -2,20 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Protocol
 
-from dataclasses_json import DataClassJsonMixin
+from ..types import RepositoryDocumentPair
 
 ###############################################################################
-
-
-@dataclass
-class RepositoryDocumentPair(DataClassJsonMixin):
-    source: str
-    repo_url: str
-    paper_doi: str
-    paper_extra_data: dict | None = None
 
 
 class DataSource(Protocol):
