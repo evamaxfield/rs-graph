@@ -6,7 +6,7 @@ import logging
 
 import requests
 
-from ..types import RepositoryDocumentPair
+from ..types import RepositoryDocumentPair, SuccessAndErroredResultsLists
 from .proto import DataSource
 
 ###############################################################################
@@ -55,7 +55,7 @@ class JOSSDataSource(DataSource):
     def get_dataset(
         use_dask: bool = False,
         **kwargs: dict[str, str],
-    ) -> list[RepositoryDocumentPair]:
+    ) -> SuccessAndErroredResultsLists:
         """Download the JOSS dataset."""
         # Get all processed results
         processed_results = []
@@ -115,4 +115,7 @@ class JOSSDataSource(DataSource):
         log.info(f"Total processed: {total_processed}")
         log.info(f"Total errored: {total_errored}")
 
-        return processed_results
+        return SuccessAndErroredResultsLists(
+            successful_results=processed_results,
+            errored_results=[],
+        )

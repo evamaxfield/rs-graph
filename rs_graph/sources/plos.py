@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import logging
 import random
+import traceback
 from pathlib import Path
 from xml.etree import ElementTree as ET  # noqa: N817
 
 from allofplos.corpus.plos_corpus import get_corpus_dir
 from allofplos.update import main as get_latest_plos_corpus
 
-from ..types import RepositoryDocumentPair
+from ..types import ErrorResult, RepositoryDocumentPair, SuccessAndErroredResultsLists
 from ..utils.dask_functions import process_func
 from .proto import DataSource
 
@@ -65,24 +66,38 @@ class PLOSDataSource(DataSource):
         return doi_container.text
 
     @staticmethod
-    def _process_xml(jats_xml_filepath: Path) -> RepositoryDocumentPair | None:
+    def _process_xml(jats_xml_filepath: Path) -> RepositoryDocumentPair | ErrorResult:
         # Load the XML
         try:
             tree = ET.parse(jats_xml_filepath)
             root = tree.getroot()
-        except ET.ParseError as e:
-            log.error(f"Error parsing XML file: '{jats_xml_filepath}': {e}")
-            return None
+        except ET.ParseError:
+            return ErrorResult(
+                source="plos",
+                identifier=jats_xml_filepath.name,
+                error="XML Parse Error",
+                traceback=traceback.format_exc(),
+            )
 
         # Get the repository URL
         repo_url = PLOSDataSource._get_article_repository_url(root)
         if repo_url is None:
-            return None
+            return ErrorResult(
+                source="plos",
+                identifier=jats_xml_filepath.name,
+                error="No Repository URL",
+                traceback="",
+            )
 
         # Get the journal info
         paper_doi = PLOSDataSource._get_article_doi(root)
         if paper_doi is None:
-            return None
+            return ErrorResult(
+                source="plos",
+                identifier=jats_xml_filepath.name,
+                error="No Paper DOI",
+                traceback="",
+            )
 
         # Add to successful results
         return RepositoryDocumentPair(
@@ -95,7 +110,7 @@ class PLOSDataSource(DataSource):
     def get_dataset(
         use_dask: bool = False,
         **kwargs: dict[str, str],
-    ) -> list[RepositoryDocumentPair]:
+    ) -> SuccessAndErroredResultsLists:
         """Download the PLOS dataset."""
         # Get all PLOS XMLs
         plos_xmls = random.sample(PLOSDataSource._get_plos_xmls(), 5000)
@@ -112,15 +127,18 @@ class PLOSDataSource(DataSource):
             use_dask=use_dask,
         )
 
-        # Filter out None results
-        successful_results = [result for result in results if result is not None]
-
-        # Get count of total processed and errored
-        total_errored = len(plos_xmls) - len(successful_results)
+        # Create successful results and errored results lists
+        successful_results = [
+            r for r in results if isinstance(r, RepositoryDocumentPair)
+        ]
+        errored_results = [r for r in results if isinstance(r, ErrorResult)]
 
         # Log total processed and errored
         log.info(f"Total succeeded: {len(successful_results)}")
-        log.info(f"Total errored: {total_errored}")
+        log.info(f"Total errored: {len(errored_results)}")
 
         # Return filepath
-        return successful_results
+        return SuccessAndErroredResultsLists(
+            successful_results=successful_results,
+            errored_results=errored_results,
+        )

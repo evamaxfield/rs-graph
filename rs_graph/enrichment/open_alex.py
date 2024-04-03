@@ -2,23 +2,23 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import random
 import time
+import traceback
 from dataclasses import dataclass
 from datetime import date
 from functools import partial
 from pathlib import Path
 
+import msgspec
 import pyalex
 from dataclasses_json import DataClassJsonMixin
 from sqlmodel import Session
 
 from ..db import models
 from ..db import utils as db_utils
-from ..sources.proto import RepositoryDocumentPair
-from ..types import ErrorResult
+from ..types import ErrorResult, RepositoryDocumentPair
 from ..utils.dask_functions import process_func
 
 #######################################################################################
@@ -30,17 +30,20 @@ log = logging.getLogger(__name__)
 DEFAULT_ALEX_EMAIL = "evamxb@uw.edu"
 
 
-@dataclass
-class OpenAlexAPICallStatus(DataClassJsonMixin):
+class OpenAlexAPICallStatus(msgspec.Struct):
     call_count: int
-    current_date: str
+    current_date: date
 
 
 API_CALL_STATUS_FILEPATH = (
-    Path("~/.rs-graph/open_alex_api_call_status.json").expanduser().resolve()
+    Path("~/.rs-graph/open_alex_api_call_status.msgpack").expanduser().resolve()
 )
 
+MSGSPEC_ENCODER = msgspec.msgpack.Encoder()
+MSGSPEC_DECODER = msgspec.msgpack.Decoder(type=OpenAlexAPICallStatus)
+
 #######################################################################################
+# Setup API
 
 
 def _write_api_call_status(current_status: OpenAlexAPICallStatus) -> None:
@@ -48,38 +51,36 @@ def _write_api_call_status(current_status: OpenAlexAPICallStatus) -> None:
     # Make dirs if needed
     API_CALL_STATUS_FILEPATH.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(API_CALL_STATUS_FILEPATH, "w") as f:
-        json.dump(current_status.to_dict(), f)
+    with open(API_CALL_STATUS_FILEPATH, "wb") as f:
+        f.write(MSGSPEC_ENCODER.encode(current_status))
 
 
 def _read_api_call_status() -> OpenAlexAPICallStatus:
     """Read the API call status from disk."""
-    with open(API_CALL_STATUS_FILEPATH) as f:
-        current_status = OpenAlexAPICallStatus.from_dict(json.load(f))
+    with open(API_CALL_STATUS_FILEPATH, "rb") as f:
+        current_status = MSGSPEC_DECODER.decode(f.read())
 
     # Check if current API status is out of date
-    if current_status.current_date != date.today().isoformat():
+    if current_status.current_date != date.today():
         current_status = OpenAlexAPICallStatus(
             call_count=0,
-            current_date=date.today().isoformat(),
+            current_date=date.today(),
         )
         _write_api_call_status(current_status=current_status)
 
     return current_status
 
 
-def _create_api_call_status_file() -> OpenAlexAPICallStatus:
+def _create_api_call_status_file() -> None:
     """Reset the API call status."""
     # Check and setup call status
     if not API_CALL_STATUS_FILEPATH.exists():
         _write_api_call_status(
             OpenAlexAPICallStatus(
                 call_count=0,
-                current_date=date.today().isoformat(),
+                current_date=date.today(),
             )
         )
-
-    return _read_api_call_status()
 
 
 def _setup() -> None:
@@ -88,8 +89,8 @@ def _setup() -> None:
     pyalex.config.email = DEFAULT_ALEX_EMAIL
 
     # Add retries
-    pyalex.config.max_retries = 1
-    pyalex.config.retry_backoff_factor = 0.1
+    pyalex.config.max_retries = 3
+    pyalex.config.retry_backoff_factor = 0.5
     pyalex.config.retry_http_codes = [429, 500, 503]
 
     _create_api_call_status_file()
@@ -108,13 +109,13 @@ def _increment_call_count_and_check() -> None:
     # pause all processing until tomorrow
     if current_status.call_count >= 80_000:
         log.info("Sleeping until tomorrow to avoid OpenAlex API limit.")
-        while date.today().isoformat() == current_status.current_date:
+        while date.today() == current_status.current_date:
             time.sleep(120)
 
         # Reset the call count
         current_status = OpenAlexAPICallStatus(
             call_count=0,
-            current_date=date.today().isoformat(),
+            current_date=date.today(),
         )
 
     # Increment count
@@ -125,10 +126,17 @@ def _increment_call_count_and_check() -> None:
     time.sleep(random.uniform(0, 2))
 
 
+_setup()
+
+# Create APIs
+OPENALEX_WORKS = pyalex.Works()
+OPENALEX_AUTHORS = pyalex.Authors()
+
+#######################################################################################
+
+
 def get_open_alex_work_from_doi(doi: str) -> pyalex.Work:
     """Get work from a DOI."""
-    _setup()
-
     # Lowercase DOI
     doi = doi.lower()
 
@@ -137,7 +145,7 @@ def get_open_alex_work_from_doi(doi: str) -> pyalex.Work:
         doi = f"https://doi.org/{doi}"
 
     _increment_call_count_and_check()
-    return pyalex.Works()[doi]
+    return OPENALEX_WORKS[doi]
 
 
 def convert_from_inverted_index_abstract(abstract: dict) -> str:
@@ -165,10 +173,8 @@ def convert_from_inverted_index_abstract(abstract: dict) -> str:
 
 def get_open_alex_author_from_id(author_id: str) -> pyalex.Author:
     """Get author from an ID."""
-    _setup()
-
     _increment_call_count_and_check()
-    return pyalex.Authors()[author_id]
+    return OPENALEX_AUTHORS[author_id]
 
 
 @dataclass
@@ -182,7 +188,6 @@ def process_doi(
     dataset_source_name: str,
     prod: bool = False,
 ) -> SuccessfulResult | ErrorResult:
-    """Process a DOI."""
     # Create db engine
     engine = db_utils.get_engine(prod=prod)
 
@@ -325,8 +330,8 @@ def process_doi(
             return ErrorResult(
                 source=dataset_source_name,
                 identifier=doi,
-                step="OpenAlex Processing",
-                error=str(e),
+                step=str(e),
+                error=traceback.format_exc(),
             )
 
 
@@ -339,6 +344,7 @@ class OpenAlexProcessingResults(DataClassJsonMixin):
 def process_pairs(
     pairs: list[RepositoryDocumentPair],
     prod: bool = False,
+    use_dask: bool = False,
 ) -> OpenAlexProcessingResults:
     """Process a list of DOIs."""
     # Check for / init worker client
@@ -353,8 +359,9 @@ def process_pairs(
         cluster_kwargs={
             "processes": False,
             "n_workers": 1,
+            "threads_per_worker": 4,
         },
-        use_dask=True,
+        use_dask=use_dask,
     )
 
     # Split results
@@ -364,7 +371,7 @@ def process_pairs(
     )
 
     # Log stats
-    log.info(f"Total processed: {len(pairs)}")
+    log.info(f"Total succeeded: {len(split_results.successful_results)}")
     log.info(f"Total errored: {len(split_results.errored_results)}")
 
     return split_results

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+import traceback
 
 import backoff
 import requests
@@ -13,7 +14,7 @@ from fastcore.net import HTTP403ForbiddenError
 from ghapi.all import GhApi, paged
 from tqdm import tqdm
 
-from ..types import RepositoryDocumentPair
+from ..types import ErrorResult, RepositoryDocumentPair, SuccessAndErroredResultsLists
 from .proto import DataSource
 
 ###############################################################################
@@ -43,7 +44,7 @@ def _process_elsevier_repo(
     repo_name: str,
     github_api: GhApi,
     elsevier_api_key: str,
-) -> RepositoryDocumentPair | None:
+) -> RepositoryDocumentPair | ErrorResult:
     # Be nice to APIs
     time.sleep(0.8)
 
@@ -71,7 +72,16 @@ def _process_elsevier_repo(
     if response.status_code == 429:
         raise RateLimitError("Rate limit exceeded for Elsevier API")
     else:
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except Exception:
+            log.debug(f"Error getting response from Elsevier API for repo: {repo_name}")
+            return ErrorResult(
+                source="softwarex",
+                identifier=repo_name,
+                error="Error getting response",
+                traceback=traceback.format_exc(),
+            )
 
     # Parse response to json
     response_json = response.json()
@@ -84,7 +94,12 @@ def _process_elsevier_repo(
             log.debug(
                 f"Unexpected number of results for repo: {repo_name} ({num_results})"
             )
-            return None
+            return ErrorResult(
+                source="softwarex",
+                identifier=repo_name,
+                error="Unexpected number of results",
+                traceback="",
+            )
 
         # Get the first result
         first_result = response_json["search-results"]["entry"][0]
@@ -95,7 +110,12 @@ def _process_elsevier_repo(
         log.debug(
             f"Error parsing response json from Elsevier API for repo: {repo_name}"
         )
-        return None
+        return ErrorResult(
+            source="softwarex",
+            identifier=repo_name,
+            error="Error parsing response json",
+            traceback=traceback.format_exc(),
+        )
 
     # Return the result
     return RepositoryDocumentPair(
@@ -110,7 +130,7 @@ class SoftwareXDataSource(DataSource):
     def get_dataset(
         use_dask: bool = False,
         **kwargs: dict[str, str],
-    ) -> list[RepositoryDocumentPair]:
+    ) -> SuccessAndErroredResultsLists:
         """Download the SoftwareX dataset."""
         # Load env
         load_dotenv()
@@ -139,29 +159,31 @@ class SoftwareXDataSource(DataSource):
             all_softwarex_repos.extend(only_repo_names)
 
         # Get original parent repo for each elsevier repo and get paper details
-        all_paper_details = []
+        successful_results = []
+        errored_results = []
         for repo_name in tqdm(
             all_softwarex_repos,
             desc="Getting SoftwareX paper details",
         ):
             # Get paper details
-            paper_details = _process_elsevier_repo(
+            result = _process_elsevier_repo(
                 repo_name=repo_name,
                 github_api=github_api,
                 elsevier_api_key=elsevier_api_key,
             )
-            all_paper_details.append(paper_details)
 
-        # Get count of total processed and errored
-        total_processed = len(all_paper_details)
-        processed_correctly = [
-            paper for paper in all_paper_details if paper is not None
-        ]
-        total_errored = total_processed - len(processed_correctly)
+            # Add to results
+            if isinstance(result, RepositoryDocumentPair):
+                successful_results.append(result)
+            else:
+                errored_results.append(result)
 
-        # Log total processed and errored
-        log.info(f"Total succeeded: {len(processed_correctly)}")
-        log.info(f"Total errored: {total_errored}")
+        # Log total succeeded and errored
+        log.info(f"Total succeeded: {len(successful_results)}")
+        log.info(f"Total errored: {len(errored_results)}")
 
         # Return filepath
-        return processed_correctly
+        return SuccessAndErroredResultsLists(
+            successful_results=successful_results,
+            errored_results=errored_results,
+        )

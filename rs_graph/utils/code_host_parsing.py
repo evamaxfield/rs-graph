@@ -1,14 +1,17 @@
 #!/usr/bin/env python
 
 import logging
+import traceback
 
 from parse import Parser
 
 from ..types import (
     CodeHostResult,
+    ErrorResult,
     ExpandedRepositoryDocumentPair,
     RepoParts,
     RepositoryDocumentPair,
+    SuccessAndErroredResultsLists,
 )
 from .dask_functions import process_func
 
@@ -168,7 +171,7 @@ def parse_code_host_url(url: str) -> CodeHostResult:
 
 def _wrapped_parse_code_host_url(
     repo_paper_pair: RepositoryDocumentPair,
-) -> ExpandedRepositoryDocumentPair | None:
+) -> ExpandedRepositoryDocumentPair | ErrorResult:
     try:
         code_host_res = parse_code_host_url(repo_paper_pair.repo_url)
 
@@ -178,7 +181,12 @@ def _wrapped_parse_code_host_url(
             or code_host_res.owner is None
             or code_host_res.name is None
         ):
-            return None
+            return ErrorResult(
+                source=repo_paper_pair.source,
+                identifier=repo_paper_pair.repo_url,
+                error="Not a GitHub repository",
+                traceback="",
+            )
 
         return ExpandedRepositoryDocumentPair(
             source=repo_paper_pair.source,
@@ -192,16 +200,21 @@ def _wrapped_parse_code_host_url(
         )
 
     except ValueError:
-        return None
+        return ErrorResult(
+            source=repo_paper_pair.source,
+            identifier=repo_paper_pair.repo_url,
+            error="Could not parse code host URL",
+            traceback=traceback.format_exc(),
+        )
 
 
 def filter_repo_paper_pairs(
     pairs: list[RepositoryDocumentPair],
     use_dask: bool = False,
-) -> list[ExpandedRepositoryDocumentPair]:
+) -> SuccessAndErroredResultsLists:
     # Filter each repo pair
     # Accepting only GitHub full repository results
-    results = process_func(
+    raw_results = process_func(
         name="code-host-parsing",
         func=_wrapped_parse_code_host_url,
         func_iterables=[pairs],
@@ -212,12 +225,20 @@ def filter_repo_paper_pairs(
         use_dask=use_dask,
     )
 
-    # Filter out None results
-    successful_results = [result for result in results if result is not None]
+    # Split results
+    split_results = SuccessAndErroredResultsLists(
+        successful_results=[
+            result
+            for result in raw_results
+            if isinstance(result, ExpandedRepositoryDocumentPair)
+        ],
+        errored_results=[
+            result for result in raw_results if isinstance(result, ErrorResult)
+        ],
+    )
 
     # Log total succeeded and errored
-    total_errored = len(pairs) - len(successful_results)
-    log.info(f"Total succeeded: {len(successful_results)}")
-    log.info(f"Total errored: {total_errored}")
+    log.info(f"Total succeeded: {len(split_results.successful_results)}")
+    log.info(f"Total errored: {len(split_results.errored_results)}")
 
-    return successful_results
+    return split_results

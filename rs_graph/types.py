@@ -12,8 +12,8 @@ from dataclasses_json import DataClassJsonMixin
 class ErrorResult(DataClassJsonMixin):
     source: str
     identifier: str
-    step: str
     error: str
+    traceback: str
 
 
 @dataclass
@@ -57,3 +57,9 @@ class ExpandedRepositoryDocumentPair(DataClassJsonMixin):
     repo_parts: RepoParts
     paper_doi: str
     paper_extra_data: dict | None = None
+
+
+@dataclass
+class SuccessAndErroredResultsLists:
+    successful_results: list[RepositoryDocumentPair | ExpandedRepositoryDocumentPair]
+    errored_results: list[ErrorResult]

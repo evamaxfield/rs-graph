@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from ..types import RepositoryDocumentPair
+from ..types import SuccessAndErroredResultsLists
 
 ###############################################################################
 
@@ -14,6 +14,6 @@ class DataSource(Protocol):
     def get_dataset(
         use_dask: bool = False,
         **kwargs: dict[str, str],
-    ) -> list[RepositoryDocumentPair]:
+    ) -> SuccessAndErroredResultsLists:
         """Download the dataset."""
         raise NotImplementedError()
