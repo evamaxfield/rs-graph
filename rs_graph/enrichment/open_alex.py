@@ -330,8 +330,8 @@ def process_doi(
             return ErrorResult(
                 source=dataset_source_name,
                 identifier=doi,
-                step=str(e),
-                error=traceback.format_exc(),
+                error=str(e),
+                traceback=traceback.format_exc(),
             )
 
 
