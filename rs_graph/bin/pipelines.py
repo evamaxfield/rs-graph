@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime
 from functools import partial
+from pathlib import Path
 
 import pandas as pd
 import typer
@@ -23,6 +24,8 @@ log = logging.getLogger(__name__)
 ###############################################################################
 
 app = typer.Typer()
+
+DEFAULT_RESULTS_DIR = Path("processing-results")
 
 ###############################################################################
 
@@ -76,15 +79,23 @@ def process(
 
     # If no filepaths provided, create them
     if len(success_results_file) == 0:
-        success_results_filepath = (
-            f"process-results-{source}-{current_datetime_str}-success.parquet"
+        # Create "results" dir
+        DEFAULT_RESULTS_DIR.mkdir(exist_ok=True)
+
+        success_results_filepath = str(
+            DEFAULT_RESULTS_DIR
+            / f"process-results-{source}-{current_datetime_str}-success.parquet"
         )
     else:
         success_results_filepath = success_results_file
 
     if len(errored_results_file) == 0:
-        errored_results_filepath = (
-            f"process-results-{source}-{current_datetime_str}-errored.parquet"
+        # Create "results" dir
+        DEFAULT_RESULTS_DIR.mkdir(exist_ok=True)
+
+        errored_results_filepath = str(
+            DEFAULT_RESULTS_DIR
+            / f"process-results-{source}-{current_datetime_str}-errored.parquet"
         )
     else:
         errored_results_filepath = errored_results_file

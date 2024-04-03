@@ -138,6 +138,7 @@ rs-graph-upstream-deps.parquet
 autotrain-text-classification-temp
 model-eval-results/
 prior-model-eval-results/
+processing-results/
 
 # Ignore all files in the data/files/ directory
 rs_graph/data/files/*
