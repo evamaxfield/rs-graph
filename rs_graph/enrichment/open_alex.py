@@ -18,7 +18,7 @@ from sqlmodel import Session
 
 from ..db import models
 from ..db import utils as db_utils
-from ..types import ErrorResult, RepositoryDocumentPair
+from ..types import ErrorResult, RepositoryDocumentPair, SuccessAndErroredResultsLists
 from ..utils.dask_functions import process_func
 
 #######################################################################################
@@ -335,17 +335,11 @@ def process_doi(
             )
 
 
-@dataclass
-class OpenAlexProcessingResults(DataClassJsonMixin):
-    successful_results: list[RepositoryDocumentPair]
-    errored_results: list[ErrorResult]
-
-
 def process_pairs(
     pairs: list[RepositoryDocumentPair],
     prod: bool = False,
     use_dask: bool = False,
-) -> OpenAlexProcessingResults:
+) -> SuccessAndErroredResultsLists:
     """Process a list of DOIs."""
     # Check for / init worker client
     process_doi_partial = partial(process_doi, prod=prod)
@@ -365,7 +359,7 @@ def process_pairs(
     )
 
     # Split results
-    split_results = OpenAlexProcessingResults(
+    split_results = SuccessAndErroredResultsLists(
         successful_results=[r for r in results if isinstance(r, SuccessfulResult)],
         errored_results=[r for r in results if isinstance(r, ErrorResult)],
     )

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 import time
+import traceback
 from dataclasses import dataclass
+from enum import Enum
 from functools import partial
 from pathlib import Path
 
@@ -14,10 +16,15 @@ from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
 from fastcore.net import HTTP403ForbiddenError, HTTP404NotFoundError
 from ghapi.all import GhApi
-from parse import search
 from tqdm import tqdm
 
-from ..registries import RegistryEnum
+from ..types import (
+    CodeHostResult,
+    ErrorResult,
+    ExpandedRepositoryDocumentPair,
+    RepoParts,
+)
+from ..utils import code_host_parsing
 
 ###############################################################################
 
@@ -30,48 +37,21 @@ GITHUB_API_SBOM_URL_TEMPLATE = "/repos/{owner}/{repo}/dependency-graph/sbom"
 ###############################################################################
 
 
-@dataclass
-class RepoParts:
-    owner: str
-    repo: str
-
-
-def get_repo_parts_from_url(url: str) -> RepoParts | None:
-    """
-    Best effort to get the repo parts from a URL.
-
-    Parameters
-    ----------
-    url: str
-        The URL to the repo.
-
-    Returns
-    -------
-    RepoParts | None
-        The repo parts.
-        If the parts cannot be parsed, returns None.
-    """
-    # Handle no http
-    if not url.startswith("http"):
-        url = f"https://{url}"
-
-    # Add trailing slash
-    if not url.endswith("/"):
-        url = f"{url}/"
-
-    # Remove www
-    url = url.replace("www.", "")
-
-    # Parse the URL
-    url_format = "https://github.com/{owner}/{repo}/"
-    result = search(url_format, url)
-
-    # Handle result
-    if result:
-        return RepoParts(owner=result["owner"], repo=result["repo"])
-
-    # Make mypy happy
-    return None
+class RegistryEnum(Enum):
+    CARGO = "rust"
+    COMPOSER = "composer"
+    NUGET = "nuget"
+    ACTIONS = "actions"
+    GO = "go"
+    MAVEN = "maven"
+    NPM = "npm"
+    PIP = "pip"
+    PNPM = "pnpm"
+    PUB = "pub"
+    POETRY = "poetry"
+    RUBYGEMS = "rubygems"
+    SWIFT = "swift"
+    YARN = "yarn"
 
 
 @dataclass
@@ -87,7 +67,7 @@ class DependencyDetails:
     max_time=300,
 )
 def get_repo_upstream_dependency_list(
-    url: str,
+    repo_parts: RepoParts,
     github_api_key: str | None = None,
     allowed_registries: list[str] | None = None,
 ) -> list[DependencyDetails] | None:
@@ -96,8 +76,8 @@ def get_repo_upstream_dependency_list(
 
     Parameters
     ----------
-    url: str
-        The URL to the repo.
+    repo_parts: RepoParts
+        The repo parts to get the upstream dependencies for.
     github_api_key: str, optional
         The GitHub API key to use for the request.
         If not provided, will use the GITHUB_TOKEN env variable.
@@ -130,19 +110,11 @@ def get_repo_upstream_dependency_list(
     if not allowed_registries:
         allowed_registries = list(RegistryEnum)
 
-    # Get repo parts
-    repo_parts = get_repo_parts_from_url(url)
-
-    # Handle failed parse
-    if not repo_parts:
-        log.debug(f"Failed to parse repo parts from url: '{url}'")
-        return None
-
     # Get SBOM full data
     result = api(
         GITHUB_API_SBOM_URL_TEMPLATE.format(
             owner=repo_parts.owner,
-            repo=repo_parts.repo,
+            repo=repo_parts.name,
         ),
     )
 
@@ -174,43 +146,41 @@ def get_repo_upstream_dependency_list(
 
 @dataclass
 class RepoDependency(DataClassJsonMixin):
-    repo: str
+    repo: RepoParts
     upstream_dep_registry: str
     upstream_dep_name: str
     upstream_dep_version: str
 
 
-@dataclass
-class RepoFailure(DataClassJsonMixin):
-    repo: str
-    exception: str
-
-
 def _get_upstream_dependencies_for_repo(
-    repo: str,
+    repo_parts: RepoParts,
     github_api_key: str | None = None,
     allowed_registries: list[RegistryEnum] | None = None,
-) -> list[RepoDependency] | RepoFailure:
+) -> list[RepoDependency] | ErrorResult:
     try:
         # Get deps
         repo_deps = get_repo_upstream_dependency_list(
-            url=repo,
+            repo_parts=repo_parts,
             github_api_key=github_api_key,
             allowed_registries=allowed_registries,
         )
 
         # Handle failure
         if not repo_deps:
-            return RepoFailure(
-                repo=repo,
-                exception="Failed to parse repo owner and name.",
+            return ErrorResult(
+                source="get_upstream_dependencies_for_repo",
+                identifier=f"{repo_parts.host}/{repo_parts.owner}/{repo_parts.name}",
+                error="Failed to get upstream dependencies for repo.",
+                traceback="",
             )
 
     except Exception as e:
         # Handle failure
-        return RepoFailure(
-            repo=repo,
-            exception=str(e),
+        return ErrorResult(
+            source="get_upstream_dependencies_for_repo",
+            identifier=f"{repo_parts.host}/{repo_parts.owner}/{repo_parts.name}",
+            error=str(e),
+            traceback=traceback.format_exc(),
         )
 
     # Store deps
@@ -218,7 +188,7 @@ def _get_upstream_dependencies_for_repo(
     for dep in repo_deps:
         this_repo_deps.append(
             RepoDependency(
-                repo=repo,
+                repo=repo_parts,
                 upstream_dep_registry=dep.registry.value,
                 upstream_dep_name=dep.name,
                 upstream_dep_version=dep.version,
@@ -232,7 +202,7 @@ def get_upstream_dependencies_for_repos(
     repos: list[str],
     github_api_key: str | None = None,
     allowed_registries: list[RegistryEnum] | None = None,
-) -> tuple[list[RepoDependency], list[RepoFailure]]:
+) -> tuple[list[RepoDependency], list[ErrorResult]]:
     """
     Get the upstream dependencies for a list of repos.
 
@@ -249,7 +219,7 @@ def get_upstream_dependencies_for_repos(
 
     Returns
     -------
-    tuple[list[RepoDependency], list[RepoFailure]]
+    tuple[list[RepoDependency], list[ErrorResult]]
         The list of upstream dependencies for the repos.
         The list of failed repos.
     """
@@ -278,7 +248,7 @@ def get_upstream_dependencies_for_repos(
 
     # Get deps
     all_deps: list[RepoDependency] = []
-    failed: list[RepoFailure] = []
+    failed: list[ErrorResult] = []
     total_succeeded = 0
     for repo in tqdm(
         github_repos,
@@ -288,7 +258,7 @@ def get_upstream_dependencies_for_repos(
         repo_results = partial_get_upstream_dependencies_for_repo(repo)
 
         # Handle failure
-        if isinstance(repo_results, RepoFailure):
+        if isinstance(repo_results, ErrorResult):
             failed.append(repo_results)
             continue
 
@@ -309,7 +279,7 @@ def get_upstream_dependencies_for_repos(
 
 @dataclass
 class RepoContributorInfo(DataClassJsonMixin):
-    repo: str
+    repo_parts: RepoParts
     username: str
     name: str | None
     company: str | None
@@ -322,12 +292,12 @@ class RepoContributorInfo(DataClassJsonMixin):
 @backoff.on_exception(
     backoff.expo,
     (HTTP403ForbiddenError),
-    max_time=300,
+    max_time=60,
 )
 def _get_user_info_from_login(
     login: str,
     api: GhApi,
-    repo_url: str,
+    repo_parts: RepoParts,
     co_contributors: tuple[str, ...],
 ) -> list[RepoContributorInfo] | None:
     # Get contributor info
@@ -344,13 +314,10 @@ def _get_user_info_from_login(
 
         # Store info
         return RepoContributorInfo(
-            repo=repo_url,
+            repo_parts=repo_parts,
             username=login,
             name=user_info["name"],
-            company=user_info["company"],
             email=user_info["email"],
-            location=user_info["location"],
-            bio=user_info["bio"],
             co_contributors=co_contributor_logins,
         )
 
@@ -361,13 +328,13 @@ def _get_user_info_from_login(
 @backoff.on_exception(
     backoff.expo,
     (HTTP403ForbiddenError),
-    max_time=300,
+    max_time=60,
 )
 def get_repo_contributors(
-    repo_url: str,
+    repo_parts: RepoParts,
     github_api_key: str | None = None,
     top_n: int = 30,
-) -> list[RepoContributorInfo] | None:
+) -> list[RepoContributorInfo] | ErrorResult:
     # Setup API
     if github_api_key:
         api = GhApi(token=github_api_key)
@@ -375,14 +342,6 @@ def get_repo_contributors(
         # Load env
         load_dotenv()
         api = GhApi()
-
-    # Get repo parts
-    repo_parts = get_repo_parts_from_url(repo_url)
-
-    # Handle failed parse
-    if not repo_parts:
-        log.debug(f"Failed to parse repo parts from url: '{repo_url}'")
-        return None
 
     # Get contributors
     try:
@@ -392,8 +351,12 @@ def get_repo_contributors(
             per_page=top_n,
         )
     except HTTP404NotFoundError:
-        log.debug(f"Failed to find repo: '{repo_url}'")
-        return None
+        return ErrorResult(
+            source="get_repo_contributors",
+            identifier=f"{repo_parts.host}/{repo_parts.owner}/{repo_parts.name}",
+            error="Repo not found.",
+            traceback="",
+        )
 
     # Get user infos
     contributor_infos = []
@@ -403,7 +366,7 @@ def get_repo_contributors(
             _get_user_info_from_login(
                 contrib["login"],
                 api=api,
-                repo_url=repo_url,
+                repo_parts=repo_parts,
                 co_contributors=tuple(contrib["login"] for contrib in contributors),
             )
         )
@@ -421,28 +384,35 @@ def get_repo_contributors_for_repos(
     cache_file: str | Path = "repo_contributors.parquet",
     cache_every: int = 10,
 ) -> list[RepoContributorInfo]:
+    # Parse every URL
+    code_host_results: list[CodeHostResult] = []
+    for repo_url in repo_urls:
+        # Parse the URL
+        try:
+            code_host_results.append(code_host_parsing.parse_code_host_url(repo_url))
+        except ValueError:
+            pass
+
+    # Filter out non-GitHub non-repo items
+    repo_parts = [
+        RepoParts(
+            host=r.host,
+            owner=r.owner,
+            name=r.name,
+        )
+        for r in code_host_results
+        if r.host == "github" and r.owner is not None and r.name is not None
+    ]
+
     # Filter out duplicates
-    repos = list(set(repo_urls))
-
-    # Log diff
-    log.info(
-        f"Filtered out {len(repos) - len(set(repos))} duplicate repos.",
-    )
-
-    # Filter out non-github repos
-    github_repos = [repo for repo in repos if "github.com" in repo]
-
-    # Log diff
-    log.info(
-        f"Filtered out {len(repos) - len(github_repos)} non-GitHub repos.",
-    )
+    repo_parts = list(set(repo_parts))
 
     # Get contributors
     all_contributors = []
     for i, repo in tqdm(
-        enumerate(github_repos),
+        enumerate(repo_parts),
         desc="Getting contributors",
-        total=len(github_repos),
+        total=len(repo_parts),
     ):
         # Get contributors
         repo_contributors = get_repo_contributors(
@@ -467,3 +437,11 @@ def get_repo_contributors_for_repos(
             ).to_parquet(cache_file)
 
     return all_contributors
+
+
+def process_pairs(
+    pairs: list[ExpandedRepositoryDocumentPair],
+    prod: bool = False,
+    use_dask: bool = False,
+) -> None:
+    pass
