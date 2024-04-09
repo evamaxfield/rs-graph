@@ -12,7 +12,6 @@ from ..types import SuccessAndErroredResultsLists
 class DataSource(Protocol):
     @staticmethod
     def get_dataset(
-        use_dask: bool = False,
         **kwargs: dict[str, str],
     ) -> SuccessAndErroredResultsLists:
         """Download the dataset."""

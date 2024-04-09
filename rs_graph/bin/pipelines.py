@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 import typer
+from distributed import LocalCluster
 
 from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.enrichment import open_alex
@@ -45,8 +46,7 @@ def _split_and_store_results(
 ) -> SuccessAndErroredResultsLists:
     # Combine results
     results = SuccessAndErroredResultsLists(
-        successful_results=old_results.successful_results
-        + new_results.successful_results,
+        successful_results=new_results.successful_results,
         errored_results=old_results.errored_results + new_results.errored_results,
     )
 
@@ -107,9 +107,24 @@ def process(
         errored_results_filepath=errored_results_filepath,
     )
 
+    # Create dask cluster and client
+    if use_dask:
+        cluster = LocalCluster(
+            processes=True,
+            n_workers=4,
+            threads_per_worker=1,
+        )
+
+        # Log dask dashboard link
+        log.info(f"Dask dashboard link: {cluster.dashboard_link}")
+
+        cluster_address = cluster.scheduler_address
+    else:
+        cluster_address = None
+
     # Create dask client and cluster
     get_dataset_results = SOURCE_MAP[source].get_dataset(
-        use_dask=use_dask,
+        cluster_address=cluster_address,
     )
     split_and_store_results_partial(
         new_results=get_dataset_results,
@@ -119,7 +134,7 @@ def process(
     # Filter out non-GitHub Repo pairs
     code_filtering_results = code_host_parsing.filter_repo_paper_pairs(
         get_dataset_results.successful_results,
-        use_dask=use_dask,
+        cluster_address=cluster_address,
     )
     split_and_store_results_partial(
         new_results=code_filtering_results,
@@ -130,7 +145,7 @@ def process(
     open_alex_processing_results = open_alex.process_pairs(
         code_filtering_results.successful_results,
         prod=prod,
-        use_dask=use_dask,
+        cluster_address=cluster_address,
     )
     split_and_store_results_partial(
         new_results=open_alex_processing_results,

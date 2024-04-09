@@ -130,6 +130,5 @@ def get_repo_contributors(
 def process_pairs(
     pairs: list[ExpandedRepositoryDocumentPair],
     prod: bool = False,
-    use_dask: bool = False,
 ) -> SuccessAndErroredResultsLists:
     return SuccessAndErroredResultsLists(successes=[], errored=[])

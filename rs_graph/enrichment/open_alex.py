@@ -338,7 +338,7 @@ def process_doi(
 def process_pairs(
     pairs: list[RepositoryDocumentPair],
     prod: bool = False,
-    use_dask: bool = False,
+    cluster_address: str | None = None,
 ) -> SuccessAndErroredResultsLists:
     """Process a list of DOIs."""
     # Check for / init worker client
@@ -350,12 +350,7 @@ def process_pairs(
             [pair.paper_doi for pair in pairs],
             [pair.source for pair in pairs],
         ],
-        cluster_kwargs={
-            "processes": False,
-            "n_workers": 1,
-            "threads_per_worker": 4,
-        },
-        use_dask=use_dask,
+        cluster_address=cluster_address,
     )
 
     # Split results

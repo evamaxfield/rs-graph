@@ -108,7 +108,7 @@ class PLOSDataSource(DataSource):
 
     @staticmethod
     def get_dataset(
-        use_dask: bool = False,
+        cluster_address: str | None = None,
         **kwargs: dict[str, str],
     ) -> SuccessAndErroredResultsLists:
         """Download the PLOS dataset."""
@@ -120,11 +120,7 @@ class PLOSDataSource(DataSource):
             name="plos-xml-processing",
             func=PLOSDataSource._process_xml,
             func_iterables=[plos_xmls],
-            cluster_kwargs={
-                "processes": True,
-                "threads_per_worker": 1,
-            },
-            use_dask=use_dask,
+            cluster_address=cluster_address,
         )
 
         # Create successful results and errored results lists

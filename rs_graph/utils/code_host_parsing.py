@@ -210,7 +210,7 @@ def _wrapped_parse_code_host_url(
 
 def filter_repo_paper_pairs(
     pairs: list[RepositoryDocumentPair],
-    use_dask: bool = False,
+    cluster_address: str | None,
 ) -> SuccessAndErroredResultsLists:
     # Filter each repo pair
     # Accepting only GitHub full repository results
@@ -218,11 +218,7 @@ def filter_repo_paper_pairs(
         name="code-host-parsing",
         func=_wrapped_parse_code_host_url,
         func_iterables=[pairs],
-        cluster_kwargs={
-            "processes": True,
-            "threads_per_worker": 1,
-        },
-        use_dask=use_dask,
+        cluster_address=cluster_address,
     )
 
     # Split results
