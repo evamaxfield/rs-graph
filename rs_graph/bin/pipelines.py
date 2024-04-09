@@ -143,25 +143,25 @@ def process(
     )
 
     # Process with open_alex
-    open_alex_processing_results = open_alex.process_pairs(
+    # open_alex_processing_results = open_alex.process_pairs(
+    #     code_filtering_results.successful_results,
+    #     prod=prod,
+    #     cluster_address=cluster_address,
+    # )
+    # split_and_store_results_partial(
+    #     new_results=open_alex_processing_results,
+    #     old_results=code_filtering_results,
+    # )
+
+    # Process with github
+    github_processing_results = github.process_repos_for_contributors(
         code_filtering_results.successful_results,
         prod=prod,
         cluster_address=cluster_address,
     )
     split_and_store_results_partial(
-        new_results=open_alex_processing_results,
-        old_results=code_filtering_results,
-    )
-
-    # Process with github
-    github_processing_results = github.process_repos_for_contributors(
-        open_alex_processing_results.successful_results,
-        prod=prod,
-        cluster_address=cluster_address,
-    )
-    split_and_store_results_partial(
         new_results=github_processing_results,
-        old_results=open_alex_processing_results,
+        old_results=code_filtering_results,
     )
 
 
