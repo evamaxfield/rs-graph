@@ -3,22 +3,28 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
+import traceback
 from dataclasses import dataclass
+from functools import partial
 
 import backoff
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
-from fastcore.net import HTTP403ForbiddenError, HTTP404NotFoundError
+from fastcore.net import HTTP403ForbiddenError
 from ghapi.all import GhApi
-from tqdm import tqdm
+from sqlmodel import Session
 
+from ..db import models as db_models
+from ..db.utils import get_engine, get_or_add
 from ..types import (
     ErrorResult,
     ExpandedRepositoryDocumentPair,
     RepoParts,
     SuccessAndErroredResultsLists,
 )
+from ..utils.dask_functions import process_func
 
 ###############################################################################
 
@@ -32,59 +38,11 @@ class RepoContributorInfo(DataClassJsonMixin):
     repo_parts: RepoParts
     username: str
     name: str | None
-    company: str | None
     email: str | None
-    location: str | None
-    bio: str | None
-    co_contributors: tuple[str, ...]
 
 
-@backoff.on_exception(
-    backoff.expo,
-    (HTTP403ForbiddenError),
-    max_time=60,
-)
-def _get_user_info_from_login(
-    login: str,
-    api: GhApi,
-    repo_parts: RepoParts,
-    co_contributors: tuple[str, ...],
-) -> list[RepoContributorInfo] | None:
-    # Get contributor info
-    try:
-        user_info = api.users.get_by_username(username=login)
-
-        # Remove login from co-contributors
-        co_contributor_logins = tuple(
-            co_contrib for co_contrib in co_contributors if co_contrib != login
-        )
-
-        # Sleep before return to avoid rate limit
-        time.sleep(2)
-
-        # Store info
-        return RepoContributorInfo(
-            repo_parts=repo_parts,
-            username=login,
-            name=user_info["name"],
-            email=user_info["email"],
-            co_contributors=co_contributor_logins,
-        )
-
-    except HTTP404NotFoundError:
-        return None
-
-
-@backoff.on_exception(
-    backoff.expo,
-    (HTTP403ForbiddenError),
-    max_time=60,
-)
-def get_repo_contributors(
-    repo_parts: RepoParts,
-    github_api_key: str | None = None,
-    top_n: int = 30,
-) -> list[RepoContributorInfo] | ErrorResult:
+def _setup_gh_api(github_api_key: str | None = None) -> GhApi:
+    """Create a GitHub API object."""
     # Setup API
     if github_api_key:
         api = GhApi(token=github_api_key)
@@ -93,42 +51,183 @@ def get_repo_contributors(
         load_dotenv()
         api = GhApi()
 
+    return api
+
+
+@backoff.on_exception(
+    backoff.expo,
+    (HTTP403ForbiddenError),
+    max_time=16,
+)
+def _get_user_info_from_login(
+    login: str,
+    repo_parts: RepoParts,
+    github_api_key: str | None = None,
+) -> list[RepoContributorInfo]:
+    # Setup API
+    api = _setup_gh_api(github_api_key)
+
+    # Get user info
+    user_info = api.users.get_by_username(username=login)
+
+    # Sleep to avoid API limits
+    time.sleep(0.85)
+
+    # Store info
+    return RepoContributorInfo(
+        repo_parts=repo_parts,
+        username=login,
+        name=user_info["name"],
+        email=user_info["email"],
+    )
+
+
+@backoff.on_exception(
+    backoff.expo,
+    (HTTP403ForbiddenError),
+    max_time=16,
+)
+def get_repo_contributors(
+    repo_parts: RepoParts,
+    github_api_key: str | None = None,
+    top_n: int = 30,
+    cluster_address: str | None = None,
+) -> list[RepoContributorInfo]:
+    # Setup API
+    api = _setup_gh_api(github_api_key)
+
     # Get contributors
-    try:
-        contributors = api.repos.list_contributors(
-            owner=repo_parts.owner,
-            repo=repo_parts.repo,
-            per_page=top_n,
-        )
-    except HTTP404NotFoundError:
-        return ErrorResult(
-            source="get_repo_contributors",
-            identifier=f"{repo_parts.host}/{repo_parts.owner}/{repo_parts.name}",
-            error="Repo not found.",
-            traceback="",
-        )
+    contributors = api.repos.list_contributors(
+        owner=repo_parts.owner,
+        repo=repo_parts.repo,
+        per_page=top_n,
+    )
+
+    # Sleep to avoid API limits
+    time.sleep(0.85)
 
     # Get user infos
-    contributor_infos = []
-    for contrib in tqdm(contributors, desc="Getting user info", leave=False):
-        # Get user info
-        contributor_infos.append(
-            _get_user_info_from_login(
-                contrib["login"],
-                api=api,
-                repo_parts=repo_parts,
-                co_contributors=tuple(contrib["login"] for contrib in contributors),
-            )
-        )
-
-    # Filter out none
-    contributor_infos = [info for info in contributor_infos if info is not None]
+    _get_user_partial = partial(
+        _get_user_info_from_login,
+        repo_parts=repo_parts,
+        github_api_key=github_api_key,
+    )
+    contributor_infos = process_func(
+        name="github-user-info-from-login",
+        func=_get_user_partial,
+        func_iterables=[
+            [contrib["login"] for contrib in contributors],
+        ],
+        cluster_address=cluster_address,
+    )
 
     return contributor_infos
 
 
-def process_pairs(
+def _wrapped_get_contributors(
+    repo_doc_pair: ExpandedRepositoryDocumentPair,
+    github_api_key: str | None = None,
+    prod: bool = False,
+    cluster_address: str | None = None,
+    top_n: int = 30,
+) -> ExpandedRepositoryDocumentPair | ErrorResult:
+    """Get repo contributors and add them to database."""
+    # Get engine
+    engine = get_engine(prod=prod)
+    with Session(engine) as session:
+        try:
+            # Get repo contributors
+            repo_contributors = get_repo_contributors(
+                repo_parts=repo_doc_pair.repo_parts,
+                github_api_key=github_api_key,
+                top_n=top_n,
+                cluster_address=cluster_address,
+            )
+
+            # Create the code host
+            code_host = db_models.CodeHost(
+                name=repo_doc_pair.repo_parts.host,
+            )
+            code_host = get_or_add(session=session, model=code_host)
+
+            # Create the repository
+            repo = db_models.Repository(
+                code_host_id=code_host.id,
+                owner=repo_doc_pair.repo_parts.owner,
+                name=repo_doc_pair.repo_parts.name,
+            )
+            repo = get_or_add(session=session, model=repo)
+
+            # For each contributor, create a developer account
+            # and then link the dev account to the repo
+            # as a repository contributor
+            for contributor in repo_contributors:
+                # Create the developer account
+                dev_account = db_models.DeveloperAccount(
+                    code_host_id=code_host.id,
+                    username=contributor.username,
+                    name=contributor.name,
+                    email=contributor.email,
+                )
+                dev_account = get_or_add(session=session, model=dev_account)
+
+                # Create the repository contributor
+                repo_contributor = db_models.RepositoryContributor(
+                    repository_id=repo.id,
+                    developer_account_id=dev_account.id,
+                )
+                get_or_add(session=session, model=repo_contributor)
+
+            return repo_doc_pair
+
+        except Exception as e:
+            session.rollback()
+            return ErrorResult(
+                source=repo_doc_pair.source,
+                identifier=(
+                    f"{repo_doc_pair.repo_parts.host}/"
+                    f"{repo_doc_pair.repo_parts.owner}/"
+                    f"{repo_doc_pair.repo_parts.name}"
+                ),
+                error=str(e),
+                traceback=traceback.format_exc(),
+            )
+
+
+def process_repos_for_contributors(
     pairs: list[ExpandedRepositoryDocumentPair],
     prod: bool = False,
+    cluster_address: str | None = None,
 ) -> SuccessAndErroredResultsLists:
-    return SuccessAndErroredResultsLists(successes=[], errored=[])
+    """Process a list of repositories."""
+    # Load dotenv
+    load_dotenv()
+    github_api_key = os.getenv("GITHUB_TOKEN")
+
+    # Check for / init worker client
+    process_doi_partial = partial(
+        _wrapped_get_contributors,
+        prod=prod,
+        github_api_key=github_api_key,
+        cluster_address=cluster_address,
+    )
+    results = process_func(
+        name="open-alex-processing",
+        func=process_doi_partial,
+        func_iterables=[pairs],
+        cluster_address=cluster_address,
+    )
+
+    # Split results
+    split_results = SuccessAndErroredResultsLists(
+        successful_results=[
+            r for r in results if isinstance(r, ExpandedRepositoryDocumentPair)
+        ],
+        errored_results=[r for r in results if isinstance(r, ErrorResult)],
+    )
+
+    # Log stats
+    log.info(f"Total succeeded: {len(split_results.successful_results)}")
+    log.info(f"Total errored: {len(split_results.errored_results)}")
+
+    return split_results

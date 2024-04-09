@@ -285,9 +285,6 @@ class Repository(SQLModel, table=True):  # type: ignore
 
     __table_args__ = (UniqueConstraint("code_host_id", "owner", "name"),)
 
-    # Data
-    repo_created_datetime: datetime
-
     # Updates
     created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())

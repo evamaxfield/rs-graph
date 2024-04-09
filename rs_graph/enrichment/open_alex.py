@@ -6,19 +6,21 @@ import logging
 import random
 import time
 import traceback
-from dataclasses import dataclass
 from datetime import date
 from functools import partial
 from pathlib import Path
 
 import msgspec
 import pyalex
-from dataclasses_json import DataClassJsonMixin
 from sqlmodel import Session
 
 from ..db import models
 from ..db import utils as db_utils
-from ..types import ErrorResult, RepositoryDocumentPair, SuccessAndErroredResultsLists
+from ..types import (
+    ErrorResult,
+    ExpandedRepositoryDocumentPair,
+    SuccessAndErroredResultsLists,
+)
 from ..utils.dask_functions import process_func
 
 #######################################################################################
@@ -177,17 +179,11 @@ def get_open_alex_author_from_id(author_id: str) -> pyalex.Author:
     return OPENALEX_AUTHORS[author_id]
 
 
-@dataclass
-class SuccessfulResult(DataClassJsonMixin):
-    doi: str
-    source: str
-
-
 def process_doi(
-    doi: str,
+    pair: ExpandedRepositoryDocumentPair,
     dataset_source_name: str,
     prod: bool = False,
-) -> SuccessfulResult | ErrorResult:
+) -> ExpandedRepositoryDocumentPair | ErrorResult:
     # Create db engine
     engine = db_utils.get_engine(prod=prod)
 
@@ -195,7 +191,7 @@ def process_doi(
     with Session(engine) as session:
         try:
             # Get the OpenAlex work
-            open_alex_work = get_open_alex_work_from_doi(doi)
+            open_alex_work = get_open_alex_work_from_doi(pair.paper_doi)
 
             # Convert inverted index abstract to string
             if open_alex_work["abstract_inverted_index"] is None:
@@ -211,7 +207,7 @@ def process_doi(
 
             # Create the Document
             document = models.Document(
-                doi=doi,
+                doi=pair.paper_doi,
                 open_alex_id=open_alex_work["id"],
                 title=open_alex_work["title"],
                 publication_date=date.fromisoformat(open_alex_work["publication_date"]),
@@ -323,20 +319,20 @@ def process_doi(
                 )
                 db_utils.get_or_add(document_funding_instance, session)
 
-            return SuccessfulResult(doi=doi, source=dataset_source_name)
+            return pair
 
         except Exception as e:
             session.rollback()
             return ErrorResult(
                 source=dataset_source_name,
-                identifier=doi,
+                identifier=pair.paper_doi,
                 error=str(e),
                 traceback=traceback.format_exc(),
             )
 
 
 def process_pairs(
-    pairs: list[RepositoryDocumentPair],
+    pairs: list[ExpandedRepositoryDocumentPair],
     prod: bool = False,
     cluster_address: str | None = None,
 ) -> SuccessAndErroredResultsLists:
@@ -355,7 +351,9 @@ def process_pairs(
 
     # Split results
     split_results = SuccessAndErroredResultsLists(
-        successful_results=[r for r in results if isinstance(r, SuccessfulResult)],
+        successful_results=[
+            r for r in results if isinstance(r, ExpandedRepositoryDocumentPair)
+        ],
         errored_results=[r for r in results if isinstance(r, ErrorResult)],
     )
 

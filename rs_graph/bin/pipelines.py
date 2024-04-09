@@ -10,7 +10,7 @@ import typer
 from distributed import LocalCluster
 
 from rs_graph.bin.typer_utils import setup_logger
-from rs_graph.enrichment import open_alex
+from rs_graph.enrichment import github, open_alex
 from rs_graph.sources.joss import JOSSDataSource
 from rs_graph.sources.plos import PLOSDataSource
 from rs_graph.sources.proto import DataSource
@@ -77,25 +77,26 @@ def process(
     # Convert to isoformat and replace colons with dashes
     current_datetime_str = current_datetime.isoformat().replace(":", "-")
 
+    # Create dir for this datetime
+    current_datetime_dir = DEFAULT_RESULTS_DIR / current_datetime_str
+
     # If no filepaths provided, create them
     if len(success_results_file) == 0:
         # Create "results" dir
-        DEFAULT_RESULTS_DIR.mkdir(exist_ok=True)
+        current_datetime_dir.mkdir(exist_ok=True, parents=True)
 
         success_results_filepath = str(
-            DEFAULT_RESULTS_DIR
-            / f"process-results-{source}-{current_datetime_str}-success.parquet"
+            current_datetime_dir / f"process-results-{source}-success.parquet"
         )
     else:
         success_results_filepath = success_results_file
 
     if len(errored_results_file) == 0:
         # Create "results" dir
-        DEFAULT_RESULTS_DIR.mkdir(exist_ok=True)
+        current_datetime_dir.mkdir(exist_ok=True, parents=True)
 
         errored_results_filepath = str(
-            DEFAULT_RESULTS_DIR
-            / f"process-results-{source}-{current_datetime_str}-errored.parquet"
+            current_datetime_dir / f"process-results-{source}-errored.parquet"
         )
     else:
         errored_results_filepath = errored_results_file
@@ -107,7 +108,7 @@ def process(
         errored_results_filepath=errored_results_filepath,
     )
 
-    # Create dask cluster and client
+    # Create dask cluster
     if use_dask:
         cluster = LocalCluster(
             processes=True,
@@ -150,6 +151,17 @@ def process(
     split_and_store_results_partial(
         new_results=open_alex_processing_results,
         old_results=code_filtering_results,
+    )
+
+    # Process with github
+    github_processing_results = github.process_repos_for_contributors(
+        open_alex_processing_results.successful_results,
+        prod=prod,
+        cluster_address=cluster_address,
+    )
+    split_and_store_results_partial(
+        new_results=github_processing_results,
+        old_results=open_alex_processing_results,
     )
 
 
