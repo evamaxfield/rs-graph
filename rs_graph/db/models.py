@@ -257,6 +257,8 @@ class DocumentFundingInstance(SQLModel, table=True):  # type: ignore
 class CodeHost(SQLModel, table=True):  # type: ignore
     """Stores the basic information for a code host (e.g. GitHub, GitLab)."""
 
+    __tablename__ = "code_host"
+
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
 
@@ -328,9 +330,9 @@ class RepositoryContributor(SQLModel, table=True):  # type: ignore
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
     repository_id: int = Field(foreign_key="repository.id")
-    researcher_id: int = Field(foreign_key="researcher.id")
+    developer_account_id: int = Field(foreign_key="developer_account.id")
 
-    __table_args__ = (UniqueConstraint("repository_id", "researcher_id"),)
+    __table_args__ = (UniqueConstraint("repository_id", "developer_account_id"),)
 
     # Updates
     db_created_datetime: datetime = Field(
