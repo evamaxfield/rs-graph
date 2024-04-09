@@ -20,10 +20,10 @@ class DatasetSource(SQLModel, table=True):  # type: ignore
     name: str = Field(unique=True)
 
     # Updates
-    created_datetime: datetime = Field(
+    db_created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    updated_datetime: datetime = Field(
+    db_updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -46,10 +46,10 @@ class Document(SQLModel, table=True):  # type: ignore
     abstract: str | None = None
 
     # Updates
-    created_datetime: datetime = Field(
+    db_created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    updated_datetime: datetime = Field(
+    db_updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -71,10 +71,10 @@ class Topic(SQLModel, table=True):  # type: ignore
     domain_open_alex_id: str
 
     # Updates
-    created_datetime: datetime = Field(
+    db_created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    updated_datetime: datetime = Field(
+    db_updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -95,10 +95,10 @@ class DocumentTopic(SQLModel, table=True):  # type: ignore
     score: float
 
     # Updates
-    created_datetime: datetime = Field(
+    db_created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    updated_datetime: datetime = Field(
+    db_updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -119,10 +119,10 @@ class Researcher(SQLModel, table=True):  # type: ignore
     two_year_mean_citedness: float
 
     # Updates
-    created_datetime: datetime = Field(
+    db_created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    updated_datetime: datetime = Field(
+    db_updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -144,10 +144,10 @@ class ResearcherDocument(SQLModel, table=True):  # type: ignore
     is_corresponding: bool
 
     # Updates
-    created_datetime: datetime = Field(
+    db_created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    updated_datetime: datetime = Field(
+    db_updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -164,10 +164,10 @@ class Institution(SQLModel, table=True):  # type: ignore
     ror: str
 
     # Updates
-    created_datetime: datetime = Field(
+    db_created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    updated_datetime: datetime = Field(
+    db_updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -185,10 +185,10 @@ class ResearcherDocumentInstitution(SQLModel, table=True):  # type: ignore
     __table_args__ = (UniqueConstraint("researcher_document_id", "institution_id"),)
 
     # Updates
-    created_datetime: datetime = Field(
+    db_created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    updated_datetime: datetime = Field(
+    db_updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -204,10 +204,10 @@ class Funder(SQLModel, table=True):  # type: ignore
     name: str
 
     # Updates
-    created_datetime: datetime = Field(
+    db_created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    updated_datetime: datetime = Field(
+    db_updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -225,10 +225,10 @@ class FundingInstance(SQLModel, table=True):  # type: ignore
     __table_args__ = (UniqueConstraint("funder_id", "award_id"),)
 
     # Updates
-    created_datetime: datetime = Field(
+    db_created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    updated_datetime: datetime = Field(
+    db_updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -246,9 +246,96 @@ class DocumentFundingInstance(SQLModel, table=True):  # type: ignore
     __table_args__ = (UniqueConstraint("document_id", "funding_instance_id"),)
 
     # Updates
-    created_datetime: datetime = Field(
+    db_created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    updated_datetime: datetime = Field(
+    db_updated_datetime: datetime = Field(
+        sa_column=Column(DateTime(), onupdate=func.now())
+    )
+
+
+class CodeHost(SQLModel, table=True):  # type: ignore
+    """Stores the basic information for a code host (e.g. GitHub, GitLab)."""
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+
+    # Data
+    name: str = Field(unique=True)
+
+    # Updates
+    db_created_datetime: datetime = Field(
+        sa_column=Column(DateTime(), server_default=func.now())
+    )
+    db_updated_datetime: datetime = Field(
+        sa_column=Column(DateTime(), onupdate=func.now())
+    )
+
+
+class Repository(SQLModel, table=True):  # type: ignore
+    """Stores the basic information for a repository."""
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+    code_host_id: int = Field(foreign_key="code_host.id")
+    owner: str
+    name: str
+
+    __table_args__ = (UniqueConstraint("code_host_id", "owner", "name"),)
+
+    # Data
+    repo_created_datetime: datetime
+
+    # Updates
+    db_created_datetime: datetime = Field(
+        sa_column=Column(DateTime(), server_default=func.now())
+    )
+    db_updated_datetime: datetime = Field(
+        sa_column=Column(DateTime(), onupdate=func.now())
+    )
+
+
+class DeveloperAccount(SQLModel, table=True):  # type: ignore
+    """Stores the basic information for a developer account (e.g. GitHub, GitLab)."""
+
+    __tablename__ = "developer_account"
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+    code_host_id: int = Field(foreign_key="code_host.id")
+    username: str
+
+    __table_args__ = (UniqueConstraint("code_host_id", "username"),)
+
+    # Data
+    name: str | None = None
+    email: str | None = None
+
+    # Updates
+    db_created_datetime: datetime = Field(
+        sa_column=Column(DateTime(), server_default=func.now())
+    )
+    db_updated_datetime: datetime = Field(
+        sa_column=Column(DateTime(), onupdate=func.now())
+    )
+
+
+class RepositoryContributor(SQLModel, table=True):  # type: ignore
+    """Stores the connection between a repository and a contributor."""
+
+    __tablename__ = "repository_contributor"
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+    repository_id: int = Field(foreign_key="repository.id")
+    researcher_id: int = Field(foreign_key="researcher.id")
+
+    __table_args__ = (UniqueConstraint("repository_id", "researcher_id"),)
+
+    # Updates
+    db_created_datetime: datetime = Field(
+        sa_column=Column(DateTime(), server_default=func.now())
+    )
+    db_updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
