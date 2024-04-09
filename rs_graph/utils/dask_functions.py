@@ -18,6 +18,7 @@ def process_func(
     func: Callable,
     func_iterables: list,
     cluster_address: str | None,
+    use_tqdm: bool = True,
 ) -> list:
     """Process a function using Dask."""
     if cluster_address is not None:
@@ -32,9 +33,8 @@ def process_func(
 
     else:
         # Process without Dask
-        return [
-            func(*func_iterable)
-            for func_iterable in tqdm(
+        if use_tqdm:
+            iterable = tqdm(
                 zip(
                     *func_iterables,
                     strict=True,
@@ -42,4 +42,10 @@ def process_func(
                 desc=name,
                 total=len(func_iterables[0]),
             )
-        ]
+        else:
+            iterable = zip(
+                *func_iterables,
+                strict=True,
+            )
+
+        return [func(*func_iterable) for func_iterable in iterable]

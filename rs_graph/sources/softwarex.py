@@ -128,6 +128,7 @@ def _process_elsevier_repo(
 class SoftwareXDataSource(DataSource):
     @staticmethod
     def get_dataset(
+        cluster_address: str | None = None,
         **kwargs: dict[str, str],
     ) -> SuccessAndErroredResultsLists:
         """Download the SoftwareX dataset."""

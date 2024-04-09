@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import random
 import time
 import traceback
 from dataclasses import dataclass
@@ -71,7 +72,7 @@ def _get_user_info_from_login(
     user_info = api.users.get_by_username(username=login)
 
     # Sleep to avoid API limits
-    time.sleep(0.85)
+    time.sleep(random.uniform(0.85, 5))
 
     # Store info
     return RepoContributorInfo(
@@ -91,7 +92,6 @@ def get_repo_contributors(
     repo_parts: RepoParts,
     github_api_key: str | None = None,
     top_n: int = 30,
-    cluster_address: str | None = None,
 ) -> list[RepoContributorInfo]:
     # Setup API
     api = _setup_gh_api(github_api_key)
@@ -99,12 +99,12 @@ def get_repo_contributors(
     # Get contributors
     contributors = api.repos.list_contributors(
         owner=repo_parts.owner,
-        repo=repo_parts.repo,
+        repo=repo_parts.name,
         per_page=top_n,
     )
 
     # Sleep to avoid API limits
-    time.sleep(0.85)
+    time.sleep(random.uniform(0.85, 5))
 
     # Get user infos
     _get_user_partial = partial(
@@ -118,7 +118,8 @@ def get_repo_contributors(
         func_iterables=[
             [contrib["login"] for contrib in contributors],
         ],
-        cluster_address=cluster_address,
+        cluster_address=None,  # Force synchronous processing
+        use_tqdm=False,
     )
 
     return contributor_infos
@@ -128,7 +129,6 @@ def _wrapped_get_contributors(
     repo_doc_pair: ExpandedRepositoryDocumentPair,
     github_api_key: str | None = None,
     prod: bool = False,
-    cluster_address: str | None = None,
     top_n: int = 30,
 ) -> ExpandedRepositoryDocumentPair | ErrorResult:
     """Get repo contributors and add them to database."""
@@ -141,7 +141,6 @@ def _wrapped_get_contributors(
                 repo_parts=repo_doc_pair.repo_parts,
                 github_api_key=github_api_key,
                 top_n=top_n,
-                cluster_address=cluster_address,
             )
 
             # Create the code host
@@ -205,15 +204,14 @@ def process_repos_for_contributors(
     github_api_key = os.getenv("GITHUB_TOKEN")
 
     # Check for / init worker client
-    process_doi_partial = partial(
+    get_contribs_partial = partial(
         _wrapped_get_contributors,
         prod=prod,
         github_api_key=github_api_key,
-        cluster_address=cluster_address,
     )
     results = process_func(
-        name="open-alex-processing",
-        func=process_doi_partial,
+        name="github-repo-contributors",
+        func=get_contribs_partial,
         func_iterables=[pairs],
         cluster_address=cluster_address,
     )

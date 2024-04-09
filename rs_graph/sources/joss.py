@@ -53,6 +53,7 @@ class JOSSDataSource(DataSource):
 
     @staticmethod
     def get_dataset(
+        cluster_address: str | None = None,
         **kwargs: dict[str, str],
     ) -> SuccessAndErroredResultsLists:
         """Download the JOSS dataset."""

@@ -122,8 +122,11 @@ def _parse_sourceforge_urls(url: str) -> CodeHostResult | None:
     return None
 
 
-def _clean_extra_slashes_from_repo(repo: str) -> str:
-    return repo.split("/")[0]
+def _clean_repo_name(repo: str) -> str:
+    name = repo.split("/")[0]
+    name = name.replace(".git", "")
+
+    return name
 
 
 def parse_code_host_url(url: str) -> CodeHostResult:
@@ -156,7 +159,7 @@ def parse_code_host_url(url: str) -> CodeHostResult:
 
     # Clean the repo name
     if result.name:
-        result.name = _clean_extra_slashes_from_repo(result.name)
+        result.name = _clean_repo_name(result.name)
 
     # For all hosts except SourceForge, the owner is required
     if result.host != "sourceforge" and result.owner is None:

@@ -12,6 +12,7 @@ from ..types import SuccessAndErroredResultsLists
 class DataSource(Protocol):
     @staticmethod
     def get_dataset(
+        cluster_address: str | None = None,
         **kwargs: dict[str, str],
     ) -> SuccessAndErroredResultsLists:
         """Download the dataset."""

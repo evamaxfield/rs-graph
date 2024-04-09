@@ -10,7 +10,7 @@ import typer
 from distributed import LocalCluster
 
 from rs_graph.bin.typer_utils import setup_logger
-from rs_graph.enrichment import github, open_alex
+from rs_graph.enrichment import github
 from rs_graph.sources.joss import JOSSDataSource
 from rs_graph.sources.plos import PLOSDataSource
 from rs_graph.sources.proto import DataSource
