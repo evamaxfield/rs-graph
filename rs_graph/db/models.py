@@ -20,10 +20,10 @@ class DatasetSource(SQLModel, table=True):  # type: ignore
     name: str = Field(unique=True)
 
     # Updates
-    db_created_datetime: datetime = Field(
+    created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    db_updated_datetime: datetime = Field(
+    updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -46,10 +46,10 @@ class Document(SQLModel, table=True):  # type: ignore
     abstract: str | None = None
 
     # Updates
-    db_created_datetime: datetime = Field(
+    created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    db_updated_datetime: datetime = Field(
+    updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -71,10 +71,10 @@ class Topic(SQLModel, table=True):  # type: ignore
     domain_open_alex_id: str
 
     # Updates
-    db_created_datetime: datetime = Field(
+    created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    db_updated_datetime: datetime = Field(
+    updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -95,10 +95,10 @@ class DocumentTopic(SQLModel, table=True):  # type: ignore
     score: float
 
     # Updates
-    db_created_datetime: datetime = Field(
+    created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    db_updated_datetime: datetime = Field(
+    updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -119,10 +119,10 @@ class Researcher(SQLModel, table=True):  # type: ignore
     two_year_mean_citedness: float
 
     # Updates
-    db_created_datetime: datetime = Field(
+    created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    db_updated_datetime: datetime = Field(
+    updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -144,10 +144,10 @@ class ResearcherDocument(SQLModel, table=True):  # type: ignore
     is_corresponding: bool
 
     # Updates
-    db_created_datetime: datetime = Field(
+    created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    db_updated_datetime: datetime = Field(
+    updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -164,10 +164,10 @@ class Institution(SQLModel, table=True):  # type: ignore
     ror: str
 
     # Updates
-    db_created_datetime: datetime = Field(
+    created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    db_updated_datetime: datetime = Field(
+    updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -185,10 +185,10 @@ class ResearcherDocumentInstitution(SQLModel, table=True):  # type: ignore
     __table_args__ = (UniqueConstraint("researcher_document_id", "institution_id"),)
 
     # Updates
-    db_created_datetime: datetime = Field(
+    created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    db_updated_datetime: datetime = Field(
+    updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -204,10 +204,10 @@ class Funder(SQLModel, table=True):  # type: ignore
     name: str
 
     # Updates
-    db_created_datetime: datetime = Field(
+    created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    db_updated_datetime: datetime = Field(
+    updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -225,10 +225,10 @@ class FundingInstance(SQLModel, table=True):  # type: ignore
     __table_args__ = (UniqueConstraint("funder_id", "award_id"),)
 
     # Updates
-    db_created_datetime: datetime = Field(
+    created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    db_updated_datetime: datetime = Field(
+    updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -246,10 +246,10 @@ class DocumentFundingInstance(SQLModel, table=True):  # type: ignore
     __table_args__ = (UniqueConstraint("document_id", "funding_instance_id"),)
 
     # Updates
-    db_created_datetime: datetime = Field(
+    created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    db_updated_datetime: datetime = Field(
+    updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -266,10 +266,10 @@ class CodeHost(SQLModel, table=True):  # type: ignore
     name: str = Field(unique=True)
 
     # Updates
-    db_created_datetime: datetime = Field(
+    created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    db_updated_datetime: datetime = Field(
+    updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -289,10 +289,10 @@ class Repository(SQLModel, table=True):  # type: ignore
     repo_created_datetime: datetime
 
     # Updates
-    db_created_datetime: datetime = Field(
+    created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    db_updated_datetime: datetime = Field(
+    updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -314,10 +314,10 @@ class DeveloperAccount(SQLModel, table=True):  # type: ignore
     email: str | None = None
 
     # Updates
-    db_created_datetime: datetime = Field(
+    created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    db_updated_datetime: datetime = Field(
+    updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
@@ -335,9 +335,9 @@ class RepositoryContributor(SQLModel, table=True):  # type: ignore
     __table_args__ = (UniqueConstraint("repository_id", "developer_account_id"),)
 
     # Updates
-    db_created_datetime: datetime = Field(
+    created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
     )
-    db_updated_datetime: datetime = Field(
+    updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
