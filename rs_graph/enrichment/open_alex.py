@@ -112,7 +112,7 @@ def _increment_call_count_and_check() -> None:
     if current_status.call_count >= 80_000:
         log.info("Sleeping until tomorrow to avoid OpenAlex API limit.")
         while date.today() == current_status.current_date:
-            time.sleep(120)
+            time.sleep(600)
 
         # Reset the call count
         current_status = OpenAlexAPICallStatus(
@@ -181,7 +181,6 @@ def get_open_alex_author_from_id(author_id: str) -> pyalex.Author:
 
 def process_doi(
     pair: ExpandedRepositoryDocumentPair,
-    dataset_source_name: str,
     prod: bool = False,
 ) -> ExpandedRepositoryDocumentPair | ErrorResult:
     # Create db engine
@@ -202,7 +201,7 @@ def process_doi(
                 )
 
             # Create DatasetSource
-            dataset_source = models.DatasetSource(name=dataset_source_name)
+            dataset_source = models.DatasetSource(name=pair.source)
             dataset_source = db_utils.get_or_add(dataset_source, session)
 
             # Create the Document
@@ -324,7 +323,8 @@ def process_doi(
         except Exception as e:
             session.rollback()
             return ErrorResult(
-                source=dataset_source_name,
+                source=pair.source,
+                step="open-alex-processing",
                 identifier=pair.paper_doi,
                 error=str(e),
                 traceback=traceback.format_exc(),
@@ -334,7 +334,7 @@ def process_doi(
 def process_pairs(
     pairs: list[ExpandedRepositoryDocumentPair],
     prod: bool = False,
-    cluster_address: str | None = None,
+    use_dask: bool = False,
 ) -> SuccessAndErroredResultsLists:
     """Process a list of DOIs."""
     # Check for / init worker client
@@ -342,11 +342,12 @@ def process_pairs(
     results = process_func(
         name="open-alex-processing",
         func=process_doi_partial,
-        func_iterables=[
-            [pair.paper_doi for pair in pairs],
-            [pair.source for pair in pairs],
-        ],
-        cluster_address=cluster_address,
+        func_iterables=[pairs],
+        use_dask=use_dask,
+        cluster_kwargs={
+            "n_workers": 4,
+            "threads_per_worker": 1,
+        },
     )
 
     # Split results

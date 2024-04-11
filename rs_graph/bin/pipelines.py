@@ -7,14 +7,10 @@ from pathlib import Path
 
 import pandas as pd
 import typer
-from distributed import LocalCluster
 
 from rs_graph.bin.typer_utils import setup_logger
-from rs_graph.enrichment import github
-from rs_graph.sources.joss import JOSSDataSource
-from rs_graph.sources.plos import PLOSDataSource
-from rs_graph.sources.proto import DataSource
-from rs_graph.sources.softwarex import SoftwareXDataSource
+from rs_graph.enrichment import github, open_alex
+from rs_graph.sources import joss, plos, proto, softwarex
 from rs_graph.types import SuccessAndErroredResultsLists
 from rs_graph.utils import code_host_parsing
 
@@ -31,10 +27,10 @@ DEFAULT_RESULTS_DIR = Path("processing-results")
 ###############################################################################
 
 
-SOURCE_MAP: dict[str, type[DataSource]] = {
-    "joss": JOSSDataSource,
-    "plos": PLOSDataSource,
-    "softwarex": SoftwareXDataSource,
+SOURCE_MAP: dict[str, proto.DatasetRetrievalFunction] = {
+    "joss": joss.get_dataset,
+    "plos": plos.get_dataset,
+    "softwarex": softwarex.get_dataset,
 }
 
 
@@ -108,25 +104,8 @@ def process(
         errored_results_filepath=errored_results_filepath,
     )
 
-    # Create dask cluster
-    if use_dask:
-        cluster = LocalCluster(
-            processes=True,
-            n_workers=4,
-            threads_per_worker=1,
-        )
-
-        # Log dask dashboard link
-        log.info(f"Dask dashboard link: {cluster.dashboard_link}")
-
-        cluster_address = cluster.scheduler_address
-    else:
-        cluster_address = None
-
     # Create dask client and cluster
-    get_dataset_results = SOURCE_MAP[source].get_dataset(
-        cluster_address=cluster_address,
-    )
+    get_dataset_results = SOURCE_MAP[source](use_dask=use_dask)
     split_and_store_results_partial(
         new_results=get_dataset_results,
         old_results=SuccessAndErroredResultsLists([], []),
@@ -135,7 +114,7 @@ def process(
     # Filter out non-GitHub Repo pairs
     code_filtering_results = code_host_parsing.filter_repo_paper_pairs(
         get_dataset_results.successful_results,
-        cluster_address=cluster_address,
+        use_dask=use_dask,
     )
     split_and_store_results_partial(
         new_results=code_filtering_results,
@@ -143,21 +122,20 @@ def process(
     )
 
     # Process with open_alex
-    # open_alex_processing_results = open_alex.process_pairs(
-    #     code_filtering_results.successful_results,
-    #     prod=prod,
-    #     cluster_address=cluster_address,
-    # )
-    # split_and_store_results_partial(
-    #     new_results=open_alex_processing_results,
-    #     old_results=code_filtering_results,
-    # )
+    open_alex_processing_results = open_alex.process_pairs(
+        code_filtering_results.successful_results,
+        prod=prod,
+        use_dask=use_dask,
+    )
+    split_and_store_results_partial(
+        new_results=open_alex_processing_results,
+        old_results=code_filtering_results,
+    )
 
     # Process with github
     github_processing_results = github.process_repos_for_contributors(
         code_filtering_results.successful_results,
         prod=prod,
-        cluster_address=cluster_address,
     )
     split_and_store_results_partial(
         new_results=github_processing_results,

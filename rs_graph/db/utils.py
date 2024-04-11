@@ -15,7 +15,7 @@ def get_engine(prod: bool = False) -> Engine:
         return create_engine(f"sqlite:///{constants.DEV_DATABASE_FILEPATH}")
 
 
-def get_or_add(model: SQLModel, session: Session) -> SQLModel:
+def get_unique_first_model(model: SQLModel, session: Session) -> SQLModel | None:
     # Get model class
     model_cls = model.__class__
 
@@ -37,13 +37,24 @@ def get_or_add(model: SQLModel, session: Session) -> SQLModel:
     # Execute the query
     result = session.exec(query).first()
 
-    # If the model exists, return it
-    if result:
-        return result
+    return result
 
-    # Otherwise, add the model
+
+def add_model(model: SQLModel, session: Session) -> SQLModel:
     session.add(model)
     session.commit()
     session.refresh(model)
 
     return model
+
+
+def get_or_add(model: SQLModel, session: Session) -> SQLModel:
+    # Check if the model exists
+    result = get_unique_first_model(model=model, session=session)
+
+    # If the model exists, return it
+    if result:
+        return result
+
+    # Otherwise, add the model
+    return add_model(model=model, session=session)

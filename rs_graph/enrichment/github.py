@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-import random
 import time
 import traceback
 from dataclasses import dataclass
@@ -22,7 +21,6 @@ from ..db.utils import get_engine, get_or_add
 from ..types import (
     ErrorResult,
     ExpandedRepositoryDocumentPair,
-    RepoParts,
     SuccessAndErroredResultsLists,
 )
 from ..utils.dask_functions import process_func
@@ -36,7 +34,7 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class RepoContributorInfo(DataClassJsonMixin):
-    repo_parts: RepoParts
+    repo_doc_pair: ExpandedRepositoryDocumentPair
     username: str
     name: str | None
     email: str | None
@@ -62,7 +60,7 @@ def _setup_gh_api(github_api_key: str | None = None) -> GhApi:
 )
 def _get_user_info_from_login(
     login: str,
-    repo_parts: RepoParts,
+    repo_doc_pair: ExpandedRepositoryDocumentPair,
     github_api_key: str | None = None,
 ) -> list[RepoContributorInfo]:
     # Setup API
@@ -72,11 +70,11 @@ def _get_user_info_from_login(
     user_info = api.users.get_by_username(username=login)
 
     # Sleep to avoid API limits
-    time.sleep(random.uniform(0.85, 5))
+    time.sleep(0.85)
 
     # Store info
     return RepoContributorInfo(
-        repo_parts=repo_parts,
+        repo_doc_pair=repo_doc_pair,
         username=login,
         name=user_info["name"],
         email=user_info["email"],
@@ -89,7 +87,7 @@ def _get_user_info_from_login(
     max_time=16,
 )
 def get_repo_contributors(
-    repo_parts: RepoParts,
+    repo_doc_pair: ExpandedRepositoryDocumentPair,
     github_api_key: str | None = None,
     top_n: int = 30,
 ) -> list[RepoContributorInfo]:
@@ -98,18 +96,18 @@ def get_repo_contributors(
 
     # Get contributors
     contributors = api.repos.list_contributors(
-        owner=repo_parts.owner,
-        repo=repo_parts.name,
+        owner=repo_doc_pair.repo_owner,
+        repo=repo_doc_pair.repo_name,
         per_page=top_n,
     )
 
     # Sleep to avoid API limits
-    time.sleep(random.uniform(0.85, 5))
+    time.sleep(0.85)
 
     # Get user infos
     _get_user_partial = partial(
         _get_user_info_from_login,
-        repo_parts=repo_parts,
+        repo_doc_pair=repo_doc_pair,
         github_api_key=github_api_key,
     )
     contributor_infos = process_func(
@@ -118,8 +116,8 @@ def get_repo_contributors(
         func_iterables=[
             [contrib["login"] for contrib in contributors],
         ],
-        cluster_address=None,  # Force synchronous processing
-        use_tqdm=False,
+        use_dask=False,  # Force synchronous processing
+        display_tqdm=False,
     )
 
     return contributor_infos
@@ -138,22 +136,22 @@ def _wrapped_get_contributors(
         try:
             # Get repo contributors
             repo_contributors = get_repo_contributors(
-                repo_parts=repo_doc_pair.repo_parts,
+                repo_doc_pair=repo_doc_pair,
                 github_api_key=github_api_key,
                 top_n=top_n,
             )
 
             # Create the code host
             code_host = db_models.CodeHost(
-                name=repo_doc_pair.repo_parts.host,
+                name=repo_doc_pair.repo_host,
             )
             code_host = get_or_add(session=session, model=code_host)
 
             # Create the repository
             repo = db_models.Repository(
                 code_host_id=code_host.id,
-                owner=repo_doc_pair.repo_parts.owner,
-                name=repo_doc_pair.repo_parts.name,
+                owner=repo_doc_pair.repo_owner,
+                name=repo_doc_pair.repo_name,
             )
             repo = get_or_add(session=session, model=repo)
 
@@ -183,10 +181,11 @@ def _wrapped_get_contributors(
             session.rollback()
             return ErrorResult(
                 source=repo_doc_pair.source,
+                step="github-repo-contributors",
                 identifier=(
-                    f"{repo_doc_pair.repo_parts.host}/"
-                    f"{repo_doc_pair.repo_parts.owner}/"
-                    f"{repo_doc_pair.repo_parts.name}"
+                    f"{repo_doc_pair.repo_host}/"
+                    f"{repo_doc_pair.repo_owner}/"
+                    f"{repo_doc_pair.repo_name}"
                 ),
                 error=str(e),
                 traceback=traceback.format_exc(),
@@ -196,7 +195,7 @@ def _wrapped_get_contributors(
 def process_repos_for_contributors(
     pairs: list[ExpandedRepositoryDocumentPair],
     prod: bool = False,
-    cluster_address: str | None = None,
+    **kwargs: dict,
 ) -> SuccessAndErroredResultsLists:
     """Process a list of repositories."""
     # Load dotenv
@@ -213,7 +212,7 @@ def process_repos_for_contributors(
         name="github-repo-contributors",
         func=get_contribs_partial,
         func_iterables=[pairs],
-        cluster_address=cluster_address,
+        use_dask=False,  # Force synchronous processing
     )
 
     # Split results

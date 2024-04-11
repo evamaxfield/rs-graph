@@ -9,7 +9,6 @@ from ..types import (
     CodeHostResult,
     ErrorResult,
     ExpandedRepositoryDocumentPair,
-    RepoParts,
     RepositoryDocumentPair,
     SuccessAndErroredResultsLists,
 )
@@ -186,6 +185,7 @@ def _wrapped_parse_code_host_url(
         ):
             return ErrorResult(
                 source=repo_paper_pair.source,
+                step="code-host-parsing",
                 identifier=repo_paper_pair.repo_url,
                 error="Not a GitHub repository",
                 traceback="",
@@ -193,11 +193,9 @@ def _wrapped_parse_code_host_url(
 
         return ExpandedRepositoryDocumentPair(
             source=repo_paper_pair.source,
-            repo_parts=RepoParts(
-                host=code_host_res.host,
-                owner=code_host_res.owner,
-                name=code_host_res.name,
-            ),
+            repo_host=code_host_res.host,
+            repo_owner=code_host_res.owner,
+            repo_name=code_host_res.name,
             paper_doi=repo_paper_pair.paper_doi,
             paper_extra_data=repo_paper_pair.paper_extra_data,
         )
@@ -205,6 +203,7 @@ def _wrapped_parse_code_host_url(
     except ValueError:
         return ErrorResult(
             source=repo_paper_pair.source,
+            step="code-host-parsing",
             identifier=repo_paper_pair.repo_url,
             error="Could not parse code host URL",
             traceback=traceback.format_exc(),
@@ -213,7 +212,8 @@ def _wrapped_parse_code_host_url(
 
 def filter_repo_paper_pairs(
     pairs: list[RepositoryDocumentPair],
-    cluster_address: str | None,
+    use_dask: bool = False,
+    **kwargs: dict,
 ) -> SuccessAndErroredResultsLists:
     # Filter each repo pair
     # Accepting only GitHub full repository results
@@ -221,7 +221,7 @@ def filter_repo_paper_pairs(
         name="code-host-parsing",
         func=_wrapped_parse_code_host_url,
         func_iterables=[pairs],
-        cluster_address=cluster_address,
+        use_dask=use_dask,
     )
 
     # Split results

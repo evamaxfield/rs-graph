@@ -2,18 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from collections.abc import Callable
 
 from ..types import SuccessAndErroredResultsLists
 
 ###############################################################################
 
 
-class DataSource(Protocol):
-    @staticmethod
-    def get_dataset(
-        cluster_address: str | None = None,
-        **kwargs: dict[str, str],
-    ) -> SuccessAndErroredResultsLists:
-        """Download the dataset."""
-        raise NotImplementedError()
+DatasetRetrievalFunction = Callable[..., SuccessAndErroredResultsLists]

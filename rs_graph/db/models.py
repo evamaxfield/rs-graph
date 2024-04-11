@@ -338,3 +338,53 @@ class RepositoryContributor(SQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
+
+
+class DocumentRepositoryLink(SQLModel, table=True):  # type: ignore
+    """Stores the connection between a document and a repository."""
+
+    __tablename__ = "document_repository_link"
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+    document_id: int = Field(foreign_key="document.id")
+    repository_id: int = Field(foreign_key="repository.id")
+
+    __table_args__ = (UniqueConstraint("document_id", "repository_id"),)
+
+    # Data
+    source: str
+    em_model_name: str | None
+    em_model_version: str | None
+
+    # Updates
+    created_datetime: datetime = Field(
+        sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime = Field(
+        sa_column=Column(DateTime(), onupdate=func.now())
+    )
+
+
+class AuthorRepositoryContributorLink(SQLModel, table=True):  # type: ignore
+    """Stores the connection between a document author and a repository contributor."""
+
+    __tablename__ = "author_repository_contributor_link"
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+    document_id: int = Field(foreign_key="document.id")
+    repository_contributor_id: int = Field(foreign_key="repository_contributor.id")
+
+    __table_args__ = (UniqueConstraint("document_id", "repository_contributor_id"),)
+
+    # Data
+    em_model_version: str
+
+    # Updates
+    created_datetime: datetime = Field(
+        sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime = Field(
+        sa_column=Column(DateTime(), onupdate=func.now())
+    )

@@ -15,7 +15,6 @@ from ghapi.all import GhApi, paged
 from tqdm import tqdm
 
 from ..types import ErrorResult, RepositoryDocumentPair, SuccessAndErroredResultsLists
-from .proto import DataSource
 
 ###############################################################################
 
@@ -46,7 +45,7 @@ def _process_elsevier_repo(
     elsevier_api_key: str,
 ) -> RepositoryDocumentPair | ErrorResult:
     # Be nice to APIs
-    time.sleep(0.8)
+    time.sleep(0.85)
 
     # Get Elsevier repo details
     repo_details = github_api.repos.get(
@@ -78,6 +77,7 @@ def _process_elsevier_repo(
             log.debug(f"Error getting response from Elsevier API for repo: {repo_name}")
             return ErrorResult(
                 source="softwarex",
+                step="elsevier-repo-processing",
                 identifier=repo_name,
                 error="Error getting response",
                 traceback=traceback.format_exc(),
@@ -96,6 +96,7 @@ def _process_elsevier_repo(
             )
             return ErrorResult(
                 source="softwarex",
+                step="elsevier-repo-processing",
                 identifier=repo_name,
                 error="Unexpected number of results",
                 traceback="",
@@ -112,6 +113,7 @@ def _process_elsevier_repo(
         )
         return ErrorResult(
             source="softwarex",
+            step="elsevier-repo-processing",
             identifier=repo_name,
             error="Error parsing response json",
             traceback=traceback.format_exc(),
@@ -125,65 +127,62 @@ def _process_elsevier_repo(
     )
 
 
-class SoftwareXDataSource(DataSource):
-    @staticmethod
-    def get_dataset(
-        cluster_address: str | None = None,
-        **kwargs: dict[str, str],
-    ) -> SuccessAndErroredResultsLists:
-        """Download the SoftwareX dataset."""
-        # Load env
-        load_dotenv()
+def get_dataset(
+    **kwargs: dict[str, str],
+) -> SuccessAndErroredResultsLists:
+    """Download the SoftwareX dataset."""
+    # Load env
+    load_dotenv()
 
-        # Setup API
-        github_api = GhApi()
+    # Setup API
+    github_api = GhApi()
 
-        # Get elsevier api key
-        elsevier_api_key = os.getenv("ELSEVIER_API_KEY")
+    # Get elsevier api key
+    elsevier_api_key = os.getenv("ELSEVIER_API_KEY")
 
-        # Get softwareX repos names
-        paged_repos = paged(
-            github_api.repos.list_for_org,
-            org="ElsevierSoftwareX",
+    # Get softwareX repos names
+    paged_repos = paged(
+        github_api.repos.list_for_org,
+        org="ElsevierSoftwareX",
+    )
+    all_softwarex_repos = []
+    for page in tqdm(
+        paged_repos,
+        desc="Getting ElsevierSoftwareX repos",
+    ):
+        # Be nice to APIs
+        time.sleep(0.85)
+
+        # Only extract the repo name from each repo detail
+        only_repo_names = [repo["name"] for repo in page]
+        all_softwarex_repos.extend(only_repo_names)
+
+    # Get original parent repo for each elsevier repo and get paper details
+    successful_results = []
+    errored_results = []
+    for repo_name in tqdm(
+        all_softwarex_repos,
+        desc="Getting SoftwareX paper details",
+    ):
+        # Get paper details
+        result = _process_elsevier_repo(
+            repo_name=repo_name,
+            github_api=github_api,
+            elsevier_api_key=elsevier_api_key,
         )
-        all_softwarex_repos = []
-        for page in tqdm(
-            paged_repos,
-            desc="Getting ElsevierSoftwareX repos",
-        ):
-            # Be nice to APIs
-            time.sleep(1)
 
-            # Only extract the repo name from each repo detail
-            only_repo_names = [repo["name"] for repo in page]
-            all_softwarex_repos.extend(only_repo_names)
+        # Add to results
+        if isinstance(result, RepositoryDocumentPair):
+            successful_results.append(result)
+        else:
+            errored_results.append(result)
 
-        # Get original parent repo for each elsevier repo and get paper details
-        successful_results = []
-        errored_results = []
-        for repo_name in tqdm(
-            all_softwarex_repos,
-            desc="Getting SoftwareX paper details",
-        ):
-            # Get paper details
-            result = _process_elsevier_repo(
-                repo_name=repo_name,
-                github_api=github_api,
-                elsevier_api_key=elsevier_api_key,
-            )
+    # Log total succeeded and errored
+    log.info(f"Total succeeded: {len(successful_results)}")
+    log.info(f"Total errored: {len(errored_results)}")
 
-            # Add to results
-            if isinstance(result, RepositoryDocumentPair):
-                successful_results.append(result)
-            else:
-                errored_results.append(result)
-
-        # Log total succeeded and errored
-        log.info(f"Total succeeded: {len(successful_results)}")
-        log.info(f"Total errored: {len(errored_results)}")
-
-        # Return filepath
-        return SuccessAndErroredResultsLists(
-            successful_results=successful_results,
-            errored_results=errored_results,
-        )
+    # Return filepath
+    return SuccessAndErroredResultsLists(
+        successful_results=successful_results,
+        errored_results=errored_results,
+    )

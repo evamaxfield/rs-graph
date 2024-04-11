@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import logging
+import time
 from collections.abc import Callable
 
 from distributed import Client, progress
@@ -17,23 +18,38 @@ def process_func(
     name: str,
     func: Callable,
     func_iterables: list,
-    cluster_address: str | None,
-    use_tqdm: bool = True,
+    use_dask: bool = True,
+    cluster_kwargs: dict | None = None,
+    display_tqdm: bool = True,
 ) -> list:
     """Process a function using Dask."""
-    if cluster_address is not None:
-        with Client(address=cluster_address) as client:
+    if use_dask:
+        if cluster_kwargs is None:
+            cluster_kwargs = {}
+
+        with Client(**cluster_kwargs) as client:
+            # Log dashboard address
+            log.info(f"Dask dashboard for '{name}': {client.dashboard_link}")
+
+            # Wait for warm up
+            time.sleep(1)
+
             # Map the function
             futures = client.map(func, *func_iterables)
 
             # Show progress
             progress(futures)
 
-            return client.gather(futures)
+            results = client.gather(futures)
+
+        # Wait for cooldown
+        time.sleep(1)
+
+        return results
 
     else:
         # Process without Dask
-        if use_tqdm:
+        if display_tqdm:
             iterable = tqdm(
                 zip(
                     *func_iterables,
