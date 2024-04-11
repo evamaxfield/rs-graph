@@ -15,7 +15,7 @@ def get_engine(prod: bool = False) -> Engine:
         return create_engine(f"sqlite:///{constants.DEV_DATABASE_FILEPATH}")
 
 
-def get_unique_first_model(model: SQLModel, session: Session) -> SQLModel | None:
+def get_unique_first_model(model: SQLModel, session: Session) -> SQLModel:
     # Get model class
     model_cls = model.__class__
 
@@ -37,7 +37,13 @@ def get_unique_first_model(model: SQLModel, session: Session) -> SQLModel | None
     # Execute the query
     result = session.exec(query).first()
 
-    return result
+    if result:
+        return result
+
+    raise ValueError(
+        f"No matching model found. "
+        f"'{model_cls.__name__}' with fields: {required_fields})"
+    )
 
 
 def add_model(model: SQLModel, session: Session) -> SQLModel:
