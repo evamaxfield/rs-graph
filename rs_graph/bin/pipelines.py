@@ -9,7 +9,7 @@ import pandas as pd
 import typer
 
 from rs_graph.bin.typer_utils import setup_logger
-from rs_graph.enrichment import github, open_alex
+from rs_graph.enrichment import entity_matching, github, open_alex
 from rs_graph.sources import joss, plos, proto, softwarex
 from rs_graph.types import SuccessAndErroredResultsLists
 from rs_graph.utils import code_host_parsing
@@ -51,6 +51,10 @@ def _split_and_store_results(
     success_results.to_parquet(success_results_filepath)
     errored_results = pd.DataFrame([r.to_dict() for r in results.errored_results])
     errored_results.to_parquet(errored_results_filepath)
+
+    # If no successful results, raise error
+    if len(results.successful_results) == 0:
+        raise ValueError("No successful results to store.")
 
     return results
 
@@ -106,7 +110,7 @@ def process(
 
     # Create dask client and cluster
     get_dataset_results = SOURCE_MAP[source](use_dask=use_dask)
-    split_and_store_results_partial(
+    get_dataset_results = split_and_store_results_partial(
         new_results=get_dataset_results,
         old_results=SuccessAndErroredResultsLists([], []),
     )
@@ -116,7 +120,7 @@ def process(
         get_dataset_results.successful_results,
         use_dask=use_dask,
     )
-    split_and_store_results_partial(
+    code_filtering_results = split_and_store_results_partial(
         new_results=code_filtering_results,
         old_results=get_dataset_results,
     )
@@ -127,7 +131,7 @@ def process(
         prod=prod,
         use_dask=use_dask,
     )
-    split_and_store_results_partial(
+    open_alex_processing_results = split_and_store_results_partial(
         new_results=open_alex_processing_results,
         old_results=code_filtering_results,
     )
@@ -137,10 +141,22 @@ def process(
         code_filtering_results.successful_results,
         prod=prod,
     )
-    split_and_store_results_partial(
+    github_processing_results = split_and_store_results_partial(
         new_results=github_processing_results,
-        old_results=code_filtering_results,
+        old_results=open_alex_processing_results,
     )
+
+    # Link repositories and documents
+    matched_results = entity_matching.link_repo_and_documents(
+        github_processing_results.successful_results,
+    )
+    matched_results = split_and_store_results_partial(
+        new_results=matched_results,
+        old_results=github_processing_results,
+    )
+
+    # Log complete
+    log.info("Processing complete!")
 
 
 ###############################################################################

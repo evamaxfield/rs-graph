@@ -15,7 +15,7 @@ def get_engine(prod: bool = False) -> Engine:
         return create_engine(f"sqlite:///{constants.DEV_DATABASE_FILEPATH}")
 
 
-def get_unique_first_model(model: SQLModel, session: Session) -> SQLModel:
+def get_unique_first_model(model: SQLModel, session: Session) -> SQLModel | None:
     # Get model class
     model_cls = model.__class__
 
@@ -29,21 +29,19 @@ def get_unique_first_model(model: SQLModel, session: Session) -> SQLModel:
         if field not in ["created_datetime", "updated_datetime"]
     ]
 
+    # BUG: TODO: required fields is incorrect and likely the reason why we occasionally get not null constraints
+    # this is just checking if the fields is required on ingestion, NOT if the field is part of "unique constraints"
+    # we need those fields
+
+    # Best course of action is likely to store a variable called "minimal queryable fields" in the model
+
     # Try and select a matching model
     query = select(model_cls)
     for field in required_fields:
         query = query.where(getattr(model_cls, field) == getattr(model, field))
 
     # Execute the query
-    result = session.exec(query).first()
-
-    if result:
-        return result
-
-    raise ValueError(
-        f"No matching model found. "
-        f"'{model_cls.__name__}' with fields: {required_fields})"
-    )
+    return session.exec(query).first()
 
 
 def add_model(model: SQLModel, session: Session) -> SQLModel:

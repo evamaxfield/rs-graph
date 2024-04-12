@@ -47,6 +47,10 @@ def _link_repo_and_document(
                 session=session,
             )
 
+            # Check code host found
+            if code_host is None or code_host.id is None:
+                raise ValueError("Could not find code host")
+
             # Get repository by querying the database
             repository = get_unique_first_model(
                 model=db_models.Repository(
@@ -60,17 +64,35 @@ def _link_repo_and_document(
             # Get document by querying the database
             document = get_unique_first_model(
                 model=db_models.Document(
-                    url=pair.paper_doi,
+                    doi=pair.paper_doi,
                 ),
                 session=session,
             )
+            print("pair", pair)
+            print("source", source)
+            print("code_host", code_host)
+            print("repository", repository)
+            print("document", document)
+            print()
+            print()
+
+            # Check that all models are found
+            if (
+                source is None
+                or source.id is None
+                or repository is None
+                or repository.id is None
+                or document is None
+                or document.id is None
+            ):
+                raise ValueError("Could not find all required models")
 
             # Link the repository and document
             linked_repo_doc = add_model(
                 model=db_models.DocumentRepositoryLink(
                     repository_id=repository.id,
                     document_id=document.id,
-                    source=pair.source,
+                    source=pair.source,  # TODO: use source.id
                     em_model_name=pair.em_model_name,
                     em_model_version=pair.em_model_version,
                 ),
@@ -111,17 +133,9 @@ def link_repo_and_documents(
     )
 
     # Separate the successful and errored results
-    successful_results = []
-    errored_results = []
-    for result in results:
-        if isinstance(result, LinkedRepositoryDocumentPair):
-            successful_results.append(result)
-        elif isinstance(result, ErrorResult):
-            errored_results.append(result)
-        else:
-            log.error(f"Unexpected result: {result}")
-
     return SuccessAndErroredResultsLists(
-        successful_results=successful_results,
-        errored_results=errored_results,
+        successful_results=[
+            r for r in results if isinstance(r, LinkedRepositoryDocumentPair)
+        ],
+        errored_results=[r for r in results if isinstance(r, ErrorResult)],
     )
