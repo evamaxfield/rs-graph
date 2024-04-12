@@ -68,13 +68,6 @@ def _link_repo_and_document(
                 ),
                 session=session,
             )
-            print("pair", pair)
-            print("source", source)
-            print("code_host", code_host)
-            print("repository", repository)
-            print("document", document)
-            print()
-            print()
 
             # Check that all models are found
             if (

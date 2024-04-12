@@ -9,6 +9,7 @@ import traceback
 from datetime import date
 from functools import partial
 from pathlib import Path
+import backoff
 
 import msgspec
 import pyalex
@@ -48,6 +49,7 @@ MSGSPEC_DECODER = msgspec.msgpack.Decoder(type=OpenAlexAPICallStatus)
 # Setup API
 
 
+@backoff.on_exception(backoff.expo, Exception, max_time=5)
 def _write_api_call_status(current_status: OpenAlexAPICallStatus) -> None:
     """Write the API call status to disk."""
     # Make dirs if needed
@@ -57,6 +59,7 @@ def _write_api_call_status(current_status: OpenAlexAPICallStatus) -> None:
         f.write(MSGSPEC_ENCODER.encode(current_status))
 
 
+@backoff.on_exception(backoff.expo, Exception, max_time=5)
 def _read_api_call_status() -> OpenAlexAPICallStatus:
     """Read the API call status from disk."""
     with open(API_CALL_STATUS_FILEPATH, "rb") as f:
@@ -345,7 +348,7 @@ def process_pairs(
         func_iterables=[pairs],
         use_dask=use_dask,
         cluster_kwargs={
-            "n_workers": 4,
+            "n_workers": 8,
             "threads_per_worker": 1,
         },
     )

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from sqlalchemy.engine import Engine
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, SQLModel, UniqueConstraint, create_engine, select
 
 from . import constants
 
@@ -19,21 +19,23 @@ def get_unique_first_model(model: SQLModel, session: Session) -> SQLModel | None
     # Get model class
     model_cls = model.__class__
 
-    # Get required fields for model
-    required_fields = model.model_json_schema()["required"]
-
-    # Remove created_datetime and updated_datetime
-    required_fields = [
-        field
-        for field in required_fields
-        if field not in ["created_datetime", "updated_datetime"]
+    # Get constrained fields
+    all_table_contraints = model_cls.__table__.constraints
+    unique_constraints = [
+        constraint
+        for constraint in all_table_contraints
+        if isinstance(constraint, UniqueConstraint)
     ]
 
-    # BUG: TODO: required fields is incorrect and likely the reason why we occasionally get not null constraints
-    # this is just checking if the fields is required on ingestion, NOT if the field is part of "unique constraints"
-    # we need those fields
-
-    # Best course of action is likely to store a variable called "minimal queryable fields" in the model
+    # Unpack constraints to just a list (converted from set) of all of the field names
+    # in each constraint
+    required_fields = list(
+        {
+            field.name
+            for constraint in unique_constraints
+            for field in constraint.columns
+        }
+    )
 
     # Try and select a matching model
     query = select(model_cls)
