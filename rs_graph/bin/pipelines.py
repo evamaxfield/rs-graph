@@ -60,7 +60,7 @@ def _split_and_store_results(
 
 
 @app.command()
-def process(
+def standard_ingest(
     source: str,
     success_results_file: str = "",
     errored_results_file: str = "",
@@ -147,12 +147,22 @@ def process(
     )
 
     # Link repositories and documents
-    matched_results = entity_matching.link_repo_and_documents(
+    repos_and_docs_results = entity_matching.link_repo_and_documents(
         github_processing_results.successful_results,
     )
-    matched_results = split_and_store_results_partial(
-        new_results=matched_results,
+    repos_and_docs_results = split_and_store_results_partial(
+        new_results=repos_and_docs_results,
         old_results=github_processing_results,
+    )
+
+    # Link developer accounts and researchers
+    devs_and_researchers_results = entity_matching.link_devs_and_researchers(
+        repos_and_docs_results.successful_results,
+    )
+    devs_and_researchers_results = split_and_store_results_partial(
+        new_results=devs_and_researchers_results,
+        # Start new results because this is a different result type
+        old_results=SuccessAndErroredResultsLists([], []),
     )
 
     # Log complete

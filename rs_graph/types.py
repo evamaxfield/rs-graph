@@ -83,3 +83,15 @@ class SuccessAndErroredResultsLists(DataClassJsonMixin):
         | LinkedRepositoryDocumentPair
     ]
     errored_results: list[ErrorResult]
+
+
+@dataclass
+class LinkedDeveloperResearcherPair(DataClassJsonMixin):
+    source_id: int
+    code_host_id: int
+    repository_id: int
+    document_id: int
+    document_repository_link_id: int
+    developer_id: int
+    researcher_id: int
+    researcher_developer_account_link_id: int

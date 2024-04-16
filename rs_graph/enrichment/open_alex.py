@@ -9,8 +9,8 @@ import traceback
 from datetime import date
 from functools import partial
 from pathlib import Path
-import backoff
 
+import backoff
 import msgspec
 import pyalex
 from sqlmodel import Session
@@ -270,13 +270,15 @@ def process_doi(
                 researcher = db_utils.get_or_add(researcher, session)
 
                 # Create the connection between researcher and document
-                researcher_document = models.ResearcherDocument(
+                document_contributor = models.DocumentContributor(
                     researcher_id=researcher.id,
                     document_id=document.id,
                     position=author_details["author_position"],
                     is_corresponding=author_details["is_corresponding"],
                 )
-                researcher_document = db_utils.get_or_add(researcher_document, session)
+                document_contributor = db_utils.get_or_add(
+                    document_contributor, session
+                )
 
                 # Create the Institution
                 for institution_details in author_details["institutions"]:
@@ -290,8 +292,8 @@ def process_doi(
                     # Create the connection between
                     # institution, researcher, and the document
                     researcher_document_institution = (
-                        models.ResearcherDocumentInstitution(
-                            researcher_document_id=researcher_document.id,
+                        models.DocumentContributorInstitution(
+                            document_contributor_id=document_contributor.id,
                             institution_id=institution.id,
                         )
                     )
@@ -348,6 +350,7 @@ def process_pairs(
         func_iterables=[pairs],
         use_dask=use_dask,
         cluster_kwargs={
+            "processes": False,
             "n_workers": 8,
             "threads_per_worker": 1,
         },

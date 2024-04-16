@@ -127,10 +127,10 @@ class Researcher(SQLModel, table=True):  # type: ignore
     )
 
 
-class ResearcherDocument(SQLModel, table=True):  # type: ignore
+class DocumentContributor(SQLModel, table=True):  # type: ignore
     """Stores the connection between a researcher and a document."""
 
-    __tablename__ = "researcher_document"
+    __tablename__ = "document_contributor"
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
@@ -172,17 +172,17 @@ class Institution(SQLModel, table=True):  # type: ignore
     )
 
 
-class ResearcherDocumentInstitution(SQLModel, table=True):  # type: ignore
+class DocumentContributorInstitution(SQLModel, table=True):  # type: ignore
     """Stores the connection between a researcher, document, and institution."""
 
-    __tablename__ = "researcher_document_institution"
+    __tablename__ = "document_contributor_institution"
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    researcher_document_id: int = Field(foreign_key="researcher_document.id")
+    document_contributor_id: int = Field(foreign_key="document_contributor.id")
     institution_id: int = Field(foreign_key="institution.id")
 
-    __table_args__ = (UniqueConstraint("researcher_document_id", "institution_id"),)
+    __table_args__ = (UniqueConstraint("document_contributor_id", "institution_id"),)
 
     # Updates
     created_datetime: datetime = Field(
@@ -366,20 +366,17 @@ class DocumentRepositoryLink(SQLModel, table=True):  # type: ignore
     )
 
 
-class AuthorRepositoryContributorLink(SQLModel, table=True):  # type: ignore
-    """Stores the connection between a document author and a repository contributor."""
+class ResearcherDeveloperAccountLink(SQLModel, table=True):  # type: ignore
+    """Stores the connection between a researcher and a developer account."""
 
-    __tablename__ = "author_repository_contributor_link"
+    __tablename__ = "researcher_developer_account_link"
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    document_id: int = Field(foreign_key="document.id")
-    repository_contributor_id: int = Field(foreign_key="repository_contributor.id")
+    researcher_id: int = Field(foreign_key="researcher.id")
+    developer_account_id: int = Field(foreign_key="developer_account.id")
 
-    __table_args__ = (UniqueConstraint("document_id", "repository_contributor_id"),)
-
-    # Data
-    em_model_version: str
+    __table_args__ = (UniqueConstraint("researcher_id", "developer_account_id"),)
 
     # Updates
     created_datetime: datetime = Field(
