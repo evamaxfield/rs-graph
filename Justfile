@@ -109,4 +109,6 @@ db-migrate target="dev":
 	-alembic revision --autogenerate -m "{{current_git_details}}"
 	-alembic upgrade head
 	sed -i "s|{{db_path}}-{{target}}.db|REPLACE_SQLITE_DB_PATH|g" {{justfile_directory()}}/alembic.ini
-	git commit -am "Migrate database for {{target}}"
+	sleep 0.5
+	git add -A
+	git commit -m "New migration for target: {{target}}"
