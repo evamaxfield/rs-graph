@@ -158,6 +158,7 @@ def standard_ingest(
     # Link developer accounts and researchers
     devs_and_researchers_results = entity_matching.link_devs_and_researchers(
         repos_and_docs_results.successful_results,
+        use_dask=use_dask,
     )
     devs_and_researchers_results = split_and_store_results_partial(
         new_results=devs_and_researchers_results,

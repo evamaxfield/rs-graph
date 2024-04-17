@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import random
 import traceback
 from pathlib import Path
 from xml.etree import ElementTree as ET  # noqa: N817
@@ -113,7 +112,7 @@ def get_dataset(
 ) -> SuccessAndErroredResultsLists:
     """Download the PLOS dataset."""
     # Get all PLOS XMLs
-    plos_xmls = random.sample(_get_plos_xmls(), 10000)
+    plos_xmls = _get_plos_xmls()
 
     # Parse each XML
     results = process_func(
