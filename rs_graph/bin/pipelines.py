@@ -161,8 +161,7 @@ def standard_ingest(
     )
     devs_and_researchers_results = split_and_store_results_partial(
         new_results=devs_and_researchers_results,
-        # Start new results because this is a different result type
-        old_results=SuccessAndErroredResultsLists([], []),
+        old_results=repos_and_docs_results,
     )
 
     # Log complete

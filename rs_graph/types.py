@@ -10,7 +10,7 @@ from dataclasses_json import DataClassJsonMixin
 
 @dataclass
 class ErrorResult(DataClassJsonMixin):
-    source: str | int
+    source: str
     step: str
     identifier: str
     error: str

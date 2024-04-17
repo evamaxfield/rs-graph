@@ -19,7 +19,8 @@ clean:
 
 # install with all deps
 install:
-    pip install -e ".[dev,lint]"
+	pip install -e ".[dev,lint]"
+	-pip uninstall rich -y
 
 # lint, format, and check all files
 lint:

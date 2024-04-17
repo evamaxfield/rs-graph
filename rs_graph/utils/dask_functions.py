@@ -43,7 +43,7 @@ def process_func(
             results = client.gather(futures)
 
         # Wait for cooldown
-        time.sleep(1)
+        time.sleep(2)
 
         return results
 

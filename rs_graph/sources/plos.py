@@ -113,7 +113,7 @@ def get_dataset(
 ) -> SuccessAndErroredResultsLists:
     """Download the PLOS dataset."""
     # Get all PLOS XMLs
-    plos_xmls = random.sample(_get_plos_xmls(), 500)
+    plos_xmls = random.sample(_get_plos_xmls(), 10000)
 
     # Parse each XML
     results = process_func(

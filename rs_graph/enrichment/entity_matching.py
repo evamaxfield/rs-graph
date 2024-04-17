@@ -209,12 +209,12 @@ def _link_devs_and_researchers_for_repo_paper_pair(
             # Create the linked pairs
             linked_dev_researcher_pairs = []
             for dev_username, author_name in matches.items():
-                linked_researcher_dev_acount = get_or_add(
+                linked_researcher_dev_account = get_or_add(
                     model=db_models.ResearcherDeveloperAccountLink(
                         researcher_id=researcher_name_to_researcher_model[
                             author_name
                         ].id,
-                        developer_id=dev_username_to_dev_model[dev_username].id,
+                        developer_account_id=dev_username_to_dev_model[dev_username].id,
                     ),
                     session=session,
                 )
@@ -224,7 +224,7 @@ def _link_devs_and_researchers_for_repo_paper_pair(
                             author_name
                         ].id,
                         developer_id=dev_username_to_dev_model[dev_username].id,
-                        researcher_developer_link_id=linked_researcher_dev_acount.id,
+                        researcher_developer_account_link_id=linked_researcher_dev_account.id,
                         **linked_repo_doc.to_dict(),
                     )
                 )
@@ -234,7 +234,7 @@ def _link_devs_and_researchers_for_repo_paper_pair(
         except Exception:
             session.rollback()
             return ErrorResult(
-                source=linked_repo_doc.source_id,
+                source=str(linked_repo_doc.source_id),
                 step="developer-researcher-linking",
                 identifier=(
                     f"{linked_repo_doc.document_id} -- {linked_repo_doc.repository_id}"
