@@ -32,17 +32,20 @@ def process_func(
             log.info(f"Dask dashboard for '{name}': {client.dashboard_link}")
 
             # Wait for warm up
-            time.sleep(1)
+            time.sleep(4)
 
             # Map the function
-            futures = client.map(func, *func_iterables)
+            futures = client.map(func, *func_iterables, batch_size=500)
 
             # Show progress
             progress(futures)
 
             results = client.gather(futures)
 
-        # Wait for cooldown
+            # Wait for cooldown
+            time.sleep(4)
+
+        # Wait for full shutdown
         time.sleep(2)
 
         return results

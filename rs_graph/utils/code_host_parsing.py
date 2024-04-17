@@ -222,6 +222,11 @@ def filter_repo_paper_pairs(
         func=_wrapped_parse_code_host_url,
         func_iterables=[pairs],
         use_dask=use_dask,
+        cluster_kwargs={
+            "processes": True,
+            "n_workers": 4,
+            "threads_per_worker": 1,
+        },
     )
 
     # Split results

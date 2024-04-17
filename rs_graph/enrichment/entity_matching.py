@@ -256,7 +256,7 @@ def link_devs_and_researchers(
         use_dask=use_dask,
         cluster_kwargs={
             "processes": True,
-            "n_workers": 4,
+            "n_workers": 2,
             "threads_per_worker": 1,
         },
     )

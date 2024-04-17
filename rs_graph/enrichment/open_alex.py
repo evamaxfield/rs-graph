@@ -351,7 +351,7 @@ def process_pairs(
         use_dask=use_dask,
         cluster_kwargs={
             "processes": False,
-            "n_workers": 8,
+            "n_workers": 4,
             "threads_per_worker": 1,
         },
     )

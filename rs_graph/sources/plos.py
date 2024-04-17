@@ -120,6 +120,11 @@ def get_dataset(
         func=_process_xml,
         func_iterables=[plos_xmls],
         use_dask=use_dask,
+        cluster_kwargs={
+            "processes": True,
+            "n_workers": 4,
+            "threads_per_worker": 1,
+        },
     )
 
     # Create successful results and errored results lists
