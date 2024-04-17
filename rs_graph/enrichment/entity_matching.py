@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import logging
 import traceback
 
@@ -127,12 +128,20 @@ def link_repo_and_documents(
         use_dask=False,  # Force synchronous processing
     )
 
+    # Split results
+    successful_results = [
+        r for r in results if isinstance(r, LinkedRepositoryDocumentPair)
+    ]
+    errored_results = [r for r in results if isinstance(r, ErrorResult)]
+
+    # Log total processed and errored
+    log.info(f"Total succeeded: {len(successful_results)}")
+    log.info(f"Total errored: {len(errored_results)}")
+
     # Separate the successful and errored results
     return SuccessAndErroredResultsLists(
-        successful_results=[
-            r for r in results if isinstance(r, LinkedRepositoryDocumentPair)
-        ],
-        errored_results=[r for r in results if isinstance(r, ErrorResult)],
+        successful_results=successful_results,
+        errored_results=errored_results,
     )
 
 
@@ -198,7 +207,7 @@ def _link_devs_and_researchers_for_repo_paper_pair(
             )
 
             # Create the linked pairs
-            created_models = []
+            linked_dev_researcher_pairs = []
             for dev_username, author_name in matches.items():
                 linked_researcher_dev_acount = get_or_add(
                     model=db_models.ResearcherDeveloperAccountLink(
@@ -209,20 +218,30 @@ def _link_devs_and_researchers_for_repo_paper_pair(
                     ),
                     session=session,
                 )
-                created_models.append(linked_researcher_dev_acount)
-
-            return [
-                LinkedDeveloperResearcherPair(
-                    **linked_repo_doc.to_dict(),
-                    researcher_id=researcher_name_to_researcher_model[author_name].id,
-                    developer_id=dev_username_to_dev_model[dev_username].id,
-                    researcher_developer_link_id=linked_researcher_dev_acount.id,
+                linked_dev_researcher_pairs.append(
+                    LinkedDeveloperResearcherPair(
+                        researcher_id=researcher_name_to_researcher_model[
+                            author_name
+                        ].id,
+                        developer_id=dev_username_to_dev_model[dev_username].id,
+                        researcher_developer_link_id=linked_researcher_dev_acount.id,
+                        **linked_repo_doc.to_dict(),
+                    )
                 )
-            ]
+
+            return linked_dev_researcher_pairs
 
         except Exception:
             session.rollback()
-            return ErrorResult()
+            return ErrorResult(
+                source=linked_repo_doc.source_id,
+                step="developer-researcher-linking",
+                identifier=(
+                    f"{linked_repo_doc.document_id} -- {linked_repo_doc.repository_id}"
+                ),
+                error="Error linking developers and researchers",
+                traceback=traceback.format_exc(),
+            )
 
 
 def link_devs_and_researchers(
@@ -245,10 +264,16 @@ def link_devs_and_researchers(
     # Separate the successful and errored results
     # Further, the successful results are lists of LinkedDeveloperResearcherPair
     # Flatten the list of lists
+    successful_results = list(
+        itertools.chain.from_iterable([r for r in results if isinstance(r, list)])
+    )
+    errored_results = [r for r in results if isinstance(r, ErrorResult)]
+
+    # Log total processed and errored
+    log.info(f"Total succeeded: {len(successful_results)}")
+    log.info(f"Total errored: {len(errored_results)}")
+
     return SuccessAndErroredResultsLists(
-        # flatten the list of lists
-        successful_results=[
-            item for sublist in results for item in sublist if isinstance(sublist, list)
-        ],
-        errored_results=[r for r in results if isinstance(r, ErrorResult)],
+        successful_results=successful_results,
+        errored_results=errored_results,
     )
