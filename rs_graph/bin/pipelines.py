@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 import typer
+from prefect import Flow
+from prefect_dask.task_runners import DaskTaskRunner
 
 from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.enrichment import entity_matching, github, open_alex
@@ -101,73 +103,31 @@ def standard_ingest(
     else:
         errored_results_filepath = errored_results_file
 
-    # Split and store partial
-    split_and_store_results_partial = partial(
-        _split_and_store_results,
-        success_results_filepath=success_results_filepath,
-        errored_results_filepath=errored_results_filepath,
-    )
+    # Start flow
+    with Flow(
+        task_runner=DaskTaskRunner(
+            cluster_class="distributed.LocalCluster",
+            cluster_kwargs={"n_workers": 3, "threads_per_worker": 1},
+        )
+    ) as flow:
+        # Get dataset
+        get_dataset_func = SOURCE_MAP[source]
+        source_results = get_dataset_func()
 
-    # Create dask client and cluster
-    get_dataset_results = SOURCE_MAP[source](use_dask=use_dask)
-    get_dataset_results = split_and_store_results_partial(
-        new_results=get_dataset_results,
-        old_results=SuccessAndErroredResultsLists([], []),
-    )
+        # Iter over each result and check code host
+        for source_result in source_results.successful_results:
+            # Check code host
+            entity_matching_result = code_host_parsing._wrapped_parse_code_host_url_task(
+                source_result,
+            )
 
-    # Filter out non-GitHub Repo pairs
-    code_filtering_results = code_host_parsing.filter_repo_paper_pairs(
-        get_dataset_results.successful_results,
-    )
-    code_filtering_results = split_and_store_results_partial(
-        new_results=code_filtering_results,
-        old_results=get_dataset_results,
-    )
+            # If entity matching result is successful, get OpenAlex data
+            if isinstance(entity_matching_result, code_host_parsing.ExpandedRepositoryDocumentPair):
+                open_alex.process_doi_task(entity_matching_result, prod=prod)
 
-    # Process with open_alex
-    open_alex_processing_results = open_alex.process_pairs(
-        code_filtering_results.successful_results,
-        prod=prod,
-        use_dask=use_dask,
-    )
-    open_alex_processing_results = split_and_store_results_partial(
-        new_results=open_alex_processing_results,
-        old_results=code_filtering_results,
-    )
 
-    # Process with github
-    github_processing_results = github.process_repos_for_contributors(
-        code_filtering_results.successful_results,
-        prod=prod,
-        use_dask=use_dask,
-    )
-    github_processing_results = split_and_store_results_partial(
-        new_results=github_processing_results,
-        old_results=open_alex_processing_results,
-    )
-
-    # Link repositories and documents
-    repos_and_docs_results = entity_matching.link_repo_and_documents(
-        github_processing_results.successful_results,
-    )
-    repos_and_docs_results = split_and_store_results_partial(
-        new_results=repos_and_docs_results,
-        old_results=github_processing_results,
-    )
-
-    # Link developer accounts and researchers
-    devs_and_researchers_results = entity_matching.link_devs_and_researchers(
-        repos_and_docs_results.successful_results,
-        use_dask=use_dask,
-    )
-    devs_and_researchers_results = split_and_store_results_partial(
-        new_results=devs_and_researchers_results,
-        old_results=repos_and_docs_results,
-    )
-
-    # Log complete
-    log.info("Processing complete!")
-
+    # Run flow
+    flow.run()
 
 ###############################################################################
 

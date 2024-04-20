@@ -9,6 +9,7 @@ from xml.etree import ElementTree as ET  # noqa: N817
 
 from allofplos.corpus.plos_corpus import get_corpus_dir
 from allofplos.update import main as get_latest_plos_corpus
+from prefect import task, flow
 
 from ..types import ErrorResult, RepositoryDocumentPair, SuccessAndErroredResultsLists
 from ..utils.dask_functions import process_func
@@ -61,7 +62,6 @@ def _get_article_doi(root: ET.Element) -> str | None:
 
     return doi_container.text
 
-
 def _process_xml(jats_xml_filepath: Path) -> RepositoryDocumentPair | ErrorResult:
     # Load the XML
     try:
@@ -106,6 +106,11 @@ def _process_xml(jats_xml_filepath: Path) -> RepositoryDocumentPair | ErrorResul
     )
 
 
+@task
+def _process_xml_task(jats_xml_filepath: Path) -> RepositoryDocumentPair | ErrorResult:
+    return _process_xml(jats_xml_filepath)
+
+
 def get_dataset(
     **kwargs: dict[str, str],
 ) -> SuccessAndErroredResultsLists:
@@ -135,4 +140,12 @@ def get_dataset(
     return SuccessAndErroredResultsLists(
         successful_results=successful_results,
         errored_results=errored_results,
+    )
+
+@flow
+def get_plos_dataset_flow(
+    **kwargs: dict[str, str],
+) -> SuccessAndErroredResultsLists:
+    return get_dataset(
+        **kwargs,
     )

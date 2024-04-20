@@ -14,6 +14,7 @@ import backoff
 import msgspec
 import pyalex
 from sqlmodel import Session
+from prefect import task
 
 from ..db import models
 from ..db import utils as db_utils
@@ -334,6 +335,13 @@ def process_doi(
                 error=str(e),
                 traceback=traceback.format_exc(),
             )
+
+@task
+def process_doi_task(
+    pair: ExpandedRepositoryDocumentPair,
+    prod: bool = False,
+) -> ExpandedRepositoryDocumentPair | ErrorResult:
+    return process_doi(pair=pair, prod=prod)
 
 
 def process_pairs(

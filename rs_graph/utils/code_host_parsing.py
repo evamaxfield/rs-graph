@@ -4,6 +4,7 @@ import logging
 import traceback
 
 from parse import Parser
+from prefect import task
 
 from ..types import (
     CodeHostResult,
@@ -208,6 +209,47 @@ def _wrapped_parse_code_host_url(
             error="Could not parse code host URL",
             traceback=traceback.format_exc(),
         )
+    
+
+@task
+def _wrapped_parse_code_host_url_task(
+    repo_paper_pair: RepositoryDocumentPair,
+) -> ExpandedRepositoryDocumentPair | ErrorResult:
+    try:
+        code_host_res = parse_code_host_url(repo_paper_pair.repo_url)
+
+        # Check if github
+        if (
+            code_host_res.host != "github"
+            or code_host_res.owner is None
+            or code_host_res.name is None
+        ):
+            return ErrorResult(
+                source=repo_paper_pair.source,
+                step="code-host-parsing",
+                identifier=repo_paper_pair.repo_url,
+                error="Not a GitHub repository",
+                traceback="",
+            )
+
+        return ExpandedRepositoryDocumentPair(
+            source=repo_paper_pair.source,
+            repo_host=code_host_res.host,
+            repo_owner=code_host_res.owner,
+            repo_name=code_host_res.name,
+            paper_doi=repo_paper_pair.paper_doi,
+            paper_extra_data=repo_paper_pair.paper_extra_data,
+        )
+
+    except ValueError:
+        return ErrorResult(
+            source=repo_paper_pair.source,
+            step="code-host-parsing",
+            identifier=repo_paper_pair.repo_url,
+            error="Could not parse code host URL",
+            traceback=traceback.format_exc(),
+        )
+
 
 
 def filter_repo_paper_pairs(
