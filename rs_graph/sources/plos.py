@@ -107,24 +107,20 @@ def _process_xml(jats_xml_filepath: Path) -> RepositoryDocumentPair | ErrorResul
 
 
 def get_dataset(
-    use_dask: bool = False,
     **kwargs: dict[str, str],
 ) -> SuccessAndErroredResultsLists:
     """Download the PLOS dataset."""
     # Get all PLOS XMLs
-    plos_xmls = _get_plos_xmls()
+    import random
+
+    plos_xmls = random.sample(_get_plos_xmls(), 400)
 
     # Parse each XML
     results = process_func(
         name="plos-xml-processing",
         func=_process_xml,
         func_iterables=[plos_xmls],
-        use_dask=use_dask,
-        cluster_kwargs={
-            "processes": True,
-            "n_workers": 4,
-            "threads_per_worker": 1,
-        },
+        use_dask=False,  # Do not need here
     )
 
     # Create successful results and errored results lists

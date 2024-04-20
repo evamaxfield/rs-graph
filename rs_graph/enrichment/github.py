@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import json
 import logging
-import os
 import time
 import traceback
 from dataclasses import dataclass
@@ -24,6 +24,10 @@ from ..types import (
     SuccessAndErroredResultsLists,
 )
 from ..utils.dask_functions import process_func
+
+###############################################################################
+
+GITHUB_TOKENS_FILE = ".github-tokens.json"
 
 ###############################################################################
 
@@ -195,24 +199,33 @@ def _wrapped_get_contributors(
 def process_repos_for_contributors(
     pairs: list[ExpandedRepositoryDocumentPair],
     prod: bool = False,
+    use_dask: bool = False,
     **kwargs: dict,
 ) -> SuccessAndErroredResultsLists:
     """Process a list of repositories."""
-    # Load dotenv
-    load_dotenv()
-    github_api_key = os.getenv("GITHUB_TOKEN")
+    # Load tokens
+    try:
+        with open(GITHUB_TOKENS_FILE) as f:
+            tokens = json.load(f)
+
+    except FileNotFoundError as e:
+        raise FileNotFoundError(
+            "Please create a .github-tokens.json file with a list of GitHub tokens"
+        ) from e
 
     # Check for / init worker client
     get_contribs_partial = partial(
         _wrapped_get_contributors,
         prod=prod,
-        github_api_key=github_api_key,
     )
     results = process_func(
         name="github-repo-contributors",
         func=get_contribs_partial,
-        func_iterables=[pairs],
-        use_dask=False,  # Force synchronous processing
+        func_iterables=[
+            pairs,
+            [tokens[i % len(tokens)] for i in range(len(pairs))],
+        ],
+        use_dask=use_dask,
     )
 
     # Split results

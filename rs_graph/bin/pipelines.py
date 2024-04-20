@@ -118,7 +118,6 @@ def standard_ingest(
     # Filter out non-GitHub Repo pairs
     code_filtering_results = code_host_parsing.filter_repo_paper_pairs(
         get_dataset_results.successful_results,
-        use_dask=use_dask,
     )
     code_filtering_results = split_and_store_results_partial(
         new_results=code_filtering_results,
@@ -140,6 +139,7 @@ def standard_ingest(
     github_processing_results = github.process_repos_for_contributors(
         code_filtering_results.successful_results,
         prod=prod,
+        use_dask=use_dask,
     )
     github_processing_results = split_and_store_results_partial(
         new_results=github_processing_results,

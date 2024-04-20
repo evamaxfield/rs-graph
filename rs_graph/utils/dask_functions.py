@@ -35,12 +35,21 @@ def process_func(
             time.sleep(4)
 
             # Map the function
+            # Start the timer
+            start_time = time.time()
             futures = client.map(func, *func_iterables, batch_size=500)
 
             # Show progress
             progress(futures)
 
             results = client.gather(futures)
+
+            # Log time taken
+            duration = time.time() - start_time
+            log.info(
+                f"Time taken for '{name}': {duration:.2f} seconds "
+                f"({duration / len(futures):.2f} seconds per item)"
+            )
 
             # Wait for cooldown
             time.sleep(4)

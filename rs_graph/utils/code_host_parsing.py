@@ -212,7 +212,6 @@ def _wrapped_parse_code_host_url(
 
 def filter_repo_paper_pairs(
     pairs: list[RepositoryDocumentPair],
-    use_dask: bool = False,
     **kwargs: dict,
 ) -> SuccessAndErroredResultsLists:
     # Filter each repo pair
@@ -221,12 +220,7 @@ def filter_repo_paper_pairs(
         name="code-host-parsing",
         func=_wrapped_parse_code_host_url,
         func_iterables=[pairs],
-        use_dask=use_dask,
-        cluster_kwargs={
-            "processes": True,
-            "n_workers": 4,
-            "threads_per_worker": 1,
-        },
+        use_dask=False,  # We don't need Dask here
     )
 
     # Split results
