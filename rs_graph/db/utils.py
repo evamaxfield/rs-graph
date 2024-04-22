@@ -218,14 +218,12 @@ def store_full_details(
                 )
 
             # Create a connection between the document and the repository
-            print("checking that doc repo link still stores")
             d_r = db_models.DocumentRepositoryLink(
                 document_id=pair.open_alex_results.document_model.id,
                 repository_id=pair.github_results.repository_model.id,
                 dataset_source_id=pair.open_alex_results.source_model.id,
             )
             _get_or_add_and_flush(model=d_r, session=session)
-            print("post doc repo link store")
 
             # Get all the info needed to refresh after commit
             document_model_id = pair.open_alex_results.document_model.id

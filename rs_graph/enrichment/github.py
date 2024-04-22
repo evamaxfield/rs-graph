@@ -8,6 +8,7 @@ import random
 import time
 import traceback
 from dataclasses import dataclass
+from datetime import datetime
 from functools import partial
 
 import backoff
@@ -162,8 +163,8 @@ def process_github_repo(
             watchers_count=repo_info["watchers_count"],
             open_issues_count=repo_info["open_issues_count"],
             size_kb=repo_info["size"],
-            creation_datetime=repo_info["created_at"],
-            last_push_datetime=repo_info["pushed_at"],
+            creation_datetime=datetime.fromisoformat(repo_info["created_at"]),
+            last_pushed_datetime=datetime.fromisoformat(repo_info["pushed_at"]),
         )
 
         # For each contributor, create a developer account
