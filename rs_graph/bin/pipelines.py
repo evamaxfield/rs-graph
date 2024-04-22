@@ -142,7 +142,7 @@ def standard_ingest(
 
     flow = _standard_ingest_flow(source=source, prod=prod)
     # Run flow
-    flow.run()
+    flow()
 
 
 ###############################################################################

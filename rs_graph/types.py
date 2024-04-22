@@ -58,27 +58,43 @@ class RepoParts(DataClassJsonMixin):
 
 @dataclass
 class TopicDetails(DataClassJsonMixin):
-    topic_model: db_models.Topic | None = None
-    document_topic_model: db_models.DocumentTopic | None = None
+    topic_model: db_models.Topic
+    document_topic_model: db_models.DocumentTopic
 
 
 @dataclass
 class ResearcherDetails(DataClassJsonMixin):
-    researcher_model: db_models.Researcher | None = None
-    document_contributor_model: db_models.DocumentContributor | None = None
-    institution_models: list[db_models.Institution] | None = None
+    researcher_model: db_models.Researcher
+    document_contributor_model: db_models.DocumentContributor
+    institution_models: list[db_models.Institution]
 
 
 @dataclass
 class FundingInstanceDetails(DataClassJsonMixin):
-    funder_model: db_models.Funder | None = None
-    funding_instance_model: db_models.FundingInstance | None = None
+    funder_model: db_models.Funder
+    funding_instance_model: db_models.FundingInstance
+
+
+@dataclass
+class OpenAlexResultModels(DataClassJsonMixin):
+    source_model: db_models.DatasetSource
+    document_model: db_models.Document
+    topic_details: list[TopicDetails]
+    researcher_details: list[ResearcherDetails]
+    funding_instance_details: list[FundingInstanceDetails]
 
 
 @dataclass
 class RepositoryContributorDetails(DataClassJsonMixin):
-    developer_account_model: db_models.DeveloperAccount | None = None
-    repository_contributor_model: db_models.RepositoryContributor | None = None
+    developer_account_model: db_models.DeveloperAccount
+    repository_contributor_model: db_models.RepositoryContributor
+
+
+@dataclass
+class GitHubResultModels(DataClassJsonMixin):
+    code_host_model: db_models.CodeHost
+    repository_model: db_models.Repository
+    repository_contributor_details: list[RepositoryContributorDetails]
 
 
 @dataclass
@@ -90,20 +106,10 @@ class ExpandedRepositoryDocumentPair(DataClassJsonMixin):
     em_model_name: str | None = None
     em_model_version: str | None = None
 
-    # Added after code host parsing
+    # Added after processing
     repo_parts: RepoParts | None = None
-
-    # Added after OpenAlex processing
-    source_model: db_models.DatasetSource | None = None
-    document_model: db_models.Document | None = None
-    topic_details: list[TopicDetails] | None = None
-    researcher_details: list[ResearcherDetails] | None = None
-    funding_instance_details: list[FundingInstanceDetails] | None = None
-
-    # Added after GitHub processing
-    code_host_model: db_models.CodeHost | None = None
-    repository_model: db_models.Repository | None = None
-    repository_contributor_details: list[RepositoryContributorDetails] | None = None
+    open_alex_results: OpenAlexResultModels | None = None
+    github_results: GitHubResultModels | None = None
 
     # Added after matching devs and researchers
     # linked_devs_and_researcher_details:

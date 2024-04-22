@@ -192,7 +192,6 @@ def process_open_alex_work(
 
         # Create DatasetSource
         dataset_source = db_models.DatasetSource(name=pair.source)
-        pair.source_model = dataset_source
 
         # Create the Document
         document = db_models.Document(
@@ -210,10 +209,9 @@ def process_open_alex_work(
             abstract=abstract_text,
             dataset_source_id=dataset_source.id,
         )
-        pair.document_model = document
 
         # For each Topic, create the Topic
-        pair.topic_details = []
+        all_topic_details = []
         for topic_details in open_alex_work["topics"]:
             # Create the topic
             topic = db_models.Topic(
@@ -235,7 +233,7 @@ def process_open_alex_work(
             )
 
             # Add to list
-            pair.topic_details.append(
+            all_topic_details.append(
                 types.TopicDetails(
                     topic_model=topic,
                     document_topic_model=document_topic,
@@ -243,7 +241,7 @@ def process_open_alex_work(
             )
 
         # For each author, create the Researcher
-        pair.researcher_details = []
+        all_researcher_details = []
         for author_details in open_alex_work["authorships"]:
             # Fetch extra author details
             open_alex_author = get_open_alex_author_from_id(
@@ -283,17 +281,8 @@ def process_open_alex_work(
                 )
                 institution_models.append(institution)
 
-                # # Create the connection between
-                # # institution, researcher, and the document
-                # researcher_document_institution = (
-                #     db_models.DocumentContributorInstitution(
-                #         document_contributor_id=document_contributor.id,
-                #         institution_id=institution.id,
-                #     )
-                # )
-
             # Add to list
-            pair.researcher_details.append(
+            all_researcher_details.append(
                 types.ResearcherDetails(
                     researcher_model=researcher,
                     document_contributor_model=document_contributor,
@@ -303,7 +292,7 @@ def process_open_alex_work(
 
         # For each grant, create the
         # Funder, FundingInstance, and DocumentFundingInstance
-        pair.funding_instance_details = []
+        all_funding_instance_details = []
         for grant_details in open_alex_work["grants"]:
             # Create the Funder
             funder = db_models.Funder(
@@ -312,24 +301,31 @@ def process_open_alex_work(
             )
 
             # Create the FundingInstance
+            # TODO: Handle None award_id
+            # planned: add a DocumentFunder model that stores these types of connections
+            if grant_details["award_id"] is None:
+                continue
             funding_instance = db_models.FundingInstance(
                 funder_id=funder.id,
                 award_id=grant_details["award_id"],
             )
 
             # Add to list
-            pair.funding_instance_details.append(
+            all_funding_instance_details.append(
                 types.FundingInstanceDetails(
                     funder_model=funder,
                     funding_instance_model=funding_instance,
                 )
             )
 
-            # # Create the connection between document and funding instance
-            # document_funding_instance = db_models.DocumentFundingInstance(
-            #     document_id=document.id,
-            #     funding_instance_id=funding_instance.id,
-            # )
+        # Attach everything back to the pair
+        pair.open_alex_results = types.OpenAlexResultModels(
+            source_model=dataset_source,
+            document_model=document,
+            topic_details=all_topic_details,
+            researcher_details=all_researcher_details,
+            funding_instance_details=all_funding_instance_details,
+        )
 
         return pair
 
@@ -343,7 +339,7 @@ def process_open_alex_work(
         )
 
 
-@task
+@task(timeout_seconds=120)
 def process_open_alex_work_task(
     pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,
 ) -> types.ExpandedRepositoryDocumentPair | types.ErrorResult:

@@ -137,7 +137,6 @@ def process_github_repo(
         code_host = db_models.CodeHost(
             name=pair.repo_parts.host,
         )
-        pair.code_host_model = code_host
 
         # Create the repository
         repo = db_models.Repository(
@@ -145,12 +144,11 @@ def process_github_repo(
             owner=pair.repo_parts.owner,
             name=pair.repo_parts.name,
         )
-        pair.repository_model = repo
 
         # For each contributor, create a developer account
         # and then link the dev account to the repo
         # as a repository contributor
-        pair.repository_contributor_details = []
+        all_repo_contributors = []
         for contributor in repo_contributors:
             # Create the developer account
             dev_account = db_models.DeveloperAccount(
@@ -167,12 +165,19 @@ def process_github_repo(
             )
 
             # Store the pair
-            pair.repository_contributor_details.append(
+            all_repo_contributors.append(
                 types.RepositoryContributorDetails(
                     developer_account_model=dev_account,
                     repository_contributor_model=repo_contributor,
                 )
             )
+
+        # Attach the results to the pair
+        pair.github_results = types.GitHubResultModels(
+            code_host_model=code_host,
+            repository_model=repo,
+            repository_contributor_details=all_repo_contributors,
+        )
 
         return pair
 
@@ -190,7 +195,7 @@ def process_github_repo(
         )
 
 
-@task
+@task(timeout_seconds=180)
 def process_github_repo_task(
     pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,
     top_n: int = 30,
