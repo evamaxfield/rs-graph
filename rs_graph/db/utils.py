@@ -24,8 +24,6 @@ def get_unique_first_model(model: SQLModel, session: Session) -> SQLModel | None
     # Get model class
     model_cls = model.__class__
 
-    print("trying to get unique first model")
-
     # Get constrained fields
     all_table_contraints = model_cls.__table__.constraints
     unique_constraints = [
@@ -57,19 +55,14 @@ def _get_or_add_and_flush(
     model: SQLModel,
     session: Session,
 ) -> SQLModel:
-    print("entered get or add and flush")
     # Try getting matching model
     existing_model = get_unique_first_model(model=model, session=session)
 
-    print("after finding unique first model")
-
     # If model exists, return it
     if existing_model is not None:
-        print("returning existing model")
         return existing_model
 
     # Otherwise, add and flush
-    print("adding NEW model")
     session.add(model)
     session.flush()
 
@@ -89,16 +82,13 @@ def store_full_details(
             assert pair.open_alex_results is not None
             assert pair.github_results is not None
 
-            print("entered store_full_details")
             # Dataset source
-            print("about to add source model")
             pair.open_alex_results.source_model = _get_or_add_and_flush(
                 model=pair.open_alex_results.source_model, session=session
             )
             assert pair.open_alex_results.source_model.id is not None
 
             # Document (update dataset source)
-            print("about to add document model")
             pair.open_alex_results.document_model.dataset_source_id = (
                 pair.open_alex_results.source_model.id
             )
@@ -110,14 +100,12 @@ def store_full_details(
             # Topic details
             for topic_detail in pair.open_alex_results.topic_details:
                 # Topic model
-                print("about to add topic model")
                 topic_detail.topic_model = _get_or_add_and_flush(
                     model=topic_detail.topic_model, session=session
                 )
                 assert topic_detail.topic_model.id is not None
 
                 # Document topic model
-                print("about to add document topic model")
                 topic_detail.document_topic_model.document_id = (
                     pair.open_alex_results.document_model.id
                 )
@@ -130,14 +118,12 @@ def store_full_details(
             # Researcher details
             for researcher_detail in pair.open_alex_results.researcher_details:
                 # Researcher model
-                print("about to add researcher model")
                 researcher_detail.researcher_model = _get_or_add_and_flush(
                     model=researcher_detail.researcher_model, session=session
                 )
                 assert researcher_detail.researcher_model.id is not None
 
                 # Document contributor model
-                print("about to add document contributor model")
                 researcher_detail.document_contributor_model.document_id = (
                     pair.open_alex_results.document_model.id
                 )
@@ -151,14 +137,12 @@ def store_full_details(
 
                 # Institution models
                 for institution_model in researcher_detail.institution_models:
-                    print("about to add institution model")
                     institution_model = _get_or_add_and_flush(
                         model=institution_model, session=session
                     )
                     assert institution_model.id is not None
 
                     # Create all of the researcher document institution models
-                    print("about to add document contributor institution model")
                     r_d_i = db_models.DocumentContributorInstitution(
                         document_contributor_id=researcher_detail.document_contributor_model.id,
                         institution_id=institution_model.id,
@@ -170,14 +154,12 @@ def store_full_details(
                 funding_instance_detail
             ) in pair.open_alex_results.funding_instance_details:
                 # Funder model
-                print("about to add funder model")
                 funding_instance_detail.funder_model = _get_or_add_and_flush(
                     model=funding_instance_detail.funder_model, session=session
                 )
                 assert funding_instance_detail.funder_model.id is not None
 
                 # Funding instance model
-                print("about to add funding instance model")
                 funding_instance_detail.funding_instance_model.funder_id = (
                     funding_instance_detail.funder_model.id
                 )
@@ -188,7 +170,6 @@ def store_full_details(
                 assert funding_instance_detail.funding_instance_model.id is not None
 
                 # Create the document funding instance models
-                print("about to add document funding instance model")
                 d_f_i = db_models.DocumentFundingInstance(
                     document_id=pair.open_alex_results.document_model.id,
                     funding_instance_id=funding_instance_detail.funding_instance_model.id,
@@ -196,14 +177,12 @@ def store_full_details(
                 _get_or_add_and_flush(model=d_f_i, session=session)
 
             # Code host
-            print("about to add code host model")
             pair.github_results.code_host_model = _get_or_add_and_flush(
                 model=pair.github_results.code_host_model, session=session
             )
             assert pair.github_results.code_host_model.id is not None
 
             # Repository
-            print("about to add repository model")
             pair.github_results.repository_model.code_host_id = (
                 pair.github_results.code_host_model.id
             )
@@ -217,7 +196,6 @@ def store_full_details(
                 repo_contributor_detail
             ) in pair.github_results.repository_contributor_details:
                 # Developer account
-                print("about to add developer account model")
                 repo_contributor_detail.developer_account_model.code_host_id = (
                     pair.github_results.code_host_model.id
                 )
@@ -228,7 +206,6 @@ def store_full_details(
                 assert repo_contributor_detail.developer_account_model.id is not None
 
                 # Repository contributor
-                print("about to add repository contributor model")
                 repo_contributor_detail.repository_contributor_model.repository_id = (
                     pair.github_results.repository_model.id
                 )
@@ -242,13 +219,9 @@ def store_full_details(
                     )
                 )
 
-            print("about to commit")
-
             session.commit()
         except Exception as e:
             session.rollback()
-            print(e)
-            print(traceback.format_exc())
             return types.ErrorResult(
                 source=pair.source,
                 step="store-full-details",

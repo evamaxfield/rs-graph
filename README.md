@@ -20,27 +20,6 @@ rs-graph-data download
 
 This will always download the latest version of the data (as pushed by @evamaxfield).
 
-## Order of Data Operations
-
-If this project was starting from scratch, the order of operations to recreate our work
-would be:
-
-**Note:** at each step of the process, the data or model is cached
-to the installed package directory (`rs_graph.data.files`).
-
-1. Get all data sources using the command: `rs-graph-sources get-all`
-2. Options
-    1. Get all recursive upstream dependencies for the repos:
-        `rs-graph-enrichment get-upstreams`
-    2. Get all of the extended paper details for the papers:
-        `rs-graph-enrichment get-extended-paper-details`
-    3. Get top 30 contributors to each repository:
-        `rs-graph-enrichment get-repo-contributors`
-    4. Train github user to author entity matching model:
-        `rs-graph-modeling train-developer-author-em-classifier`
-    5. Match devs and authors using trained predictive model:
-        `rs-graph-enrichment match-devs-and-authors`
-
 ## GitHub User and Author Entity Matching Model
 
 ### Annotation

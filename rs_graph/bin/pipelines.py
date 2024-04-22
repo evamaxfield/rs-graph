@@ -98,8 +98,7 @@ def _standard_ingest_flow(
     )
 
     # Gather results
-    results = [f.result() for f in github_futures]
-    print(results[:3])
+    [f.result() for f in github_futures]
 
 
 @app.command()
@@ -140,9 +139,7 @@ def standard_ingest(
     else:
         pass
 
-    flow = _standard_ingest_flow(source=source, prod=prod)
-    # Run flow
-    flow()
+    _standard_ingest_flow(source=source, prod=prod)
 
 
 ###############################################################################
