@@ -115,7 +115,7 @@ def get_dataset(
     # Get all PLOS XMLs
     import random
 
-    plos_xmls = random.sample(_get_plos_xmls(), 500)
+    plos_xmls = random.sample(_get_plos_xmls(), 2000)
 
     results = [
         _process_xml(plos_xml)
