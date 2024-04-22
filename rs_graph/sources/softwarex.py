@@ -14,7 +14,7 @@ from fastcore.net import HTTP403ForbiddenError
 from ghapi.all import GhApi, paged
 from tqdm import tqdm
 
-from ..types import ErrorResult, RepositoryDocumentPair, SuccessAndErroredResultsLists
+from .. import types
 
 ###############################################################################
 
@@ -43,7 +43,7 @@ def _process_elsevier_repo(
     repo_name: str,
     github_api: GhApi,
     elsevier_api_key: str,
-) -> RepositoryDocumentPair | ErrorResult:
+) -> types.BasicRepositoryDocumentPair | types.ErrorResult:
     # Be nice to APIs
     time.sleep(0.85)
 
@@ -75,7 +75,7 @@ def _process_elsevier_repo(
             response.raise_for_status()
         except Exception:
             log.debug(f"Error getting response from Elsevier API for repo: {repo_name}")
-            return ErrorResult(
+            return types.ErrorResult(
                 source="softwarex",
                 step="elsevier-repo-processing",
                 identifier=repo_name,
@@ -94,7 +94,7 @@ def _process_elsevier_repo(
             log.debug(
                 f"Unexpected number of results for repo: {repo_name} ({num_results})"
             )
-            return ErrorResult(
+            return types.ErrorResult(
                 source="softwarex",
                 step="elsevier-repo-processing",
                 identifier=repo_name,
@@ -111,7 +111,7 @@ def _process_elsevier_repo(
         log.debug(
             f"Error parsing response json from Elsevier API for repo: {repo_name}"
         )
-        return ErrorResult(
+        return types.ErrorResult(
             source="softwarex",
             step="elsevier-repo-processing",
             identifier=repo_name,
@@ -120,7 +120,7 @@ def _process_elsevier_repo(
         )
 
     # Return the result
-    return RepositoryDocumentPair(
+    return types.BasicRepositoryDocumentPair(
         source="softwarex",
         repo_url=repo_url,
         paper_doi=doi,
@@ -129,7 +129,7 @@ def _process_elsevier_repo(
 
 def get_dataset(
     **kwargs: dict[str, str],
-) -> SuccessAndErroredResultsLists:
+) -> types.SuccessAndErroredResultsLists:
     """Download the SoftwareX dataset."""
     # Load env
     load_dotenv()
@@ -172,7 +172,7 @@ def get_dataset(
         )
 
         # Add to results
-        if isinstance(result, RepositoryDocumentPair):
+        if isinstance(result, types.BasicRepositoryDocumentPair):
             successful_results.append(result)
         else:
             errored_results.append(result)
@@ -182,7 +182,7 @@ def get_dataset(
     log.info(f"Total errored: {len(errored_results)}")
 
     # Return filepath
-    return SuccessAndErroredResultsLists(
+    return types.SuccessAndErroredResultsLists(
         successful_results=successful_results,
         errored_results=errored_results,
     )

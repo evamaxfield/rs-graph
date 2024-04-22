@@ -3,6 +3,7 @@
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, UniqueConstraint, create_engine, select
 
+from .. import types
 from . import constants
 
 ###############################################################################
@@ -64,3 +65,23 @@ def get_or_add(model: SQLModel, session: Session) -> SQLModel:
 
     # Otherwise, add the model
     return add_model(model=model, session=session)
+
+
+def store_full_details(
+    pair: types.ExpandedRepositoryDocumentPair,
+    prod: bool = False,
+) -> types.ExpandedRepositoryDocumentPair | types.ErrorResult:
+    # Get the engine
+    engine = get_engine(prod=prod)
+
+    # Create a session
+    with Session(engine) as session:
+        # Work through document results
+        # try:
+        # Dataset source
+        pair.source_model = get_or_add(model=pair.source_model, session=session)
+
+        # Document
+        pair.document_model = get_or_add(model=pair.document_model, session=session)
+
+    return pair

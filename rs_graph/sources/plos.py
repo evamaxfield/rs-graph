@@ -9,10 +9,9 @@ from xml.etree import ElementTree as ET  # noqa: N817
 
 from allofplos.corpus.plos_corpus import get_corpus_dir
 from allofplos.update import main as get_latest_plos_corpus
-from prefect import task, flow
+from tqdm import tqdm
 
-from ..types import ErrorResult, RepositoryDocumentPair, SuccessAndErroredResultsLists
-from ..utils.dask_functions import process_func
+from .. import types
 
 ###############################################################################
 
@@ -62,13 +61,16 @@ def _get_article_doi(root: ET.Element) -> str | None:
 
     return doi_container.text
 
-def _process_xml(jats_xml_filepath: Path) -> RepositoryDocumentPair | ErrorResult:
+
+def _process_xml(
+    jats_xml_filepath: Path,
+) -> types.BasicRepositoryDocumentPair | types.ErrorResult:
     # Load the XML
     try:
         tree = ET.parse(jats_xml_filepath)
         root = tree.getroot()
     except ET.ParseError:
-        return ErrorResult(
+        return types.ErrorResult(
             source="plos",
             step="plos-xml-processing",
             identifier=jats_xml_filepath.name,
@@ -79,7 +81,7 @@ def _process_xml(jats_xml_filepath: Path) -> RepositoryDocumentPair | ErrorResul
     # Get the repository URL
     repo_url = _get_article_repository_url(root)
     if repo_url is None:
-        return ErrorResult(
+        return types.ErrorResult(
             source="plos",
             step="plos-xml-processing",
             identifier=jats_xml_filepath.name,
@@ -90,7 +92,7 @@ def _process_xml(jats_xml_filepath: Path) -> RepositoryDocumentPair | ErrorResul
     # Get the journal info
     paper_doi = _get_article_doi(root)
     if paper_doi is None:
-        return ErrorResult(
+        return types.ErrorResult(
             source="plos",
             step="plos-xml-processing",
             identifier=jats_xml_filepath.name,
@@ -99,53 +101,42 @@ def _process_xml(jats_xml_filepath: Path) -> RepositoryDocumentPair | ErrorResul
         )
 
     # Add to successful results
-    return RepositoryDocumentPair(
+    return types.BasicRepositoryDocumentPair(
         source="plos",
         repo_url=repo_url,
         paper_doi=paper_doi,
     )
 
 
-@task
-def _process_xml_task(jats_xml_filepath: Path) -> RepositoryDocumentPair | ErrorResult:
-    return _process_xml(jats_xml_filepath)
-
-
 def get_dataset(
     **kwargs: dict[str, str],
-) -> SuccessAndErroredResultsLists:
+) -> types.SuccessAndErroredResultsLists:
     """Download the PLOS dataset."""
     # Get all PLOS XMLs
     import random
 
-    plos_xmls = random.sample(_get_plos_xmls(), 400)
+    plos_xmls = random.sample(_get_plos_xmls(), 500)
 
-    # Parse each XML
-    results = process_func(
-        name="plos-xml-processing",
-        func=_process_xml,
-        func_iterables=[plos_xmls],
-        use_dask=False,  # Do not need here
-    )
+    results = [
+        _process_xml(plos_xml)
+        for plos_xml in tqdm(
+            plos_xmls,
+            desc="Processing PLOS XMLs",
+        )
+    ]
 
     # Create successful results and errored results lists
-    successful_results = [r for r in results if isinstance(r, RepositoryDocumentPair)]
-    errored_results = [r for r in results if isinstance(r, ErrorResult)]
+    successful_results = [
+        r for r in results if isinstance(r, types.BasicRepositoryDocumentPair)
+    ]
+    errored_results = [r for r in results if isinstance(r, types.ErrorResult)]
 
     # Log total processed and errored
     log.info(f"Total succeeded: {len(successful_results)}")
     log.info(f"Total errored: {len(errored_results)}")
 
     # Return filepath
-    return SuccessAndErroredResultsLists(
+    return types.SuccessAndErroredResultsLists(
         successful_results=successful_results,
         errored_results=errored_results,
-    )
-
-@flow
-def get_plos_dataset_flow(
-    **kwargs: dict[str, str],
-) -> SuccessAndErroredResultsLists:
-    return get_dataset(
-        **kwargs,
     )

@@ -2,16 +2,15 @@
 
 import logging
 from datetime import datetime
-from functools import partial
 from pathlib import Path
 
 import pandas as pd
 import typer
-from prefect import Flow
+from prefect import flow
 from prefect_dask.task_runners import DaskTaskRunner
 
 from rs_graph.bin.typer_utils import setup_logger
-from rs_graph.enrichment import entity_matching, github, open_alex
+from rs_graph.enrichment import github, open_alex
 from rs_graph.sources import joss, plos, proto, softwarex
 from rs_graph.types import SuccessAndErroredResultsLists
 from rs_graph.utils import code_host_parsing
@@ -61,6 +60,43 @@ def _split_and_store_results(
     return results
 
 
+@flow(
+    name="standard-ingest",
+    task_runner=DaskTaskRunner(
+        cluster_class="distributed.LocalCluster",
+        cluster_kwargs={"n_workers": 3, "threads_per_worker": 1},
+    ),
+)
+def _standard_ingest_flow(
+    source: str,
+    prod: bool,
+) -> None:
+    # Get dataset
+    source_func = SOURCE_MAP[source]
+    source_results = source_func()
+
+    # Filter dataset
+    filtered_results = code_host_parsing.filter_repo_paper_pairs(
+        source_results.successful_results,
+    )
+
+    # Process open alex
+    open_alex_futures = open_alex.process_open_alex_work_task.map(
+        pair=filtered_results.successful_results,
+    )
+
+    # Process github
+    github_futures = github.process_github_repo_task.map(
+        pair=open_alex_futures,
+    )
+
+    # Match devs and researchers
+
+    # Gather results
+    results = [f.result() for f in github_futures]
+    print(results[:3])
+
+
 @app.command()
 def standard_ingest(
     source: str,
@@ -87,47 +123,22 @@ def standard_ingest(
         # Create "results" dir
         current_datetime_dir.mkdir(exist_ok=True, parents=True)
 
-        success_results_filepath = str(
-            current_datetime_dir / f"process-results-{source}-success.parquet"
-        )
+        str(current_datetime_dir / f"process-results-{source}-success.parquet")
     else:
-        success_results_filepath = success_results_file
+        pass
 
     if len(errored_results_file) == 0:
         # Create "results" dir
         current_datetime_dir.mkdir(exist_ok=True, parents=True)
 
-        errored_results_filepath = str(
-            current_datetime_dir / f"process-results-{source}-errored.parquet"
-        )
+        str(current_datetime_dir / f"process-results-{source}-errored.parquet")
     else:
-        errored_results_filepath = errored_results_file
+        pass
 
-    # Start flow
-    with Flow(
-        task_runner=DaskTaskRunner(
-            cluster_class="distributed.LocalCluster",
-            cluster_kwargs={"n_workers": 3, "threads_per_worker": 1},
-        )
-    ) as flow:
-        # Get dataset
-        get_dataset_func = SOURCE_MAP[source]
-        source_results = get_dataset_func()
-
-        # Iter over each result and check code host
-        for source_result in source_results.successful_results:
-            # Check code host
-            entity_matching_result = code_host_parsing._wrapped_parse_code_host_url_task(
-                source_result,
-            )
-
-            # If entity matching result is successful, get OpenAlex data
-            if isinstance(entity_matching_result, code_host_parsing.ExpandedRepositoryDocumentPair):
-                open_alex.process_doi_task(entity_matching_result, prod=prod)
-
-
+    flow = _standard_ingest_flow(source=source, prod=prod)
     # Run flow
     flow.run()
+
 
 ###############################################################################
 

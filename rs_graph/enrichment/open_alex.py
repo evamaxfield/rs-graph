@@ -7,23 +7,15 @@ import random
 import time
 import traceback
 from datetime import date
-from functools import partial
 from pathlib import Path
 
 import backoff
 import msgspec
 import pyalex
-from sqlmodel import Session
 from prefect import task
 
-from ..db import models
-from ..db import utils as db_utils
-from ..types import (
-    ErrorResult,
-    ExpandedRepositoryDocumentPair,
-    SuccessAndErroredResultsLists,
-)
-from ..utils.dask_functions import process_func
+from .. import types
+from ..db import models as db_models
 
 #######################################################################################
 
@@ -183,197 +175,180 @@ def get_open_alex_author_from_id(author_id: str) -> pyalex.Author:
     return OPENALEX_AUTHORS[author_id]
 
 
-def process_doi(
-    pair: ExpandedRepositoryDocumentPair,
-    prod: bool = False,
-) -> ExpandedRepositoryDocumentPair | ErrorResult:
-    # Create db engine
-    engine = db_utils.get_engine(prod=prod)
+def process_open_alex_work(
+    pair: types.ExpandedRepositoryDocumentPair,
+) -> types.ExpandedRepositoryDocumentPair | types.ErrorResult:
+    try:
+        # Get the OpenAlex work
+        open_alex_work = get_open_alex_work_from_doi(pair.paper_doi)
 
-    # Start a session
-    with Session(engine) as session:
-        try:
-            # Get the OpenAlex work
-            open_alex_work = get_open_alex_work_from_doi(pair.paper_doi)
-
-            # Convert inverted index abstract to string
-            if open_alex_work["abstract_inverted_index"] is None:
-                abstract_text = None
-            else:
-                abstract_text = convert_from_inverted_index_abstract(
-                    open_alex_work["abstract_inverted_index"]
-                )
-
-            # Create DatasetSource
-            dataset_source = models.DatasetSource(name=pair.source)
-            dataset_source = db_utils.get_or_add(dataset_source, session)
-
-            # Create the Document
-            document = models.Document(
-                doi=pair.paper_doi,
-                open_alex_id=open_alex_work["id"],
-                title=open_alex_work["title"],
-                publication_date=date.fromisoformat(open_alex_work["publication_date"]),
-                cited_by_count=open_alex_work["cited_by_count"],
-                cited_by_percentile_year_min=open_alex_work["cited_by_percentile_year"][
-                    "min"
-                ],
-                cited_by_percentile_year_max=open_alex_work["cited_by_percentile_year"][
-                    "max"
-                ],
-                abstract=abstract_text,
-                dataset_source_id=dataset_source.id,
+        # Convert inverted index abstract to string
+        if open_alex_work["abstract_inverted_index"] is None:
+            abstract_text = None
+        else:
+            abstract_text = convert_from_inverted_index_abstract(
+                open_alex_work["abstract_inverted_index"]
             )
-            document = db_utils.get_or_add(document, session)
 
-            # For each Topic, create the Topic
-            for topic_details in open_alex_work["topics"]:
-                # Create the topic
-                topic = models.Topic(
-                    open_alex_id=topic_details["id"],
-                    name=topic_details["display_name"],
-                    field_name=topic_details["field"]["display_name"],
-                    field_open_alex_id=topic_details["field"]["id"],
-                    subfield_name=topic_details["subfield"]["display_name"],
-                    subfield_open_alex_id=topic_details["subfield"]["id"],
-                    domain_name=topic_details["domain"]["display_name"],
-                    domain_open_alex_id=topic_details["domain"]["id"],
-                )
-                topic = db_utils.get_or_add(topic, session)
+        # Create DatasetSource
+        dataset_source = db_models.DatasetSource(name=pair.source)
+        pair.source_model = dataset_source
 
-                # Create the connection between topic and document
-                document_topic = models.DocumentTopic(
-                    document_id=document.id,
-                    topic_id=topic.id,
-                    score=topic_details["score"],
-                )
-                document_topic = db_utils.get_or_add(document_topic, session)
+        # Create the Document
+        document = db_models.Document(
+            doi=pair.paper_doi,
+            open_alex_id=open_alex_work["id"],
+            title=open_alex_work["title"],
+            publication_date=date.fromisoformat(open_alex_work["publication_date"]),
+            cited_by_count=open_alex_work["cited_by_count"],
+            cited_by_percentile_year_min=open_alex_work["cited_by_percentile_year"][
+                "min"
+            ],
+            cited_by_percentile_year_max=open_alex_work["cited_by_percentile_year"][
+                "max"
+            ],
+            abstract=abstract_text,
+            dataset_source_id=dataset_source.id,
+        )
+        pair.document_model = document
 
-            # For each author, create the Researcher
-            for author_details in open_alex_work["authorships"]:
-                # Fetch extra author details
-                open_alex_author = get_open_alex_author_from_id(
-                    author_details["author"]["id"]
-                )
-
-                # Create the Researcher
-                researcher = models.Researcher(
-                    open_alex_id=open_alex_author["id"],
-                    name=open_alex_author["display_name"],
-                    works_count=open_alex_author["works_count"],
-                    cited_by_count=open_alex_author["cited_by_count"],
-                    h_index=open_alex_author["summary_stats"]["h_index"],
-                    i10_index=open_alex_author["summary_stats"]["i10_index"],
-                    two_year_mean_citedness=open_alex_author["summary_stats"][
-                        "2yr_mean_citedness"
-                    ],
-                )
-                researcher = db_utils.get_or_add(researcher, session)
-
-                # Create the connection between researcher and document
-                document_contributor = models.DocumentContributor(
-                    researcher_id=researcher.id,
-                    document_id=document.id,
-                    position=author_details["author_position"],
-                    is_corresponding=author_details["is_corresponding"],
-                )
-                document_contributor = db_utils.get_or_add(
-                    document_contributor, session
-                )
-
-                # Create the Institution
-                for institution_details in author_details["institutions"]:
-                    institution = models.Institution(
-                        open_alex_id=institution_details["id"],
-                        name=institution_details["display_name"],
-                        ror=institution_details["ror"],
-                    )
-                    institution = db_utils.get_or_add(institution, session)
-
-                    # Create the connection between
-                    # institution, researcher, and the document
-                    researcher_document_institution = (
-                        models.DocumentContributorInstitution(
-                            document_contributor_id=document_contributor.id,
-                            institution_id=institution.id,
-                        )
-                    )
-                    db_utils.get_or_add(researcher_document_institution, session)
-
-            # For each grant, create the
-            # Funder, FundingInstance, and DocumentFundingInstance
-            for grant_details in open_alex_work["grants"]:
-                # Create the Funder
-                funder = models.Funder(
-                    open_alex_id=grant_details["funder"],
-                    name=grant_details["funder_display_name"],
-                )
-                funder = db_utils.get_or_add(funder, session)
-
-                # Create the FundingInstance
-                funding_instance = models.FundingInstance(
-                    funder_id=funder.id,
-                    award_id=grant_details["award_id"],
-                )
-                funding_instance = db_utils.get_or_add(funding_instance, session)
-
-                # Create the connection between document and funding instance
-                document_funding_instance = models.DocumentFundingInstance(
-                    document_id=document.id,
-                    funding_instance_id=funding_instance.id,
-                )
-                db_utils.get_or_add(document_funding_instance, session)
-
-            return pair
-
-        except Exception as e:
-            session.rollback()
-            return ErrorResult(
-                source=pair.source,
-                step="open-alex-processing",
-                identifier=pair.paper_doi,
-                error=str(e),
-                traceback=traceback.format_exc(),
+        # For each Topic, create the Topic
+        pair.topic_details = []
+        for topic_details in open_alex_work["topics"]:
+            # Create the topic
+            topic = db_models.Topic(
+                open_alex_id=topic_details["id"],
+                name=topic_details["display_name"],
+                field_name=topic_details["field"]["display_name"],
+                field_open_alex_id=topic_details["field"]["id"],
+                subfield_name=topic_details["subfield"]["display_name"],
+                subfield_open_alex_id=topic_details["subfield"]["id"],
+                domain_name=topic_details["domain"]["display_name"],
+                domain_open_alex_id=topic_details["domain"]["id"],
             )
+
+            # Create the connection between topic and document
+            document_topic = db_models.DocumentTopic(
+                document_id=document.id,
+                topic_id=topic.id,
+                score=topic_details["score"],
+            )
+
+            # Add to list
+            pair.topic_details.append(
+                types.TopicDetails(
+                    topic_model=topic,
+                    document_topic_model=document_topic,
+                )
+            )
+
+        # For each author, create the Researcher
+        pair.researcher_details = []
+        for author_details in open_alex_work["authorships"]:
+            # Fetch extra author details
+            open_alex_author = get_open_alex_author_from_id(
+                author_details["author"]["id"]
+            )
+
+            # Create the Researcher
+            researcher = db_models.Researcher(
+                open_alex_id=open_alex_author["id"],
+                name=open_alex_author["display_name"],
+                works_count=open_alex_author["works_count"],
+                cited_by_count=open_alex_author["cited_by_count"],
+                h_index=open_alex_author["summary_stats"]["h_index"],
+                i10_index=open_alex_author["summary_stats"]["i10_index"],
+                two_year_mean_citedness=open_alex_author["summary_stats"][
+                    "2yr_mean_citedness"
+                ],
+            )
+
+            # Create the connection between researcher and document
+            document_contributor = db_models.DocumentContributor(
+                researcher_id=researcher.id,
+                document_id=document.id,
+                position=author_details["author_position"],
+                is_corresponding=author_details["is_corresponding"],
+            )
+
+            # Create the Institutions
+            institution_models = []
+
+            # Create the Institution
+            for institution_details in author_details["institutions"]:
+                institution = db_models.Institution(
+                    open_alex_id=institution_details["id"],
+                    name=institution_details["display_name"],
+                    ror=institution_details["ror"],
+                )
+                institution_models.append(institution)
+
+                # # Create the connection between
+                # # institution, researcher, and the document
+                # researcher_document_institution = (
+                #     db_models.DocumentContributorInstitution(
+                #         document_contributor_id=document_contributor.id,
+                #         institution_id=institution.id,
+                #     )
+                # )
+
+            # Add to list
+            pair.researcher_details.append(
+                types.ResearcherDetails(
+                    researcher_model=researcher,
+                    document_contributor_model=document_contributor,
+                    institution_models=institution_models,
+                )
+            )
+
+        # For each grant, create the
+        # Funder, FundingInstance, and DocumentFundingInstance
+        pair.funding_instance_details = []
+        for grant_details in open_alex_work["grants"]:
+            # Create the Funder
+            funder = db_models.Funder(
+                open_alex_id=grant_details["funder"],
+                name=grant_details["funder_display_name"],
+            )
+
+            # Create the FundingInstance
+            funding_instance = db_models.FundingInstance(
+                funder_id=funder.id,
+                award_id=grant_details["award_id"],
+            )
+
+            # Add to list
+            pair.funding_instance_details.append(
+                types.FundingInstanceDetails(
+                    funder_model=funder,
+                    funding_instance_model=funding_instance,
+                )
+            )
+
+            # # Create the connection between document and funding instance
+            # document_funding_instance = db_models.DocumentFundingInstance(
+            #     document_id=document.id,
+            #     funding_instance_id=funding_instance.id,
+            # )
+
+        return pair
+
+    except Exception as e:
+        return types.ErrorResult(
+            source=pair.source,
+            step="open-alex-processing",
+            identifier=pair.paper_doi,
+            error=str(e),
+            traceback=traceback.format_exc(),
+        )
+
 
 @task
-def process_doi_task(
-    pair: ExpandedRepositoryDocumentPair,
-    prod: bool = False,
-) -> ExpandedRepositoryDocumentPair | ErrorResult:
-    return process_doi(pair=pair, prod=prod)
+def process_open_alex_work_task(
+    pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,
+) -> types.ExpandedRepositoryDocumentPair | types.ErrorResult:
+    # Pass through
+    if isinstance(pair, types.ErrorResult):
+        return pair
 
-
-def process_pairs(
-    pairs: list[ExpandedRepositoryDocumentPair],
-    prod: bool = False,
-    use_dask: bool = False,
-) -> SuccessAndErroredResultsLists:
-    """Process a list of DOIs."""
-    # Check for / init worker client
-    process_doi_partial = partial(process_doi, prod=prod)
-    results = process_func(
-        name="open-alex-processing",
-        func=process_doi_partial,
-        func_iterables=[pairs],
-        use_dask=use_dask,
-        cluster_kwargs={
-            "processes": False,
-            "n_workers": 4,
-            "threads_per_worker": 1,
-        },
-    )
-
-    # Split results
-    split_results = SuccessAndErroredResultsLists(
-        successful_results=[
-            r for r in results if isinstance(r, ExpandedRepositoryDocumentPair)
-        ],
-        errored_results=[r for r in results if isinstance(r, ErrorResult)],
-    )
-
-    # Log stats
-    log.info(f"Total succeeded: {len(split_results.successful_results)}")
-    log.info(f"Total errored: {len(split_results.errored_results)}")
-
-    return split_results
+    return process_open_alex_work(pair=pair)

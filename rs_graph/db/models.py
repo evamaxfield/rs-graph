@@ -16,7 +16,7 @@ class DatasetSource(SQLModel, table=True):  # type: ignore
     __tablename__ = "dataset_source"
 
     # Primary Keys / Uniqueness
-    id: int | None = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True, auto_increment=True)
     name: str = Field(unique=True)
 
     # Updates
