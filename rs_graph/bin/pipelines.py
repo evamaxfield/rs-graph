@@ -6,10 +6,11 @@ from pathlib import Path
 
 import pandas as pd
 import typer
-from prefect import flow
+from prefect import flow, unmapped
 from prefect_dask.task_runners import DaskTaskRunner
 
 from rs_graph.bin.typer_utils import setup_logger
+from rs_graph.db import utils as db_utils
 from rs_graph.enrichment import github, open_alex
 from rs_graph.sources import joss, plos, proto, softwarex
 from rs_graph.types import SuccessAndErroredResultsLists
@@ -66,6 +67,7 @@ def _split_and_store_results(
         cluster_class="distributed.LocalCluster",
         cluster_kwargs={"n_workers": 3, "threads_per_worker": 1},
     ),
+    log_prints=True,
 )
 def _standard_ingest_flow(
     source: str,
@@ -90,7 +92,10 @@ def _standard_ingest_flow(
         pair=open_alex_futures,
     )
 
-    # Match devs and researchers
+    db_utils.store_full_details_task.map(
+        pair=github_futures,
+        prod=unmapped(prod),
+    )
 
     # Gather results
     results = [f.result() for f in github_futures]

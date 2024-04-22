@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from prefect import task
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, UniqueConstraint, create_engine, select
 
@@ -75,16 +76,34 @@ def store_full_details(
 
     # Create a session
     with Session(engine) as session:
+        # Assert that everything is in the correct state
+        assert pair.source_model is not None
+        assert pair.document_model is not None
+
         # Work through document results
         # try:
         # Dataset source
-        pair.source_model = get_or_trans_add(model=pair.source_model, session=session)
+        source_model = get_or_trans_add(model=pair.source_model, session=session)
 
         # Document (update dataset source)
-        pair.document_model.source_id = pair.source_model.id
+        assert source_model.id is not None
+        pair.document_model.source_id = source_model.id
         print(pair.document_model)
-        pair.document_model = get_or_trans_add(model=pair.document_model, session=session)
+        pair.document_model = get_or_trans_add(
+            model=pair.document_model, session=session
+        )
 
         print(pair.document_model)
 
     return pair
+
+
+@task
+def store_full_details_task(
+    pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,
+    prod: bool = False,
+) -> types.ExpandedRepositoryDocumentPair | types.ErrorResult:
+    if isinstance(pair, types.ErrorResult):
+        return pair
+
+    return store_full_details(pair=pair, prod=prod)
