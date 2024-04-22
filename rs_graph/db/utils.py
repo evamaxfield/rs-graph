@@ -48,25 +48,6 @@ def get_unique_first_model(model: SQLModel, session: Session) -> SQLModel | None
     return session.exec(query).first()
 
 
-def trans_add_model(model: SQLModel, session: Session) -> SQLModel:
-    session.add(model)
-    session.flush()
-
-    return model
-
-
-def get_or_trans_add(model: SQLModel, session: Session) -> SQLModel:
-    # Check if the model exists
-    result = get_unique_first_model(model=model, session=session)
-
-    # If the model exists, return it
-    if result:
-        return result
-
-    # Otherwise, add the model
-    return trans_add_model(model=model, session=session)
-
-
 def store_full_details(
     pair: types.ExpandedRepositoryDocumentPair,
     prod: bool = False,
@@ -76,24 +57,29 @@ def store_full_details(
 
     # Create a session
     with Session(engine) as session:
-        # Assert that everything is in the correct state
-        assert pair.source_model is not None
-        assert pair.document_model is not None
+        try:
+            # Assert that everything is in the correct state
+            assert pair.source_model is not None
+            assert pair.document_model is not None
 
-        # Work through document results
-        # try:
-        # Dataset source
-        source_model = get_or_trans_add(model=pair.source_model, session=session)
+            # Work through document results
+            # try:
+            # Dataset source
+            session.add(pair.source_model)
+            session.flush()
+            print(pair.source_model)
 
-        # Document (update dataset source)
-        assert source_model.id is not None
-        pair.document_model.source_id = source_model.id
-        print(pair.document_model)
-        pair.document_model = get_or_trans_add(
-            model=pair.document_model, session=session
-        )
+            # Document (update dataset source)
+            assert pair.source_model.id is not None
+            pair.document_model.dataset_source_id = pair.source_model.id
+            print(pair.document_model)
+            session.add(pair.document_model)
+            session.flush()
+            print(pair.document_model)
 
-        print(pair.document_model)
+            session.commit()
+        except Exception:
+            session.rollback()
 
     return pair
 
