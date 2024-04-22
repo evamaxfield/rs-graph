@@ -47,15 +47,14 @@ def get_unique_first_model(model: SQLModel, session: Session) -> SQLModel | None
     return session.exec(query).first()
 
 
-def add_model(model: SQLModel, session: Session) -> SQLModel:
+def trans_add_model(model: SQLModel, session: Session) -> SQLModel:
     session.add(model)
-    session.commit()
-    session.refresh(model)
+    session.flush()
 
     return model
 
 
-def get_or_add(model: SQLModel, session: Session) -> SQLModel:
+def get_or_trans_add(model: SQLModel, session: Session) -> SQLModel:
     # Check if the model exists
     result = get_unique_first_model(model=model, session=session)
 
@@ -64,7 +63,7 @@ def get_or_add(model: SQLModel, session: Session) -> SQLModel:
         return result
 
     # Otherwise, add the model
-    return add_model(model=model, session=session)
+    return trans_add_model(model=model, session=session)
 
 
 def store_full_details(
@@ -79,9 +78,13 @@ def store_full_details(
         # Work through document results
         # try:
         # Dataset source
-        pair.source_model = get_or_add(model=pair.source_model, session=session)
+        pair.source_model = get_or_trans_add(model=pair.source_model, session=session)
 
-        # Document
-        pair.document_model = get_or_add(model=pair.document_model, session=session)
+        # Document (update dataset source)
+        pair.document_model.source_id = pair.source_model.id
+        print(pair.document_model)
+        pair.document_model = get_or_trans_add(model=pair.document_model, session=session)
+
+        print(pair.document_model)
 
     return pair
