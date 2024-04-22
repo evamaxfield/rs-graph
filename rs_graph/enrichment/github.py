@@ -126,6 +126,8 @@ def process_github_repo(
     assert pair.repo_parts is not None
 
     try:
+        # TODO: get repo basic info and stats
+
         # Get repo contributors
         repo_contributors = get_repo_contributors(
             pair=pair,

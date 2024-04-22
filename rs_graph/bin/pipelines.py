@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -9,16 +8,11 @@ import typer
 from prefect import flow, unmapped
 from prefect_dask.task_runners import DaskTaskRunner
 
-from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.db import utils as db_utils
 from rs_graph.enrichment import github, open_alex
 from rs_graph.sources import joss, plos, proto, softwarex
 from rs_graph.types import SuccessAndErroredResultsLists
 from rs_graph.utils import code_host_parsing
-
-###############################################################################
-
-log = logging.getLogger(__name__)
 
 ###############################################################################
 
@@ -92,13 +86,13 @@ def _standard_ingest_flow(
         pair=open_alex_futures,
     )
 
+    # TODO: Match devs and researchers
+
+    # Store everything
     db_utils.store_full_details_task.map(
         pair=github_futures,
         prod=unmapped(prod),
     )
-
-    # Gather results
-    [f.result() for f in github_futures]
 
 
 @app.command()
@@ -108,12 +102,8 @@ def standard_ingest(
     errored_results_file: str = "",
     prod: bool = False,
     use_dask: bool = False,
-    debug: bool = False,
 ) -> None:
     """Get data from OpenAlex."""
-    # Setup logger
-    setup_logger(debug=debug)
-
     # Create current datetime without microseconds
     current_datetime = datetime.now().replace(microsecond=0)
     # Convert to isoformat and replace colons with dashes
@@ -139,7 +129,20 @@ def standard_ingest(
     else:
         pass
 
+    # Keep track of duration
+    start_dt = datetime.now()
+    start_dt = start_dt.replace(microsecond=0)
+
+    # Start the flow
+    # TODO: manage dask parameter
     _standard_ingest_flow(source=source, prod=prod)
+
+    # End duration
+    end_dt = datetime.now()
+    end_dt = end_dt.replace(microsecond=0)
+
+    # Log time taken
+    print(f"Total Processing Duration: {end_dt - start_dt}")
 
 
 ###############################################################################

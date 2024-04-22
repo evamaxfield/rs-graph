@@ -219,6 +219,14 @@ def store_full_details(
                     )
                 )
 
+            # Create a connection between the document and the repository
+            d_r = db_models.DocumentRepositoryLink(
+                document_id=pair.open_alex_results.document_model.id,
+                repository_id=pair.github_results.repository_model.id,
+                source=pair.source,
+            )
+            _get_or_add_and_flush(model=d_r, session=session)
+
             session.commit()
         except Exception as e:
             session.rollback()

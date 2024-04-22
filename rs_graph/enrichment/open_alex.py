@@ -101,12 +101,12 @@ def _increment_call_count_and_check() -> None:
 
     # Temporary log
     if current_status.call_count % 1000 == 0:
-        log.info(f"OpenAlex Daily API call count: {current_status.call_count}")
+        print(f"OpenAlex Daily API call count: {current_status.call_count}")
 
     # If we've made 80,000 calls in a single day
     # pause all processing until tomorrow
     if current_status.call_count >= 80_000:
-        log.info("Sleeping until tomorrow to avoid OpenAlex API limit.")
+        print("Sleeping until tomorrow to avoid OpenAlex API limit.")
         while date.today() == current_status.current_date:
             time.sleep(600)
 
