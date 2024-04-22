@@ -207,7 +207,6 @@ def process_open_alex_work(
                 "max"
             ],
             abstract=abstract_text,
-            dataset_source_id=dataset_source.id,
         )
 
         # For each Topic, create the Topic

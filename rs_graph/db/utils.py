@@ -72,7 +72,7 @@ def _get_or_add_and_flush(
 def store_full_details(
     pair: types.ExpandedRepositoryDocumentPair,
     prod: bool = False,
-) -> types.ExpandedRepositoryDocumentPair | types.ErrorResult:
+) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
     # Get the engine
     engine = get_engine(prod=prod)
 
@@ -81,6 +81,7 @@ def store_full_details(
         try:
             assert pair.open_alex_results is not None
             assert pair.github_results is not None
+            assert pair.repo_parts is not None
 
             # Dataset source
             pair.open_alex_results.source_model = _get_or_add_and_flush(
@@ -89,9 +90,6 @@ def store_full_details(
             assert pair.open_alex_results.source_model.id is not None
 
             # Document (update dataset source)
-            pair.open_alex_results.document_model.dataset_source_id = (
-                pair.open_alex_results.source_model.id
-            )
             pair.open_alex_results.document_model = _get_or_add_and_flush(
                 model=pair.open_alex_results.document_model, session=session
             )
@@ -220,14 +218,63 @@ def store_full_details(
                 )
 
             # Create a connection between the document and the repository
+            print("checking that doc repo link still stores")
             d_r = db_models.DocumentRepositoryLink(
                 document_id=pair.open_alex_results.document_model.id,
                 repository_id=pair.github_results.repository_model.id,
-                source=pair.source,
+                dataset_source_id=pair.open_alex_results.source_model.id,
             )
             _get_or_add_and_flush(model=d_r, session=session)
+            print("post doc repo link store")
+
+            # Get all the info needed to refresh after commit
+            document_model_id = pair.open_alex_results.document_model.id
+            repository_model_id = pair.github_results.repository_model.id
+            developer_account_model_ids = [
+                repo_contributor_detail.developer_account_model.id
+                for repo_contributor_detail in (
+                    pair.github_results.repository_contributor_details
+                )
+            ]
+            researcher_model_ids = [
+                researcher_detail.researcher_model.id
+                for researcher_detail in pair.open_alex_results.researcher_details
+            ]
 
             session.commit()
+
+            # Get all the models after they have been added
+            document_stmt = select(db_models.Document).where(
+                db_models.Document.id == document_model_id
+            )
+            document_model = session.exec(document_stmt).first()
+            assert document_model is not None
+            repository_stmt = select(db_models.Repository).where(
+                db_models.Repository.id == repository_model_id
+            )
+            repository_model = session.exec(repository_stmt).first()
+            assert repository_model is not None
+            developer_account_stmt = select(db_models.DeveloperAccount).where(
+                db_models.DeveloperAccount.id.in_(  # type: ignore
+                    developer_account_model_ids
+                )
+            )
+            developer_account_models = session.exec(developer_account_stmt).all()
+            researcher_stmt = select(db_models.Researcher).where(
+                db_models.Researcher.id.in_(researcher_model_ids)  # type: ignore
+            )
+            researcher_models = session.exec(researcher_stmt).all()
+
+            # Create the stored pair
+            stored_pair = types.StoredRepositoryDocumentPair(
+                document_model=document_model,
+                repository_model=repository_model,
+                developer_account_models=developer_account_models,
+                researcher_models=researcher_models,
+            )
+
+            return stored_pair
+
         except Exception as e:
             session.rollback()
             return types.ErrorResult(
@@ -238,8 +285,6 @@ def store_full_details(
                 traceback=traceback.format_exc(),
             )
 
-    return pair
-
 
 @task(
     retries=2,
@@ -248,8 +293,73 @@ def store_full_details(
 def store_full_details_task(
     pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,
     prod: bool = False,
-) -> types.ExpandedRepositoryDocumentPair | types.ErrorResult:
+) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
     if isinstance(pair, types.ErrorResult):
         return pair
 
     return store_full_details(pair=pair, prod=prod)
+
+
+def store_dev_research_em_links(
+    pair: types.StoredRepositoryDocumentPair,
+    prod: bool = False,
+) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
+    # Get the engine
+    engine = get_engine(prod=prod)
+
+    # Create a session
+    with Session(engine) as session:
+        try:
+            assert pair.researcher_developer_links is not None
+
+            # Iter over each linked dev researcher link and add to the database
+            link_ids = []
+            for linked_dev_researcher_pair in pair.researcher_developer_links:
+                linked_dev_researcher_pair = _get_or_add_and_flush(
+                    model=linked_dev_researcher_pair, session=session
+                )
+                link_ids.append(linked_dev_researcher_pair.id)
+
+            # Commit
+            session.commit()
+
+            # Get all the models after they have been added
+            linked_dev_researcher_stmt = select(
+                db_models.ResearcherDeveloperAccountLink
+            ).where(
+                db_models.ResearcherDeveloperAccountLink.id.in_(  # type: ignore
+                    link_ids
+                )
+            )
+            linked_dev_researcher_models = session.exec(
+                linked_dev_researcher_stmt
+            ).all()
+
+            # Attach to model
+            pair.researcher_developer_links = linked_dev_researcher_models
+
+            return pair
+
+        except Exception as e:
+            session.rollback()
+            return types.ErrorResult(
+                source="none",  # TODO
+                step="store-dev-research-em-links",
+                identifier="none",  # TODO
+                error=str(e),
+                traceback=traceback.format_exc(),
+            )
+
+
+@task(
+    retries=2,
+    retry_delay_seconds=2,
+)
+def store_dev_research_em_links_task(
+    pair: types.StoredRepositoryDocumentPair | types.ErrorResult,
+    prod: bool = False,
+) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
+    if isinstance(pair, types.ErrorResult):
+        return pair
+
+    return store_dev_research_em_links(pair=pair, prod=prod)

@@ -42,7 +42,6 @@ class Document(SQLModel, table=True):  # type: ignore
     cited_by_count: int
     cited_by_percentile_year_min: int
     cited_by_percentile_year_max: int
-    dataset_source_id: int = Field(foreign_key="dataset_source.id")
     abstract: str | None = None
 
     # Updates
@@ -285,6 +284,17 @@ class Repository(SQLModel, table=True):  # type: ignore
 
     __table_args__ = (UniqueConstraint("code_host_id", "owner", "name"),)
 
+    # Data
+    description: str | None = None
+    is_fork: bool
+    forks_count: int
+    stargazers_count: int
+    watchers_count: int
+    open_issues_count: int
+    size_kb: int
+    creation_datetime: datetime
+    last_pushed_datetime: datetime
+
     # Updates
     created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
@@ -353,7 +363,7 @@ class DocumentRepositoryLink(SQLModel, table=True):  # type: ignore
     __table_args__ = (UniqueConstraint("document_id", "repository_id"),)
 
     # Data
-    source: str
+    dataset_source_id: int = Field(foreign_key="dataset_source.id")
     em_model_name: str | None
     em_model_version: str | None
 

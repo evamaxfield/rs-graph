@@ -126,7 +126,17 @@ def process_github_repo(
     assert pair.repo_parts is not None
 
     try:
-        # TODO: get repo basic info and stats
+        # Setup API
+        api = _setup_gh_api(github_api_key)
+
+        # Get repo info
+        repo_info = api.repos.get(
+            owner=pair.repo_parts.owner,
+            repo=pair.repo_parts.name,
+        )
+
+        # Sleep to avoid API limits
+        time.sleep(0.85)
 
         # Get repo contributors
         repo_contributors = get_repo_contributors(
@@ -145,6 +155,15 @@ def process_github_repo(
             code_host_id=code_host.id,
             owner=pair.repo_parts.owner,
             name=pair.repo_parts.name,
+            description=repo_info["description"],
+            is_fork=repo_info["fork"],
+            forks_count=repo_info["forks_count"],
+            stargazers_count=repo_info["stargazers_count"],
+            watchers_count=repo_info["watchers_count"],
+            open_issues_count=repo_info["open_issues_count"],
+            size_kb=repo_info["size"],
+            creation_datetime=repo_info["created_at"],
+            last_push_datetime=repo_info["pushed_at"],
         )
 
         # For each contributor, create a developer account

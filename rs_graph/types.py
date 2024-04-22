@@ -111,13 +111,22 @@ class ExpandedRepositoryDocumentPair(DataClassJsonMixin):
     open_alex_results: OpenAlexResultModels | None = None
     github_results: GitHubResultModels | None = None
 
-    # Added after matching devs and researchers
-    # linked_devs_and_researcher_details:
+
+@dataclass
+class StoredRepositoryDocumentPair(DataClassJsonMixin):
+    # Required / Basic
+    document_model: db_models.Document
+    repository_model: db_models.Repository
+    developer_account_models: list[db_models.DeveloperAccount]
+    researcher_models: list[db_models.Researcher]
+
+    # Added after processing
+    researcher_developer_links: list[
+        db_models.ResearcherDeveloperAccountLink
+    ] | None = None
 
 
 @dataclass
 class SuccessAndErroredResultsLists(DataClassJsonMixin):
-    successful_results: list[
-        BasicRepositoryDocumentPair | ExpandedRepositoryDocumentPair
-    ]
+    successful_results: list[BasicRepositoryDocumentPair]
     errored_results: list[ErrorResult]

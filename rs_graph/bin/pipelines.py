@@ -9,7 +9,7 @@ from prefect import flow, unmapped
 from prefect_dask.task_runners import DaskTaskRunner
 
 from rs_graph.db import utils as db_utils
-from rs_graph.enrichment import github, open_alex
+from rs_graph.enrichment import entity_matching, github, open_alex
 from rs_graph.sources import joss, plos, proto, softwarex
 from rs_graph.types import SuccessAndErroredResultsLists
 from rs_graph.utils import code_host_parsing
@@ -86,11 +86,20 @@ def _standard_ingest_flow(
         pair=open_alex_futures,
     )
 
-    # TODO: Match devs and researchers
-
     # Store everything
-    db_utils.store_full_details_task.map(
+    stored_futures = db_utils.store_full_details_task.map(
         pair=github_futures,
+        prod=unmapped(prod),
+    )
+
+    # Match devs and researchers
+    dev_researcher_futures = entity_matching.match_devs_and_researchers.map(
+        pair=stored_futures,
+    )
+
+    # Store the dev-researcher links
+    db_utils.store_dev_research_em_links_task.map(
+        pair=dev_researcher_futures,
         prod=unmapped(prod),
     )
 
