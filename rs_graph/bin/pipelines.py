@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 import typer
-from prefect import flow, unmapped
+from prefect import Flow, unmapped
+from prefect.task_runners import SequentialTaskRunner
 from prefect_dask.task_runners import DaskTaskRunner
 
 from rs_graph.db import utils as db_utils
@@ -55,14 +56,6 @@ def _split_and_store_results(
     return results
 
 
-@flow(
-    name="standard-ingest",
-    task_runner=DaskTaskRunner(
-        cluster_class="distributed.LocalCluster",
-        cluster_kwargs={"n_workers": 3, "threads_per_worker": 1},
-    ),
-    log_prints=True,
-)
 def _standard_ingest_flow(
     source: str,
     prod: bool,
@@ -138,13 +131,32 @@ def standard_ingest(
     else:
         pass
 
+    # If using dask, use DaskTaskRunner
+    if use_dask:
+        task_runner = DaskTaskRunner(
+            cluster_class="distributed.LocalCluster",
+            cluster_kwargs={"n_workers": 3, "threads_per_worker": 1},
+        )
+    else:
+        task_runner = SequentialTaskRunner()
+
+    # Create the flow
+    ingest_flow = Flow(
+        _standard_ingest_flow,
+        name="ingest-flow",
+        task_runner=task_runner,
+        log_prints=True,
+    )
+
     # Keep track of duration
     start_dt = datetime.now()
     start_dt = start_dt.replace(microsecond=0)
 
     # Start the flow
-    # TODO: manage dask parameter
-    _standard_ingest_flow(source=source, prod=prod)
+    ingest_flow(
+        source=source,
+        prod=prod,
+    )
 
     # End duration
     end_dt = datetime.now()

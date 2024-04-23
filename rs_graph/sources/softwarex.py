@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 import time
 import traceback
@@ -15,10 +14,6 @@ from ghapi.all import GhApi, paged
 from tqdm import tqdm
 
 from .. import types
-
-###############################################################################
-
-log = logging.getLogger(__name__)
 
 ###############################################################################
 
@@ -73,13 +68,13 @@ def _process_elsevier_repo(
     else:
         try:
             response.raise_for_status()
-        except Exception:
-            log.debug(f"Error getting response from Elsevier API for repo: {repo_name}")
+        except Exception as e:
+            print(f"Error getting response from Elsevier API for repo: {repo_name}")
             return types.ErrorResult(
                 source="softwarex",
                 step="elsevier-repo-processing",
-                identifier=repo_name,
-                error="Error getting response",
+                identifier=repo_url,
+                error=str(e),
                 traceback=traceback.format_exc(),
             )
 
@@ -91,13 +86,11 @@ def _process_elsevier_repo(
         # Check number of results
         num_results = len(response_json["search-results"]["entry"])
         if num_results != 1:
-            log.debug(
-                f"Unexpected number of results for repo: {repo_name} ({num_results})"
-            )
+            print(f"Unexpected number of results for repo: {repo_name} ({num_results})")
             return types.ErrorResult(
                 source="softwarex",
                 step="elsevier-repo-processing",
-                identifier=repo_name,
+                identifier=repo_url,
                 error="Unexpected number of results",
                 traceback="",
             )
@@ -107,15 +100,13 @@ def _process_elsevier_repo(
 
         # Get the title, doi, and published date
         doi = first_result["prism:doi"]
-    except Exception:
-        log.debug(
-            f"Error parsing response json from Elsevier API for repo: {repo_name}"
-        )
+    except Exception as e:
+        print(f"Error parsing response json from Elsevier API for repo: {repo_name}")
         return types.ErrorResult(
             source="softwarex",
             step="elsevier-repo-processing",
-            identifier=repo_name,
-            error="Error parsing response json",
+            identifier=repo_url,
+            error=str(e),
             traceback=traceback.format_exc(),
         )
 
@@ -178,8 +169,8 @@ def get_dataset(
             errored_results.append(result)
 
     # Log total succeeded and errored
-    log.info(f"Total succeeded: {len(successful_results)}")
-    log.info(f"Total errored: {len(errored_results)}")
+    print(f"Total succeeded: {len(successful_results)}")
+    print(f"Total errored: {len(errored_results)}")
 
     # Return filepath
     return types.SuccessAndErroredResultsLists(

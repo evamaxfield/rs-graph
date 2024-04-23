@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import traceback
 from pathlib import Path
 from xml.etree import ElementTree as ET  # noqa: N817
@@ -12,10 +11,6 @@ from allofplos.update import main as get_latest_plos_corpus
 from tqdm import tqdm
 
 from .. import types
-
-###############################################################################
-
-log = logging.getLogger(__name__)
 
 ###############################################################################
 
@@ -69,12 +64,12 @@ def _process_xml(
     try:
         tree = ET.parse(jats_xml_filepath)
         root = tree.getroot()
-    except ET.ParseError:
+    except ET.ParseError as e:
         return types.ErrorResult(
             source="plos",
             step="plos-xml-processing",
             identifier=jats_xml_filepath.name,
-            error="XML Parse Error",
+            error=str(e),
             traceback=traceback.format_exc(),
         )
 
@@ -115,7 +110,7 @@ def get_dataset(
     # Get all PLOS XMLs
     import random
 
-    plos_xmls = random.sample(_get_plos_xmls(), 400)
+    plos_xmls = random.sample(_get_plos_xmls(), 10000)
 
     results = [
         _process_xml(plos_xml)
@@ -132,8 +127,8 @@ def get_dataset(
     errored_results = [r for r in results if isinstance(r, types.ErrorResult)]
 
     # Log total processed and errored
-    log.info(f"Total succeeded: {len(successful_results)}")
-    log.info(f"Total errored: {len(errored_results)}")
+    print(f"Total succeeded: {len(successful_results)}")
+    print(f"Total errored: {len(errored_results)}")
 
     # Return filepath
     return types.SuccessAndErroredResultsLists(

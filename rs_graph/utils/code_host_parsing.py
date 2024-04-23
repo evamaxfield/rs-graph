@@ -1,16 +1,11 @@
 #!/usr/bin/env python
 
-import logging
 import traceback
 
 from parse import Parser
 from tqdm import tqdm
 
 from .. import types
-
-#######################################################################################
-
-log = logging.getLogger(__name__)
 
 #######################################################################################
 
@@ -180,7 +175,7 @@ def _wrapped_parse_code_host_url(
             return types.ErrorResult(
                 source=pair.source,
                 step="code-host-parsing",
-                identifier=pair.repo_url,
+                identifier=pair.paper_doi,
                 error="Not a GitHub repository",
                 traceback="",
             )
@@ -196,12 +191,12 @@ def _wrapped_parse_code_host_url(
             paper_extra_data=pair.paper_extra_data,
         )
 
-    except ValueError:
+    except ValueError as e:
         return types.ErrorResult(
             source=pair.source,
             step="code-host-parsing",
-            identifier=pair.repo_url,
-            error="Could not parse code host URL",
+            identifier=pair.paper_doi,
+            error=str(e),
             traceback=traceback.format_exc(),
         )
 
@@ -233,7 +228,7 @@ def filter_repo_paper_pairs(
     )
 
     # Log total succeeded and errored
-    log.info(f"Total succeeded: {len(split_results.successful_results)}")
-    log.info(f"Total errored: {len(split_results.errored_results)}")
+    print(f"Total succeeded: {len(split_results.successful_results)}")
+    print(f"Total errored: {len(split_results.errored_results)}")
 
     return split_results

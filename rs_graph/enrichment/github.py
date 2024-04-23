@@ -207,11 +207,7 @@ def process_github_repo(
         return types.ErrorResult(
             source=pair.source,
             step="github-repo-contributors",
-            identifier=(
-                f"{pair.repo_parts.host}/"
-                f"{pair.repo_parts.owner}/"
-                f"{pair.repo_parts.name}"
-            ),
+            identifier=pair.paper_doi,
             error=str(e),
             traceback=traceback.format_exc(),
         )
@@ -232,11 +228,11 @@ def process_github_repo_task(
 
     except FileNotFoundError as e:
         return types.ErrorResult(
-            source="github",
+            source=pair.source,
             step="github-repo-contributors",
-            identifier="",  # No identifier, as this is a general error
-            error="No .github-tokens.json file found",
-            traceback=str(e),
+            identifier=pair.paper_doi,
+            error=str(e),
+            traceback=traceback.format_exc(),
         )
 
     return process_github_repo(

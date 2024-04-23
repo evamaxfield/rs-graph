@@ -115,6 +115,7 @@ class ExpandedRepositoryDocumentPair(DataClassJsonMixin):
 @dataclass
 class StoredRepositoryDocumentPair(DataClassJsonMixin):
     # Required / Basic
+    dataset_source_model: db_models.DatasetSource
     document_model: db_models.Document
     repository_model: db_models.Repository
     developer_account_models: list[db_models.DeveloperAccount]

@@ -226,6 +226,7 @@ def store_full_details(
             _get_or_add_and_flush(model=d_r, session=session)
 
             # Get all the info needed to refresh after commit
+            dataset_source_id = pair.open_alex_results.source_model.id
             document_model_id = pair.open_alex_results.document_model.id
             repository_model_id = pair.github_results.repository_model.id
             developer_account_model_ids = [
@@ -242,6 +243,10 @@ def store_full_details(
             session.commit()
 
             # Get all the models after they have been added
+            dataset_source_stmt = select(db_models.DatasetSource).where(
+                db_models.DatasetSource.id == dataset_source_id
+            )
+            dataset_source_model = session.exec(dataset_source_stmt).first()
             document_stmt = select(db_models.Document).where(
                 db_models.Document.id == document_model_id
             )
@@ -265,6 +270,7 @@ def store_full_details(
 
             # Create the stored pair
             stored_pair = types.StoredRepositoryDocumentPair(
+                dataset_source_model=dataset_source_model,
                 document_model=document_model,
                 repository_model=repository_model,
                 developer_account_models=developer_account_models,
@@ -278,7 +284,7 @@ def store_full_details(
             return types.ErrorResult(
                 source=pair.source,
                 step="store-full-details",
-                identifier=(pair.paper_doi),
+                identifier=pair.paper_doi,
                 error=str(e),
                 traceback=traceback.format_exc(),
             )
@@ -341,9 +347,9 @@ def store_dev_research_em_links(
         except Exception as e:
             session.rollback()
             return types.ErrorResult(
-                source="none",  # TODO
+                source=pair.dataset_source_model.name,
                 step="store-dev-research-em-links",
-                identifier="none",  # TODO
+                identifier=pair.document_model.paper_doi,
                 error=str(e),
                 traceback=traceback.format_exc(),
             )

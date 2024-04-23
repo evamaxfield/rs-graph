@@ -67,9 +67,9 @@ def match_devs_and_researchers(
 
     except Exception as e:
         return types.ErrorResult(
-            source="none",  # TODO
+            source=pair.dataset_source_model.name,
             step="developer-researcher-linking",
-            identifier=f"{pair.document_model.id} -- {pair.repository_model.id}",
+            identifier=pair.document_model.paper_doi,
             error=str(e),
             traceback=traceback.format_exc(),
         )
