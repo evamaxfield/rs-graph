@@ -295,6 +295,8 @@ class Repository(SQLModel, table=True):  # type: ignore
     creation_datetime: datetime
     last_pushed_datetime: datetime
 
+    # TODO: add total commits field
+
     # Updates
     created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
@@ -341,6 +343,8 @@ class RepositoryContributor(SQLModel, table=True):  # type: ignore
 
     __table_args__ = (UniqueConstraint("repository_id", "developer_account_id"),)
 
+    # TODO: add "total commits" field
+
     # Updates
     created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
@@ -349,6 +353,11 @@ class RepositoryContributor(SQLModel, table=True):  # type: ignore
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
+# TODO: Store basic repository commit details
+# https://docs.github.com/en/rest/metrics/statistics?apiVersion=2022-11-28#get-all-contributor-commit-activity
+# I.e. WeeklyRepositoryCommitActivity
+# includes reference to repository contributor
+# includes date and additions, deletions, and number of commits for that week
 
 class DocumentRepositoryLink(SQLModel, table=True):  # type: ignore
     """Stores the connection between a document and a repository."""
