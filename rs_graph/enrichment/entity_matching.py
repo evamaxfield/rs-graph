@@ -69,7 +69,7 @@ def match_devs_and_researchers(
         return types.ErrorResult(
             source=pair.dataset_source_model.name,
             step="developer-researcher-linking",
-            identifier=pair.document_model.paper_doi,
+            identifier=pair.document_model.doi,
             error=str(e),
             traceback=traceback.format_exc(),
         )

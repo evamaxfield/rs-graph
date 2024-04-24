@@ -44,7 +44,9 @@ def load_dev_author_em_model() -> LogisticRegressionCV:
     LogisticRegressionCV
         The author EM model
     """
-    log.debug(f"Loading author EM model from {DEV_AUTHOR_EM_CLASSIFIER_PATH}")
+    import warnings
+
+    warnings.filterwarnings("ignore", module="sklearn")
     return skio.load(DEV_AUTHOR_EM_CLASSIFIER_PATH, trusted=True)
 
 
@@ -57,7 +59,14 @@ def load_dev_author_em_embedding_model() -> SentenceTransformer:
     SentenceTransformer
         The author EM embedding model
     """
-    log.debug(f"Loading author EM embedding model from {DEV_AUTHOR_EM_EMBEDDING_MODEL}")
+    import warnings
+
+    warnings.filterwarnings("ignore", module="transformers")
+
+    sentence_tfs_logger = logging.getLogger("sentence_transformers")
+    sentence_tfs_logger.setLevel(logging.ERROR)
+
+    # Return model
     return SentenceTransformer(DEV_AUTHOR_EM_EMBEDDING_MODEL)
 
 

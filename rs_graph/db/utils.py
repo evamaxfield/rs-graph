@@ -304,7 +304,7 @@ def store_full_details_task(
     return store_full_details(pair=pair, prod=prod)
 
 
-def store_dev_research_em_links(
+def store_dev_researcher_em_links(
     pair: types.StoredRepositoryDocumentPair,
     prod: bool = False,
 ) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
@@ -359,11 +359,11 @@ def store_dev_research_em_links(
     retries=2,
     retry_delay_seconds=2,
 )
-def store_dev_research_em_links_task(
+def store_dev_researcher_em_links_task(
     pair: types.StoredRepositoryDocumentPair | types.ErrorResult,
     prod: bool = False,
 ) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
     if isinstance(pair, types.ErrorResult):
         return pair
 
-    return store_dev_research_em_links(pair=pair, prod=prod)
+    return store_dev_researcher_em_links(pair=pair, prod=prod)
