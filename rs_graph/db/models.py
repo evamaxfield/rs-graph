@@ -353,11 +353,13 @@ class RepositoryContributor(SQLModel, table=True):  # type: ignore
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
+
 # TODO: Store basic repository commit details
 # https://docs.github.com/en/rest/metrics/statistics?apiVersion=2022-11-28#get-all-contributor-commit-activity
 # I.e. WeeklyRepositoryCommitActivity
 # includes reference to repository contributor
 # includes date and additions, deletions, and number of commits for that week
+
 
 class DocumentRepositoryLink(SQLModel, table=True):  # type: ignore
     """Stores the connection between a document and a repository."""
