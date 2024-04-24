@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import traceback
-import json
 import gzip
+import json
 import shutil
+import traceback
 from pathlib import Path
 
 import requests
@@ -21,6 +21,7 @@ DOWNLOAD_URL = (
 )
 
 ###############################################################################
+
 
 def _get_raw_data() -> list[dict]:
     try:
@@ -77,7 +78,7 @@ def _process_item(
                 error="Not an official paper",
                 traceback="",
             )
-        
+
         # Construct the doi
         doi = f"10.48550/arxiv.{item['paper_arxiv_id']}"
 
@@ -87,7 +88,7 @@ def _process_item(
             repo_url=item["repo_url"],
             paper_doi=doi,
         )
-    
+
     except Exception as e:
         return types.ErrorResult(
             source="pwc",
@@ -96,6 +97,7 @@ def _process_item(
             error=str(e),
             traceback=traceback.format_exc(),
         )
+
 
 def get_dataset(
     **kwargs: dict[str, str],
