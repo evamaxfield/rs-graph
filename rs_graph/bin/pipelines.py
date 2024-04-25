@@ -5,6 +5,7 @@ import random
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 import pandas as pd
 import typer
@@ -127,7 +128,7 @@ def _prelinked_dataset_ingestion_flow(
 def prelinked_dataset_ingestion(
     source: str,
     prod: bool = False,
-    use_dask: bool = False,
+    processing_engine: Literal["seq", "dask", "coiled"] = "dask",
     batch_size: int = 200,
 ) -> None:
     """Get data from OpenAlex."""
@@ -145,10 +146,20 @@ def prelinked_dataset_ingestion(
     )
 
     # If using dask, use DaskTaskRunner
-    if use_dask:
+    if processing_engine == "dask":
         task_runner = DaskTaskRunner(
             cluster_class="distributed.LocalCluster",
             cluster_kwargs={"n_workers": 5, "threads_per_worker": 1},
+        )
+    elif processing_engine == "coiled":
+        task_runner = DaskTaskRunner(
+            cluster_class="coiled.Cluster",
+            cluster_kwargs={
+                "n_workers": 5,
+                "threads_per_worker": 1,
+                "software": "rs-graph",
+                "name": "rs-graph",
+            },
         )
     else:
         task_runner = SequentialTaskRunner()

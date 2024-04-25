@@ -28,8 +28,6 @@ from transformers import Pipeline, pipeline
 
 from ..data import (
     load_annotated_dev_author_em_dataset,
-    load_author_contributions_dataset,
-    load_repo_contributors_dataset,
 )
 
 # Models used for testing, both fine-tune and semantic logit
@@ -128,13 +126,15 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:  # noqa: C901
     ].astype(str)
 
     # Load the authors dataset
-    authors = load_author_contributions_dataset()
+    # authors = load_author_contributions_dataset()
+    authors = pd.DataFrame()
 
     # Drop everything but the author_id and the name
     authors = authors[["author_id", "name"]].dropna()
 
     # Load the repos dataset to get to devs
-    repos = load_repo_contributors_dataset()
+    # repos = load_repo_contributors_dataset()
+    repos = pd.DataFrame()
 
     # Get unique devs by grouping by username
     # and then taking the first email and first "name"
