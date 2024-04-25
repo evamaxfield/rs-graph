@@ -107,9 +107,7 @@ def get_dataset(
 ) -> types.SuccessAndErroredResultsLists:
     """Download the PLOS dataset."""
     # Get all PLOS XMLs
-    import random
-
-    plos_xmls = random.sample(_get_plos_xmls(), 50000)
+    plos_xmls = _get_plos_xmls()
 
     results = [
         _process_xml(plos_xml)

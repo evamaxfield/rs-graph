@@ -128,7 +128,7 @@ def prelinked_dataset_ingestion(
     source: str,
     prod: bool = False,
     use_dask: bool = False,
-    batch_size: int = 500,
+    batch_size: int = 200,
 ) -> None:
     """Get data from OpenAlex."""
     # Create current datetime without microseconds
