@@ -5,7 +5,6 @@ import random
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
 
 import pandas as pd
 import typer
@@ -79,6 +78,8 @@ def _prelinked_dataset_ingestion_flow(
     ):
         chunk = filtered_results.successful_results[i : i + batch_size]
 
+        # TODO: add a check to see if the repo and paper are already in the database
+
         # Process open alex
         open_alex_futures = open_alex.process_open_alex_work_task.map(
             pair=chunk,
@@ -128,7 +129,7 @@ def _prelinked_dataset_ingestion_flow(
 def prelinked_dataset_ingestion(
     source: str,
     prod: bool = False,
-    processing_engine: Literal["seq", "dask", "coiled"] = "dask",
+    processing_engine: str = "dask",
     batch_size: int = 200,
 ) -> None:
     """Get data from OpenAlex."""
@@ -156,9 +157,8 @@ def prelinked_dataset_ingestion(
             cluster_class="coiled.Cluster",
             cluster_kwargs={
                 "n_workers": 5,
-                "threads_per_worker": 1,
-                "software": "rs-graph",
-                "name": "rs-graph",
+                "worker_cpu": 2,
+                "container": ""
             },
         )
     else:

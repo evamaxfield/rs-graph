@@ -60,6 +60,7 @@ dependencies = [
   "allofplos>=1,<2",
   "ghapi>=1,<2",
   "pyalex>=0.14,<0.15",
+  "msgspec>=0.18,<0.19",  # used for tracking openalex api usage
 ]
 
 [project.urls]

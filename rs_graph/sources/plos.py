@@ -7,6 +7,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET  # noqa: N817
 
 from allofplos.corpus.plos_corpus import get_corpus_dir
+from allofplos.update import main as get_latest_plos_corpus
 from tqdm import tqdm
 
 from .. import types
@@ -16,7 +17,7 @@ from .. import types
 
 def _get_plos_xmls() -> list[Path]:
     # Download all plos files
-    # get_latest_plos_corpus()
+    get_latest_plos_corpus()
 
     # Get the corpus dir
     corpus_dir = get_corpus_dir()
