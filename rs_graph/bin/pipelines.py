@@ -1,14 +1,17 @@
 #!/usr/bin/env python
 
+import math
 import random
+import time
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 import typer
-from prefect import Flow, get_run_logger, task, unmapped
+from prefect import Flow, get_run_logger, unmapped
 from prefect.task_runners import SequentialTaskRunner
 from prefect_dask.task_runners import DaskTaskRunner
+from tqdm import tqdm
 
 from rs_graph import types
 from rs_graph.db import utils as db_utils
@@ -33,10 +36,9 @@ SOURCE_MAP: dict[str, proto.DatasetRetrievalFunction] = {
 }
 
 
-@task
 def _store_errored_results(
     results: list[types.StoredRepositoryDocumentPair | types.ErrorResult],
-    store_path: str,
+    store_path: Path,
 ) -> None:
     # Get only errors
     errored_results = [
@@ -50,8 +52,9 @@ def _store_errored_results(
 
 def _prelinked_dataset_ingestion_flow(
     source: str,
+    batch_size: int,
     prod: bool,
-    errored_store_path: str,
+    errored_store_path: Path,
 ) -> None:
     # Get dataset
     source_func = SOURCE_MAP[source]
@@ -66,40 +69,58 @@ def _prelinked_dataset_ingestion_flow(
     logger = get_run_logger()
     logger.setLevel("ERROR")
 
-    # TODO: handle batched mapping to not overload the dask scheduler
+    # Create chunks of batch_size of the results to process
+    n_batches = math.ceil(len(filtered_results.successful_results) / batch_size)
+    for i in tqdm(
+        range(0, len(filtered_results.successful_results), batch_size),
+        desc="Batches",
+        total=n_batches,
+    ):
+        chunk = filtered_results.successful_results[i : i + batch_size]
 
-    # Process open alex
-    open_alex_futures = open_alex.process_open_alex_work_task.map(
-        pair=filtered_results.successful_results,
-    )
+        # Process open alex
+        open_alex_futures = open_alex.process_open_alex_work_task.map(
+            pair=chunk,
+        )
 
-    # Process github
-    github_futures = github.process_github_repo_task.map(
-        pair=open_alex_futures,
-    )
+        # Process github
+        github_futures = github.process_github_repo_task.map(
+            pair=open_alex_futures,
+        )
 
-    # Store everything
-    stored_futures = db_utils.store_full_details_task.map(
-        pair=github_futures,
-        prod=unmapped(prod),
-    )
+        # Store everything
+        stored_futures = db_utils.store_full_details_task.map(
+            pair=github_futures,
+            prod=unmapped(prod),
+        )
 
-    # Match devs and researchers
-    dev_researcher_futures = entity_matching.match_devs_and_researchers.map(
-        pair=stored_futures,
-    )
+        # Match devs and researchers
+        dev_researcher_futures = entity_matching.match_devs_and_researchers.map(
+            pair=stored_futures,
+        )
 
-    # Store the dev-researcher links
-    stored_dev_researcher_futures = db_utils.store_dev_researcher_em_links_task.map(
-        pair=dev_researcher_futures,
-        prod=unmapped(prod),
-    )
+        # Store the dev-researcher links
+        stored_dev_researcher_futures = db_utils.store_dev_researcher_em_links_task.map(
+            pair=dev_researcher_futures,
+            prod=unmapped(prod),
+        )
 
-    # Store pipeline failures
-    _store_errored_results.submit(
-        results=stored_dev_researcher_futures,
-        store_path=unmapped(errored_store_path),
-    )
+        # Store this batch's errored results
+        # Update errored store path with batch index
+        this_batch_store_path = errored_store_path.with_name(
+            errored_store_path.stem + f"-{i // batch_size}.parquet"
+        )
+        _store_errored_results(
+            # Wait for all futures to complete
+            results=[f.result() for f in stored_dev_researcher_futures],
+            store_path=this_batch_store_path,
+        )
+
+        # Sleep for a second before next chunk
+        time.sleep(1)
+
+    # Cooldown
+    time.sleep(3)
 
 
 @app.command()
@@ -107,6 +128,7 @@ def prelinked_dataset_ingestion(
     source: str,
     prod: bool = False,
     use_dask: bool = False,
+    batch_size: int = 500,
 ) -> None:
     """Get data from OpenAlex."""
     # Create current datetime without microseconds
@@ -118,7 +140,7 @@ def prelinked_dataset_ingestion(
     current_datetime_dir = DEFAULT_RESULTS_DIR / current_datetime_str
     # Create "results" dir
     current_datetime_dir.mkdir(exist_ok=True, parents=True)
-    errored_store_path = str(
+    errored_store_path = (
         current_datetime_dir / f"process-results-{source}-errored.parquet"
     )
 
@@ -146,6 +168,7 @@ def prelinked_dataset_ingestion(
     # Start the flow
     ingest_flow(
         source=source,
+        batch_size=batch_size,
         prod=prod,
         errored_store_path=errored_store_path,
     )

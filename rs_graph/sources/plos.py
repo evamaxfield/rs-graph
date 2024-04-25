@@ -107,7 +107,9 @@ def get_dataset(
 ) -> types.SuccessAndErroredResultsLists:
     """Download the PLOS dataset."""
     # Get all PLOS XMLs
-    plos_xmls = _get_plos_xmls()
+    import random
+
+    plos_xmls = random.sample(_get_plos_xmls(), 50000)
 
     results = [
         _process_xml(plos_xml)
@@ -132,19 +134,3 @@ def get_dataset(
         successful_results=successful_results,
         errored_results=errored_results,
     )
-
-
-def _get_random_sample(
-    seed: int = 12,
-) -> list[dict]:
-    # Get all data
-    import random
-
-    # Set seed
-    random.seed(seed)
-
-    # Get all data
-    results = get_dataset()
-
-    # Take random sample
-    return random.sample(results.successful_results, 50)
