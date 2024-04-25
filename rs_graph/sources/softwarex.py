@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 import time
 import traceback
@@ -14,11 +13,7 @@ from fastcore.net import HTTP403ForbiddenError
 from ghapi.all import GhApi, paged
 from tqdm import tqdm
 
-from ..types import ErrorResult, RepositoryDocumentPair, SuccessAndErroredResultsLists
-
-###############################################################################
-
-log = logging.getLogger(__name__)
+from .. import types
 
 ###############################################################################
 
@@ -43,7 +38,7 @@ def _process_elsevier_repo(
     repo_name: str,
     github_api: GhApi,
     elsevier_api_key: str,
-) -> RepositoryDocumentPair | ErrorResult:
+) -> types.BasicRepositoryDocumentPair | types.ErrorResult:
     # Be nice to APIs
     time.sleep(0.85)
 
@@ -73,13 +68,13 @@ def _process_elsevier_repo(
     else:
         try:
             response.raise_for_status()
-        except Exception:
-            log.debug(f"Error getting response from Elsevier API for repo: {repo_name}")
-            return ErrorResult(
+        except Exception as e:
+            print(f"Error getting response from Elsevier API for repo: {repo_name}")
+            return types.ErrorResult(
                 source="softwarex",
                 step="elsevier-repo-processing",
-                identifier=repo_name,
-                error="Error getting response",
+                identifier=repo_url,
+                error=str(e),
                 traceback=traceback.format_exc(),
             )
 
@@ -91,13 +86,11 @@ def _process_elsevier_repo(
         # Check number of results
         num_results = len(response_json["search-results"]["entry"])
         if num_results != 1:
-            log.debug(
-                f"Unexpected number of results for repo: {repo_name} ({num_results})"
-            )
-            return ErrorResult(
+            print(f"Unexpected number of results for repo: {repo_name} ({num_results})")
+            return types.ErrorResult(
                 source="softwarex",
                 step="elsevier-repo-processing",
-                identifier=repo_name,
+                identifier=repo_url,
                 error="Unexpected number of results",
                 traceback="",
             )
@@ -107,20 +100,18 @@ def _process_elsevier_repo(
 
         # Get the title, doi, and published date
         doi = first_result["prism:doi"]
-    except Exception:
-        log.debug(
-            f"Error parsing response json from Elsevier API for repo: {repo_name}"
-        )
-        return ErrorResult(
+    except Exception as e:
+        print(f"Error parsing response json from Elsevier API for repo: {repo_name}")
+        return types.ErrorResult(
             source="softwarex",
             step="elsevier-repo-processing",
-            identifier=repo_name,
-            error="Error parsing response json",
+            identifier=repo_url,
+            error=str(e),
             traceback=traceback.format_exc(),
         )
 
     # Return the result
-    return RepositoryDocumentPair(
+    return types.BasicRepositoryDocumentPair(
         source="softwarex",
         repo_url=repo_url,
         paper_doi=doi,
@@ -129,7 +120,7 @@ def _process_elsevier_repo(
 
 def get_dataset(
     **kwargs: dict[str, str],
-) -> SuccessAndErroredResultsLists:
+) -> types.SuccessAndErroredResultsLists:
     """Download the SoftwareX dataset."""
     # Load env
     load_dotenv()
@@ -172,17 +163,17 @@ def get_dataset(
         )
 
         # Add to results
-        if isinstance(result, RepositoryDocumentPair):
+        if isinstance(result, types.BasicRepositoryDocumentPair):
             successful_results.append(result)
         else:
             errored_results.append(result)
 
     # Log total succeeded and errored
-    log.info(f"Total succeeded: {len(successful_results)}")
-    log.info(f"Total errored: {len(errored_results)}")
+    print(f"Total succeeded: {len(successful_results)}")
+    print(f"Total errored: {len(errored_results)}")
 
     # Return filepath
-    return SuccessAndErroredResultsLists(
+    return types.SuccessAndErroredResultsLists(
         successful_results=successful_results,
         errored_results=errored_results,
     )

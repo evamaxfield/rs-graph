@@ -39,32 +39,28 @@ dependencies = [
   "backoff>=2,<3",
   "bokeh>=3,<4",
   "distributed>=2024.3.1",
-  "ghapi>=1,<2",
   "parse>=1,<2",
+  "prefect>=2,<3",
+  "prefect-dask>=0.2,<0.3",
   "requests>=2,<3",
-  "semanticscholar>=0.7,<0.8",
   "sentencepiece>=0.1,<0.2",
   "sentence-transformers>=2,<3",
   # database
   "alembic[tz]>=1,<2",
   "sqlmodel>=0.0.16,<0.0.17",
   # viz
-  "altair>=5,<6",
   "bokeh>=3,<4",
   "matplotlib>=3,<4",
-  "networkx>=3,<4",
   "opinionated>=0.0.2,<0.0.3",
-  "scipy>=1,<2",
-  "umap-learn[plot]>=0.5.4,<0.6",
   # statistics and ml
-  "autotrain-advanced>=0.7,<0.8",
-  "datasets>=2,<3",
   "scikit-learn>=1,<2",
   "skops==0.9.0",
   "statsmodels>=0.14,<0.15",
   # specific datasets and data sources
   "allofplos>=1,<2",
+  "ghapi>=1,<2",
   "pyalex>=0.14,<0.15",
+  "msgspec>=0.18,<0.19",  # used for tracking openalex api usage
 ]
 
 [project.urls]
@@ -82,6 +78,10 @@ lint = [
 dev = [
   "ipython",
   "jupyterlab",
+]
+training = [
+  "autotrain-advanced>=0.7,<0.8",
+  "datasets>=2,<3",
 ]
 
 # entry points

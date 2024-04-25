@@ -1,8 +1,8 @@
-"""Git Commit: f6de62c.
+"""Git Commit: 7333ca6.
 
-Revision ID: 478778943877
+Revision ID: f75d994f9c44
 Revises: 
-Create Date: 2024-04-17 11:30:21.673195
+Create Date: 2024-04-25 12:17:44.203899
 
 """
 from collections.abc import Sequence
@@ -12,7 +12,7 @@ import sqlmodel
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "478778943877"
+revision: str = "f75d994f9c44"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -47,6 +47,26 @@ def upgrade() -> None:
         sa.Column("updated_datetime", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("name"),
+    )
+    op.create_table(
+        "document",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("doi", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("open_alex_id", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("title", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("publication_date", sa.Date(), nullable=False),
+        sa.Column("cited_by_count", sa.Integer(), nullable=False),
+        sa.Column("cited_by_percentile_year_min", sa.Integer(), nullable=False),
+        sa.Column("cited_by_percentile_year_max", sa.Integer(), nullable=False),
+        sa.Column(
+            "created_datetime",
+            sa.DateTime(),
+            server_default=sa.text("(CURRENT_TIMESTAMP)"),
+            nullable=True,
+        ),
+        sa.Column("updated_datetime", sa.DateTime(), nullable=True),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("doi"),
     )
     op.create_table(
         "funder",
@@ -148,17 +168,10 @@ def upgrade() -> None:
         sa.UniqueConstraint("code_host_id", "username"),
     )
     op.create_table(
-        "document",
+        "document_abstract",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("doi", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column("open_alex_id", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column("title", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column("publication_date", sa.Date(), nullable=False),
-        sa.Column("cited_by_count", sa.Integer(), nullable=False),
-        sa.Column("cited_by_percentile_year_min", sa.Integer(), nullable=False),
-        sa.Column("cited_by_percentile_year_max", sa.Integer(), nullable=False),
-        sa.Column("dataset_source_id", sa.Integer(), nullable=False),
-        sa.Column("abstract", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column("document_id", sa.Integer(), nullable=False),
+        sa.Column("content", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
         sa.Column(
             "created_datetime",
             sa.DateTime(),
@@ -167,11 +180,60 @@ def upgrade() -> None:
         ),
         sa.Column("updated_datetime", sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(
-            ["dataset_source_id"],
-            ["dataset_source.id"],
+            ["document_id"],
+            ["document.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("doi"),
+        sa.UniqueConstraint("document_id"),
+    )
+    op.create_table(
+        "document_contributor",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("researcher_id", sa.Integer(), nullable=False),
+        sa.Column("document_id", sa.Integer(), nullable=False),
+        sa.Column("position", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("is_corresponding", sa.Boolean(), nullable=False),
+        sa.Column(
+            "created_datetime",
+            sa.DateTime(),
+            server_default=sa.text("(CURRENT_TIMESTAMP)"),
+            nullable=True,
+        ),
+        sa.Column("updated_datetime", sa.DateTime(), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["document_id"],
+            ["document.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["researcher_id"],
+            ["researcher.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("researcher_id", "document_id"),
+    )
+    op.create_table(
+        "document_topic",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("document_id", sa.Integer(), nullable=False),
+        sa.Column("topic_id", sa.Integer(), nullable=False),
+        sa.Column("score", sa.Float(), nullable=False),
+        sa.Column(
+            "created_datetime",
+            sa.DateTime(),
+            server_default=sa.text("(CURRENT_TIMESTAMP)"),
+            nullable=True,
+        ),
+        sa.Column("updated_datetime", sa.DateTime(), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["document_id"],
+            ["document.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["topic_id"],
+            ["topic.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("document_id", "topic_id"),
     )
     op.create_table(
         "funding_instance",
@@ -198,6 +260,15 @@ def upgrade() -> None:
         sa.Column("code_host_id", sa.Integer(), nullable=False),
         sa.Column("owner", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
         sa.Column("name", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("description", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column("is_fork", sa.Boolean(), nullable=False),
+        sa.Column("forks_count", sa.Integer(), nullable=False),
+        sa.Column("stargazers_count", sa.Integer(), nullable=False),
+        sa.Column("watchers_count", sa.Integer(), nullable=False),
+        sa.Column("open_issues_count", sa.Integer(), nullable=False),
+        sa.Column("size_kb", sa.Integer(), nullable=False),
+        sa.Column("creation_datetime", sa.DateTime(), nullable=False),
+        sa.Column("last_pushed_datetime", sa.DateTime(), nullable=False),
         sa.Column(
             "created_datetime",
             sa.DateTime(),
@@ -213,12 +284,10 @@ def upgrade() -> None:
         sa.UniqueConstraint("code_host_id", "owner", "name"),
     )
     op.create_table(
-        "document_contributor",
+        "document_contributor_institution",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("researcher_id", sa.Integer(), nullable=False),
-        sa.Column("document_id", sa.Integer(), nullable=False),
-        sa.Column("position", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-        sa.Column("is_corresponding", sa.Boolean(), nullable=False),
+        sa.Column("document_contributor_id", sa.Integer(), nullable=False),
+        sa.Column("institution_id", sa.Integer(), nullable=False),
         sa.Column(
             "created_datetime",
             sa.DateTime(),
@@ -227,15 +296,15 @@ def upgrade() -> None:
         ),
         sa.Column("updated_datetime", sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(
-            ["document_id"],
-            ["document.id"],
+            ["document_contributor_id"],
+            ["document_contributor.id"],
         ),
         sa.ForeignKeyConstraint(
-            ["researcher_id"],
-            ["researcher.id"],
+            ["institution_id"],
+            ["institution.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("researcher_id", "document_id"),
+        sa.UniqueConstraint("document_contributor_id", "institution_id"),
     )
     op.create_table(
         "document_funding_instance",
@@ -265,7 +334,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("document_id", sa.Integer(), nullable=False),
         sa.Column("repository_id", sa.Integer(), nullable=False),
-        sa.Column("source", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("dataset_source_id", sa.Integer(), nullable=False),
         sa.Column("em_model_name", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
         sa.Column(
             "em_model_version", sqlmodel.sql.sqltypes.AutoString(), nullable=True
@@ -278,6 +347,10 @@ def upgrade() -> None:
         ),
         sa.Column("updated_datetime", sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(
+            ["dataset_source_id"],
+            ["dataset_source.id"],
+        ),
+        sa.ForeignKeyConstraint(
             ["document_id"],
             ["document.id"],
         ),
@@ -287,30 +360,6 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("document_id", "repository_id"),
-    )
-    op.create_table(
-        "document_topic",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("document_id", sa.Integer(), nullable=False),
-        sa.Column("topic_id", sa.Integer(), nullable=False),
-        sa.Column("score", sa.Float(), nullable=False),
-        sa.Column(
-            "created_datetime",
-            sa.DateTime(),
-            server_default=sa.text("(CURRENT_TIMESTAMP)"),
-            nullable=True,
-        ),
-        sa.Column("updated_datetime", sa.DateTime(), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["document_id"],
-            ["document.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["topic_id"],
-            ["topic.id"],
-        ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("document_id", "topic_id"),
     )
     op.create_table(
         "repository_contributor",
@@ -336,6 +385,45 @@ def upgrade() -> None:
         sa.UniqueConstraint("repository_id", "developer_account_id"),
     )
     op.create_table(
+        "repository_language",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("repository_id", sa.Integer(), nullable=False),
+        sa.Column("language", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+        sa.Column("bytes_of_code", sa.Integer(), nullable=False),
+        sa.Column(
+            "created_datetime",
+            sa.DateTime(),
+            server_default=sa.text("(CURRENT_TIMESTAMP)"),
+            nullable=True,
+        ),
+        sa.Column("updated_datetime", sa.DateTime(), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["repository_id"],
+            ["repository.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("repository_id", "language"),
+    )
+    op.create_table(
+        "repository_readme",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("repository_id", sa.Integer(), nullable=False),
+        sa.Column("content", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+        sa.Column(
+            "created_datetime",
+            sa.DateTime(),
+            server_default=sa.text("(CURRENT_TIMESTAMP)"),
+            nullable=True,
+        ),
+        sa.Column("updated_datetime", sa.DateTime(), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["repository_id"],
+            ["repository.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("repository_id"),
+    )
+    op.create_table(
         "researcher_developer_account_link",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("researcher_id", sa.Integer(), nullable=False),
@@ -358,49 +446,29 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("researcher_id", "developer_account_id"),
     )
-    op.create_table(
-        "document_contributor_institution",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("document_contributor_id", sa.Integer(), nullable=False),
-        sa.Column("institution_id", sa.Integer(), nullable=False),
-        sa.Column(
-            "created_datetime",
-            sa.DateTime(),
-            server_default=sa.text("(CURRENT_TIMESTAMP)"),
-            nullable=True,
-        ),
-        sa.Column("updated_datetime", sa.DateTime(), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["document_contributor_id"],
-            ["document_contributor.id"],
-        ),
-        sa.ForeignKeyConstraint(
-            ["institution_id"],
-            ["institution.id"],
-        ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("document_contributor_id", "institution_id"),
-    )
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
-    op.drop_table("document_contributor_institution")
     op.drop_table("researcher_developer_account_link")
+    op.drop_table("repository_readme")
+    op.drop_table("repository_language")
     op.drop_table("repository_contributor")
-    op.drop_table("document_topic")
     op.drop_table("document_repository_link")
     op.drop_table("document_funding_instance")
-    op.drop_table("document_contributor")
+    op.drop_table("document_contributor_institution")
     op.drop_table("repository")
     op.drop_table("funding_instance")
-    op.drop_table("document")
+    op.drop_table("document_topic")
+    op.drop_table("document_contributor")
+    op.drop_table("document_abstract")
     op.drop_table("developer_account")
     op.drop_table("topic")
     op.drop_table("researcher")
     op.drop_table("institution")
     op.drop_table("funder")
+    op.drop_table("document")
     op.drop_table("dataset_source")
     op.drop_table("code_host")
     # ### end Alembic commands ###

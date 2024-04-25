@@ -1,22 +1,11 @@
 #!/usr/bin/env python
 
-import logging
 import traceback
 
 from parse import Parser
+from tqdm import tqdm
 
-from ..types import (
-    CodeHostResult,
-    ErrorResult,
-    ExpandedRepositoryDocumentPair,
-    RepositoryDocumentPair,
-    SuccessAndErroredResultsLists,
-)
-from .dask_functions import process_func
-
-#######################################################################################
-
-log = logging.getLogger(__name__)
+from .. import types
 
 #######################################################################################
 
@@ -73,50 +62,50 @@ SOURCEFORGE_REPO_PARSER = Parser(
 #######################################################################################
 
 
-def _parse_github_urls(url: str) -> CodeHostResult | None:
+def _parse_github_urls(url: str) -> types.CodeHostResult | None:
     if result := GITHUB_COM_REPO_PARSER.parse(url):
-        return CodeHostResult("github", result["owner"], result["repo"])
+        return types.CodeHostResult("github", result["owner"], result["repo"])
     if result := GITHUB_IO_REPO_PARSER.parse(url):
-        return CodeHostResult("github", result["owner"], result["repo"])
+        return types.CodeHostResult("github", result["owner"], result["repo"])
     if result := GITHUB_IO_REPO_PARSER_TYPO.parse(url):
-        return CodeHostResult("github", result["owner"], result["repo"])
+        return types.CodeHostResult("github", result["owner"], result["repo"])
     if result := GITHUB_COM_OWNER_PARSER.parse(url):
-        return CodeHostResult("github", result["owner"], None)
+        return types.CodeHostResult("github", result["owner"], None)
     if result := GITHUB_IO_OWNER_PARSER.parse(url):
-        return CodeHostResult("github", result["owner"], None)
+        return types.CodeHostResult("github", result["owner"], None)
     if result := GITHUB_IO_OWNER_PARSER_TYPO.parse(url):
-        return CodeHostResult("github", result["owner"], None)
+        return types.CodeHostResult("github", result["owner"], None)
 
     return None
 
 
-def _parse_gitlab_urls(url: str) -> CodeHostResult | None:
+def _parse_gitlab_urls(url: str) -> types.CodeHostResult | None:
     if result := GITLAB_COM_REPO_PARSER.parse(url):
-        return CodeHostResult("gitlab", result["owner"], result["repo"])
+        return types.CodeHostResult("gitlab", result["owner"], result["repo"])
     if result := GITLAB_IO_REPO_PARSER.parse(url):
-        return CodeHostResult("gitlab", result["owner"], result["repo"])
+        return types.CodeHostResult("gitlab", result["owner"], result["repo"])
     if result := GITLAB_IO_REPO_PARSER_TYPO.parse(url):
-        return CodeHostResult("gitlab", result["owner"], result["repo"])
+        return types.CodeHostResult("gitlab", result["owner"], result["repo"])
     if result := GITLAB_COM_OWNER_PARSER.parse(url):
-        return CodeHostResult("gitlab", result["owner"], None)
+        return types.CodeHostResult("gitlab", result["owner"], None)
     if result := GITLAB_IO_OWNER_PARSER.parse(url):
-        return CodeHostResult("gitlab", result["owner"], None)
+        return types.CodeHostResult("gitlab", result["owner"], None)
     if result := GITLAB_IO_OWNER_PARSER_TYPO.parse(url):
-        return CodeHostResult("gitlab", result["owner"], None)
+        return types.CodeHostResult("gitlab", result["owner"], None)
 
     return None
 
 
-def _parse_bitbucket_urls(url: str) -> CodeHostResult | None:
+def _parse_bitbucket_urls(url: str) -> types.CodeHostResult | None:
     if result := BITBUCKET_ORG_REPO_PARSER.parse(url):
-        return CodeHostResult("bitbucket", result["owner"], result["repo"])
+        return types.CodeHostResult("bitbucket", result["owner"], result["repo"])
 
     return None
 
 
-def _parse_sourceforge_urls(url: str) -> CodeHostResult | None:
+def _parse_sourceforge_urls(url: str) -> types.CodeHostResult | None:
     if result := SOURCEFORGE_REPO_PARSER.parse(url):
-        return CodeHostResult("sourceforge", None, result["repo"])
+        return types.CodeHostResult("sourceforge", None, result["repo"])
 
     return None
 
@@ -128,7 +117,7 @@ def _clean_repo_name(repo: str) -> str:
     return name
 
 
-def parse_code_host_url(url: str) -> CodeHostResult:
+def parse_code_host_url(url: str) -> types.CodeHostResult:
     # Standardize the URL
     url = url.strip().lower()
 
@@ -172,10 +161,10 @@ def parse_code_host_url(url: str) -> CodeHostResult:
 
 
 def _wrapped_parse_code_host_url(
-    repo_paper_pair: RepositoryDocumentPair,
-) -> ExpandedRepositoryDocumentPair | ErrorResult:
+    pair: types.BasicRepositoryDocumentPair,
+) -> types.ExpandedRepositoryDocumentPair | types.ErrorResult:
     try:
-        code_host_res = parse_code_host_url(repo_paper_pair.repo_url)
+        code_host_res = parse_code_host_url(pair.repo_url)
 
         # Check if github
         if (
@@ -183,60 +172,63 @@ def _wrapped_parse_code_host_url(
             or code_host_res.owner is None
             or code_host_res.name is None
         ):
-            return ErrorResult(
-                source=repo_paper_pair.source,
+            return types.ErrorResult(
+                source=pair.source,
                 step="code-host-parsing",
-                identifier=repo_paper_pair.repo_url,
+                identifier=pair.paper_doi,
                 error="Not a GitHub repository",
                 traceback="",
             )
 
-        return ExpandedRepositoryDocumentPair(
-            source=repo_paper_pair.source,
-            repo_host=code_host_res.host,
-            repo_owner=code_host_res.owner,
-            repo_name=code_host_res.name,
-            paper_doi=repo_paper_pair.paper_doi,
-            paper_extra_data=repo_paper_pair.paper_extra_data,
+        return types.ExpandedRepositoryDocumentPair(
+            source=pair.source,
+            repo_parts=types.RepoParts(
+                host=code_host_res.host,
+                owner=code_host_res.owner,
+                name=code_host_res.name,
+            ),
+            paper_doi=pair.paper_doi,
+            paper_extra_data=pair.paper_extra_data,
         )
 
-    except ValueError:
-        return ErrorResult(
-            source=repo_paper_pair.source,
+    except ValueError as e:
+        return types.ErrorResult(
+            source=pair.source,
             step="code-host-parsing",
-            identifier=repo_paper_pair.repo_url,
-            error="Could not parse code host URL",
+            identifier=pair.paper_doi,
+            error=str(e),
             traceback=traceback.format_exc(),
         )
 
 
 def filter_repo_paper_pairs(
-    pairs: list[RepositoryDocumentPair],
+    pairs: list[types.BasicRepositoryDocumentPair],
     **kwargs: dict,
-) -> SuccessAndErroredResultsLists:
+) -> types.SuccessAndErroredResultsLists:
     # Filter each repo pair
     # Accepting only GitHub full repository results
-    raw_results = process_func(
-        name="code-host-parsing",
-        func=_wrapped_parse_code_host_url,
-        func_iterables=[pairs],
-        use_dask=False,  # We don't need Dask here
-    )
+    results = [
+        _wrapped_parse_code_host_url(pair)
+        for pair in tqdm(
+            pairs,
+            desc="Filtering Repository Pairs",
+        )
+    ]
 
     # Split results
-    split_results = SuccessAndErroredResultsLists(
+    split_results = types.SuccessAndErroredResultsLists(
         successful_results=[
             result
-            for result in raw_results
-            if isinstance(result, ExpandedRepositoryDocumentPair)
+            for result in results
+            if isinstance(result, types.ExpandedRepositoryDocumentPair)
         ],
         errored_results=[
-            result for result in raw_results if isinstance(result, ErrorResult)
+            result for result in results if isinstance(result, types.ErrorResult)
         ],
     )
 
     # Log total succeeded and errored
-    log.info(f"Total succeeded: {len(split_results.successful_results)}")
-    log.info(f"Total errored: {len(split_results.errored_results)}")
+    print(f"Total succeeded: {len(split_results.successful_results)}")
+    print(f"Total errored: {len(split_results.errored_results)}")
 
     return split_results

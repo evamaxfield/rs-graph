@@ -2,15 +2,9 @@
 
 from __future__ import annotations
 
-import logging
-
 import requests
 
-from ..types import RepositoryDocumentPair, SuccessAndErroredResultsLists
-
-###############################################################################
-
-log = logging.getLogger(__name__)
+from .. import types
 
 ###############################################################################
 
@@ -23,12 +17,12 @@ JOSS_PUBLISHED_PAPERS_URL_TEMPLATE = (
 
 def _process_joss_results_page(
     results: list[dict],
-) -> tuple[list[RepositoryDocumentPair | None], bool]:
+) -> tuple[list[types.BasicRepositoryDocumentPair | None], bool]:
     # Store "continuation" flag
     continue_next = len(results) == 10
 
     # Store processed results
-    processed_results: list[RepositoryDocumentPair | None] = []
+    processed_results: list[types.BasicRepositoryDocumentPair | None] = []
 
     # Parse each result
     for paper in results:
@@ -39,7 +33,7 @@ def _process_joss_results_page(
 
         # Parse paper information
         processed_results.append(
-            RepositoryDocumentPair(
+            types.BasicRepositoryDocumentPair(
                 source="joss",
                 repo_url=paper["software_repository"],
                 paper_doi=paper["doi"],
@@ -51,7 +45,7 @@ def _process_joss_results_page(
 
 def get_dataset(
     **kwargs: dict[str, str],
-) -> SuccessAndErroredResultsLists:
+) -> types.SuccessAndErroredResultsLists:
     """Download the JOSS dataset."""
     # Get all processed results
     processed_results = []
@@ -76,8 +70,8 @@ def get_dataset(
         try:
             response.raise_for_status()
         except Exception as e:
-            log.error(f"Error getting JOSS page {current_page}: {e}")
-            log.error(f"Full response data: {response}")
+            print(f"Error getting JOSS page {current_page}: {e}")
+            print(f"Full response data: {response}")
             continue
 
         # Process page results
@@ -105,13 +99,13 @@ def get_dataset(
 
         # Update progress
         if total_processed % 500 == 0:
-            log.info(f"Processed {total_processed} papers")
+            print(f"Processed {total_processed} papers")
 
     # Log final metrics
-    log.info(f"Total processed: {total_processed}")
-    log.info(f"Total errored: {total_errored}")
+    print(f"Total processed: {total_processed}")
+    print(f"Total errored: {total_errored}")
 
-    return SuccessAndErroredResultsLists(
+    return types.SuccessAndErroredResultsLists(
         successful_results=processed_results,
         errored_results=[],
     )

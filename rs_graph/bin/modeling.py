@@ -17,6 +17,7 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import train_test_split
 from skops import io as skio
+from sqlmodel import Session, select
 from statsmodels.stats.inter_rater import aggregate_raters, fleiss_kappa
 from tqdm import tqdm
 
@@ -24,11 +25,13 @@ from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.data import (
     DATA_FILES_DIR,
     load_annotated_dev_author_em_dataset,
-    load_author_contributions_dataset,
+    # load_author_contributions_dataset,
     load_multi_annotator_dev_author_em_irr_dataset,
-    load_multi_annotator_repo_paper_em_irr_dataset,
-    load_repo_contributors_dataset,
 )
+from rs_graph.db import models as db_models
+from rs_graph.db import utils as db_utils
+
+# load_repo_contributors_dataset,
 from rs_graph.ml.dev_author_em_clf import (
     DEV_AUTHOR_EM_CLASSIFIER_PATH,
     DEV_AUTHOR_EM_EMBEDDING_MODEL,
@@ -145,7 +148,8 @@ def create_developer_author_em_dataset_for_annotation(  # noqa: C901
 
     # Load the repo contributors dataset
     log.info("Loading developer contributions dataset...")
-    devs = load_repo_contributors_dataset()
+    # devs = load_repo_contributors_dataset()
+    devs = pd.DataFrame()
 
     # Get unique devs frame
     unique_devs_df, _ = _get_unique_devs_frame_from_dev_contributions(
@@ -154,7 +158,8 @@ def create_developer_author_em_dataset_for_annotation(  # noqa: C901
 
     # Load the author contributions dataset
     log.info("Loading author contributions dataset...")
-    authors = load_author_contributions_dataset()
+    # authors = load_author_contributions_dataset()
+    authors = pd.DataFrame()
 
     # Drop authors without an author_id
     authors = authors.dropna(subset=["author_id"])
@@ -500,13 +505,15 @@ def train_dev_author_em_classifier(
     ].astype(str)
 
     # Load the authors dataset
-    authors = load_author_contributions_dataset()
+    # authors = load_author_contributions_dataset()
+    authors = pd.DataFrame()
 
     # Drop everything but the author_id and the name
     authors = authors[["author_id", "name"]].dropna()
 
     # Load the repos dataset to get to devs
-    repos = load_repo_contributors_dataset()
+    # repos = load_repo_contributors_dataset()
+    repos = pd.DataFrame()
 
     # Get unique devs by grouping by username
     # and then taking the first email and first "name"
@@ -646,24 +653,156 @@ def train_dev_author_em_classifier(
     misclassifications.to_csv(misclassifications_save_path, index=False)
 
 
-@app.command()
-def calculate_irr_for_repo_paper_em_annotation(
-    include_diff_rows: bool = False,
-    debug: bool = False,
-) -> None:
-    # Setup logging
-    setup_logger(debug=debug)
+def _create_dataset_for_document_repository_training(
+    prod: bool = False,
+) -> pd.DataFrame:
+    # Get DB engine
+    engine = db_utils.get_engine(prod=prod)
 
-    # Load the repo-paper EM annotation dataset
-    log.info("Loading repo-paper EM annotation dataset...")
-    repo_paper_em_irr_df = load_multi_annotator_repo_paper_em_irr_dataset()
+    # Start session
+    rows = []
+    with Session(engine) as session:
+        # Create a dataframe of:
+        # "document_id", "document_doi", "document_title", "document_abstract"
+        # "document_publication_date", "document_contributor_names",
+        # "repository_id", "repository_name",
+        # "repository_description", "repository_creation_date",
+        # "repository_contributor_usernames", "repository_contributor_names",
+        # "repository_contributor_emails"
+        # "match"
+        stmt = (
+            select(
+                db_models.Document,
+                db_models.DocumentRepositoryLink,
+                db_models.Repository,
+            )
+            .join(
+                db_models.DocumentRepositoryLink,
+                db_models.DocumentRepositoryLink.document_id == db_models.Document.id,
+            )
+            .join(
+                db_models.Repository,
+                db_models.DocumentRepositoryLink.repository_id
+                == db_models.Repository.id,
+            )
+        )
 
-    _print_irr_stats(
-        irr_df=repo_paper_em_irr_df,
-        compare_col_one="paper_url",
-        compare_col_two="repo_url",
-        include_diff_rows=include_diff_rows,
-    )
+        # Iter data
+        for doc, link, repo in session.exec(stmt):
+            # Get doc contributors for this doc
+            doc_contribs_statement = (
+                select(
+                    db_models.Researcher,
+                )
+                .join(
+                    db_models.DocumentContributor,
+                )
+                .where(
+                    db_models.DocumentContributor.document_id == doc.id,
+                )
+            )
+            doc_contrib_names = []
+            for researcher in session.exec(doc_contribs_statement):
+                doc_contrib_names.append(researcher.name.strip())
+
+            # Get repo contributors for this repo
+            repo_contribs_statement = (
+                select(
+                    db_models.DeveloperAccount,
+                )
+                .join(
+                    db_models.RepositoryContributor,
+                )
+                .where(
+                    db_models.RepositoryContributor.repository_id == repo.id,
+                )
+            )
+            repo_contrib_usernames = []
+            repo_contrib_names = []
+            repo_contrib_emails = []
+            for dev_account in session.exec(repo_contribs_statement):
+                repo_contrib_usernames.append(dev_account.username.strip())
+                if dev_account.name is not None:
+                    repo_contrib_names.append(dev_account.name.strip())
+                if dev_account.email is not None:
+                    repo_contrib_emails.append(dev_account.email.strip())
+
+            # Remove Nones
+            repo_contrib_names = [v for v in repo_contrib_names if v is not None]
+            repo_contrib_emails = [v for v in repo_contrib_emails if v is not None]
+
+            # Add to rows
+            rows.append(
+                {
+                    "dataset_source": link.dataset_source_id,
+                    "document_id": doc.id,
+                    "document_doi": doc.doi,
+                    "document_title": doc.title,
+                    "document_abstract": doc.abstract,
+                    "document_publication_date": doc.publication_date.isoformat(),
+                    "document_contributor_names": ", ".join(doc_contrib_names),
+                    "repository_id": repo.id,
+                    "repository_name": repo.name,
+                    "repository_description": repo.description,
+                    "repository_creation_date": (
+                        repo.creation_datetime.date().isoformat()
+                    ),
+                    "repository_contributor_usernames": ", ".join(
+                        repo_contrib_usernames
+                    ),
+                    "repository_contributor_names": ", ".join(repo_contrib_names),
+                    "repository_contributor_emails": ", ".join(repo_contrib_emails),
+                    "match": "match",
+                }
+            )
+
+    # Convert to dataframe
+    df = pd.DataFrame(rows)
+
+    # For every row, create a random negative sample
+    # using the repository details of another row
+    negative_samples = []
+    for _, row in df.iterrows():
+        # Get a random row
+        random_row = df.sample(n=1).iloc[0]
+
+        # Add to negative samples
+        negative_samples.append(
+            {
+                "dataset_source": -1,
+                "document_id": row["document_id"],
+                "document_doi": row["document_doi"],
+                "document_title": row["document_title"],
+                "document_abstract": row["document_abstract"],
+                "document_publication_date": row["document_publication_date"],
+                "document_contributor_names": row["document_contributor_names"],
+                "repository_id": random_row["repository_id"],
+                "repository_name": random_row["repository_name"],
+                "repository_description": random_row["repository_description"],
+                "repository_creation_date": random_row["repository_creation_date"],
+                "repository_contributor_usernames": random_row[
+                    "repository_contributor_usernames"
+                ],
+                "repository_contributor_names": random_row[
+                    "repository_contributor_names"
+                ],
+                "repository_contributor_emails": random_row[
+                    "repository_contributor_emails"
+                ],
+                "match": "no-match",
+            }
+        )
+
+    # Convert to dataframe
+    negative_df = pd.DataFrame(negative_samples)
+
+    # Concatenate the two dataframes
+    full_df = pd.concat([df, negative_df])
+
+    # Shuffle the dataframe
+    full_df = full_df.sample(frac=1).reset_index(drop=True)
+
+    return full_df
 
 
 ###############################################################################

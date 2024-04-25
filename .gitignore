@@ -150,3 +150,4 @@ dev-author-em-annotation-dataset.csv
 dev-author-em-annotation-dataset-irr.csv
 dev-author-em-confusion-matrix.png
 dev-author-em-roc-curve.png
+scratch.py

@@ -1,22 +1,23 @@
 #!/usr/bin/env python
 
-import logging
+import math
+import random
+import time
 from datetime import datetime
-from functools import partial
 from pathlib import Path
 
 import pandas as pd
 import typer
+from prefect import Flow, get_run_logger, unmapped
+from prefect.task_runners import SequentialTaskRunner
+from prefect_dask.task_runners import DaskTaskRunner
+from tqdm import tqdm
 
-from rs_graph.bin.typer_utils import setup_logger
+from rs_graph import types
+from rs_graph.db import utils as db_utils
 from rs_graph.enrichment import entity_matching, github, open_alex
-from rs_graph.sources import joss, plos, proto, softwarex
-from rs_graph.types import SuccessAndErroredResultsLists
+from rs_graph.sources import joss, plos, proto, pwc
 from rs_graph.utils import code_host_parsing
-
-###############################################################################
-
-log = logging.getLogger(__name__)
 
 ###############################################################################
 
@@ -30,48 +31,108 @@ DEFAULT_RESULTS_DIR = Path("processing-results")
 SOURCE_MAP: dict[str, proto.DatasetRetrievalFunction] = {
     "joss": joss.get_dataset,
     "plos": plos.get_dataset,
-    "softwarex": softwarex.get_dataset,
+    # "softwarex": softwarex.get_dataset,
+    "pwc": pwc.get_dataset,
 }
 
 
-def _split_and_store_results(
-    new_results: SuccessAndErroredResultsLists,
-    old_results: SuccessAndErroredResultsLists,
-    success_results_filepath: str,
-    errored_results_filepath: str,
-) -> SuccessAndErroredResultsLists:
-    # Combine results
-    results = SuccessAndErroredResultsLists(
-        successful_results=new_results.successful_results,
-        errored_results=old_results.errored_results + new_results.errored_results,
+def _store_errored_results(
+    results: list[types.StoredRepositoryDocumentPair | types.ErrorResult],
+    store_path: Path,
+) -> None:
+    # Get only errors
+    errored_results = [
+        result for result in results if isinstance(result, types.ErrorResult)
+    ]
+
+    # Store errored results
+    errored_df = pd.DataFrame(errored_results)
+    errored_df.to_parquet(store_path)
+
+
+def _prelinked_dataset_ingestion_flow(
+    source: str,
+    batch_size: int,
+    prod: bool,
+    errored_store_path: Path,
+) -> None:
+    # Get dataset
+    source_func = SOURCE_MAP[source]
+    source_results = source_func()
+
+    # Filter dataset
+    filtered_results = code_host_parsing.filter_repo_paper_pairs(
+        source_results.successful_results,
     )
 
-    # Split and store results
-    success_results = pd.DataFrame([r.to_dict() for r in results.successful_results])
-    success_results.to_parquet(success_results_filepath)
-    errored_results = pd.DataFrame([r.to_dict() for r in results.errored_results])
-    errored_results.to_parquet(errored_results_filepath)
+    # Set logging to Error
+    logger = get_run_logger()
+    logger.setLevel("ERROR")
 
-    # If no successful results, raise error
-    if len(results.successful_results) == 0:
-        raise ValueError("No successful results to store.")
+    # Create chunks of batch_size of the results to process
+    n_batches = math.ceil(len(filtered_results.successful_results) / batch_size)
+    for i in tqdm(
+        range(0, len(filtered_results.successful_results), batch_size),
+        desc="Batches",
+        total=n_batches,
+    ):
+        chunk = filtered_results.successful_results[i : i + batch_size]
 
-    return results
+        # TODO: add a check to see if the repo and paper are already in the database
+
+        # Process open alex
+        open_alex_futures = open_alex.process_open_alex_work_task.map(
+            pair=chunk,
+        )
+
+        # Process github
+        github_futures = github.process_github_repo_task.map(
+            pair=open_alex_futures,
+        )
+
+        # Store everything
+        stored_futures = db_utils.store_full_details_task.map(
+            pair=github_futures,
+            prod=unmapped(prod),
+        )
+
+        # Match devs and researchers
+        dev_researcher_futures = entity_matching.match_devs_and_researchers.map(
+            pair=stored_futures,
+        )
+
+        # Store the dev-researcher links
+        stored_dev_researcher_futures = db_utils.store_dev_researcher_em_links_task.map(
+            pair=dev_researcher_futures,
+            prod=unmapped(prod),
+        )
+
+        # Store this batch's errored results
+        # Update errored store path with batch index
+        this_batch_store_path = errored_store_path.with_name(
+            errored_store_path.stem + f"-{i // batch_size}.parquet"
+        )
+        _store_errored_results(
+            # Wait for all futures to complete
+            results=[f.result() for f in stored_dev_researcher_futures],
+            store_path=this_batch_store_path,
+        )
+
+        # Sleep for a second before next chunk
+        time.sleep(1)
+
+    # Cooldown
+    time.sleep(3)
 
 
 @app.command()
-def standard_ingest(
+def prelinked_dataset_ingestion(
     source: str,
-    success_results_file: str = "",
-    errored_results_file: str = "",
     prod: bool = False,
     use_dask: bool = False,
-    debug: bool = False,
+    batch_size: int = 200,
 ) -> None:
     """Get data from OpenAlex."""
-    # Setup logger
-    setup_logger(debug=debug)
-
     # Create current datetime without microseconds
     current_datetime = datetime.now().replace(microsecond=0)
     # Convert to isoformat and replace colons with dashes
@@ -79,94 +140,89 @@ def standard_ingest(
 
     # Create dir for this datetime
     current_datetime_dir = DEFAULT_RESULTS_DIR / current_datetime_str
+    # Create "results" dir
+    current_datetime_dir.mkdir(exist_ok=True, parents=True)
+    errored_store_path = (
+        current_datetime_dir / f"process-results-{source}-errored.parquet"
+    )
 
-    # If no filepaths provided, create them
-    if len(success_results_file) == 0:
-        # Create "results" dir
-        current_datetime_dir.mkdir(exist_ok=True, parents=True)
-
-        success_results_filepath = str(
-            current_datetime_dir / f"process-results-{source}-success.parquet"
+    # If using dask, use DaskTaskRunner
+    if use_dask:
+        task_runner = DaskTaskRunner(
+            cluster_class="distributed.LocalCluster",
+            cluster_kwargs={"n_workers": 5, "threads_per_worker": 1},
         )
     else:
-        success_results_filepath = success_results_file
+        task_runner = SequentialTaskRunner()
 
-    if len(errored_results_file) == 0:
-        # Create "results" dir
-        current_datetime_dir.mkdir(exist_ok=True, parents=True)
+    # Create the flow
+    ingest_flow = Flow(
+        _prelinked_dataset_ingestion_flow,
+        name="ingest-flow",
+        task_runner=task_runner,
+        log_prints=True,
+    )
 
-        errored_results_filepath = str(
-            current_datetime_dir / f"process-results-{source}-errored.parquet"
+    # Keep track of duration
+    start_dt = datetime.now()
+    start_dt = start_dt.replace(microsecond=0)
+
+    # Start the flow
+    ingest_flow(
+        source=source,
+        batch_size=batch_size,
+        prod=prod,
+        errored_store_path=errored_store_path,
+    )
+
+    # End duration
+    end_dt = datetime.now()
+    end_dt = end_dt.replace(microsecond=0)
+
+    # Log time taken
+    print(f"Total Processing Duration: {end_dt - start_dt}")
+
+
+@app.command()
+def get_random_sample_of_prelinked_source_data(
+    seed: int = 12,
+    outfile_path: str = "random-sample-prelinked-sources.csv",
+) -> None:
+    """Get a random sample of pre-linked source data."""
+    # Set seed
+    random.seed(seed)
+
+    # Iter over sources, take random samples of their "get_dataset" function results
+    results = []
+    for source, source_func in SOURCE_MAP.items():
+        print("Working on source:", source)
+        source_results = source_func()
+
+        # Filter dataset
+        filtered_results = code_host_parsing.filter_repo_paper_pairs(
+            source_results.successful_results,
         )
-    else:
-        errored_results_filepath = errored_results_file
 
-    # Split and store partial
-    split_and_store_results_partial = partial(
-        _split_and_store_results,
-        success_results_filepath=success_results_filepath,
-        errored_results_filepath=errored_results_filepath,
-    )
+        # Take random sample
+        random_sample = random.sample(
+            filtered_results.successful_results,
+            10,
+        )
 
-    # Create dask client and cluster
-    get_dataset_results = SOURCE_MAP[source](use_dask=use_dask)
-    get_dataset_results = split_and_store_results_partial(
-        new_results=get_dataset_results,
-        old_results=SuccessAndErroredResultsLists([], []),
-    )
+        # Unpack each result and then append to results
+        for result in random_sample:
+            results.append(
+                {
+                    "source": source,
+                    **result.to_dict(),
+                }
+            )
 
-    # Filter out non-GitHub Repo pairs
-    code_filtering_results = code_host_parsing.filter_repo_paper_pairs(
-        get_dataset_results.successful_results,
-    )
-    code_filtering_results = split_and_store_results_partial(
-        new_results=code_filtering_results,
-        old_results=get_dataset_results,
-    )
+    # Create DataFrame
+    df = pd.DataFrame(results)
 
-    # Process with open_alex
-    open_alex_processing_results = open_alex.process_pairs(
-        code_filtering_results.successful_results,
-        prod=prod,
-        use_dask=use_dask,
-    )
-    open_alex_processing_results = split_and_store_results_partial(
-        new_results=open_alex_processing_results,
-        old_results=code_filtering_results,
-    )
-
-    # Process with github
-    github_processing_results = github.process_repos_for_contributors(
-        code_filtering_results.successful_results,
-        prod=prod,
-        use_dask=use_dask,
-    )
-    github_processing_results = split_and_store_results_partial(
-        new_results=github_processing_results,
-        old_results=open_alex_processing_results,
-    )
-
-    # Link repositories and documents
-    repos_and_docs_results = entity_matching.link_repo_and_documents(
-        github_processing_results.successful_results,
-    )
-    repos_and_docs_results = split_and_store_results_partial(
-        new_results=repos_and_docs_results,
-        old_results=github_processing_results,
-    )
-
-    # Link developer accounts and researchers
-    devs_and_researchers_results = entity_matching.link_devs_and_researchers(
-        repos_and_docs_results.successful_results,
-        use_dask=use_dask,
-    )
-    devs_and_researchers_results = split_and_store_results_partial(
-        new_results=devs_and_researchers_results,
-        old_results=repos_and_docs_results,
-    )
-
-    # Log complete
-    log.info("Processing complete!")
+    # Save to CSV
+    df.to_csv(outfile_path, index=False)
 
 
 ###############################################################################

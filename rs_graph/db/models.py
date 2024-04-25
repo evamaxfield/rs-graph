@@ -9,6 +9,8 @@ from sqlmodel import Field, SQLModel, UniqueConstraint
 
 ###############################################################################
 
+# TODO: strip all text fields prior to db storage
+
 
 class DatasetSource(SQLModel, table=True):  # type: ignore
     """Stores the basic information for a dataset source."""
@@ -42,8 +44,29 @@ class Document(SQLModel, table=True):  # type: ignore
     cited_by_count: int
     cited_by_percentile_year_min: int
     cited_by_percentile_year_max: int
-    dataset_source_id: int = Field(foreign_key="dataset_source.id")
-    abstract: str | None = None
+
+    # Updates
+    created_datetime: datetime = Field(
+        sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime = Field(
+        sa_column=Column(DateTime(), onupdate=func.now())
+    )
+
+
+class DocumentAbstract(SQLModel, table=True):  # type: ignore
+    """Stores the abstract for a document."""
+
+    __tablename__ = "document_abstract"
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+    document_id: int = Field(foreign_key="document.id")
+
+    __table_args__ = (UniqueConstraint("document_id"),)
+
+    # Data
+    content: str | None = None
 
     # Updates
     created_datetime: datetime = Field(
@@ -285,6 +308,66 @@ class Repository(SQLModel, table=True):  # type: ignore
 
     __table_args__ = (UniqueConstraint("code_host_id", "owner", "name"),)
 
+    # Data
+    description: str | None = None
+    is_fork: bool
+    forks_count: int
+    stargazers_count: int
+    watchers_count: int
+    open_issues_count: int
+    size_kb: int
+    creation_datetime: datetime
+    last_pushed_datetime: datetime
+
+    # TODO: add total commits field
+
+    # Updates
+    created_datetime: datetime = Field(
+        sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime = Field(
+        sa_column=Column(DateTime(), onupdate=func.now())
+    )
+
+
+class RepositoryReadme(SQLModel, table=True):  # type: ignore
+    """Stores the readme for a repository."""
+
+    __tablename__ = "repository_readme"
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+    repository_id: int = Field(foreign_key="repository.id")
+
+    __table_args__ = (UniqueConstraint("repository_id"),)
+
+    # Data
+    content: str | None = None
+
+    # Updates
+    created_datetime: datetime = Field(
+        sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime = Field(
+        sa_column=Column(DateTime(), onupdate=func.now())
+    )
+
+
+class RepositoryLanguage(SQLModel, table=True):  # type: ignore
+    """Stores the connection between a repository and a language."""
+
+    __tablename__ = "repository_language"
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+    repository_id: int = Field(foreign_key="repository.id")
+    language: str
+
+    __table_args__ = (UniqueConstraint("repository_id", "language"),)
+
+    # Data
+    bytes_of_code: int
+
     # Updates
     created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
@@ -331,6 +414,8 @@ class RepositoryContributor(SQLModel, table=True):  # type: ignore
 
     __table_args__ = (UniqueConstraint("repository_id", "developer_account_id"),)
 
+    # TODO: add "total commits" field
+
     # Updates
     created_datetime: datetime = Field(
         sa_column=Column(DateTime(), server_default=func.now())
@@ -338,6 +423,13 @@ class RepositoryContributor(SQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
+
+
+# TODO: Store basic repository commit details
+# https://docs.github.com/en/rest/metrics/statistics?apiVersion=2022-11-28#get-all-contributor-commit-activity
+# I.e. WeeklyRepositoryCommitActivity
+# includes reference to repository contributor
+# includes date and additions, deletions, and number of commits for that week
 
 
 class DocumentRepositoryLink(SQLModel, table=True):  # type: ignore
@@ -353,7 +445,7 @@ class DocumentRepositoryLink(SQLModel, table=True):  # type: ignore
     __table_args__ = (UniqueConstraint("document_id", "repository_id"),)
 
     # Data
-    source: str
+    dataset_source_id: int = Field(foreign_key="dataset_source.id")
     em_model_name: str | None
     em_model_version: str | None
 
