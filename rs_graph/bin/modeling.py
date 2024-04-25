@@ -17,6 +17,7 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import train_test_split
 from skops import io as skio
+from sqlmodel import Session, select
 from statsmodels.stats.inter_rater import aggregate_raters, fleiss_kappa
 from tqdm import tqdm
 
@@ -26,17 +27,16 @@ from rs_graph.data import (
     load_annotated_dev_author_em_dataset,
     # load_author_contributions_dataset,
     load_multi_annotator_dev_author_em_irr_dataset,
-    load_multi_annotator_repo_paper_em_irr_dataset,
-    # load_repo_contributors_dataset,
 )
+from rs_graph.db import models as db_models
+from rs_graph.db import utils as db_utils
+
+# load_repo_contributors_dataset,
 from rs_graph.ml.dev_author_em_clf import (
     DEV_AUTHOR_EM_CLASSIFIER_PATH,
     DEV_AUTHOR_EM_EMBEDDING_MODEL,
     DEV_AUTHOR_EM_TEMPLATE,
 )
-from rs_graph.db import utils as db_utils
-from rs_graph.db import models as db_models
-from sqlmodel import Session, select
 
 ###############################################################################
 
@@ -652,6 +652,7 @@ def train_dev_author_em_classifier(
     misclassifications_save_path = DATA_FILES_DIR / misclassifications_save_name
     misclassifications.to_csv(misclassifications_save_path, index=False)
 
+
 def _create_dataset_for_document_repository_training(
     prod: bool = False,
 ) -> pd.DataFrame:
@@ -669,39 +670,52 @@ def _create_dataset_for_document_repository_training(
         # "repository_contributor_usernames", "repository_contributor_names",
         # "repository_contributor_emails"
         # "match"
-        stmt = select(
-            db_models.Document,
-            db_models.DocumentRepositoryLink,
-            db_models.Repository,
-        ).join(
-            db_models.DocumentRepositoryLink,
-            db_models.DocumentRepositoryLink.document_id == db_models.Document.id,
-        ).join(
-            db_models.Repository,
-            db_models.DocumentRepositoryLink.repository_id == db_models.Repository.id,
+        stmt = (
+            select(
+                db_models.Document,
+                db_models.DocumentRepositoryLink,
+                db_models.Repository,
+            )
+            .join(
+                db_models.DocumentRepositoryLink,
+                db_models.DocumentRepositoryLink.document_id == db_models.Document.id,
+            )
+            .join(
+                db_models.Repository,
+                db_models.DocumentRepositoryLink.repository_id
+                == db_models.Repository.id,
+            )
         )
 
         # Iter data
         for doc, link, repo in session.exec(stmt):
             # Get doc contributors for this doc
-            doc_contribs_statement = select(
-                db_models.Researcher,
-            ).join(
-                db_models.DocumentContributor,
-            ).where(
-                db_models.DocumentContributor.document_id == doc.id,
+            doc_contribs_statement = (
+                select(
+                    db_models.Researcher,
+                )
+                .join(
+                    db_models.DocumentContributor,
+                )
+                .where(
+                    db_models.DocumentContributor.document_id == doc.id,
+                )
             )
             doc_contrib_names = []
             for researcher in session.exec(doc_contribs_statement):
                 doc_contrib_names.append(researcher.name.strip())
 
             # Get repo contributors for this repo
-            repo_contribs_statement = select(
-                db_models.DeveloperAccount,
-            ).join(
-                db_models.RepositoryContributor,
-            ).where(
-                db_models.RepositoryContributor.repository_id == repo.id,
+            repo_contribs_statement = (
+                select(
+                    db_models.DeveloperAccount,
+                )
+                .join(
+                    db_models.RepositoryContributor,
+                )
+                .where(
+                    db_models.RepositoryContributor.repository_id == repo.id,
+                )
             )
             repo_contrib_usernames = []
             repo_contrib_names = []
@@ -730,8 +744,12 @@ def _create_dataset_for_document_repository_training(
                     "repository_id": repo.id,
                     "repository_name": repo.name,
                     "repository_description": repo.description,
-                    "repository_creation_date": repo.creation_datetime.date().isoformat(),
-                    "repository_contributor_usernames": ", ".join(repo_contrib_usernames),
+                    "repository_creation_date": (
+                        repo.creation_datetime.date().isoformat()
+                    ),
+                    "repository_contributor_usernames": ", ".join(
+                        repo_contrib_usernames
+                    ),
                     "repository_contributor_names": ", ".join(repo_contrib_names),
                     "repository_contributor_emails": ", ".join(repo_contrib_emails),
                     "match": "match",

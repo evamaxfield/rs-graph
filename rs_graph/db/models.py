@@ -308,6 +308,7 @@ class Repository(SQLModel, table=True):  # type: ignore
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
+
 class RepositoryLanguage(SQLModel, table=True):  # type: ignore
     """Stores the connection between a repository and a language."""
 
@@ -328,6 +329,7 @@ class RepositoryLanguage(SQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(
         sa_column=Column(DateTime(), onupdate=func.now())
     )
+
 
 class DeveloperAccount(SQLModel, table=True):  # type: ignore
     """Stores the basic information for a developer account (e.g. GitHub, GitLab)."""

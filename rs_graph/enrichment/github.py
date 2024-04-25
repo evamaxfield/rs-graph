@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import random
 import time
-import base64
 import traceback
 from dataclasses import dataclass
 from datetime import datetime
@@ -157,11 +157,13 @@ def process_github_repo(
             )
 
             # Decode the content
-            repo_readme = base64.b64decode(repo_readme_response["content"]).decode("utf-8")
+            repo_readme = base64.b64decode(repo_readme_response["content"]).decode(
+                "utf-8"
+            )
 
-        except:
+        except Exception:
             repo_readme = None
-        
+
         finally:
             # Sleep to avoid API limits
             time.sleep(0.85)

@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 
-from rs_graph.bin.modeling import _create_dataset_for_document_repository_training
-from sklearn.model_selection import train_test_split
-
 import os
 import random
 from dataclasses import dataclass
@@ -19,7 +16,10 @@ from sklearn.metrics import (
     accuracy_score,
     precision_recall_fscore_support,
 )
+from sklearn.model_selection import train_test_split
 from transformers import Pipeline, pipeline
+
+from rs_graph.bin.modeling import _create_dataset_for_document_repository_training
 
 # Fine-tune default settings
 BASE_MODEL = "Alibaba-NLP/gte-base-en-v1.5"
@@ -67,9 +67,9 @@ Contributor Names: {repository_contributor_names}
 Contributor Emails: {repository_contributor_emails}
 """.strip()
 
-def _train():
 
-    df = _create_dataset_for_document_repository_training() 
+def _train() -> None:
+    df = _create_dataset_for_document_repository_training()
     df["text"] = df.apply(
         lambda row: fill_template.format(
             article_title=str(row["document_title"]),
@@ -79,7 +79,9 @@ def _train():
             repository_name=str(row["repository_name"]),
             repository_description=str(row["repository_description"]),
             repository_creation_date=str(row["repository_creation_date"]),
-            repository_contributor_usernames=str(row["repository_contributor_usernames"]),
+            repository_contributor_usernames=str(
+                row["repository_contributor_usernames"]
+            ),
             repository_contributor_names=str(row["repository_contributor_names"]),
             repository_contributor_emails=str(row["repository_contributor_emails"]),
         ),
@@ -88,7 +90,9 @@ def _train():
 
     # Drop everything but dataset_source_id, document_id, repository_id, text, and match
     # rename match to label
-    prepped_df = df[["dataset_source", "document_id", "repository_id", "text", "match"]].copy()
+    prepped_df = df[
+        ["dataset_source", "document_id", "repository_id", "text", "match"]
+    ].copy()
     prepped_df = prepped_df.rename(columns={"match": "label"})
 
     # Save out dataset
@@ -141,7 +145,7 @@ def _train():
         f1: float
 
     def evaluate(
-        model:  Pipeline,
+        model: Pipeline,
         x_test: list[np.ndarray] | list[str],
         y_test: list[str],
         df: pd.DataFrame,
@@ -198,7 +202,10 @@ def _train():
         )
 
     # Create the datasets
-    (fieldset_train_df, fieldset_train_ds) = convert_split_details_to_text_input_dataset(
+    (
+        fieldset_train_df,
+        fieldset_train_ds,
+    ) = convert_split_details_to_text_input_dataset(
         train_df[["text", "label"]],
     )
     (_, fieldset_valid_ds) = convert_split_details_to_text_input_dataset(
@@ -240,7 +247,6 @@ def _train():
     print()
     print()
 
-
     # Set seed
     np.random.seed(42)
     random.seed(42)
@@ -273,6 +279,7 @@ def _train():
     print(results)
     cm.figure_.savefig("confusion_matrix.png")
     misclassifications.to_csv("misclassifications.csv", index=False)
+
 
 if __name__ == "__main__":
     _train()

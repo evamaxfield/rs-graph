@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
+import random
 from datetime import datetime
 from pathlib import Path
-import random
 
 import pandas as pd
 import typer
@@ -13,7 +13,7 @@ from prefect_dask.task_runners import DaskTaskRunner
 from rs_graph import types
 from rs_graph.db import utils as db_utils
 from rs_graph.enrichment import entity_matching, github, open_alex
-from rs_graph.sources import joss, plos, proto, pwc, softwarex
+from rs_graph.sources import joss, plos, proto, pwc
 from rs_graph.utils import code_host_parsing
 
 ###############################################################################
