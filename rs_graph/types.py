@@ -94,6 +94,7 @@ class RepositoryContributorDetails(DataClassJsonMixin):
 class GitHubResultModels(DataClassJsonMixin):
     code_host_model: db_models.CodeHost
     repository_model: db_models.Repository
+    repository_language_models: list[db_models.RepositoryLanguage]
     repository_contributor_details: list[RepositoryContributorDetails]
 
 

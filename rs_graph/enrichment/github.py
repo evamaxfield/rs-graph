@@ -6,6 +6,7 @@ import json
 import logging
 import random
 import time
+import base64
 import traceback
 from dataclasses import dataclass
 from datetime import datetime
@@ -139,6 +140,32 @@ def process_github_repo(
         # Sleep to avoid API limits
         time.sleep(0.85)
 
+        # Get repo languages
+        repo_languages = api.repos.list_languages(
+            owner=pair.repo_parts.owner,
+            repo=pair.repo_parts.name,
+        )
+
+        # Sleep to avoid API limits
+        time.sleep(0.85)
+
+        # Get repo README
+        try:
+            repo_readme_response = api.repos.get_readme(
+                owner=pair.repo_parts.owner,
+                repo=pair.repo_parts.name,
+            )
+
+            # Decode the content
+            repo_readme = base64.b64decode(repo_readme_response["content"]).decode("utf-8")
+
+        except:
+            repo_readme = None
+        
+        finally:
+            # Sleep to avoid API limits
+            time.sleep(0.85)
+
         # Get repo contributors
         repo_contributors = get_repo_contributors(
             pair=pair,
@@ -156,6 +183,7 @@ def process_github_repo(
             code_host_id=code_host.id,
             owner=pair.repo_parts.owner,
             name=pair.repo_parts.name,
+            readme=repo_readme,
             description=repo_info["description"],
             is_fork=repo_info["fork"],
             forks_count=repo_info["forks_count"],
@@ -166,6 +194,17 @@ def process_github_repo(
             creation_datetime=datetime.fromisoformat(repo_info["created_at"]),
             last_pushed_datetime=datetime.fromisoformat(repo_info["pushed_at"]),
         )
+
+        # For each language, create a repository language
+        all_repo_languages = []
+        for language, bytes_of_code in repo_languages.items():
+            all_repo_languages.append(
+                db_models.RepositoryLanguage(
+                    repository_id=repo.id,
+                    language=language,
+                    bytes_of_code=bytes_of_code,
+                )
+            )
 
         # For each contributor, create a developer account
         # and then link the dev account to the repo
@@ -198,6 +237,7 @@ def process_github_repo(
         pair.github_results = types.GitHubResultModels(
             code_host_model=code_host,
             repository_model=repo,
+            repository_language_models=all_repo_languages,
             repository_contributor_details=all_repo_contributors,
         )
 

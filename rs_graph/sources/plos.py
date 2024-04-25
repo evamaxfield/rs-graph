@@ -17,7 +17,7 @@ from .. import types
 
 def _get_plos_xmls() -> list[Path]:
     # Download all plos files
-    get_latest_plos_corpus()
+    # get_latest_plos_corpus()
 
     # Get the corpus dir
     corpus_dir = get_corpus_dir()
@@ -108,9 +108,7 @@ def get_dataset(
 ) -> types.SuccessAndErroredResultsLists:
     """Download the PLOS dataset."""
     # Get all PLOS XMLs
-    import random
-
-    plos_xmls = random.sample(_get_plos_xmls(), 100000)
+    plos_xmls = _get_plos_xmls()
 
     results = [
         _process_xml(plos_xml)
@@ -135,3 +133,19 @@ def get_dataset(
         successful_results=successful_results,
         errored_results=errored_results,
     )
+
+
+def _get_random_sample(
+    seed: int = 12,
+) -> list[dict]:
+    # Get all data
+    import random
+
+    # Set seed
+    random.seed(seed)
+
+    # Get all data
+    results = get_dataset()
+    
+    # Take random sample
+    return random.sample(results.successful_results, 50)

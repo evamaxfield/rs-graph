@@ -9,6 +9,8 @@ from sqlmodel import Field, SQLModel, UniqueConstraint
 
 ###############################################################################
 
+# TODO: strip all text fields prior to db storage
+
 
 class DatasetSource(SQLModel, table=True):  # type: ignore
     """Stores the basic information for a dataset source."""
@@ -285,6 +287,7 @@ class Repository(SQLModel, table=True):  # type: ignore
     __table_args__ = (UniqueConstraint("code_host_id", "owner", "name"),)
 
     # Data
+    readme: str | None = None
     description: str | None = None
     is_fork: bool
     forks_count: int
@@ -305,6 +308,26 @@ class Repository(SQLModel, table=True):  # type: ignore
         sa_column=Column(DateTime(), onupdate=func.now())
     )
 
+class RepositoryLanguage(SQLModel, table=True):  # type: ignore
+    """Stores the connection between a repository and a language."""
+
+    __tablename__ = "repository_language"
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+    repository_id: int = Field(foreign_key="repository.id")
+    language: str
+    bytes_of_code: int
+
+    __table_args__ = (UniqueConstraint("repository_id", "language"),)
+
+    # Updates
+    created_datetime: datetime = Field(
+        sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime = Field(
+        sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 class DeveloperAccount(SQLModel, table=True):  # type: ignore
     """Stores the basic information for a developer account (e.g. GitHub, GitLab)."""

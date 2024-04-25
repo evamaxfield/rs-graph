@@ -189,6 +189,13 @@ def store_full_details(
             )
             assert pair.github_results.repository_model.id is not None
 
+            # Repository languages
+            for repo_language in pair.github_results.repository_language_models:
+                repo_language.repository_id = pair.github_results.repository_model.id
+                repo_language = _get_or_add_and_flush(
+                    model=repo_language, session=session
+                )
+
             # Repository contributor details
             for (
                 repo_contributor_detail

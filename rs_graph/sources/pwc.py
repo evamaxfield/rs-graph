@@ -103,11 +103,8 @@ def get_dataset(
     **kwargs: dict[str, str],
 ) -> types.SuccessAndErroredResultsLists:
     """Download the PLOS dataset."""
-    # Get all PLOS XMLs
-    import random
-
     # Get all data
-    data = random.sample(_get_raw_data(), 50)
+    data = _get_raw_data()
 
     # Process each item
     results = [
