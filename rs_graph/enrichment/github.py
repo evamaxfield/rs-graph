@@ -185,7 +185,6 @@ def process_github_repo(
             code_host_id=code_host.id,
             owner=pair.repo_parts.owner,
             name=pair.repo_parts.name,
-            readme=repo_readme,
             description=repo_info["description"],
             is_fork=repo_info["fork"],
             forks_count=repo_info["forks_count"],
@@ -239,6 +238,10 @@ def process_github_repo(
         pair.github_results = types.GitHubResultModels(
             code_host_model=code_host,
             repository_model=repo,
+            repository_readme_model=db_models.RepositoryReadme(
+                repository_id=repo.id,
+                content=repo_readme,
+            ),
             repository_language_models=all_repo_languages,
             repository_contributor_details=all_repo_contributors,
         )

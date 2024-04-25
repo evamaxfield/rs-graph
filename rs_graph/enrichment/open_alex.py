@@ -206,7 +206,12 @@ def process_open_alex_work(
             cited_by_percentile_year_max=open_alex_work["cited_by_percentile_year"][
                 "max"
             ],
-            abstract=abstract_text,
+        )
+
+        # Create the abstract
+        abstract_model = db_models.DocumentAbstract(
+            document_id=document.id,
+            content=abstract_text,
         )
 
         # For each Topic, create the Topic
@@ -321,6 +326,7 @@ def process_open_alex_work(
         pair.open_alex_results = types.OpenAlexResultModels(
             source_model=dataset_source,
             document_model=document,
+            document_abstract_model=abstract_model,
             topic_details=all_topic_details,
             researcher_details=all_researcher_details,
             funding_instance_details=all_funding_instance_details,

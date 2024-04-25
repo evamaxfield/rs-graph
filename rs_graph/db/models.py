@@ -44,7 +44,29 @@ class Document(SQLModel, table=True):  # type: ignore
     cited_by_count: int
     cited_by_percentile_year_min: int
     cited_by_percentile_year_max: int
-    abstract: str | None = None
+
+    # Updates
+    created_datetime: datetime = Field(
+        sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime = Field(
+        sa_column=Column(DateTime(), onupdate=func.now())
+    )
+
+
+class DocumentAbstract(SQLModel, table=True):  # type: ignore
+    """Stores the abstract for a document."""
+
+    __tablename__ = "document_abstract"
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+    document_id: int = Field(foreign_key="document.id")
+
+    __table_args__ = (UniqueConstraint("document_id"),)
+
+    # Data
+    content: str | None = None
 
     # Updates
     created_datetime: datetime = Field(
@@ -287,7 +309,6 @@ class Repository(SQLModel, table=True):  # type: ignore
     __table_args__ = (UniqueConstraint("code_host_id", "owner", "name"),)
 
     # Data
-    readme: str | None = None
     description: str | None = None
     is_fork: bool
     forks_count: int
@@ -309,6 +330,29 @@ class Repository(SQLModel, table=True):  # type: ignore
     )
 
 
+class RepositoryReadme(SQLModel, table=True):  # type: ignore
+    """Stores the readme for a repository."""
+
+    __tablename__ = "repository_readme"
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+    repository_id: int = Field(foreign_key="repository.id")
+
+    __table_args__ = (UniqueConstraint("repository_id"),)
+
+    # Data
+    content: str | None = None
+
+    # Updates
+    created_datetime: datetime = Field(
+        sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime = Field(
+        sa_column=Column(DateTime(), onupdate=func.now())
+    )
+
+
 class RepositoryLanguage(SQLModel, table=True):  # type: ignore
     """Stores the connection between a repository and a language."""
 
@@ -318,9 +362,11 @@ class RepositoryLanguage(SQLModel, table=True):  # type: ignore
     id: int | None = Field(default=None, primary_key=True)
     repository_id: int = Field(foreign_key="repository.id")
     language: str
-    bytes_of_code: int
 
     __table_args__ = (UniqueConstraint("repository_id", "language"),)
+
+    # Data
+    bytes_of_code: int
 
     # Updates
     created_datetime: datetime = Field(

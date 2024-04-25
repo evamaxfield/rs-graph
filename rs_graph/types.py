@@ -79,6 +79,7 @@ class FundingInstanceDetails(DataClassJsonMixin):
 class OpenAlexResultModels(DataClassJsonMixin):
     source_model: db_models.DatasetSource
     document_model: db_models.Document
+    document_abstract_model: db_models.DocumentAbstract
     topic_details: list[TopicDetails]
     researcher_details: list[ResearcherDetails]
     funding_instance_details: list[FundingInstanceDetails]
@@ -94,6 +95,7 @@ class RepositoryContributorDetails(DataClassJsonMixin):
 class GitHubResultModels(DataClassJsonMixin):
     code_host_model: db_models.CodeHost
     repository_model: db_models.Repository
+    repository_readme_model: db_models.RepositoryReadme
     repository_language_models: list[db_models.RepositoryLanguage]
     repository_contributor_details: list[RepositoryContributorDetails]
 

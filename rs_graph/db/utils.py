@@ -95,6 +95,15 @@ def store_full_details(
             )
             assert pair.open_alex_results.document_model.id is not None
 
+            # Store the abstract
+            pair.open_alex_results.document_abstract_model.document_id = (
+                pair.open_alex_results.document_model.id
+            )
+            pair.open_alex_results.document_abstract_model = _get_or_add_and_flush(
+                model=pair.open_alex_results.document_abstract_model,
+                session=session,
+            )
+
             # Topic details
             for topic_detail in pair.open_alex_results.topic_details:
                 # Topic model
@@ -188,6 +197,14 @@ def store_full_details(
                 model=pair.github_results.repository_model, session=session
             )
             assert pair.github_results.repository_model.id is not None
+
+            # Store the README
+            pair.github_results.repository_readme_model.repository_id = (
+                pair.github_results.repository_model.id
+            )
+            pair.github_results.repository_readme_model = _get_or_add_and_flush(
+                model=pair.github_results.repository_readme_model, session=session
+            )
 
             # Repository languages
             for repo_language in pair.github_results.repository_language_models:
