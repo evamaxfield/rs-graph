@@ -83,9 +83,6 @@ training = [
   "autotrain-advanced>=0.7,<0.8",
   "datasets>=2,<3",
 ]
-coiled = [
-  "coiled>=1,<2",
-]
 
 # entry points
 # https://peps.python.org/pep-0621/#entry-points

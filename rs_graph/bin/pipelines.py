@@ -129,7 +129,7 @@ def _prelinked_dataset_ingestion_flow(
 def prelinked_dataset_ingestion(
     source: str,
     prod: bool = False,
-    processing_engine: str = "dask",
+    use_dask: bool = False,
     batch_size: int = 200,
 ) -> None:
     """Get data from OpenAlex."""
@@ -147,19 +147,10 @@ def prelinked_dataset_ingestion(
     )
 
     # If using dask, use DaskTaskRunner
-    if processing_engine == "dask":
+    if use_dask:
         task_runner = DaskTaskRunner(
             cluster_class="distributed.LocalCluster",
             cluster_kwargs={"n_workers": 5, "threads_per_worker": 1},
-        )
-    elif processing_engine == "coiled":
-        task_runner = DaskTaskRunner(
-            cluster_class="coiled.Cluster",
-            cluster_kwargs={
-                "n_workers": 5,
-                "worker_cpu": 2,
-                "container": ""
-            },
         )
     else:
         task_runner = SequentialTaskRunner()

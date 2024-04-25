@@ -19,7 +19,7 @@ clean:
 
 # install with all deps
 install:
-	pip install -e ".[dev,lint,training,coiled]"
+	pip install -e ".[dev,lint,training]"
 
 # lint, format, and check all files
 lint:
