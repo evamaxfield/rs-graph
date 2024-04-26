@@ -8,9 +8,12 @@ on:
         required: true
         type: string
 
+# adding permissions to tackle error: 'Resource not accessible by integration'
 permissions:
-  id-token: write
+  actions: write
   contents: write
+  id-token: write
+  issues: write
   pull-requests: write
 
 jobs:
