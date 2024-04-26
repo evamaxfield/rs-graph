@@ -30,7 +30,7 @@ jobs:
             GOOGLE_APPLICATION_CREDENTIALS_DATA: ${{ secrets.GOOGLE_CREDENTIALS }}
         run: |
           cml runner \
-              --single
+              --single \
               --cloud=gcp \
               --cloud-region=us-central1-a \
               --cloud-type=e2-standard-8 \
