@@ -54,6 +54,10 @@ def _store_batch_results(
     print(f"This Batch Success: {len(results) - len(errored_results)}")
     print(f"This Batch Errored: {len(errored_results)}")
 
+    for error in errored_results:
+        print(error)
+        print()
+
     # Store errored results
     errored_df = pd.DataFrame(errored_results)
     errored_df.to_parquet(store_path)
