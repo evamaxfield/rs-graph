@@ -15,8 +15,11 @@ from . import models as db_models
 
 def get_engine(prod: bool = False) -> Engine:
     if prod:
+        print("prod path", constants.PROD_DATABASE_FILEPATH)
+
         return create_engine(f"sqlite:///{constants.PROD_DATABASE_FILEPATH}")
     else:
+        print("dev path", constants.DEV_DATABASE_FILEPATH)
         return create_engine(f"sqlite:///{constants.DEV_DATABASE_FILEPATH}")
 
 
@@ -76,8 +79,11 @@ def store_full_details(
     # Get the engine
     engine = get_engine(prod=prod)
 
+    print("engine", engine)
+
     # Create a session
     with Session(engine) as session:
+        print("session", session)
         try:
             assert pair.open_alex_results is not None
             assert pair.github_results is not None

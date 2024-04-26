@@ -163,7 +163,9 @@ def prelinked_dataset_ingestion(
 
     # Download latest if prod
     if prod:
+        print("Downloading latest data files...")
         download_rs_graph_data_files()
+        print(list(Path(__file__).parent.parent / "data" / "files").glob("*"))
 
     # If using dask, use DaskTaskRunner
     if use_dask:
