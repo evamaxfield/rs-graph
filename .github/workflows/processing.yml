@@ -47,7 +47,7 @@ jobs:
 
       - name: Run Command
         env:
-            GITHUB_TOKENS: ${{ secrets.GITHUB_TOKENS }}
+            GITHUB_TOKENS: ${{ secrets.ALL_GITHUB_TOKENS_FOR_API }}
         run: |
             rs-graph-pipelines \
                 prelinked-dataset-ingestion \

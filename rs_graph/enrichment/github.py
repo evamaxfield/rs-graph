@@ -284,7 +284,7 @@ def process_github_repo_task(
                 traceback="",
             )
         else:
-            tokens = tokens_optional.split(";")
+            tokens = json.loads(tokens_optional)
 
     return process_github_repo(
         pair=pair,
