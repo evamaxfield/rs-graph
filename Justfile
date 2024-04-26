@@ -112,3 +112,19 @@ db-migrate target="dev":
 	sleep 0.5
 	git add -A
 	git commit -m "New migration for target: {{target}}"
+
+db-upgrade target="dev":
+	sed -i "s|REPLACE_SQLITE_DB_PATH|{{db_path}}-{{target}}.db|g" {{justfile_directory()}}/alembic.ini
+	-alembic upgrade head
+	sed -i "s|{{db_path}}-{{target}}.db|REPLACE_SQLITE_DB_PATH|g" {{justfile_directory()}}/alembic.ini
+
+###############################################################################
+# Docker management
+
+# build docker image locally
+docker-build:
+	docker build --tag rs-graph {{justfile_directory()}}
+
+# run docker in interactive mode with bash
+docker-run:
+	docker run --rm -it rs-graph bash

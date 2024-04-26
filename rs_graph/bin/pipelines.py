@@ -14,6 +14,8 @@ from prefect_dask.task_runners import DaskTaskRunner
 from tqdm import tqdm
 
 from rs_graph import types
+from rs_graph.bin.data import download as download_rs_graph_data_files
+from rs_graph.bin.data import upload as upload_rs_graph_data_files
 from rs_graph.db import utils as db_utils
 from rs_graph.enrichment import entity_matching, github, open_alex
 from rs_graph.sources import joss, plos, proto, pwc
@@ -146,6 +148,10 @@ def prelinked_dataset_ingestion(
         current_datetime_dir / f"process-results-{source}-errored.parquet"
     )
 
+    # Download latest if prod
+    if prod:
+        download_rs_graph_data_files()
+
     # If using dask, use DaskTaskRunner
     if use_dask:
         task_runner = DaskTaskRunner(
@@ -178,6 +184,16 @@ def prelinked_dataset_ingestion(
     # End duration
     end_dt = datetime.now()
     end_dt = end_dt.replace(microsecond=0)
+
+    # Upload latest if prod
+    if prod:
+        upload_rs_graph_data_files()
+
+    # Sum errors
+    errored_df = pd.concat(
+        [pd.read_parquet(path) for path in current_datetime_dir.glob("*.parquet")]
+    )
+    print(f"Total Errored: {len(errored_df)}")
 
     # Log time taken
     print(f"Total Processing Duration: {end_dt - start_dt}")
