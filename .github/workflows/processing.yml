@@ -65,8 +65,9 @@ jobs:
         env:
             GITHUB_TOKENS: ${{ secrets.ALL_GITHUB_TOKENS_FOR_API }}
         run: |
-            rs-graph-pipelines \
-                prelinked-dataset-ingestion \
-                ${{ github.event.inputs.dataset-source }} \
-                --use-dask \
-                --prod
+          . .venv/bin/activate && \
+          rs-graph-pipelines \
+              prelinked-dataset-ingestion \
+              ${{ github.event.inputs.dataset-source }} \
+              --use-dask \
+              --prod
