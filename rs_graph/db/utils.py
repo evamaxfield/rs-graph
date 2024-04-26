@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import traceback
+from pathlib import Path
 
 from prefect import task
 from sqlalchemy.engine import Engine
@@ -14,13 +15,20 @@ from . import models as db_models
 
 
 def get_engine(prod: bool = False) -> Engine:
-    if prod:
-        print("prod path", constants.PROD_DATABASE_FILEPATH)
+    db_path = Path(__file__).parent.parent / "data" / "files"
 
-        return create_engine(f"sqlite:///{constants.PROD_DATABASE_FILEPATH}")
+    if prod:
+        db_path = db_path / "rs-graph-prod.db"
+
+        print("prod db path", db_path)
+
+        return create_engine(f"sqlite:///{db_path}")
     else:
-        print("dev path", constants.DEV_DATABASE_FILEPATH)
-        return create_engine(f"sqlite:///{constants.DEV_DATABASE_FILEPATH}")
+        db_path = db_path / "rs-graph-dev.db"
+
+        print("dev db path", db_path)
+
+        return create_engine(f"sqlite:///{db_path}")
 
 
 def get_unique_first_model(model: SQLModel, session: Session) -> SQLModel | None:
