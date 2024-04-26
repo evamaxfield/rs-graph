@@ -38,9 +38,10 @@ SOURCE_MAP: dict[str, proto.DatasetRetrievalFunction] = {
 }
 
 
-def _store_errored_results(
+def _store_errored_results_and_upload_db(
     results: list[types.StoredRepositoryDocumentPair | types.ErrorResult],
     store_path: Path,
+    prod: bool,
 ) -> None:
     # Get only errors
     errored_results = [
@@ -50,6 +51,10 @@ def _store_errored_results(
     # Store errored results
     errored_df = pd.DataFrame(errored_results)
     errored_df.to_parquet(store_path)
+
+    # Upload latest if prod
+    if prod:
+        upload_rs_graph_data_files()
 
 
 def _prelinked_dataset_ingestion_flow(
@@ -114,10 +119,11 @@ def _prelinked_dataset_ingestion_flow(
         this_batch_store_path = errored_store_path.with_name(
             errored_store_path.stem + f"-{i // batch_size}.parquet"
         )
-        _store_errored_results(
+        _store_errored_results_and_upload_db(
             # Wait for all futures to complete
             results=[f.result() for f in stored_dev_researcher_futures],
             store_path=this_batch_store_path,
+            prod=prod,
         )
 
         # Sleep for a second before next chunk
@@ -132,7 +138,7 @@ def prelinked_dataset_ingestion(
     source: str,
     prod: bool = False,
     use_dask: bool = False,
-    batch_size: int = 200,
+    batch_size: int = 40,
 ) -> None:
     """Get data from OpenAlex."""
     # Create current datetime without microseconds

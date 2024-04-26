@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 import random
 import time
 import traceback
@@ -271,14 +272,19 @@ def process_github_repo_task(
         with open(GITHUB_TOKENS_FILE) as f:
             tokens = json.load(f)
 
-    except FileNotFoundError as e:
-        return types.ErrorResult(
-            source=pair.source,
-            step="github-repo-contributors",
-            identifier=pair.paper_doi,
-            error=str(e),
-            traceback=traceback.format_exc(),
-        )
+    except FileNotFoundError:
+        # Try loading from env
+        tokens_optional = os.getenv("GITHUB_TOKENS")
+        if tokens_optional is None:
+            return types.ErrorResult(
+                source=pair.source,
+                step="github-repo-contributors",
+                identifier=pair.paper_doi,
+                error="No GitHub tokens",
+                traceback="",
+            )
+        else:
+            tokens = tokens_optional.split(";")
 
     return process_github_repo(
         pair=pair,

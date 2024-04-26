@@ -88,7 +88,10 @@ switch-project project=default_project:
 enable-services project=default_project:
 	gcloud services enable cloudresourcemanager.googleapis.com
 	gcloud services enable \
-		storage.googleapis.com
+		storage.googleapis.com \
+		compute.googleapis.com \
+		logging.googleapis.com \
+		monitoring.googleapis.com
 
 # setup all resources
 setup-infra project=default_project:

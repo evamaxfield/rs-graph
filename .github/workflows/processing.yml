@@ -1,0 +1,56 @@
+name: Data Processing
+
+on: 
+  workflow_dispatch:
+    inputs:
+      dataset-source:
+        description: "Which dataset to process"
+        required: true
+        type: string
+
+jobs:
+  deploy-runner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: iterative/setup-cml@v2
+      - name: Deploy Runner
+        env:
+            REPO_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+            GOOGLE_APPLICATION_CREDENTIALS_DATA: ${{ secrets.GOOGLE_CREDENTIALS }}
+        run: |
+          cml runner \
+              --single
+              --cloud=gcp \
+              --cloud-region=us-central1-a \
+              --cloud-type=e2-standard-8 \
+              --labels=cml-runner
+
+  run-command:
+    needs: deploy-runner
+    runs-on: [self-hosted, cml-runner]
+    container: python:3.11
+    timeout-minutes: 14400 # 1 week
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v0
+        with:
+            project_id: sci-software-graph
+            service_account_key: ${{ secrets.GOOGLE_CREDENTIALS }}
+            export_default_credentials: true
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip wheel
+          pip install .
+
+      - name: Run Command
+        env:
+            GITHUB_TOKENS: ${{ secrets.GITHUB_TOKENS }}
+        run: |
+            rs-graph-pipelines \
+                prelinked-dataset-ingestion \
+                ${{ github.event.inputs.dataset-source }} \
+                --use-dask \
+                --prod
