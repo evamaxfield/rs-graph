@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 import typer
-from prefect import Flow, get_run_logger, unmapped
+from prefect import Flow, unmapped
 from prefect.task_runners import SequentialTaskRunner
 from prefect_dask.task_runners import DaskTaskRunner
 from tqdm import tqdm
@@ -78,10 +78,6 @@ def _prelinked_dataset_ingestion_flow(
     filtered_results = code_host_parsing.filter_repo_paper_pairs(
         source_results.successful_results,
     )
-
-    # Set logging to Error
-    logger = get_run_logger()
-    logger.setLevel("ERROR")
 
     # Create chunks of batch_size of the results to process
     n_batches = math.ceil(len(filtered_results.successful_results) / batch_size)
