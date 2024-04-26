@@ -59,7 +59,7 @@ jobs:
           pip install uv
           uv venv -p 3.11
           . .venv/bin/activate
-          uv pip install "."
+          uv pip install -e "."
 
       - name: Run Command
         env:
