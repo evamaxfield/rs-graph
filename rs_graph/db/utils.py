@@ -6,27 +6,24 @@ from pathlib import Path
 from prefect import task
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, UniqueConstraint, create_engine, select
+from tqdm import tqdm
 
 from .. import types
-from . import constants
 from . import models as db_models
 
 ###############################################################################
 
 
 def get_engine(prod: bool = False) -> Engine:
+    # TODO: final check on if constants can be used here
     db_path = Path(__file__).parent.parent / "data" / "files"
 
     if prod:
         db_path = db_path / "rs-graph-prod.db"
 
-        print("prod db path", db_path)
-
         return create_engine(f"sqlite:///{db_path}")
     else:
         db_path = db_path / "rs-graph-dev.db"
-
-        print("dev db path", db_path)
 
         return create_engine(f"sqlite:///{db_path}")
 
@@ -87,11 +84,8 @@ def store_full_details(
     # Get the engine
     engine = get_engine(prod=prod)
 
-    print("engine", engine)
-
     # Create a session
     with Session(engine) as session:
-        print("session", session)
         try:
             assert pair.open_alex_results is not None
             assert pair.github_results is not None
@@ -405,3 +399,85 @@ def store_dev_researcher_em_links_task(
         return pair
 
     return store_dev_researcher_em_links(pair=pair, prod=prod)
+
+
+def check_pair_exists(
+    pair: types.ExpandedRepositoryDocumentPair,
+    prod: bool = False,
+) -> bool:
+    # Get the engine
+    engine = get_engine(prod=prod)
+
+    # Check we have already processed to repo parts
+    assert pair.repo_parts is not None
+
+    # Create a session
+    with Session(engine) as session:
+        # Four statements
+        # One to check and get the document
+        # One to get the repo host id
+        # One to check and get the repository
+        # And a last to check and get the link
+
+        # Document
+        document_stmt = select(db_models.Document).where(
+            db_models.Document.doi == pair.paper_doi
+        )
+        document_model = session.exec(document_stmt).first()
+
+        # Fast fail
+        if document_model is None:
+            return False
+
+        # Code Host
+        code_host_stmt = select(db_models.CodeHost).where(
+            db_models.CodeHost.name == pair.repo_parts.host
+        )
+        code_host_model = session.exec(code_host_stmt).first()
+
+        # Fast fail
+        if code_host_model is None:
+            return False
+
+        # Repository
+        repository_stmt = select(db_models.Repository).where(
+            db_models.Repository.code_host_id == code_host_model.id,
+            db_models.Repository.owner == pair.repo_parts.owner,
+            db_models.Repository.name == pair.repo_parts.name,
+        )
+        repository_model = session.exec(repository_stmt).first()
+
+        # Fast fail
+        if repository_model is None:
+            return False
+
+        # Link
+        link_stmt = select(db_models.DocumentRepositoryLink).where(
+            db_models.DocumentRepositoryLink.document_id == document_model.id,
+            db_models.DocumentRepositoryLink.repository_id == repository_model.id,
+        )
+        link_model = session.exec(link_stmt).first()
+
+        # Final check
+        return link_model is not None
+
+
+def filter_stored_pairs(
+    pairs: list[types.ExpandedRepositoryDocumentPair],
+    prod: bool = False,
+) -> list[types.ExpandedRepositoryDocumentPair]:
+    # For each pair, check if it exists in the database
+    unprocessed_pairs = [
+        pair
+        for pair in tqdm(
+            pairs,
+            desc="Filtering already stored pairs",
+        )
+        if not check_pair_exists(pair=pair, prod=prod)
+    ]
+
+    # Log remaining pairs and filtered out pairs
+    print(f"Filtered out pairs: {len(pairs) - len(unprocessed_pairs)}")
+    print(f"Remaining pairs: {len(unprocessed_pairs)}")
+
+    return unprocessed_pairs

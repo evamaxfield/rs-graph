@@ -62,7 +62,7 @@ class CacheStateMetadata(DataClassJsonMixin):
 
 
 @app.command()
-def download(debug: bool = False) -> None:
+def download(force: bool = False, debug: bool = False) -> None:
     """
     Download all files from remote storage.
 
@@ -109,7 +109,7 @@ def download(debug: bool = False) -> None:
 
     # If the most recent date is newer than the last updated date,
     # then download the new files
-    if most_recent_date > last_updated:
+    if most_recent_date > last_updated or force:
         # Get the remote folder
         remote_folder = f"{REMOTE_STORAGE_BUCKET}/{most_recent_date.isoformat()}"
 

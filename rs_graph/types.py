@@ -132,5 +132,7 @@ class StoredRepositoryDocumentPair(DataClassJsonMixin):
 
 @dataclass
 class SuccessAndErroredResultsLists(DataClassJsonMixin):
-    successful_results: list[BasicRepositoryDocumentPair]
+    successful_results: list[
+        BasicRepositoryDocumentPair | ExpandedRepositoryDocumentPair
+    ]
     errored_results: list[ErrorResult]

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import random
 import time
 import traceback
 from datetime import date
@@ -121,7 +120,7 @@ def _increment_call_count_and_check() -> None:
     _write_api_call_status(current_status)
 
     # Sleep for a random amount of time
-    time.sleep(random.uniform(0, 2))
+    time.sleep(0.6)
 
 
 _setup()

@@ -38,10 +38,17 @@ SOURCE_MAP: dict[str, proto.DatasetRetrievalFunction] = {
 }
 
 
+def _upload_db(
+    prod: bool,
+) -> None:
+    if prod:
+        print("Uploading files to GCS...")
+        upload_rs_graph_data_files()
+
+
 def _store_batch_results(
     results: list[types.StoredRepositoryDocumentPair | types.ErrorResult],
     store_path: Path,
-    prod: bool,
 ) -> None:
     print("Storing batch results...")
 
@@ -54,18 +61,9 @@ def _store_batch_results(
     print(f"This Batch Success: {len(results) - len(errored_results)}")
     print(f"This Batch Errored: {len(errored_results)}")
 
-    for error in errored_results:
-        print(error)
-        print()
-
     # Store errored results
     errored_df = pd.DataFrame(errored_results)
     errored_df.to_parquet(store_path)
-
-    # Upload latest if prod
-    if prod:
-        print("Uploading files to GCS...")
-        upload_rs_graph_data_files()
 
 
 def _prelinked_dataset_ingestion_flow(
@@ -79,59 +77,72 @@ def _prelinked_dataset_ingestion_flow(
     source_results = source_func()
 
     # Filter dataset
-    filtered_results = code_host_parsing.filter_repo_paper_pairs(
+    code_filtered_results = code_host_parsing.filter_repo_paper_pairs(
         source_results.successful_results,
     )
 
+    # Filter out already processed pairs
+    stored_filtered_results = db_utils.filter_stored_pairs(
+        code_filtered_results.successful_results,
+        prod=prod,
+    )
+
     # Create chunks of batch_size of the results to process
-    n_batches = math.ceil(len(filtered_results.successful_results) / batch_size)
+    n_batches = math.ceil(len(stored_filtered_results) / batch_size)
     for i in tqdm(
-        range(0, len(filtered_results.successful_results), batch_size),
+        range(0, len(stored_filtered_results), batch_size),
         desc="Batches",
         total=n_batches,
     ):
-        chunk = filtered_results.successful_results[i : i + batch_size]
+        chunk = stored_filtered_results[i : i + batch_size]
 
-        # TODO: add a check to see if the repo and paper are already in the database
+        # Handle any timeouts and such
+        try:
+            # Process open alex
+            open_alex_futures = open_alex.process_open_alex_work_task.map(
+                pair=chunk,
+            )
 
-        # Process open alex
-        open_alex_futures = open_alex.process_open_alex_work_task.map(
-            pair=chunk,
-        )
+            # Process github
+            github_futures = github.process_github_repo_task.map(
+                pair=open_alex_futures,
+            )
 
-        # Process github
-        github_futures = github.process_github_repo_task.map(
-            pair=open_alex_futures,
-        )
+            # Store everything
+            stored_futures = db_utils.store_full_details_task.map(
+                pair=github_futures,
+                prod=unmapped(prod),
+            )
 
-        # Store everything
-        stored_futures = db_utils.store_full_details_task.map(
-            pair=github_futures,
-            prod=unmapped(prod),
-        )
+            # Match devs and researchers
+            dev_researcher_futures = entity_matching.match_devs_and_researchers.map(
+                pair=stored_futures,
+            )
 
-        # Match devs and researchers
-        dev_researcher_futures = entity_matching.match_devs_and_researchers.map(
-            pair=stored_futures,
-        )
+            # Store the dev-researcher links
+            stored_dev_researcher_futures = (
+                db_utils.store_dev_researcher_em_links_task.map(
+                    pair=dev_researcher_futures,
+                    prod=unmapped(prod),
+                )
+            )
 
-        # Store the dev-researcher links
-        stored_dev_researcher_futures = db_utils.store_dev_researcher_em_links_task.map(
-            pair=dev_researcher_futures,
-            prod=unmapped(prod),
-        )
+            # Store this batch's errored results
+            # Update errored store path with batch index
+            this_batch_store_path = errored_store_path.with_name(
+                errored_store_path.stem + f"-{i // batch_size}.parquet"
+            )
+            _store_batch_results(
+                results=[f.result() for f in stored_dev_researcher_futures],
+                store_path=this_batch_store_path,
+            )
 
-        # Store this batch's errored results
-        # Update errored store path with batch index
-        this_batch_store_path = errored_store_path.with_name(
-            errored_store_path.stem + f"-{i // batch_size}.parquet"
-        )
-        _store_batch_results(
-            # Wait for all futures to complete
-            results=[f.result() for f in stored_dev_researcher_futures],
-            store_path=this_batch_store_path,
-            prod=prod,
-        )
+        except Exception as e:
+            print("Error processing chunk, skipping storage of errors...")
+            print(f"Error: {e}")
+
+        # Always upload the database
+        _upload_db(prod)
 
         # Sleep for a second before next chunk
         time.sleep(1)
@@ -164,12 +175,7 @@ def prelinked_dataset_ingestion(
     # Download latest if prod
     if prod:
         print("Downloading latest data files...")
-        download_rs_graph_data_files()
-    print()
-    print("HELLO!!!")
-    for f in (Path(__file__).parent.parent / "data" / "files").iterdir():
-        print(f)
-        print()
+        download_rs_graph_data_files(force=True)
 
     # If using dask, use DaskTaskRunner
     if use_dask:
