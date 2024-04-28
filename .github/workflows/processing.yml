@@ -61,11 +61,11 @@ jobs:
         run: |
           pip install -e "."
 
+      # . .venv/bin/activate && \
       - name: Run Command
         env:
             GITHUB_TOKENS: ${{ secrets.ALL_GITHUB_TOKENS_FOR_API }}
         run: |
-          . .venv/bin/activate && \
           rs-graph-pipelines \
               prelinked-dataset-ingestion \
               ${{ github.event.inputs.dataset-source }} \
