@@ -151,3 +151,6 @@ dev-author-em-annotation-dataset-irr.csv
 dev-author-em-confusion-matrix.png
 dev-author-em-roc-curve.png
 scratch.py
+dev-author-em-clf
+all-model-results.csv
+random-sample-prelinked-sources.csv

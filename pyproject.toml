@@ -51,7 +51,7 @@ dependencies = [
   # viz
   "bokeh>=3,<4",
   "matplotlib>=3,<4",
-  "opinionated>=0.0.2,<0.0.3",
+  "opinionated>=0.0.3,<0.0.4",
   # statistics and ml
   "scikit-learn>=1,<2",
   "skops==0.9.0",

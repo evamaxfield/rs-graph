@@ -9,14 +9,12 @@ import pandas as pd
 import typer
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.util import cos_sim
-from sklearn.linear_model import LogisticRegressionCV
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
-    RocCurveDisplay,
+    accuracy_score,
     precision_recall_fscore_support,
 )
 from sklearn.model_selection import train_test_split
-from skops import io as skio
 from sqlmodel import Session, select
 from statsmodels.stats.inter_rater import aggregate_raters, fleiss_kappa
 from tqdm import tqdm
@@ -25,15 +23,15 @@ from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.data import (
     DATA_FILES_DIR,
     load_annotated_dev_author_em_dataset,
-    # load_author_contributions_dataset,
+    load_author_contributions_dataset,
     load_multi_annotator_dev_author_em_irr_dataset,
+    load_repo_contributors_dataset,
 )
 from rs_graph.db import models as db_models
 from rs_graph.db import utils as db_utils
 
 # load_repo_contributors_dataset,
 from rs_graph.ml.dev_author_em_clf import (
-    DEV_AUTHOR_EM_CLASSIFIER_PATH,
     DEV_AUTHOR_EM_EMBEDDING_MODEL,
     DEV_AUTHOR_EM_TEMPLATE,
 )
@@ -481,14 +479,20 @@ def train_and_eval_all_dev_author_em_classifiers(debug: bool = False) -> None:
 
 @app.command()
 def train_dev_author_em_classifier(
-    embedding_model: str = DEV_AUTHOR_EM_EMBEDDING_MODEL,
-    test_size: float = 0.2,
+    base_model_name: str = DEV_AUTHOR_EM_EMBEDDING_MODEL,
+    test_size: float = 0.15,
     seed: int = 12,
     confusion_matrix_save_name: str = "dev-author-em-confusion-matrix.png",
-    roc_curve_save_name: str = "dev-author-em-roc-curve.png",
     misclassifications_save_name: str = "dev-author-em-misclassifications.csv",
     debug: bool = False,
 ) -> None:
+    from transformers import AutoModelForSequenceClassification
+    from transformers import AutoTokenizer
+    import datasets
+    from transformers import TrainingArguments, Trainer
+    from transformers import DataCollatorWithPadding
+    from transformers import pipeline
+
     # Setup logging
     setup_logger(debug=debug)
 
@@ -505,15 +509,13 @@ def train_dev_author_em_classifier(
     ].astype(str)
 
     # Load the authors dataset
-    # authors = load_author_contributions_dataset()
-    authors = pd.DataFrame()
+    authors = load_author_contributions_dataset()
 
     # Drop everything but the author_id and the name
     authors = authors[["author_id", "name"]].dropna()
 
     # Load the repos dataset to get to devs
-    # repos = load_repo_contributors_dataset()
-    repos = pd.DataFrame()
+    repos = load_repo_contributors_dataset()
 
     # Get unique devs by grouping by username
     # and then taking the first email and first "name"
@@ -555,8 +557,6 @@ def train_dev_author_em_classifier(
     for _, row in expanded_details.iterrows():
         prepped_rows.append(
             {
-                "author_id": row["author_id"],
-                "dev_username": row["dev_username"],
                 "text": DEV_AUTHOR_EM_TEMPLATE.format(
                     dev_username=row["dev_username"],
                     dev_name=row["dev_name"],
@@ -570,18 +570,9 @@ def train_dev_author_em_classifier(
     # Convert to dataframe
     prepped_data = pd.DataFrame(prepped_rows)
 
-    # Create embeddings for each dev-author string
-    log.info("Creating embeddings for each dev-author string...")
-    model = SentenceTransformer(embedding_model)
-    embeddings = model.encode(
-        prepped_data["text"].tolist(),
-        show_progress_bar=True,
-    )
-
-    # Convert embeddings from a single ndarray to a list of ndarrays
-    # so that we can add them to the dataframe
-    embeddings_list = [np.array(embedding) for embedding in embeddings.tolist()]
-    prepped_data["embedding"] = embeddings_list
+    # Get n classes and labels
+    num_classes = prepped_data["label"].nunique()
+    class_labels = prepped_data["label"].unique().tolist()
 
     # Create splits
     log.info("Creating train and test splits...")
@@ -593,25 +584,104 @@ def train_dev_author_em_classifier(
         shuffle=True,
     )
 
-    # Train a classifier
-    log.info("Training the classifier...")
-    clf = LogisticRegressionCV(
-        cv=10,
-        max_iter=3000,
-        random_state=seed,
-        class_weight="balanced",
-    ).fit(
-        train_df["embedding"].tolist(),
-        train_df["label"].tolist(),
+    # Log split counts
+    split_counts = []
+    for split_name, split_df in [
+        ("train", train_df),
+        ("test", test_df),
+    ]:
+        split_counts.append(
+            {
+                "split": split_name,
+                **split_df["label"].value_counts().to_dict(),
+            }
+        )
+    split_counts_df = pd.DataFrame(split_counts)
+    print("Split counts:")
+    print(split_counts_df)
+    print()
+
+    # Construct features for the dataset
+    features = datasets.Features(
+        text=datasets.Value("string"),
+        label=datasets.ClassLabel(
+            num_classes=num_classes,
+            names=class_labels,
+        ),
     )
 
-    # Store the model
-    log.info("Storing the classifier...")
-    skio.dump(clf, DEV_AUTHOR_EM_CLASSIFIER_PATH)
+    # Create dataset dict
+    ds_dict = datasets.DatasetDict({
+        "train": datasets.Dataset.from_pandas(
+            train_df,
+            features=features,
+            preserve_index=False,
+        ),
+        "test": datasets.Dataset.from_pandas(
+            test_df,
+            features=features,
+            preserve_index=False,
+        ),
+    })
+
+    def tokenize_function(examples):
+        return tokenizer(examples["text"], padding="max_length", truncation=True)
+    
+    # Tokenize the dataset
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+    tokenized_ds_dict = ds_dict.map(tokenize_function, batched=True)
+
+    # Construct label to id and vice-versa LUTs
+    label2id, id2label = {}, {}
+    for i, label in enumerate(class_labels):
+        label2id[label] = str(i)
+        id2label[str(i)] = label
+
+    # Load base model
+    base_model = AutoModelForSequenceClassification.from_pretrained(
+        base_model_name,
+        num_labels=2,
+        label2id=label2id,
+        id2label=id2label,
+        ignore_mismatched_sizes=True,
+    )
+
+    # Create Training Args and Trainer
+    training_args = TrainingArguments(
+        output_dir="dev-author-em-clf",
+        overwrite_output_dir=True,
+        num_train_epochs=2,
+        learning_rate=5e-5,
+        logging_steps=20,
+        auto_find_batch_size=True,
+        seed=12,
+    )
+    trainer = Trainer(
+        model=base_model,
+        args=training_args,
+        train_dataset=tokenized_ds_dict["train"],
+        tokenizer=tokenizer,
+        data_collator=data_collator,
+    )
+
+    # Train
+    trainer.train()
+    trainer.save_model("dev-author-em-clf")  # TODO: Update to use an official name
+
+    # Load model from dir as pipeline
+    trained_clf = pipeline(
+        "text-classification",
+        model="dev-author-em-clf/",
+    )
 
     # Evaluate
     log.info("Evaluating the classifier...")
-    y_pred = clf.predict(test_df["embedding"].tolist())
+    y_pred = [
+        pred["label"]
+        for pred in trained_clf(test_df["text"].tolist())
+    ]
+    accuracy = accuracy_score(test_df["label"].tolist(), y_pred)
     precision, recall, f1, _ = precision_recall_fscore_support(
         test_df["label"].tolist(),
         y_pred,
@@ -620,11 +690,12 @@ def train_dev_author_em_classifier(
     )
 
     # Print results
-    log.info(
+    print(
         f"Evaluation results -- "
-        f"Precision: {precision:.2f}, "
-        f"Recall: {recall:.2f}, "
-        f"F1: {f1:.2f}"
+        f"Accuracy: {accuracy:.3f}, "
+        f"Precision: {precision:.3f}, "
+        f"Recall: {recall:.3f}, "
+        f"F1: {f1:.3f}"
     )
 
     # Create confusion matrix and ROC curve
@@ -634,13 +705,6 @@ def train_dev_author_em_classifier(
     )
     confusion_matrix_save_path = DATA_FILES_DIR / confusion_matrix_save_name
     confusion_matrix.figure_.savefig(confusion_matrix_save_path)
-    roc_curve = RocCurveDisplay.from_estimator(
-        clf,
-        test_df["embedding"].tolist(),
-        test_df["label"].tolist(),
-    )
-    roc_curve_save_path = DATA_FILES_DIR / roc_curve_save_name
-    roc_curve.figure_.savefig(roc_curve_save_path)
 
     # Add predicted values to test_df to find misclassifications
     test_df["predicted"] = y_pred
@@ -648,7 +712,6 @@ def train_dev_author_em_classifier(
 
     # Store misclassifications
     # Drop the embedding column
-    misclassifications = misclassifications.drop(columns=["embedding"])
     misclassifications_save_path = DATA_FILES_DIR / misclassifications_save_name
     misclassifications.to_csv(misclassifications_save_path, index=False)
 
@@ -673,8 +736,14 @@ def _create_dataset_for_document_repository_training(
         stmt = (
             select(
                 db_models.Document,
+                db_models.DocumentAbstract,
                 db_models.DocumentRepositoryLink,
                 db_models.Repository,
+                db_models.RepositoryReadme,
+            )
+            .join(
+                db_models.DocumentAbstract,
+                db_models.DocumentAbstract.document_id == db_models.Document.id,
             )
             .join(
                 db_models.DocumentRepositoryLink,
@@ -685,10 +754,14 @@ def _create_dataset_for_document_repository_training(
                 db_models.DocumentRepositoryLink.repository_id
                 == db_models.Repository.id,
             )
+            .join(
+                db_models.RepositoryReadme,
+                db_models.RepositoryReadme.repository_id == db_models.Repository.id,
+            )
         )
 
         # Iter data
-        for doc, link, repo in session.exec(stmt):
+        for doc, doc_abstract, link, repo, repo_readme in session.exec(stmt):
             # Get doc contributors for this doc
             doc_contribs_statement = (
                 select(
@@ -738,11 +811,12 @@ def _create_dataset_for_document_repository_training(
                     "document_id": doc.id,
                     "document_doi": doc.doi,
                     "document_title": doc.title,
-                    "document_abstract": doc.abstract,
+                    "document_abstract": doc_abstract.content,
                     "document_publication_date": doc.publication_date.isoformat(),
                     "document_contributor_names": ", ".join(doc_contrib_names),
                     "repository_id": repo.id,
                     "repository_name": repo.name,
+                    "repository_readme": repo_readme.content,
                     "repository_description": repo.description,
                     "repository_creation_date": (
                         repo.creation_datetime.date().isoformat()
@@ -778,6 +852,7 @@ def _create_dataset_for_document_repository_training(
                 "document_contributor_names": row["document_contributor_names"],
                 "repository_id": random_row["repository_id"],
                 "repository_name": random_row["repository_name"],
+                "repository_readme": random_row["repository_readme"],
                 "repository_description": random_row["repository_description"],
                 "repository_creation_date": random_row["repository_creation_date"],
                 "repository_contributor_usernames": random_row[

@@ -226,6 +226,7 @@ def prelinked_dataset_ingestion(
 
 @app.command()
 def get_random_sample_of_prelinked_source_data(
+    n: int = 50,
     seed: int = 12,
     outfile_path: str = "random-sample-prelinked-sources.csv",
 ) -> None:
@@ -247,7 +248,7 @@ def get_random_sample_of_prelinked_source_data(
         # Take random sample
         random_sample = random.sample(
             filtered_results.successful_results,
-            10,
+            n,
         )
 
         # Unpack each result and then append to results
@@ -255,7 +256,10 @@ def get_random_sample_of_prelinked_source_data(
             results.append(
                 {
                     "source": source,
-                    **result.to_dict(),
+                    "paper_doi": result.paper_doi,
+                    "repo_url": f"https://github.com/{result.repo_parts.owner}/{result.repo_parts.name}",
+                    "label-match": None,
+                    "label-software-type": None,
                 }
             )
 

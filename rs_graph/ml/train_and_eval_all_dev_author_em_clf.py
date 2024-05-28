@@ -28,26 +28,26 @@ from transformers import Pipeline, pipeline
 
 from ..data import (
     load_annotated_dev_author_em_dataset,
+    load_author_contributions_dataset,
+    load_repo_contributors_dataset,
 )
 
 # Models used for testing, both fine-tune and semantic logit
 BASE_MODELS = {
-    "gte": "thenlper/gte-base",
-    "bge": "BAAI/bge-base-en-v1.5",
+    # "gte": "thenlper/gte-base",
+    # "bge": "BAAI/bge-base-en-v1.5",
     "deberta": "microsoft/deberta-v3-base",
-    "bert-multilingual": "google-bert/bert-base-multilingual-cased",
-    "mpnet": "sentence-transformers/all-mpnet-base-v2",
-    "bert-uncased": "google-bert/bert-base-uncased",
-    "distilbert": "distilbert/distilbert-base-uncased",
+    # "bert-multilingual": "google-bert/bert-base-multilingual-cased",
+    # "mpnet": "sentence-transformers/all-mpnet-base-v2",
+    # "bert-uncased": "google-bert/bert-base-uncased",
+    # "distilbert": "distilbert/distilbert-base-uncased",
 }
 
 # Optional fields to create combinations
 OPTIONAL_DATA_FIELDS = [
     "dev_name",
     "dev_email",
-    "dev_bio",
-    "dev_co_contributors",
-    "author_co_authors",
+    # "dev_bio",
 ]
 
 # Create all combinations
@@ -67,8 +67,8 @@ FINE_TUNE_COMMAND_DICT = {
     "text_column": "text",
     "target_column": "label",
     "train_split": "train",
-    "valid_split": "valid",
-    "epochs": 3,
+    # "valid_split": "valid",
+    "epochs": 2,
     "lr": 5e-5,
     "auto_find_batch_size": True,
     "seed": 12,
@@ -78,6 +78,21 @@ FINE_TUNE_COMMAND_DICT = {
 # Evaluation storage path
 EVAL_STORAGE_PATH = Path("model-eval-results/")
 
+MODEL_STR_INPUT_TEMPLATE = """
+# Developer Details
+
+username: {dev_username}
+{dev_extras}
+
+---
+
+# Author Details
+
+name: {author_name}
+
+""".strip()
+
+
 ###############################################################################
 
 
@@ -85,24 +100,6 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:  # noqa: C901
     # Load environment variables
     load_dotenv()
     FINE_TUNE_COMMAND_DICT["token"] = os.environ["HF_AUTH_TOKEN"]
-
-    # Basic template for model input
-    # We choose username and name because they are always available
-    # All other optional fields are added for experimentation because
-    # Users may not always have them
-    model_str_input_template = """
-    # Developer Details
-
-    username: {dev_username}
-    {dev_extras}
-
-    ---
-
-    # Author Details
-
-    name: {author_name}
-    {author_extras}
-    """.strip()
 
     # Delete prior results and then remake
     shutil.rmtree(EVAL_STORAGE_PATH, ignore_errors=True)
@@ -126,15 +123,13 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:  # noqa: C901
     ].astype(str)
 
     # Load the authors dataset
-    # authors = load_author_contributions_dataset()
-    authors = pd.DataFrame()
+    authors = load_author_contributions_dataset()
 
     # Drop everything but the author_id and the name
     authors = authors[["author_id", "name"]].dropna()
 
     # Load the repos dataset to get to devs
-    # repos = load_repo_contributors_dataset()
-    repos = pd.DataFrame()
+    repos = load_repo_contributors_dataset()
 
     # Get unique devs by grouping by username
     # and then taking the first email and first "name"
@@ -158,6 +153,7 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:  # noqa: C901
                     "dev_username": row["github_id"],
                     "dev_name": dev_details["name"],
                     "dev_email": dev_details["email"],
+                    "dev_bio": dev_details["bio"],
                     "author_id": row["semantic_scholar_id"],
                     "author_name": author_details["name"],
                     "match": "match" if row["match"] else "no-match",
@@ -194,7 +190,7 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:  # noqa: C901
                     if field.startswith("author_")
                 ]
             )
-            model_str_input = model_str_input_template.format(
+            model_str_input = MODEL_STR_INPUT_TEMPLATE.format(
                 dev_username=row["dev_username"],
                 dev_extras=dev_extras,
                 author_name=row["author_name"],
@@ -334,7 +330,7 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:  # noqa: C901
 
     # Iter through different dataset sizes
     for random_neg_sample_frac in tqdm(
-        [0.1, 0.25, 0.5, 1],
+        [1],
         desc="Random neg sample fracs",
     ):
         print("Randomly sampling negative examples with frac:", random_neg_sample_frac)
@@ -361,17 +357,24 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:  # noqa: C901
         ).reset_index(drop=True)
 
         # Create splits
-        train_df, test_and_valid_df = train_test_split(
+        # train_df, test_and_valid_df = train_test_split(
+        #     random_neg_sampled_df,
+        #     test_size=0.2,
+        #     shuffle=True,
+        #     stratify=random_neg_sampled_df["match"],
+        # )
+        # valid_df, test_df = train_test_split(
+        #     test_and_valid_df,
+        #     test_size=0.75,
+        #     shuffle=True,
+        #     stratify=test_and_valid_df["match"],
+        # )
+        train_df, test_df = train_test_split(
             random_neg_sampled_df,
-            test_size=0.4,
+            test_size=0.1,
             shuffle=True,
             stratify=random_neg_sampled_df["match"],
-        )
-        valid_df, test_df = train_test_split(
-            test_and_valid_df,
-            test_size=0.5,
-            shuffle=True,
-            stratify=test_and_valid_df["match"],
+            random_state=12,
         )
 
         # Add the negative examples NOT included in the random sample
@@ -389,7 +392,7 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:  # noqa: C901
         split_counts = []
         for split_name, split_df in [
             ("train", train_df),
-            ("valid", valid_df),
+            # ("valid", valid_df),
             ("test", test_df),
         ]:
             split_counts.append(
@@ -420,13 +423,13 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:  # noqa: C901
                     train_df,
                     fieldset,
                 )
-                (
-                    fieldset_valid_df,
-                    fieldset_valid_ds,
-                ) = convert_split_details_to_text_input_dataset(
-                    valid_df,
-                    fieldset,
-                )
+                # (
+                #     fieldset_valid_df,
+                #     fieldset_valid_ds,
+                # ) = convert_split_details_to_text_input_dataset(
+                #     valid_df,
+                #     fieldset,
+                # )
                 (
                     fieldset_test_df,
                     fieldset_test_ds,
@@ -439,7 +442,7 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:  # noqa: C901
                 fieldset_ds_dict = datasets.DatasetDict(
                     {
                         "train": fieldset_train_ds,
-                        "valid": fieldset_valid_ds,
+                        # "valid": fieldset_valid_ds,
                         "test": fieldset_test_ds,
                     }
                 )
@@ -463,75 +466,75 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:  # noqa: C901
                 print()
                 print()
 
-                # Train each semantic logit model
-                for model_short_name, hf_model_path in tqdm(
-                    BASE_MODELS.items(),
-                    desc="Semantic logit models",
-                    leave=False,
-                ):
-                    # Set seed
-                    np.random.seed(12)
-                    random.seed(12)
+                # # Train each semantic logit model
+                # for model_short_name, hf_model_path in tqdm(
+                #     BASE_MODELS.items(),
+                #     desc="Semantic logit models",
+                #     leave=False,
+                # ):
+                #     # Set seed
+                #     np.random.seed(12)
+                #     random.seed(12)
 
-                    this_iter_model_name = f"semantic-logit-{model_short_name}"
-                    print()
-                    print(f"Working on: {this_iter_model_name}")
-                    try:
-                        # Init sentence transformer
-                        sentence_transformer = SentenceTransformer(hf_model_path)
+                #     this_iter_model_name = f"semantic-logit-{model_short_name}"
+                #     print()
+                #     print(f"Working on: {this_iter_model_name}")
+                #     try:
+                #         # Init sentence transformer
+                #         sentence_transformer = SentenceTransformer(hf_model_path)
 
-                        # Preprocess all of the text to embeddings
-                        print("Preprocessing text to embeddings")
-                        fieldset_train_df["embedding"] = [
-                            np.array(embed)
-                            for embed in sentence_transformer.encode(
-                                fieldset_train_df["text"].tolist(),
-                            ).tolist()
-                        ]
-                        fieldset_test_df["embedding"] = [
-                            np.array(embed)
-                            for embed in sentence_transformer.encode(
-                                fieldset_test_df["text"].tolist(),
-                            ).tolist()
-                        ]
+                #         # Preprocess all of the text to embeddings
+                #         print("Preprocessing text to embeddings")
+                #         fieldset_train_df["embedding"] = [
+                #             np.array(embed)
+                #             for embed in sentence_transformer.encode(
+                #                 fieldset_train_df["text"].tolist(),
+                #             ).tolist()
+                #         ]
+                #         fieldset_test_df["embedding"] = [
+                #             np.array(embed)
+                #             for embed in sentence_transformer.encode(
+                #                 fieldset_test_df["text"].tolist(),
+                #             ).tolist()
+                #         ]
 
-                        # Train model
-                        print("Training model")
-                        clf = LogisticRegressionCV(
-                            cv=10,
-                            max_iter=3000,
-                            random_state=12,
-                            class_weight="balanced",
-                        ).fit(
-                            fieldset_train_df["embedding"].tolist(),
-                            fieldset_train_df["label"].tolist(),
-                        )
+                #         # Train model
+                #         print("Training model")
+                #         clf = LogisticRegressionCV(
+                #             cv=10,
+                #             max_iter=3000,
+                #             random_state=12,
+                #             class_weight="balanced",
+                #         ).fit(
+                #             fieldset_train_df["embedding"].tolist(),
+                #             fieldset_train_df["label"].tolist(),
+                #         )
 
-                        # Evaluate model
-                        results.append(
-                            evaluate(
-                                clf,
-                                fieldset_test_df["embedding"].tolist(),
-                                fieldset_test_df["label"].tolist(),
-                                this_iter_model_name,
-                                fieldset_test_df,
-                                "-".join(fieldset),
-                                random_neg_sample_frac,
-                            ).to_dict(),
-                        )
+                #         # Evaluate model
+                #         results.append(
+                #             evaluate(
+                #                 clf,
+                #                 fieldset_test_df["embedding"].tolist(),
+                #                 fieldset_test_df["label"].tolist(),
+                #                 this_iter_model_name,
+                #                 fieldset_test_df,
+                #                 "-".join(fieldset),
+                #                 random_neg_sample_frac,
+                #             ).to_dict(),
+                #         )
 
-                        print()
+                #         print()
 
-                    except Exception as e:
-                        print(f"Error during: {this_iter_model_name}, Error: {e}")
-                        results.append(
-                            {
-                                "fieldset": fieldset,
-                                "model": this_iter_model_name,
-                                "error_level": "semantic model training",
-                                "error": str(e),
-                            }
-                        )
+                #     except Exception as e:
+                #         print(f"Error during: {this_iter_model_name}, Error: {e}")
+                #         results.append(
+                #             {
+                #                 "fieldset": fieldset,
+                #                 "model": this_iter_model_name,
+                #                 "error_level": "semantic model training",
+                #                 "error": str(e),
+                #             }
+                #         )
 
                 # Train each fine-tuned model
                 for model_short_name, hf_model_path in tqdm(
