@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 from dataclasses_json import DataClassJsonMixin
@@ -116,6 +116,7 @@ def load_multi_annotator_repo_paper_em_irr_dataset() -> pd.DataFrame:
         suffixes=("_akhil", "_terra"),
     )
 
+
 ###############################################################################
 # TODO: To fix with new data later
 
@@ -125,6 +126,7 @@ DATASET_SOURCE_FILE_PATTERN = "-short-paper-details.parquet"
 # Other datasets are formed from enrichment and have hardcoded paths
 EXTENDED_PAPER_DETAILS_PATH = DATA_FILES_DIR / "extended-paper-details.parquet"
 REPO_CONTRIBUTORS_PATH = DATA_FILES_DIR / "repo-contributors.parquet"
+
 
 def load_basic_repos_dataset() -> pd.DataFrame:
     """Load the base dataset (all dataset sources)."""
@@ -148,7 +150,6 @@ def load_basic_repos_dataset() -> pd.DataFrame:
 def load_extended_paper_details_dataset() -> pd.DataFrame:
     """Load the extended paper details dataset."""
     return pd.read_parquet(EXTENDED_PAPER_DETAILS_PATH)
-
 
 
 @dataclass

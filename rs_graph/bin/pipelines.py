@@ -253,6 +253,9 @@ def get_random_sample_of_prelinked_source_data(
 
         # Unpack each result and then append to results
         for result in random_sample:
+            # Assert repo_parts is not None (for type checker)
+            assert result.repo_parts is not None
+
             results.append(
                 {
                     "source": source,

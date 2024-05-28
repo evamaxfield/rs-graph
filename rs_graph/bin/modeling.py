@@ -486,12 +486,15 @@ def train_dev_author_em_classifier(
     misclassifications_save_name: str = "dev-author-em-misclassifications.csv",
     debug: bool = False,
 ) -> None:
-    from transformers import AutoModelForSequenceClassification
-    from transformers import AutoTokenizer
     import datasets
-    from transformers import TrainingArguments, Trainer
-    from transformers import DataCollatorWithPadding
-    from transformers import pipeline
+    from transformers import (
+        AutoModelForSequenceClassification,
+        AutoTokenizer,
+        DataCollatorWithPadding,
+        Trainer,
+        TrainingArguments,
+        pipeline,
+    )
 
     # Setup logging
     setup_logger(debug=debug)
@@ -611,22 +614,24 @@ def train_dev_author_em_classifier(
     )
 
     # Create dataset dict
-    ds_dict = datasets.DatasetDict({
-        "train": datasets.Dataset.from_pandas(
-            train_df,
-            features=features,
-            preserve_index=False,
-        ),
-        "test": datasets.Dataset.from_pandas(
-            test_df,
-            features=features,
-            preserve_index=False,
-        ),
-    })
+    ds_dict = datasets.DatasetDict(
+        {
+            "train": datasets.Dataset.from_pandas(
+                train_df,
+                features=features,
+                preserve_index=False,
+            ),
+            "test": datasets.Dataset.from_pandas(
+                test_df,
+                features=features,
+                preserve_index=False,
+            ),
+        }
+    )
 
-    def tokenize_function(examples):
+    def tokenize_function(examples: dict[str, list[str]]) -> dict[str, list[int]]:
         return tokenizer(examples["text"], padding="max_length", truncation=True)
-    
+
     # Tokenize the dataset
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
@@ -677,10 +682,7 @@ def train_dev_author_em_classifier(
 
     # Evaluate
     log.info("Evaluating the classifier...")
-    y_pred = [
-        pred["label"]
-        for pred in trained_clf(test_df["text"].tolist())
-    ]
+    y_pred = [pred["label"] for pred in trained_clf(test_df["text"].tolist())]
     accuracy = accuracy_score(test_df["label"].tolist(), y_pred)
     precision, recall, f1, _ = precision_recall_fscore_support(
         test_df["label"].tolist(),

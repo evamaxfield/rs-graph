@@ -14,7 +14,6 @@ import pandas as pd
 from autotrain.trainers.text_classification.__main__ import train as ft_train
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
-from sentence_transformers import SentenceTransformer
 from sklearn.linear_model import LogisticRegressionCV
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
