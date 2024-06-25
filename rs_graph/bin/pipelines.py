@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import json
 import math
 import random
 import time
@@ -179,9 +180,17 @@ def prelinked_dataset_ingestion(
 
     # If using dask, use DaskTaskRunner
     if use_dask:
+        # N workers should be equal to the number of github tokens we have access to
+        with open(".github-tokens.json", "rb") as f:
+            github_tokens = json.load(f)
+
+        # Get length
+        n_workers = len(github_tokens)
+
+        # Create runner
         task_runner = DaskTaskRunner(
             cluster_class="distributed.LocalCluster",
-            cluster_kwargs={"n_workers": 5, "threads_per_worker": 1},
+            cluster_kwargs={"n_workers": n_workers, "threads_per_worker": 1},
         )
     else:
         task_runner = SequentialTaskRunner()
@@ -235,7 +244,7 @@ def get_random_sample_of_prelinked_source_data(
     random.seed(seed)
 
     # Iter over sources, take random samples of their "get_dataset" function results
-    results = []
+    results = {}
     for source, source_func in SOURCE_MAP.items():
         print("Working on source:", source)
         source_results = source_func()
