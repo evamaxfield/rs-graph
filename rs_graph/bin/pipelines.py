@@ -244,7 +244,7 @@ def get_random_sample_of_prelinked_source_data(
     random.seed(seed)
 
     # Iter over sources, take random samples of their "get_dataset" function results
-    results = {}
+    results = []
     for source, source_func in SOURCE_MAP.items():
         print("Working on source:", source)
         source_results = source_func()
