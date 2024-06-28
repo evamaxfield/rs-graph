@@ -22,7 +22,7 @@ repos:
 
   # Notebooks
   - repo: https://github.com/nbQA-dev/nbQA
-    rev: 1.7.0
+    rev: 1.8.5
     hooks:
       - id: nbqa-black
       - id: nbqa-ruff
