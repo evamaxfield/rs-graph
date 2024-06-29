@@ -44,7 +44,7 @@ OPTIONAL_DATA_FIELDS = [
 ]
 
 # Holdout authors and devs sample size
-HOLDOUT_SAMPLE_SIZE = 0.2
+HOLDOUT_SAMPLE_SIZE = 0.05
 
 # Create all combinations
 OPTIONAL_DATA_FIELDSETS: list[tuple[str, ...]] = [
@@ -64,7 +64,7 @@ FINE_TUNE_COMMAND_DICT = {
     "target_column": "label",
     "train_split": "train",
     # "valid_split": "valid",
-    "epochs": 2,
+    "epochs": 1,
     "lr": 5e-5,
     "auto_find_batch_size": True,
     "seed": 12,
@@ -76,14 +76,17 @@ FINE_TUNE_COMMAND_DICT = {
 EVAL_STORAGE_PATH = Path("model-eval-results/")
 
 MODEL_STR_INPUT_TEMPLATE = """
-<comparison-set>
-\t<developer-details>
-\t\t<username>{dev_username}</username>{dev_extras}
-\t</developer-details>
-\t<author-details>
-\t\t<name>{author_name}</name>
-\t</author-details>
-</comparison-set>
+# Developer Details
+
+username: {dev_username}
+{dev_extras}
+
+---
+
+# Author Details
+
+name: {author_name}
+
 """.strip()
 
 
@@ -100,8 +103,8 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:  # noqa: C901
     EVAL_STORAGE_PATH.mkdir(exist_ok=True)
 
     # Set seed
-    np.random.seed(12)
-    random.seed(12)
+    np.random.seed(42)
+    random.seed(42)
 
     ###############################################################################
 
@@ -199,26 +202,26 @@ def train_and_eval_all_dev_author_em_classifiers() -> None:  # noqa: C901
         # Construct the model input strings
         rows = []
         for _, row in df.iterrows():
-            dev_extras = "\n\t\t".join(
+            dev_extras = "\n".join(
                 [
-                    f"<{field.replace('dev_', '')}>"
-                    f"{row[field]}"
-                    f"</{field.replace('dev_', '')}>"
+                    f"{field.replace('dev_', '')}: {row[field]}"
                     for field in fieldset
                     if field.startswith("dev_")
                 ]
             )
-            dev_extras = f"\n\t\t{dev_extras}" if len(dev_extras) > 0 else ""
-            author_extras = "\n\t\t".join(
+            author_extras = "\n".join(
                 [
-                    f"<{field.replace('author_', '')}>"
-                    f"{row[field]}"
-                    f"</{field.replace('author_', '')}>"
+                    f"{field.replace('author_', '')}: {row[field]}"
                     for field in fieldset
                     if field.startswith("author_")
                 ]
             )
-            author_extras = f"\n\t\t{author_extras}" if len(author_extras) > 0 else ""
+            model_str_input = MODEL_STR_INPUT_TEMPLATE.format(
+                dev_username=row["dev_username"],
+                dev_extras=dev_extras,
+                author_name=row["author_name"],
+                author_extras=author_extras,
+            )
             model_str_input = MODEL_STR_INPUT_TEMPLATE.format(
                 dev_username=row["dev_username"],
                 dev_extras=dev_extras,
