@@ -44,7 +44,7 @@ OPTIONAL_DATA_FIELDS = [
 ]
 
 # Holdout authors and devs sample size
-HOLDOUT_SAMPLE_SIZE = 0.05
+HOLDOUT_SAMPLE_SIZE = 0.1
 
 # Create all combinations
 OPTIONAL_DATA_FIELDSETS: list[tuple[str, ...]] = [
@@ -65,7 +65,7 @@ FINE_TUNE_COMMAND_DICT = {
     "train_split": "train",
     # "valid_split": "valid",
     "epochs": 1,
-    "lr": 5e-5,
+    "lr": 1e-5,
     "auto_find_batch_size": True,
     "seed": 12,
     "max_seq_length": DEFAULT_MODEL_MAX_SEQ_LENGTH,

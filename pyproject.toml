@@ -50,7 +50,7 @@ dependencies = [
   "sqlmodel>=0.0.16,<0.0.17",
   # viz
   "bokeh>=3,<4",
-  "matplotlib>=3,<4",
+  "matplotlib==3.8.4",  # pinned for compatibility with colormaps
   "opinionated>=0.0.3,<0.0.4",
   # statistics and ml
   "scikit-learn>=1,<2",
