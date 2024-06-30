@@ -64,7 +64,7 @@ FINE_TUNE_COMMAND_DICT = {
     "target_column": "label",
     "train_split": "train",
     # "valid_split": "valid",
-    "epochs": 1,
+    "epochs": 2,
     "lr": 1e-5,
     "auto_find_batch_size": True,
     "seed": 12,
