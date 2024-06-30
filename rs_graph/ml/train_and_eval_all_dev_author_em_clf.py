@@ -64,10 +64,10 @@ FINE_TUNE_COMMAND_DICT = {
     "target_column": "label",
     "train_split": "train",
     # "valid_split": "valid",
-    "epochs": 2,
+    "epochs": 1,
     "lr": 1e-5,
     "auto_find_batch_size": True,
-    "seed": 12,
+    "seed": 422,
     "max_seq_length": DEFAULT_MODEL_MAX_SEQ_LENGTH,
     "logging_steps": 10,
 }
