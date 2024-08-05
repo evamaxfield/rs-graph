@@ -54,14 +54,10 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-        # pip install uv
-        # uv venv -p 3.11
-        # . .venv/bin/activate
       - name: Install Dependencies
         run: |
-          pip install -e "."
-
-      # . .venv/bin/activate && \
+          pip install uv && uv pip install --system --no-cache-dir -e .
+      
       - name: Run Command
         env:
             GITHUB_TOKENS: ${{ secrets.ALL_GITHUB_TOKENS_FOR_API }}
