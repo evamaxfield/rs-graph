@@ -19,7 +19,7 @@ def _process_joss_results_page(
     results: list[dict],
 ) -> tuple[list[types.BasicRepositoryDocumentPair | None], bool]:
     # Store "continuation" flag
-    continue_next = len(results) == 10
+    continue_next = len(results) == 20
 
     # Store processed results
     processed_results: list[types.BasicRepositoryDocumentPair | None] = []
