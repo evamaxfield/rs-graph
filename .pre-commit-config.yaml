@@ -19,6 +19,7 @@ repos:
         additional_dependencies:
           - "types-requests"
           - "types-tabulate"
+          - "types-PyYAML"
 
   # Notebooks
   - repo: https://github.com/nbQA-dev/nbQA

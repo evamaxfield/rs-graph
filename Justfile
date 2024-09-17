@@ -20,7 +20,7 @@ clean:
 # install with all deps
 install:
 	pip install uv
-	uv pip install -e ".[dev,lint,training]"
+	uv pip install -e ".[dev,lint]"
 
 # lint, format, and check all files
 lint:

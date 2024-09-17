@@ -1,21 +1,27 @@
 #!/usr/bin/env python
 
+import itertools
 import math
+import os
 import random
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
+import coiled
 import pandas as pd
 import typer
-from prefect import flow, unmapped
+import yaml
+from prefect import Task, flow, task, unmapped
 from tqdm import tqdm
 
 from rs_graph import types
 from rs_graph.bin.data import download as download_rs_graph_data_files
 from rs_graph.bin.data import upload as upload_rs_graph_data_files
 from rs_graph.db import utils as db_utils
-from rs_graph.enrichment import entity_matching, github, open_alex
+from rs_graph.enrichment import github, open_alex
 from rs_graph.sources import joss, plos, proto, pwc
 from rs_graph.utils import code_host_parsing
 
@@ -24,6 +30,7 @@ from rs_graph.utils import code_host_parsing
 app = typer.Typer()
 
 DEFAULT_RESULTS_DIR = Path("processing-results")
+DEFAULT_GITHUB_TOKENS_FILE = ".github-tokens.yml"
 
 ###############################################################################
 
@@ -34,6 +41,47 @@ SOURCE_MAP: dict[str, proto.DatasetRetrievalFunction] = {
     # "softwarex": softwarex.get_dataset,
     "pwc": pwc.get_dataset,
 }
+
+
+def _wrap_func_with_coiled_prefect_task(
+    func: Callable,
+    prefect_kwargs: dict[str, Any] | None = None,
+    coiled_kwargs: dict[str, Any] | None = None,
+) -> Task:
+    if coiled_kwargs is None:
+        coiled_kwargs = {}
+    if prefect_kwargs is None:
+        prefect_kwargs = {}
+
+    @task(
+        **prefect_kwargs,
+    )
+    @coiled.function(
+        **coiled_kwargs,
+    )
+    def wrapped_func(*args, **kwargs):  # type: ignore
+        return func(*args, **kwargs)
+
+    return wrapped_func
+
+
+def _load_github_tokens(
+    github_tokens_file: str,
+) -> list[str]:
+    # Load tokens
+    try:
+        with open(github_tokens_file) as f:
+            tokens_file = yaml.safe_load(f)
+
+    except FileNotFoundError as e:
+        raise FileNotFoundError(
+            f"GitHub tokens file not found at path: {github_tokens_file}"
+        ) from e
+
+    # Get tokens
+    tokens_list = tokens_file["tokens"].values()
+
+    return tokens_list
 
 
 def _upload_db(
@@ -69,8 +117,10 @@ def _store_batch_results(
 )
 def _prelinked_dataset_ingestion_flow(
     source: str,
-    batch_size: int,
     prod: bool,
+    github_tokens: list[str],
+    use_coiled: bool,
+    batch_size: int,
     errored_store_path: Path,
 ) -> None:
     # Get dataset
@@ -88,6 +138,38 @@ def _prelinked_dataset_ingestion_flow(
         prod=prod,
     )
 
+    # Get an infinite cycle of github tokens
+    cycled_github_tokens = itertools.cycle(github_tokens)
+
+    # Workers is the number of github tokens
+    n_github_tokens = len(github_tokens)
+    n_workers_for_gh_cluster: int | list[int]
+    if n_github_tokens <= 1:
+        n_workers_for_gh_cluster = 1
+    else:
+        n_workers_for_gh_cluster = [1, n_github_tokens + 1]
+
+    # Print the calculated number of workers
+    print(f"Number of workers for GitHub cluster: {n_workers_for_gh_cluster}")
+
+    # Construct different cluster parameters
+    github_cluster_config = {
+        "keepalive": "15m",
+        "cpu": [1, 4],
+        "memory": ["1GiB", "4GiB"],
+        "n_workers": n_workers_for_gh_cluster,
+        "spot_policy": "spot_with_fallback",
+        "local": not use_coiled,
+    }
+    open_alex_cluster_config = {
+        "keepalive": "15m",
+        "cpu": [1, 4],
+        "memory": ["1GiB", "4GiB"],
+        "n_workers": [1, 3],
+        "spot_policy": "spot_with_fallback",
+        "local": not use_coiled,
+    }
+
     # Create chunks of batch_size of the results to process
     n_batches = math.ceil(len(stored_filtered_results) / batch_size)
     for i in tqdm(
@@ -100,13 +182,24 @@ def _prelinked_dataset_ingestion_flow(
         # Handle any timeouts and such
         try:
             # Process open alex
-            open_alex_futures = open_alex.process_open_alex_work_task.map(
+            process_open_alex_wrapped_task = _wrap_func_with_coiled_prefect_task(
+                open_alex.process_open_alex_work_task,
+                coiled_kwargs=open_alex_cluster_config,
+            )
+            open_alex_futures = process_open_alex_wrapped_task.map(
                 pair=chunk,
             )
 
             # Process github
-            github_futures = github.process_github_repo_task.map(
+            process_github_wrapped_task = _wrap_func_with_coiled_prefect_task(
+                github.process_github_repo_task,
+                coiled_kwargs=github_cluster_config,
+            )
+            github_futures = process_github_wrapped_task.map(
                 pair=open_alex_futures,
+                github_api_key=[
+                    next(cycled_github_tokens) for _ in range(len(open_alex_futures))
+                ],
             )
 
             # Store everything
@@ -115,18 +208,24 @@ def _prelinked_dataset_ingestion_flow(
                 prod=unmapped(prod),
             )
 
-            # Match devs and researchers
-            dev_researcher_futures = entity_matching.match_devs_and_researchers.map(
-                pair=stored_futures,
-            )
+            # # Match devs and researchers
+            # match_devs_and_researchers_wrapped_task = (
+            #     _wrap_func_with_coiled_prefect_task(
+            #         entity_matching.match_devs_and_researchers,
+            #         coiled_kwargs=gpu_cluster_kwargs,
+            #     )
+            # )
+            # dev_researcher_futures = match_devs_and_researchers_wrapped_task.map(
+            #     pair=stored_futures,
+            # )
 
-            # Store the dev-researcher links
-            stored_dev_researcher_futures = (
-                db_utils.store_dev_researcher_em_links_task.map(
-                    pair=dev_researcher_futures,
-                    prod=unmapped(prod),
-                )
-            )
+            # # Store the dev-researcher links
+            # stored_dev_researcher_futures = (
+            #     db_utils.store_dev_researcher_em_links_task.map(
+            #         pair=dev_researcher_futures,
+            #         prod=unmapped(prod),
+            #     )
+            # )
 
             # Store this batch's errored results
             # Update errored store path with batch index
@@ -134,7 +233,7 @@ def _prelinked_dataset_ingestion_flow(
                 errored_store_path.stem + f"-{i // batch_size}.parquet"
             )
             _store_batch_results(
-                results=[f.result() for f in stored_dev_researcher_futures],
+                results=[f.result() for f in stored_futures],
                 store_path=this_batch_store_path,
             )
 
@@ -156,7 +255,9 @@ def _prelinked_dataset_ingestion_flow(
 def prelinked_dataset_ingestion(
     source: str,
     prod: bool = False,
-    batch_size: int = 40,
+    use_coiled: bool = False,
+    github_tokens_file: str = DEFAULT_GITHUB_TOKENS_FILE,
+    batch_size: int = 50,
 ) -> None:
     """Get data from OpenAlex."""
     # Create current datetime without microseconds
@@ -181,11 +282,19 @@ def prelinked_dataset_ingestion(
     start_dt = datetime.now()
     start_dt = start_dt.replace(microsecond=0)
 
+    # Ignore prefect task introspection warnings
+    os.environ["PREFECT_TASK_INTROSPECTION_WARN_THRESHOLD"] = "0"
+
+    # Load GitHub tokens
+    github_tokens = _load_github_tokens(github_tokens_file)
+
     # Start the flow
     _prelinked_dataset_ingestion_flow(
         source=source,
-        batch_size=batch_size,
         prod=prod,
+        github_tokens=github_tokens,
+        use_coiled=use_coiled,
+        batch_size=batch_size,
         errored_store_path=errored_store_path,
     )
 

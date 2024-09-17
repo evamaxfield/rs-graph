@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import base64
-import json
 import logging
-import os
-import random
 import time
 import traceback
 from dataclasses import dataclass
@@ -14,20 +11,13 @@ from datetime import datetime
 from functools import partial
 
 import backoff
-import coiled
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
 from fastcore.net import HTTP403ForbiddenError
 from ghapi.all import GhApi
-from prefect import task
 
 from .. import types
 from ..db import models as db_models
-from ..pipeline_config import LOCAL
-
-###############################################################################
-
-GITHUB_TOKENS_FILE = ".github-tokens.json"
 
 ###############################################################################
 
@@ -261,39 +251,16 @@ def process_github_repo(
         )
 
 
-@task(log_prints=True, timeout_seconds=180)
-@coiled.function(
-    local=LOCAL,
-    n_workers=1,
-)
 def process_github_repo_task(
     pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,
+    github_api_key: str,
     top_n: int = 30,
 ) -> types.ExpandedRepositoryDocumentPair | types.ErrorResult:
     if isinstance(pair, types.ErrorResult):
         return pair
 
-    # Load tokens
-    try:
-        with open(GITHUB_TOKENS_FILE) as f:
-            tokens = json.load(f)
-
-    except FileNotFoundError:
-        # Try loading from env
-        tokens_optional = os.getenv("GITHUB_TOKENS")
-        if tokens_optional is None:
-            return types.ErrorResult(
-                source=pair.source,
-                step="github-repo-contributors",
-                identifier=pair.paper_doi,
-                error="No GitHub tokens",
-                traceback="",
-            )
-        else:
-            tokens = json.loads(tokens_optional)
-
     return process_github_repo(
         pair=pair,
-        github_api_key=random.choice(tokens),
+        github_api_key=github_api_key,
         top_n=top_n,
     )

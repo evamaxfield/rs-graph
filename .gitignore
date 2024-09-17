@@ -135,6 +135,7 @@ softwarex-short-paper-details.parquet
 rs-graph-upstream-deps-failed.parquet
 rs-graph-upstream-deps.parquet
 .github-tokens.json
+.github-tokens.yml
 autotrain-text-classification-temp
 model-eval-results/
 prior-model-eval-results/

@@ -3,7 +3,6 @@
 import traceback
 from pathlib import Path
 
-import coiled
 from prefect import task
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, UniqueConstraint, create_engine, select
@@ -328,10 +327,6 @@ def store_full_details(
     retries=2,
     retry_delay_seconds=2,
 )
-@coiled.function(
-    local=True,  # Hard code that this must happen locally
-    n_workers=1,
-)
 def store_full_details_task(
     pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,
     prod: bool = False,
@@ -397,10 +392,6 @@ def store_dev_researcher_em_links(
     log_prints=True,
     retries=2,
     retry_delay_seconds=2,
-)
-@coiled.function(
-    local=True,  # Hard code that this must happen locally
-    n_workers=1,
 )
 def store_dev_researcher_em_links_task(
     pair: types.StoredRepositoryDocumentPair | types.ErrorResult,
