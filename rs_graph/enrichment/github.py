@@ -14,6 +14,7 @@ from datetime import datetime
 from functools import partial
 
 import backoff
+import coiled
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
 from fastcore.net import HTTP403ForbiddenError
@@ -22,6 +23,7 @@ from prefect import task
 
 from .. import types
 from ..db import models as db_models
+from ..pipeline_config import LOCAL
 
 ###############################################################################
 
@@ -259,7 +261,10 @@ def process_github_repo(
         )
 
 
-@task(timeout_seconds=180)
+@task(log_prints=True, timeout_seconds=180)
+@coiled.function(
+    local=LOCAL,
+)
 def process_github_repo_task(
     pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,
     top_n: int = 30,

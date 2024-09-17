@@ -9,12 +9,14 @@ from datetime import date
 from pathlib import Path
 
 import backoff
+import coiled
 import msgspec
 import pyalex
 from prefect import task
 
 from .. import types
 from ..db import models as db_models
+from ..pipeline_config import LOCAL
 
 #######################################################################################
 
@@ -343,7 +345,10 @@ def process_open_alex_work(
         )
 
 
-@task(timeout_seconds=120)
+@task(log_prints=True, timeout_seconds=120)
+@coiled.function(
+    local=LOCAL,
+)
 def process_open_alex_work_task(
     pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,
 ) -> types.ExpandedRepositoryDocumentPair | types.ErrorResult:

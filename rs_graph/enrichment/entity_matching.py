@@ -5,11 +5,13 @@ from __future__ import annotations
 import logging
 import traceback
 
+import coiled
 from prefect import task
 
 from .. import types
 from ..db import models as db_models
 from ..ml import dev_author_em_clf
+from ..pipeline_config import LOCAL
 
 ###############################################################################
 
@@ -18,7 +20,12 @@ log = logging.getLogger(__name__)
 ###############################################################################
 
 
-@task
+@task(
+    log_prints=True,
+)
+@coiled.function(
+    local=LOCAL,
+)
 def match_devs_and_researchers(
     pair: types.StoredRepositoryDocumentPair | types.ErrorResult,
 ) -> types.StoredRepositoryDocumentPair | types.ErrorResult:

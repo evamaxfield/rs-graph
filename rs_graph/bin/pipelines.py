@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import json
 import math
 import random
 import time
@@ -9,9 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 import typer
-from prefect import Flow, unmapped
-from prefect.task_runners import SequentialTaskRunner
-from prefect_dask.task_runners import DaskTaskRunner
+from prefect import flow, unmapped
 from tqdm import tqdm
 
 from rs_graph import types
@@ -67,6 +64,9 @@ def _store_batch_results(
     errored_df.to_parquet(store_path)
 
 
+@flow(
+    log_prints=True,
+)
 def _prelinked_dataset_ingestion_flow(
     source: str,
     batch_size: int,
@@ -156,7 +156,6 @@ def _prelinked_dataset_ingestion_flow(
 def prelinked_dataset_ingestion(
     source: str,
     prod: bool = False,
-    use_dask: bool = False,
     batch_size: int = 40,
 ) -> None:
     """Get data from OpenAlex."""
@@ -178,37 +177,12 @@ def prelinked_dataset_ingestion(
         print("Downloading latest data files...")
         download_rs_graph_data_files(force=True)
 
-    # If using dask, use DaskTaskRunner
-    if use_dask:
-        # N workers should be equal to the number of github tokens we have access to
-        with open(".github-tokens.json", "rb") as f:
-            github_tokens = json.load(f)
-
-        # Get length
-        n_workers = len(github_tokens)
-
-        # Create runner
-        task_runner = DaskTaskRunner(
-            cluster_class="distributed.LocalCluster",
-            cluster_kwargs={"n_workers": n_workers, "threads_per_worker": 1},
-        )
-    else:
-        task_runner = SequentialTaskRunner()
-
-    # Create the flow
-    ingest_flow = Flow(
-        _prelinked_dataset_ingestion_flow,
-        name="ingest-flow",
-        task_runner=task_runner,
-        log_prints=True,
-    )
-
     # Keep track of duration
     start_dt = datetime.now()
     start_dt = start_dt.replace(microsecond=0)
 
     # Start the flow
-    ingest_flow(
+    _prelinked_dataset_ingestion_flow(
         source=source,
         batch_size=batch_size,
         prod=prod,
