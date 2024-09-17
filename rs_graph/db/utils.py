@@ -330,6 +330,7 @@ def store_full_details(
 )
 @coiled.function(
     local=True,  # Hard code that this must happen locally
+    n_workers=1,
 )
 def store_full_details_task(
     pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,
@@ -399,6 +400,7 @@ def store_dev_researcher_em_links(
 )
 @coiled.function(
     local=True,  # Hard code that this must happen locally
+    n_workers=1,
 )
 def store_dev_researcher_em_links_task(
     pair: types.StoredRepositoryDocumentPair | types.ErrorResult,

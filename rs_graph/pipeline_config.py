@@ -4,4 +4,4 @@
 
 # LOCAL = True means process data locally on your machine
 # LOCAL = False means process data on Coiled
-LOCAL = True
+LOCAL = False

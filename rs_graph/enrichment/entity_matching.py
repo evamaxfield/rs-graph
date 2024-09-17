@@ -25,6 +25,7 @@ log = logging.getLogger(__name__)
 )
 @coiled.function(
     local=LOCAL,
+    n_workers=1,
 )
 def match_devs_and_researchers(
     pair: types.StoredRepositoryDocumentPair | types.ErrorResult,

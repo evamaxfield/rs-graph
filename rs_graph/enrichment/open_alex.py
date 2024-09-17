@@ -348,6 +348,7 @@ def process_open_alex_work(
 @task(log_prints=True, timeout_seconds=120)
 @coiled.function(
     local=LOCAL,
+    n_workers=1,
 )
 def process_open_alex_work_task(
     pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,

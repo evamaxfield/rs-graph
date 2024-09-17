@@ -264,6 +264,7 @@ def process_github_repo(
 @task(log_prints=True, timeout_seconds=180)
 @coiled.function(
     local=LOCAL,
+    n_workers=1,
 )
 def process_github_repo_task(
     pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,
