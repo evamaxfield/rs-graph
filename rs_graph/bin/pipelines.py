@@ -21,7 +21,7 @@ from rs_graph import types
 from rs_graph.bin.data import download as download_rs_graph_data_files
 from rs_graph.bin.data import upload as upload_rs_graph_data_files
 from rs_graph.db import utils as db_utils
-from rs_graph.enrichment import github, open_alex
+from rs_graph.enrichment import entity_matching, github, open_alex
 from rs_graph.sources import joss, plos, proto, pwc
 from rs_graph.utils import code_host_parsing
 
@@ -55,9 +55,12 @@ def _wrap_func_with_coiled_prefect_task(
 
     @task(
         **prefect_kwargs,
+        name=func.__name__,
+        log_prints=True,
     )
     @coiled.function(
         **coiled_kwargs,
+        name=func.__name__,
     )
     def wrapped_func(*args, **kwargs):  # type: ignore
         return func(*args, **kwargs)
@@ -155,19 +158,31 @@ def _prelinked_dataset_ingestion_flow(
     # Construct different cluster parameters
     github_cluster_config = {
         "keepalive": "15m",
-        "cpu": [1, 4],
-        "memory": ["1GiB", "4GiB"],
-        "n_workers": n_workers_for_gh_cluster,
+        "cpu": [2, 4],
+        "memory": ["2GiB", "8GiB"],
+        "n_workers": 1,
+        "threads_per_worker": n_workers_for_gh_cluster,
         "spot_policy": "spot_with_fallback",
-        "local": not use_coiled,
+        "local": False,
     }
+    print(github_cluster_config)
     open_alex_cluster_config = {
         "keepalive": "15m",
-        "cpu": [1, 4],
-        "memory": ["1GiB", "4GiB"],
-        "n_workers": [1, 3],
+        "cpu": [4, 8],
+        "memory": ["4GiB", "8GiB"],
+        "n_workers": 1,
+        "threads_per_worker": 6,
         "spot_policy": "spot_with_fallback",
-        "local": not use_coiled,
+        "local": False,
+    }
+    gpu_cluster_kwargs = {
+        "keepalive": "15m",
+        "cpu": [4, 8],
+        "memory": ["8GiB"],
+        "n_workers": 2,
+        "spot_policy": "spot_with_fallback",
+        "local": False,
+        "gpu": True,
     }
 
     # Create chunks of batch_size of the results to process
@@ -208,24 +223,24 @@ def _prelinked_dataset_ingestion_flow(
                 prod=unmapped(prod),
             )
 
-            # # Match devs and researchers
-            # match_devs_and_researchers_wrapped_task = (
-            #     _wrap_func_with_coiled_prefect_task(
-            #         entity_matching.match_devs_and_researchers,
-            #         coiled_kwargs=gpu_cluster_kwargs,
-            #     )
-            # )
-            # dev_researcher_futures = match_devs_and_researchers_wrapped_task.map(
-            #     pair=stored_futures,
-            # )
+            # Match devs and researchers
+            match_devs_and_researchers_wrapped_task = (
+                _wrap_func_with_coiled_prefect_task(
+                    entity_matching.match_devs_and_researchers,
+                    coiled_kwargs=gpu_cluster_kwargs,
+                )
+            )
+            dev_researcher_futures = match_devs_and_researchers_wrapped_task.map(
+                pair=stored_futures,
+            )
 
-            # # Store the dev-researcher links
-            # stored_dev_researcher_futures = (
-            #     db_utils.store_dev_researcher_em_links_task.map(
-            #         pair=dev_researcher_futures,
-            #         prod=unmapped(prod),
-            #     )
-            # )
+            # Store the dev-researcher links
+            stored_dev_researcher_futures = (
+                db_utils.store_dev_researcher_em_links_task.map(
+                    pair=dev_researcher_futures,
+                    prod=unmapped(prod),
+                )
+            )
 
             # Store this batch's errored results
             # Update errored store path with batch index
@@ -233,7 +248,7 @@ def _prelinked_dataset_ingestion_flow(
                 errored_store_path.stem + f"-{i // batch_size}.parquet"
             )
             _store_batch_results(
-                results=[f.result() for f in stored_futures],
+                results=[f.result() for f in stored_dev_researcher_futures],
                 store_path=this_batch_store_path,
             )
 
@@ -259,7 +274,10 @@ def prelinked_dataset_ingestion(
     github_tokens_file: str = DEFAULT_GITHUB_TOKENS_FILE,
     batch_size: int = 50,
 ) -> None:
-    """Get data from OpenAlex."""
+    """
+    Process and ingest a stored pre-linked dataset of
+    scientific articles and source code repositories.
+    """
     # Create current datetime without microseconds
     current_datetime = datetime.now().replace(microsecond=0)
     # Convert to isoformat and replace colons with dashes
