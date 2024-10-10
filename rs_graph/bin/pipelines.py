@@ -155,7 +155,7 @@ def _prelinked_dataset_ingestion_flow(
         "n_workers": 1,
         "threads_per_worker": n_github_tokens,
         "spot_policy": "spot_with_fallback",
-        "local": True,
+        "local": not use_coiled,
     }
     print(github_cluster_config)
     open_alex_cluster_config = {
@@ -165,16 +165,15 @@ def _prelinked_dataset_ingestion_flow(
         "n_workers": 1,
         "threads_per_worker": 6,
         "spot_policy": "spot_with_fallback",
-        "local": True,
+        "local": not use_coiled,
     }
     gpu_cluster_kwargs = {
         "keepalive": "15m",
         "cpu": [4, 8],
-        "memory": ["8GiB"],
-        "n_workers": 2,
+        "memory": ["4GiB", "8GiB"],
+        "n_workers": 3,
         "spot_policy": "spot_with_fallback",
-        "local": True,
-        "gpu": True,
+        "local": not use_coiled,
     }
 
     # Create chunks of batch_size of the results to process
