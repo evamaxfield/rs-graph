@@ -146,14 +146,6 @@ def _prelinked_dataset_ingestion_flow(
 
     # Workers is the number of github tokens
     n_github_tokens = len(github_tokens)
-    n_workers_for_gh_cluster: int | list[int]
-    if n_github_tokens <= 1:
-        n_workers_for_gh_cluster = 1
-    else:
-        n_workers_for_gh_cluster = [1, n_github_tokens + 1]
-
-    # Print the calculated number of workers
-    print(f"Number of workers for GitHub cluster: {n_workers_for_gh_cluster}")
 
     # Construct different cluster parameters
     github_cluster_config = {
@@ -161,9 +153,9 @@ def _prelinked_dataset_ingestion_flow(
         "cpu": [2, 4],
         "memory": ["2GiB", "8GiB"],
         "n_workers": 1,
-        "threads_per_worker": n_workers_for_gh_cluster,
+        "threads_per_worker": n_github_tokens,
         "spot_policy": "spot_with_fallback",
-        "local": False,
+        "local": True,
     }
     print(github_cluster_config)
     open_alex_cluster_config = {
@@ -173,7 +165,7 @@ def _prelinked_dataset_ingestion_flow(
         "n_workers": 1,
         "threads_per_worker": 6,
         "spot_policy": "spot_with_fallback",
-        "local": False,
+        "local": True,
     }
     gpu_cluster_kwargs = {
         "keepalive": "15m",
@@ -181,7 +173,7 @@ def _prelinked_dataset_ingestion_flow(
         "memory": ["8GiB"],
         "n_workers": 2,
         "spot_policy": "spot_with_fallback",
-        "local": False,
+        "local": True,
         "gpu": True,
     }
 
