@@ -120,7 +120,7 @@ def _store_batch_results(
 )
 def _prelinked_dataset_ingestion_flow(
     source: str,
-    prod: bool,
+    use_prod: bool,
     github_tokens: list[str],
     use_coiled: bool,
     batch_size: int,
@@ -138,7 +138,7 @@ def _prelinked_dataset_ingestion_flow(
     # Filter out already processed pairs
     stored_filtered_results = db_utils.filter_stored_pairs(
         code_filtered_results.successful_results,
-        prod=prod,
+        use_prod=use_prod,
     )
 
     # Get an infinite cycle of github tokens
@@ -210,7 +210,7 @@ def _prelinked_dataset_ingestion_flow(
             # Store everything
             stored_futures = db_utils.store_full_details_task.map(
                 pair=github_futures,
-                prod=unmapped(prod),
+                use_prod=unmapped(use_prod),
             )
 
             # Match devs and researchers
@@ -228,7 +228,7 @@ def _prelinked_dataset_ingestion_flow(
             stored_dev_researcher_futures = (
                 db_utils.store_dev_researcher_em_links_task.map(
                     pair=dev_researcher_futures,
-                    prod=unmapped(prod),
+                    use_prod=unmapped(use_prod),
                 )
             )
 
@@ -247,7 +247,7 @@ def _prelinked_dataset_ingestion_flow(
             print(f"Error: {e}")
 
         # Always upload the database
-        _upload_db(prod)
+        _upload_db(use_prod)
 
         # Sleep for a second before next chunk
         time.sleep(1)
@@ -259,7 +259,7 @@ def _prelinked_dataset_ingestion_flow(
 @app.command()
 def prelinked_dataset_ingestion(
     source: str,
-    prod: bool = False,
+    use_prod: bool = False,
     use_coiled: bool = False,
     github_tokens_file: str = DEFAULT_GITHUB_TOKENS_FILE,
     batch_size: int = 50,
@@ -282,7 +282,7 @@ def prelinked_dataset_ingestion(
     )
 
     # Download latest if prod
-    if prod:
+    if use_prod:
         print("Downloading latest data files...")
         download_rs_graph_data_files(force=True)
 
@@ -299,7 +299,7 @@ def prelinked_dataset_ingestion(
     # Start the flow
     _prelinked_dataset_ingestion_flow(
         source=source,
-        prod=prod,
+        use_prod=use_prod,
         github_tokens=github_tokens,
         use_coiled=use_coiled,
         batch_size=batch_size,
@@ -311,7 +311,7 @@ def prelinked_dataset_ingestion(
     end_dt = end_dt.replace(microsecond=0)
 
     # Upload latest if prod
-    if prod:
+    if use_prod:
         upload_rs_graph_data_files()
 
     # Sum errors

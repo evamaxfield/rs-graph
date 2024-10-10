@@ -14,11 +14,11 @@ from . import models as db_models
 ###############################################################################
 
 
-def get_engine(prod: bool = False) -> Engine:
+def get_engine(use_prod: bool = False) -> Engine:
     # TODO: final check on if constants can be used here
     db_path = Path(__file__).parent.parent / "data" / "files"
 
-    if prod:
+    if use_prod:
         db_path = db_path / "rs-graph-prod.db"
 
         return create_engine(f"sqlite:///{db_path}")
@@ -79,10 +79,10 @@ def _get_or_add_and_flush(
 
 def store_full_details(
     pair: types.ExpandedRepositoryDocumentPair,
-    prod: bool = False,
+    use_prod: bool = False,
 ) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
     # Get the engine
-    engine = get_engine(prod=prod)
+    engine = get_engine(use_prod=use_prod)
 
     # Create a session
     with Session(engine) as session:
@@ -329,20 +329,20 @@ def store_full_details(
 )
 def store_full_details_task(
     pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,
-    prod: bool = False,
+    use_prod: bool = False,
 ) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
     if isinstance(pair, types.ErrorResult):
         return pair
 
-    return store_full_details(pair=pair, prod=prod)
+    return store_full_details(pair=pair, use_prod=use_prod)
 
 
 def store_dev_researcher_em_links(
     pair: types.StoredRepositoryDocumentPair,
-    prod: bool = False,
+    use_prod: bool = False,
 ) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
     # Get the engine
-    engine = get_engine(prod=prod)
+    engine = get_engine(use_prod=use_prod)
 
     # Create a session
     with Session(engine) as session:
@@ -382,7 +382,7 @@ def store_dev_researcher_em_links(
             return types.ErrorResult(
                 source=pair.dataset_source_model.name,
                 step="store-dev-research-em-links",
-                identifier=pair.document_model.paper_doi,
+                identifier=pair.document_model.doi,
                 error=str(e),
                 traceback=traceback.format_exc(),
             )
@@ -395,20 +395,20 @@ def store_dev_researcher_em_links(
 )
 def store_dev_researcher_em_links_task(
     pair: types.StoredRepositoryDocumentPair | types.ErrorResult,
-    prod: bool = False,
+    use_prod: bool = False,
 ) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
     if isinstance(pair, types.ErrorResult):
         return pair
 
-    return store_dev_researcher_em_links(pair=pair, prod=prod)
+    return store_dev_researcher_em_links(pair=pair, use_prod=use_prod)
 
 
 def check_pair_exists(
     pair: types.ExpandedRepositoryDocumentPair,
-    prod: bool = False,
+    use_prod: bool = False,
 ) -> bool:
     # Get the engine
-    engine = get_engine(prod=prod)
+    engine = get_engine(use_prod=use_prod)
 
     # Check we have already processed to repo parts
     assert pair.repo_parts is not None
@@ -466,7 +466,7 @@ def check_pair_exists(
 
 def filter_stored_pairs(
     pairs: list[types.ExpandedRepositoryDocumentPair],
-    prod: bool = False,
+    use_prod: bool = False,
 ) -> list[types.ExpandedRepositoryDocumentPair]:
     # For each pair, check if it exists in the database
     unprocessed_pairs = [
@@ -475,7 +475,7 @@ def filter_stored_pairs(
             pairs,
             desc="Filtering already stored pairs",
         )
-        if not check_pair_exists(pair=pair, prod=prod)
+        if not check_pair_exists(pair=pair, use_prod=use_prod)
     ]
 
     # Log remaining pairs and filtered out pairs
