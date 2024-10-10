@@ -100,7 +100,6 @@ def get_dataset(
         # Update progress
         if total_processed % 500 == 0:
             print(f"Processed {total_processed} papers")
-            break
 
     # Log final metrics
     print(f"Total processed: {total_processed}")
