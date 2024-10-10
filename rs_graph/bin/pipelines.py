@@ -157,7 +157,6 @@ def _prelinked_dataset_ingestion_flow(
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
     }
-    print(github_cluster_config)
     open_alex_cluster_config = {
         "keepalive": "15m",
         "cpu": [4, 8],
