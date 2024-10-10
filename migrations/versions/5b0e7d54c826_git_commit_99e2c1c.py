@@ -1,8 +1,8 @@
-"""Git Commit: 7333ca6.
+"""Git Commit: 99e2c1c.
 
-Revision ID: f75d994f9c44
+Revision ID: 5b0e7d54c826
 Revises: 
-Create Date: 2024-04-25 12:17:44.203899
+Create Date: 2024-10-09 18:13:55.016214
 
 """
 from collections.abc import Sequence
@@ -12,7 +12,7 @@ import sqlmodel
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "f75d994f9c44"
+revision: str = "5b0e7d54c826"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -335,10 +335,15 @@ def upgrade() -> None:
         sa.Column("document_id", sa.Integer(), nullable=False),
         sa.Column("repository_id", sa.Integer(), nullable=False),
         sa.Column("dataset_source_id", sa.Integer(), nullable=False),
-        sa.Column("em_model_name", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
         sa.Column(
-            "em_model_version", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+            "predictive_model_name", sqlmodel.sql.sqltypes.AutoString(), nullable=True
         ),
+        sa.Column(
+            "predictive_model_version",
+            sqlmodel.sql.sqltypes.AutoString(),
+            nullable=True,
+        ),
+        sa.Column("predictive_model_confidence", sa.Float(), nullable=True),
         sa.Column(
             "created_datetime",
             sa.DateTime(),
@@ -428,6 +433,15 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("researcher_id", sa.Integer(), nullable=False),
         sa.Column("developer_account_id", sa.Integer(), nullable=False),
+        sa.Column(
+            "predictive_model_name", sqlmodel.sql.sqltypes.AutoString(), nullable=True
+        ),
+        sa.Column(
+            "predictive_model_version",
+            sqlmodel.sql.sqltypes.AutoString(),
+            nullable=True,
+        ),
+        sa.Column("predictive_model_confidence", sa.Float(), nullable=True),
         sa.Column(
             "created_datetime",
             sa.DateTime(),

@@ -26,13 +26,6 @@ class SuccessAndErroredResults:
 
 
 @dataclass
-class DeveloperDetails:
-    username: str
-    name: str | None
-    email: str | None
-
-
-@dataclass
 class BasicRepositoryDocumentPair(DataClassJsonMixin):
     source: str
     repo_url: str

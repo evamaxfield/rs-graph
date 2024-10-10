@@ -3,16 +3,28 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import Column, DateTime, func
 from sqlmodel import Field, SQLModel, UniqueConstraint
 
+
+class StripMixin:
+    def __init__(self, **data: Any):
+        for field, value in data.items():
+            if isinstance(value, str):
+                data[field] = value.strip()
+        super().__init__(**data)
+
+
+class StrippedSQLModel(StripMixin, SQLModel):
+    pass
+
+
 ###############################################################################
 
-# TODO: strip all text fields prior to db storage
 
-
-class DatasetSource(SQLModel, table=True):  # type: ignore
+class DatasetSource(StrippedSQLModel, table=True):  # type: ignore
     """Stores the basic information for a dataset source."""
 
     __tablename__ = "dataset_source"
@@ -30,7 +42,7 @@ class DatasetSource(SQLModel, table=True):  # type: ignore
     )
 
 
-class Document(SQLModel, table=True):  # type: ignore
+class Document(StrippedSQLModel, table=True):  # type: ignore
     """Stores paper, report, or other academic document details."""
 
     # Primary Keys / Uniqueness
@@ -54,7 +66,7 @@ class Document(SQLModel, table=True):  # type: ignore
     )
 
 
-class DocumentAbstract(SQLModel, table=True):  # type: ignore
+class DocumentAbstract(StrippedSQLModel, table=True):  # type: ignore
     """Stores the abstract for a document."""
 
     __tablename__ = "document_abstract"
@@ -77,7 +89,7 @@ class DocumentAbstract(SQLModel, table=True):  # type: ignore
     )
 
 
-class Topic(SQLModel, table=True):  # type: ignore
+class Topic(StrippedSQLModel, table=True):  # type: ignore
     """Stores the basic information for a topic."""
 
     # Primary Keys / Uniqueness
@@ -102,7 +114,7 @@ class Topic(SQLModel, table=True):  # type: ignore
     )
 
 
-class DocumentTopic(SQLModel, table=True):  # type: ignore
+class DocumentTopic(StrippedSQLModel, table=True):  # type: ignore
     """Stores the connection between a document and a topic."""
 
     __tablename__ = "document_topic"
@@ -126,7 +138,7 @@ class DocumentTopic(SQLModel, table=True):  # type: ignore
     )
 
 
-class Researcher(SQLModel, table=True):  # type: ignore
+class Researcher(StrippedSQLModel, table=True):  # type: ignore
     """Stores researcher details."""
 
     # Primary Keys / Uniqueness
@@ -150,7 +162,7 @@ class Researcher(SQLModel, table=True):  # type: ignore
     )
 
 
-class DocumentContributor(SQLModel, table=True):  # type: ignore
+class DocumentContributor(StrippedSQLModel, table=True):  # type: ignore
     """Stores the connection between a researcher and a document."""
 
     __tablename__ = "document_contributor"
@@ -175,7 +187,7 @@ class DocumentContributor(SQLModel, table=True):  # type: ignore
     )
 
 
-class Institution(SQLModel, table=True):  # type: ignore
+class Institution(StrippedSQLModel, table=True):  # type: ignore
     """Stores institution details."""
 
     # Primary Keys / Uniqueness
@@ -195,7 +207,7 @@ class Institution(SQLModel, table=True):  # type: ignore
     )
 
 
-class DocumentContributorInstitution(SQLModel, table=True):  # type: ignore
+class DocumentContributorInstitution(StrippedSQLModel, table=True):  # type: ignore
     """Stores the connection between a researcher, document, and institution."""
 
     __tablename__ = "document_contributor_institution"
@@ -216,7 +228,7 @@ class DocumentContributorInstitution(SQLModel, table=True):  # type: ignore
     )
 
 
-class Funder(SQLModel, table=True):  # type: ignore
+class Funder(StrippedSQLModel, table=True):  # type: ignore
     """Stores the basic information for a funding source (e.g. NSF, NIH)."""
 
     # Primary Keys / Uniqueness
@@ -235,7 +247,7 @@ class Funder(SQLModel, table=True):  # type: ignore
     )
 
 
-class FundingInstance(SQLModel, table=True):  # type: ignore
+class FundingInstance(StrippedSQLModel, table=True):  # type: ignore
     """Stores the basic information for a single funding instance (e.g. grant)."""
 
     __tablename__ = "funding_instance"
@@ -256,7 +268,7 @@ class FundingInstance(SQLModel, table=True):  # type: ignore
     )
 
 
-class DocumentFundingInstance(SQLModel, table=True):  # type: ignore
+class DocumentFundingInstance(StrippedSQLModel, table=True):  # type: ignore
     """Stores the connection between a document and a funding instance."""
 
     __tablename__ = "document_funding_instance"
@@ -277,7 +289,7 @@ class DocumentFundingInstance(SQLModel, table=True):  # type: ignore
     )
 
 
-class CodeHost(SQLModel, table=True):  # type: ignore
+class CodeHost(StrippedSQLModel, table=True):  # type: ignore
     """Stores the basic information for a code host (e.g. GitHub, GitLab)."""
 
     __tablename__ = "code_host"
@@ -297,7 +309,7 @@ class CodeHost(SQLModel, table=True):  # type: ignore
     )
 
 
-class Repository(SQLModel, table=True):  # type: ignore
+class Repository(StrippedSQLModel, table=True):  # type: ignore
     """Stores the basic information for a repository."""
 
     # Primary Keys / Uniqueness
@@ -330,7 +342,7 @@ class Repository(SQLModel, table=True):  # type: ignore
     )
 
 
-class RepositoryReadme(SQLModel, table=True):  # type: ignore
+class RepositoryReadme(StrippedSQLModel, table=True):  # type: ignore
     """Stores the readme for a repository."""
 
     __tablename__ = "repository_readme"
@@ -353,7 +365,7 @@ class RepositoryReadme(SQLModel, table=True):  # type: ignore
     )
 
 
-class RepositoryLanguage(SQLModel, table=True):  # type: ignore
+class RepositoryLanguage(StrippedSQLModel, table=True):  # type: ignore
     """Stores the connection between a repository and a language."""
 
     __tablename__ = "repository_language"
@@ -377,7 +389,7 @@ class RepositoryLanguage(SQLModel, table=True):  # type: ignore
     )
 
 
-class DeveloperAccount(SQLModel, table=True):  # type: ignore
+class DeveloperAccount(StrippedSQLModel, table=True):  # type: ignore
     """Stores the basic information for a developer account (e.g. GitHub, GitLab)."""
 
     __tablename__ = "developer_account"
@@ -402,7 +414,7 @@ class DeveloperAccount(SQLModel, table=True):  # type: ignore
     )
 
 
-class RepositoryContributor(SQLModel, table=True):  # type: ignore
+class RepositoryContributor(StrippedSQLModel, table=True):  # type: ignore
     """Stores the connection between a repository and a contributor."""
 
     __tablename__ = "repository_contributor"
@@ -432,7 +444,7 @@ class RepositoryContributor(SQLModel, table=True):  # type: ignore
 # includes date and additions, deletions, and number of commits for that week
 
 
-class DocumentRepositoryLink(SQLModel, table=True):  # type: ignore
+class DocumentRepositoryLink(StrippedSQLModel, table=True):  # type: ignore
     """Stores the connection between a document and a repository."""
 
     __tablename__ = "document_repository_link"
@@ -446,8 +458,9 @@ class DocumentRepositoryLink(SQLModel, table=True):  # type: ignore
 
     # Data
     dataset_source_id: int = Field(foreign_key="dataset_source.id")
-    em_model_name: str | None
-    em_model_version: str | None
+    predictive_model_name: str | None = None
+    predictive_model_version: str | None = None
+    predictive_model_confidence: float | None = None
 
     # Updates
     created_datetime: datetime = Field(
@@ -458,7 +471,7 @@ class DocumentRepositoryLink(SQLModel, table=True):  # type: ignore
     )
 
 
-class ResearcherDeveloperAccountLink(SQLModel, table=True):  # type: ignore
+class ResearcherDeveloperAccountLink(StrippedSQLModel, table=True):  # type: ignore
     """Stores the connection between a researcher and a developer account."""
 
     __tablename__ = "researcher_developer_account_link"
@@ -469,6 +482,11 @@ class ResearcherDeveloperAccountLink(SQLModel, table=True):  # type: ignore
     developer_account_id: int = Field(foreign_key="developer_account.id")
 
     __table_args__ = (UniqueConstraint("researcher_id", "developer_account_id"),)
+
+    # Data
+    predictive_model_name: str | None = None
+    predictive_model_version: str | None = None
+    predictive_model_confidence: float | None = None
 
     # Updates
     created_datetime: datetime = Field(

@@ -11,7 +11,6 @@ from pathlib import Path
 import backoff
 import msgspec
 import pyalex
-from prefect import task
 
 from .. import types
 from ..db import models as db_models
@@ -343,7 +342,6 @@ def process_open_alex_work(
         )
 
 
-@task(timeout_seconds=120)
 def process_open_alex_work_task(
     pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,
 ) -> types.ExpandedRepositoryDocumentPair | types.ErrorResult:

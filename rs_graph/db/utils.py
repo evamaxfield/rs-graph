@@ -323,6 +323,7 @@ def store_full_details(
 
 
 @task(
+    log_prints=True,
     retries=2,
     retry_delay_seconds=2,
 )
@@ -388,6 +389,7 @@ def store_dev_researcher_em_links(
 
 
 @task(
+    log_prints=True,
     retries=2,
     retry_delay_seconds=2,
 )

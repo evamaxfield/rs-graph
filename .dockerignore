@@ -27,3 +27,4 @@ processing-results/
 .keys
 .env
 .github-tokens.json
+.github-tokens.yml

@@ -5,11 +5,10 @@ from __future__ import annotations
 import logging
 import traceback
 
-from prefect import task
+from sci_soft_models import dev_author_em
 
 from .. import types
 from ..db import models as db_models
-from ..ml import dev_author_em_clf
 
 ###############################################################################
 
@@ -18,7 +17,6 @@ log = logging.getLogger(__name__)
 ###############################################################################
 
 
-@task
 def match_devs_and_researchers(
     pair: types.StoredRepositoryDocumentPair | types.ErrorResult,
 ) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
@@ -26,10 +24,13 @@ def match_devs_and_researchers(
         return pair
 
     try:
-        # Convert these to ml ready types and luts
+        # Get the model details
+        model_details = dev_author_em.get_model_details()
+
+        # Convert db types to ml ready types and create LUTs
         dev_username_to_dev_details = {
             dev_account_model.username: (
-                dev_author_em_clf.DeveloperDetails(
+                dev_author_em.DeveloperDetails(
                     username=dev_account_model.username,
                     name=dev_account_model.name,
                     email=dev_account_model.email,
@@ -46,17 +47,25 @@ def match_devs_and_researchers(
         }
 
         # Predict matches
-        matches = dev_author_em_clf.match_devs_and_authors(
+        matches = dev_author_em.match_devs_and_authors(
             devs=list(dev_username_to_dev_details.values()),
-            authors=[researcher.name for researcher in pair.researcher_models],
+            authors=list(researcher_name_to_researcher_model.keys()),
         )
 
         # Create the linked pairs
         linked_dev_researcher_pairs: list[db_models.ResearcherDeveloperAccountLink] = []
-        for dev_username, researcher_name in matches.items():
+        for matched_dev_author in matches:
+            # Find the matching db models
+            dev_username = matched_dev_author.dev.username
+            researcher_name = matched_dev_author.author
+
+            # Create formal link
             linked_researcher_dev_account = db_models.ResearcherDeveloperAccountLink(
                 researcher_id=researcher_name_to_researcher_model[researcher_name].id,
                 developer_account_id=dev_username_to_dev_model[dev_username].id,
+                predictive_model_name=model_details.name,
+                predictive_model_version=model_details.version,
+                predictive_model_confidence=matched_dev_author.confidence,
             )
             linked_dev_researcher_pairs.append(linked_researcher_dev_account)
 
