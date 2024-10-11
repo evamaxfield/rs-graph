@@ -57,7 +57,7 @@ def _wrap_func_with_coiled_prefect_task(
         **prefect_kwargs,
         name=func.__name__,
         log_prints=True,
-        timeout_seconds=600, # 10 minutes
+        timeout_seconds=600,  # 10 minutes
     )
     @coiled.function(
         **coiled_kwargs,
