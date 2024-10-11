@@ -57,7 +57,7 @@ def _wrap_func_with_coiled_prefect_task(
         **prefect_kwargs,
         name=func.__name__,
         log_prints=True,
-        timeout_seconds=300, # 5 minutes
+        timeout_seconds=600, # 10 minutes
     )
     @coiled.function(
         **coiled_kwargs,
@@ -171,7 +171,7 @@ def _prelinked_dataset_ingestion_flow(
         "keepalive": "15m",
         "cpu": [4, 8],
         "memory": ["4GiB", "8GiB"],
-        "n_workers": 3,
+        "n_workers": 5,
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
     }
