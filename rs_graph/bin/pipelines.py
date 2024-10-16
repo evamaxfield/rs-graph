@@ -139,6 +139,7 @@ def _prelinked_dataset_ingestion_flow(
 
     # Get dataset
     source_func = SOURCE_MAP[source]
+    print("Getting dataset...")
     source_results = source_func()
 
     # Get an infinite cycle of github tokens
