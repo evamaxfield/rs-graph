@@ -248,7 +248,7 @@ def process_article(
             cited_by_percentile_year_max=open_alex_work["cited_by_percentile_year"][
                 "max"
             ],
-            open_access_status=open_alex_work["oa_status"],
+            open_access_status=open_alex_work["open_access"]["oa_status"],
         )
 
         # Create the abstract

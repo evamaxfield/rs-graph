@@ -130,12 +130,12 @@ def _prelinked_dataset_ingestion_flow(
     errored_store_path: Path,
 ) -> None:
     # Print dataset and coiled status
-    print("\n\n", "-" * 80)
+    print("-" * 80)
     print("Pipeline Options:")
     print(f"Source: {source}")
     print(f"Use Prod Database: {use_prod}")
     print(f"Use Coiled: {use_coiled}")
-    print("-" * 80, "\n\n")
+    print("-" * 80)
 
     # Get dataset
     source_func = SOURCE_MAP[source]
