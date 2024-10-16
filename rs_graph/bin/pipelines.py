@@ -41,16 +41,6 @@ SOURCE_MAP: dict[str, proto.DatasetRetrievalFunction] = {
     "plos": plos.get_dataset,
     # "softwarex": softwarex.get_dataset,
     "pwc": pwc.get_dataset,
-    "soft-search": lambda: types.SuccessAndErroredResultsLists(
-        successful_results=[
-            types.BasicRepositoryDocumentPair(
-                source="soft-search",
-                repo_url="https://github.com/evamaxfield/rs-graph",
-                paper_doi="10.48550/arXiv.2302.14177",
-            )
-        ],
-        errored_results=[],
-    ),
 }
 
 
@@ -139,6 +129,14 @@ def _prelinked_dataset_ingestion_flow(
     batch_size: int,
     errored_store_path: Path,
 ) -> None:
+    # Print dataset and coiled status
+    print("\n\n", "-" * 80)
+    print("Pipeline Options:")
+    print(f"Source: {source}")
+    print(f"Use Prod Database: {use_prod}")
+    print(f"Use Coiled: {use_coiled}")
+    print("-" * 80, "\n\n")
+
     # Get dataset
     source_func = SOURCE_MAP[source]
     source_results = source_func()

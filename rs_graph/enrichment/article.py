@@ -138,8 +138,20 @@ def get_updated_doi_from_semantic_scholar(
 ) -> str:
     # Try and get updated DOI
     try:
+        # Handle searchable ID
+        if "arxiv" in doi.lower():
+            search_id = doi.lower().split("arxiv.")[-1]
+            search_string = f"arxiv:{search_id}"
+        else:
+            search_string = f"doi:{doi}"
+
+        # Setup API
         api = SemanticScholar(api_key=semantic_scholar_api_key)
-        paper_details = api.get_paper(f"doi:{doi}")
+
+        # Get paper details
+        paper_details = api.get_paper(search_string)
+
+        # Return updated DOI
         return paper_details.externalIds["DOI"]
 
     # Return original
@@ -208,13 +220,6 @@ def process_article(
             alternate_dois.append(
                 pair.paper_doi,
             )
-
-        print("Given DOI:", pair.paper_doi)
-        print("Updated DOI:", updated_doi)
-        print("Alternate DOIs:", alternate_dois)
-
-        if pair.source == "soft-search":
-            raise ValueError()
 
         # Get the OpenAlex work
         open_alex_work = get_open_alex_work_from_doi(updated_doi)

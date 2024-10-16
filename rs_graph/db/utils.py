@@ -453,9 +453,12 @@ def check_pair_exists(
             if document_alternate_doi_model is None:
                 return False
 
-        # Fast fail
-        if document_model is None:
-            return False
+            # Else get updated document model
+            else:
+                document_stmt = select(db_models.Document).where(
+                    db_models.Document.id == document_alternate_doi_model.document_id
+                )
+                document_model = session.exec(document_stmt).first()
 
         # Code Host
         code_host_stmt = select(db_models.CodeHost).where(
