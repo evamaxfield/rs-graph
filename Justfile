@@ -110,6 +110,7 @@ current_git_details := `git log -n 1 --pretty=format:"Git Commit: %h"`
 db-migrate target="dev":
 	git update-index --really-refresh
 	sed -i "s|REPLACE_SQLITE_DB_PATH|{{db_path}}-{{target}}.db|g" {{justfile_directory()}}/alembic.ini
+	mkdir -p {{justfile_directory()}}/rs_graph/data/files
 	-alembic revision --autogenerate -m "{{current_git_details}}"
 	-alembic upgrade head
 	sed -i "s|{{db_path}}-{{target}}.db|REPLACE_SQLITE_DB_PATH|g" {{justfile_directory()}}/alembic.ini
@@ -119,6 +120,7 @@ db-migrate target="dev":
 
 db-upgrade target="dev":
 	sed -i "s|REPLACE_SQLITE_DB_PATH|{{db_path}}-{{target}}.db|g" {{justfile_directory()}}/alembic.ini
+	mkdir -p {{justfile_directory()}}/rs_graph/data/files
 	-alembic upgrade head
 	sed -i "s|{{db_path}}-{{target}}.db|REPLACE_SQLITE_DB_PATH|g" {{justfile_directory()}}/alembic.ini
 
