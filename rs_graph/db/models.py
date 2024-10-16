@@ -56,6 +56,7 @@ class Document(StrippedSQLModel, table=True):  # type: ignore
     cited_by_count: int
     cited_by_percentile_year_min: int
     cited_by_percentile_year_max: int
+    open_access_status: str
 
     # Updates
     created_datetime: datetime = Field(
