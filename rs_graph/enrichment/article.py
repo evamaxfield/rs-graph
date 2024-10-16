@@ -248,6 +248,9 @@ def process_article(
             cited_by_percentile_year_max=open_alex_work["cited_by_percentile_year"][
                 "max"
             ],
+            fwic=open_alex_work["fwci"],
+            document_type=open_alex_work["type"],
+            is_open_access=open_alex_work["open_access"]["is_oa"],
             open_access_status=open_alex_work["open_access"]["oa_status"],
         )
 
