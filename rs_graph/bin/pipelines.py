@@ -14,6 +14,7 @@ import coiled
 import pandas as pd
 import typer
 import yaml
+from dotenv import load_dotenv
 from prefect import Task, flow, task, unmapped
 from tqdm import tqdm
 
@@ -21,7 +22,7 @@ from rs_graph import types
 from rs_graph.bin.data import download as download_rs_graph_data_files
 from rs_graph.bin.data import upload as upload_rs_graph_data_files
 from rs_graph.db import utils as db_utils
-from rs_graph.enrichment import entity_matching, github, open_alex
+from rs_graph.enrichment import article, entity_matching, github
 from rs_graph.sources import joss, plos, proto, pwc
 from rs_graph.utils import code_host_parsing
 
@@ -123,6 +124,7 @@ def _prelinked_dataset_ingestion_flow(
     source: str,
     use_prod: bool,
     github_tokens: list[str],
+    semantic_scholar_api_key: str,
     use_coiled: bool,
     batch_size: int,
     errored_store_path: Path,
@@ -158,7 +160,7 @@ def _prelinked_dataset_ingestion_flow(
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
     }
-    open_alex_cluster_config = {
+    article_processing_cluster_config = {
         "keepalive": "15m",
         "cpu": [4, 8],
         "memory": ["4GiB", "8GiB"],
@@ -167,7 +169,7 @@ def _prelinked_dataset_ingestion_flow(
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
     }
-    gpu_cluster_kwargs = {
+    gpu_cluster_config = {
         "keepalive": "15m",
         "cpu": [4, 8],
         "memory": ["4GiB", "8GiB"],
@@ -188,12 +190,13 @@ def _prelinked_dataset_ingestion_flow(
         # Handle any timeouts and such
         try:
             # Process open alex
-            process_open_alex_wrapped_task = _wrap_func_with_coiled_prefect_task(
-                open_alex.process_open_alex_work_task,
-                coiled_kwargs=open_alex_cluster_config,
+            process_article_wrapped_task = _wrap_func_with_coiled_prefect_task(
+                article.process_article_task,
+                coiled_kwargs=article_processing_cluster_config,
             )
-            open_alex_futures = process_open_alex_wrapped_task.map(
+            article_processing_futures = process_article_wrapped_task.map(
                 pair=chunk,
+                semantic_scholar_api_key=unmapped(semantic_scholar_api_key),
             )
 
             # Process github
@@ -202,9 +205,10 @@ def _prelinked_dataset_ingestion_flow(
                 coiled_kwargs=github_cluster_config,
             )
             github_futures = process_github_wrapped_task.map(
-                pair=open_alex_futures,
+                pair=article_processing_futures,
                 github_api_key=[
-                    next(cycled_github_tokens) for _ in range(len(open_alex_futures))
+                    next(cycled_github_tokens)
+                    for _ in range(len(article_processing_futures))
                 ],
             )
 
@@ -218,7 +222,7 @@ def _prelinked_dataset_ingestion_flow(
             match_devs_and_researchers_wrapped_task = (
                 _wrap_func_with_coiled_prefect_task(
                     entity_matching.match_devs_and_researchers,
-                    coiled_kwargs=gpu_cluster_kwargs,
+                    coiled_kwargs=gpu_cluster_config,
                 )
             )
             dev_researcher_futures = match_devs_and_researchers_wrapped_task.map(
@@ -291,6 +295,17 @@ def prelinked_dataset_ingestion(
     start_dt = datetime.now()
     start_dt = start_dt.replace(microsecond=0)
 
+    # Load environment variables
+    load_dotenv()
+
+    # Get semantic scholar API key
+    try:
+        semantic_scholar_api_key = os.environ["SEMANTIC_SCHOLAR_API_KEY"]
+    except KeyError as e:
+        raise KeyError(
+            "Please set the SEMANTIC_SCHOLAR_API_KEY environment variable."
+        ) from e
+
     # Ignore prefect task introspection warnings
     os.environ["PREFECT_TASK_INTROSPECTION_WARN_THRESHOLD"] = "0"
 
@@ -302,6 +317,7 @@ def prelinked_dataset_ingestion(
         source=source,
         use_prod=use_prod,
         github_tokens=github_tokens,
+        semantic_scholar_api_key=semantic_scholar_api_key,
         use_coiled=use_coiled,
         batch_size=batch_size,
         errored_store_path=errored_store_path,
