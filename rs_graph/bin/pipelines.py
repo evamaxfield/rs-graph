@@ -143,17 +143,6 @@ def _prelinked_dataset_ingestion_flow(
     source_func = SOURCE_MAP[source]
     source_results = source_func()
 
-    # Filter dataset
-    code_filtered_results = code_host_parsing.filter_repo_paper_pairs(
-        source_results.successful_results,
-    )
-
-    # Filter out already processed pairs
-    stored_filtered_results = db_utils.filter_stored_pairs(
-        code_filtered_results.successful_results,
-        use_prod=use_prod,
-    )
-
     # Get an infinite cycle of github tokens
     cycled_github_tokens = itertools.cycle(github_tokens)
 
@@ -187,6 +176,17 @@ def _prelinked_dataset_ingestion_flow(
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
     }
+
+    # Filter dataset
+    code_filtered_results = code_host_parsing.filter_repo_paper_pairs(
+        source_results.successful_results,
+    )
+
+    # Filter out already processed pairs
+    stored_filtered_results = db_utils.filter_stored_pairs(
+        code_filtered_results.successful_results,
+        use_prod=use_prod,
+    )
 
     # Create chunks of batch_size of the results to process
     n_batches = math.ceil(len(stored_filtered_results) / batch_size)

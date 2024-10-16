@@ -135,6 +135,7 @@ extend-ignore = [
 
 [tool.ruff.per-file-ignores]
 "**/notebooks/*" = ["E501", "B018"]
+"**/publications/*" = ["E501", "B018"]
 "**/tests/*.py" = ["D"]
 
 [tool.mypy]

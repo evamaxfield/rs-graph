@@ -31,8 +31,6 @@ class BasicRepositoryDocumentPair(DataClassJsonMixin):
     repo_url: str
     paper_doi: str
     paper_extra_data: dict | None = None
-    em_model_name: str | None = None
-    em_model_version: str | None = None
 
 
 @dataclass
@@ -73,6 +71,7 @@ class OpenAlexResultModels(DataClassJsonMixin):
     source_model: db_models.DatasetSource
     document_model: db_models.Document
     document_abstract_model: db_models.DocumentAbstract
+    document_alternate_dois: list[str]
     topic_details: list[TopicDetails]
     researcher_details: list[ResearcherDetails]
     funding_instance_details: list[FundingInstanceDetails]
@@ -99,8 +98,6 @@ class ExpandedRepositoryDocumentPair(DataClassJsonMixin):
     source: str
     paper_doi: str
     paper_extra_data: dict | None = None
-    em_model_name: str | None = None
-    em_model_version: str | None = None
 
     # Added after processing
     repo_parts: RepoParts | None = None

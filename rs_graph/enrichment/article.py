@@ -200,8 +200,18 @@ def process_article(
             semantic_scholar_api_key=semantic_scholar_api_key,
         )
 
+        # Handle "Alternate DOI" case
+        alternate_dois: list[str] = []
+        if updated_doi != pair.paper_doi:
+            # Store the original DOI as an alternate DOI
+            # as we have resolved a more recent version
+            alternate_dois.append(
+                pair.paper_doi,
+            )
+
         print("Given DOI:", pair.paper_doi)
         print("Updated DOI:", updated_doi)
+        print("Alternate DOIs:", alternate_dois)
 
         if pair.source == "soft-search":
             raise ValueError()
@@ -354,6 +364,7 @@ def process_article(
             source_model=dataset_source,
             document_model=document,
             document_abstract_model=abstract_model,
+            document_alternate_dois=alternate_dois,
             topic_details=all_topic_details,
             researcher_details=all_researcher_details,
             funding_instance_details=all_funding_instance_details,
