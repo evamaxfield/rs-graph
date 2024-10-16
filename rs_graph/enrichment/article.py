@@ -7,7 +7,6 @@ import time
 import traceback
 from datetime import date
 from pathlib import Path
-import os
 
 import backoff
 import msgspec
@@ -132,6 +131,7 @@ OPENALEX_AUTHORS = pyalex.Authors()
 
 #######################################################################################
 
+
 def get_updated_doi_from_semantic_scholar(
     doi: str,
     semantic_scholar_api_key: str,
@@ -145,6 +145,7 @@ def get_updated_doi_from_semantic_scholar(
     # Return original
     except Exception:
         return doi
+
 
 def get_open_alex_work_from_doi(doi: str) -> pyalex.Work:
     """Get work from a DOI."""
