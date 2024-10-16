@@ -41,6 +41,16 @@ SOURCE_MAP: dict[str, proto.DatasetRetrievalFunction] = {
     "plos": plos.get_dataset,
     # "softwarex": softwarex.get_dataset,
     "pwc": pwc.get_dataset,
+    "soft-search": lambda: types.SuccessAndErroredResultsLists(
+        successful_results=[
+            types.BasicRepositoryDocumentPair(
+                source="soft-search",
+                repo_url="https://github.com/evamaxfield/rs-graph",
+                paper_doi="10.48550/arXiv.2302.14177",
+            )
+        ],
+        errored_results=[],
+    ),
 }
 
 

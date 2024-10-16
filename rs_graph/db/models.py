@@ -48,9 +48,9 @@ class Document(StrippedSQLModel, table=True):  # type: ignore
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
     doi: str = Field(unique=True)
-    secondary_doi: str | None = None
 
     # Data
+    secondary_doi: str | None = None
     open_alex_id: str
     title: str
     publication_date: date

@@ -200,6 +200,12 @@ def process_article(
             semantic_scholar_api_key=semantic_scholar_api_key,
         )
 
+        print("Given DOI:", pair.paper_doi)
+        print("Updated DOI:", updated_doi)
+
+        if pair.source == "soft-search":
+            raise ValueError()
+
         # Get the OpenAlex work
         open_alex_work = get_open_alex_work_from_doi(updated_doi)
 
