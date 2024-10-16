@@ -56,6 +56,31 @@ class Document(StrippedSQLModel, table=True):  # type: ignore
     cited_by_count: int
     cited_by_percentile_year_min: int
     cited_by_percentile_year_max: int
+    open_access_status: str
+
+    # Updates
+    created_datetime: datetime = Field(
+        sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime = Field(
+        sa_column=Column(DateTime(), onupdate=func.now())
+    )
+
+
+class DocumentAlternateDOI(StrippedSQLModel, table=True):  # type: ignore
+    """
+    Stores alternate DOIs for a document.
+
+    "Alternate" DOIs are DOIs that were previously associated with a document
+    which we have resolved to a more recent version.
+    """
+
+    __tablename__ = "document_alternate_doi"
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+    document_id: int = Field(foreign_key="document.id")
+    doi: str = Field(unique=True)
 
     # Updates
     created_datetime: datetime = Field(

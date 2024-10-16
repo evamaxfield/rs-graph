@@ -11,6 +11,7 @@ from pathlib import Path
 import backoff
 import msgspec
 import pyalex
+from semanticscholar import SemanticScholar
 
 from .. import types
 from ..db import models as db_models
@@ -131,6 +132,33 @@ OPENALEX_AUTHORS = pyalex.Authors()
 #######################################################################################
 
 
+def get_updated_doi_from_semantic_scholar(
+    doi: str,
+    semantic_scholar_api_key: str,
+) -> str:
+    # Try and get updated DOI
+    try:
+        # Handle searchable ID
+        if "arxiv" in doi.lower():
+            search_id = doi.lower().split("arxiv.")[-1]
+            search_string = f"arxiv:{search_id}"
+        else:
+            search_string = f"doi:{doi}"
+
+        # Setup API
+        api = SemanticScholar(api_key=semantic_scholar_api_key)
+
+        # Get paper details
+        paper_details = api.get_paper(search_string)
+
+        # Return updated DOI
+        return paper_details.externalIds["DOI"]
+
+    # Return original
+    except Exception:
+        return doi
+
+
 def get_open_alex_work_from_doi(doi: str) -> pyalex.Work:
     """Get work from a DOI."""
     # Lowercase DOI
@@ -173,12 +201,28 @@ def get_open_alex_author_from_id(author_id: str) -> pyalex.Author:
     return OPENALEX_AUTHORS[author_id]
 
 
-def process_open_alex_work(
+def process_article(
     pair: types.ExpandedRepositoryDocumentPair,
+    semantic_scholar_api_key: str,
 ) -> types.ExpandedRepositoryDocumentPair | types.ErrorResult:
     try:
+        # Check for updated DOI
+        updated_doi = get_updated_doi_from_semantic_scholar(
+            doi=pair.paper_doi,
+            semantic_scholar_api_key=semantic_scholar_api_key,
+        )
+
+        # Handle "Alternate DOI" case
+        alternate_dois: list[str] = []
+        if updated_doi != pair.paper_doi:
+            # Store the original DOI as an alternate DOI
+            # as we have resolved a more recent version
+            alternate_dois.append(
+                pair.paper_doi,
+            )
+
         # Get the OpenAlex work
-        open_alex_work = get_open_alex_work_from_doi(pair.paper_doi)
+        open_alex_work = get_open_alex_work_from_doi(updated_doi)
 
         # Convert inverted index abstract to string
         if open_alex_work["abstract_inverted_index"] is None:
@@ -193,7 +237,7 @@ def process_open_alex_work(
 
         # Create the Document
         document = db_models.Document(
-            doi=pair.paper_doi,
+            doi=updated_doi,
             open_alex_id=open_alex_work["id"],
             title=open_alex_work["title"],
             publication_date=date.fromisoformat(open_alex_work["publication_date"]),
@@ -204,6 +248,7 @@ def process_open_alex_work(
             cited_by_percentile_year_max=open_alex_work["cited_by_percentile_year"][
                 "max"
             ],
+            open_access_status=open_alex_work["open_access"]["oa_status"],
         )
 
         # Create the abstract
@@ -325,6 +370,7 @@ def process_open_alex_work(
             source_model=dataset_source,
             document_model=document,
             document_abstract_model=abstract_model,
+            document_alternate_dois=alternate_dois,
             topic_details=all_topic_details,
             researcher_details=all_researcher_details,
             funding_instance_details=all_funding_instance_details,
@@ -342,11 +388,15 @@ def process_open_alex_work(
         )
 
 
-def process_open_alex_work_task(
+def process_article_task(
     pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,
+    semantic_scholar_api_key: str,
 ) -> types.ExpandedRepositoryDocumentPair | types.ErrorResult:
     # Pass through
     if isinstance(pair, types.ErrorResult):
         return pair
 
-    return process_open_alex_work(pair=pair)
+    return process_article(
+        pair=pair,
+        semantic_scholar_api_key=semantic_scholar_api_key,
+    )

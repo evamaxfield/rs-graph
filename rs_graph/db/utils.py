@@ -112,6 +112,20 @@ def store_full_details(
                 session=session,
             )
 
+            # Store alternate DOIs
+            for alternate_doi in pair.open_alex_results.document_alternate_dois:
+                # Create new model
+                alternate_doi_model = db_models.DocumentAlternateDOI(
+                    document_id=pair.open_alex_results.document_model.id,
+                    doi=alternate_doi,
+                )
+
+                # Persist
+                alternate_doi_model = _get_or_add_and_flush(
+                    model=alternate_doi_model,
+                    session=session,
+                )
+
             # Topic details
             for topic_detail in pair.open_alex_results.topic_details:
                 # Topic model
@@ -415,8 +429,9 @@ def check_pair_exists(
 
     # Create a session
     with Session(engine) as session:
-        # Four statements
+        # Five statements
         # One to check and get the document
+        # One to check for backup alternate dois
         # One to get the repo host id
         # One to check and get the repository
         # And a last to check and get the link
@@ -427,9 +442,23 @@ def check_pair_exists(
         )
         document_model = session.exec(document_stmt).first()
 
-        # Fast fail
+        # Check for document alternate doi
         if document_model is None:
-            return False
+            document_stmt = select(db_models.DocumentAlternateDOI).where(
+                db_models.DocumentAlternateDOI.doi == pair.paper_doi
+            )
+            document_alternate_doi_model = session.exec(document_stmt).first()
+
+            # Fast fail
+            if document_alternate_doi_model is None:
+                return False
+
+            # Else get updated document model
+            else:
+                document_stmt = select(db_models.Document).where(
+                    db_models.Document.id == document_alternate_doi_model.document_id
+                )
+                document_model = session.exec(document_stmt).first()
 
         # Code Host
         code_host_stmt = select(db_models.CodeHost).where(
