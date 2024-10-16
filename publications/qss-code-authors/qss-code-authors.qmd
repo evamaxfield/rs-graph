@@ -1,5 +1,5 @@
 ---
-title: "Soft-Search: Two Datasets to Study the Identification and Production of Research Software"
+title: "Code Contribution and Authorship"
 author:
   - name: "Eva Maxfield Brown"
     email: evamxb@uw.edu
@@ -53,7 +53,14 @@ format:
 # Introduction
 
 ```{python}
-print("hello world")
+from rs_graph.db import models as db_models
+from rs_graph.db import utils as db_utils
+from sqlmodel import Session, select
+from sqlalchemy import text
+import pandas as pd
+
+# Get db engine for production database
+prod_db = db_utils.get_engine(use_prod=True)
 ```
 
 - Contemporary scientific research has become increasingly dependent on specialized software tools and computational methods.
@@ -114,6 +121,22 @@ print("hello world")
 print("INSERT WORKFLOW DIAGRAM")
 ```
 
+```{python}
+with Session(prod_db) as session:
+  # Totals
+  total_article_repo_pairs = session.exec(
+    text("SELECT COUNT(id) FROM document_repository_link")
+  ).first()[0]
+
+  total_authors = session.exec(
+    text("SELECT COUNT(id) FROM researcher")
+  ).first()[0]
+
+  total_devs = session.exec(
+    text("SELECT COUNT(id) FROM developer_account")
+  ).first()[0]
+```
+
 - Our final dataset contains the bibliometric and code repository information for hundreds of thousands of scientific-article-source-code-repository pairs from multiple article types and fields.
 	- specifics about the whole dataset (size, number of unique article-repository pairs, number of unique authors, number of unique developer accounts)
 	- table of data descriptive statistics broken out by data source and providing things like:
@@ -124,15 +147,6 @@ print("INSERT WORKFLOW DIAGRAM")
     - Number of unique article-repository pairs by year
 
 ```{python}
-from rs_graph.db import models as db_models
-from rs_graph.db import utils as db_utils
-from sqlmodel import Session, select
-from sqlalchemy import text
-import pandas as pd
-
-# Get db engine for production database
-prod_db = db_utils.get_engine(use_prod=True)
-
 # SQL Statements
 article_repo_pairs_for_dataset = """
 SELECT COUNT(id)
@@ -204,33 +218,127 @@ with Session(prod_db) as session:
       "n_devs": n_devs,
     })
 
-  # Totals
-  total_article_repo_pairs = session.exec(
-    text("SELECT COUNT(id) FROM document_repository_link")
-  ).first()[0]
+# Create dataframe using source names as index
+# Columns as count type
+source_counts_df = pd.DataFrame([
+  *source_stats,
+]).set_index("dataset").sort_values("n_article_repo_pairs", ascending=False)
 
-  total_authors = session.exec(
-    text("SELECT COUNT(id) FROM researcher")
-  ).first()[0]
+source_counts_df
+```
 
-  total_devs = session.exec(
-    text("SELECT COUNT(id) FROM developer_account")
-  ).first()[0]
+```{python}
+# SQL Statements
+article_repo_pairs_for_field = """
+SELECT COUNT(document_repository_link.id)
+FROM document_repository_link
+JOIN document
+  ON document_repository_link.document_id=document.id
+JOIN document_topic
+  ON document.id=document_topic.document_id
+JOIN topic
+  ON document_topic.topic_id=topic.id
+WHERE topic.field_name='{field_name}'
+AND document_topic.id = (
+    SELECT document_topic.id
+    FROM document_topic 
+    WHERE document_topic.document_id = document.id
+    ORDER BY document_topic.score DESC
+    LIMIT 1
+)
+""".strip()
 
-  source_stats.append({
-    "dataset": "TOTAL",
-    "n_article_repo_pairs": total_article_repo_pairs,
-    "n_authors": total_authors,
-    "n_devs": total_devs,
-  })
+authors_for_field = """
+SELECT COUNT(researcher.id)
+FROM researcher
+JOIN document_contributor
+  ON researcher.id=document_contributor.researcher_id
+JOIN document_topic
+  ON document_contributor.document_id=document_topic.document_id
+JOIN topic
+  ON document_topic.topic_id=topic.id
+WHERE topic.field_name='{field_name}'
+AND document_topic.id = (
+    SELECT document_topic.id
+    FROM document_topic 
+    WHERE document_topic.document_id = document_contributor.document_id
+    ORDER BY document_topic.score DESC
+    LIMIT 1
+)
+""".strip()
+
+developers_for_field = """
+SELECT COUNT(developer_account.id)
+FROM developer_account
+JOIN repository_contributor
+  ON developer_account.id=repository_contributor.developer_account_id
+JOIN document_repository_link
+  ON repository_contributor.repository_id=document_repository_link.repository_id
+JOIN document_topic
+  ON document_repository_link.document_id=document_topic.document_id
+JOIN topic
+  ON document_topic.topic_id=topic.id
+WHERE topic.field_name='{field_name}'
+AND document_topic.id = (
+    SELECT document_topic.id
+    FROM document_topic 
+    WHERE document_topic.document_id = document_repository_link.document_id
+    ORDER BY document_topic.score DESC
+    LIMIT 1
+)
+""".strip()
+
+# Execute SQL to get counts
+with Session(prod_db) as session:
+  # Get fields
+  field_names = [
+    field[0]
+    for field in session.exec(text("SELECT DISTINCT field_name FROM topic"))
+  ]
+
+  # Create a lookup table of stats per field
+  field_stats = []
+
+  # For each source, get stats
+  for field in field_names:
+    n_article_repo_pairs = session.exec(
+      text(
+        article_repo_pairs_for_field.format(
+          field_name=field,
+        )
+      )
+    ).first()[0]
+
+    n_authors = session.exec(
+      text(
+        authors_for_field.format(
+          field_name=field,
+        )
+      )
+    ).first()[0]
+
+    n_devs = session.exec(
+      text(
+        developers_for_field.format(
+          field_name=field,
+        )
+      )
+    ).first()[0]
+
+    field_stats.append({
+      "field": field,
+      "n_article_repo_pairs": n_article_repo_pairs,
+      "n_authors": n_authors,
+      "n_devs": n_devs,
+    })
 
 # Create dataframe using source names as index
 # Columns as count type
-counts_df = pd.DataFrame([
-  *source_stats,
-]).set_index("dataset")
+field_counts_df = pd.DataFrame([
+  *field_stats,
+]).set_index("field").sort_values("n_article_repo_pairs", ascending=False)
 
-counts_df
+field_counts_df
 ```
 
 ## Manual Matching of Article Authors and Source Code Repository Contributors
