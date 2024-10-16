@@ -159,8 +159,8 @@ def _prelinked_dataset_ingestion_flow(
     }
     article_processing_cluster_config = {
         "keepalive": "15m",
-        "cpu": [4, 8],
-        "memory": ["4GiB", "8GiB"],
+        "cpu": [2, 8],
+        "memory": ["2GiB", "8GiB"],
         "n_workers": 1,
         "threads_per_worker": 6,
         "spot_policy": "spot_with_fallback",
