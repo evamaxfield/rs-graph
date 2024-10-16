@@ -110,7 +110,7 @@ def get_dataset(
     results = [
         _process_item(item)
         for item in tqdm(
-            data[:2000],
+            data,
             desc="Processing Papers with Code JSONs",
         )
     ]
