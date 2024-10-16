@@ -1,0 +1,327 @@
+---
+title: "Soft-Search: Two Datasets to Study the Identification and Production of Research Software"
+author:
+  - name: "Eva Maxfield Brown"
+    email: evamxb@uw.edu
+    orcid: 0000-0003-2564-0373
+    affliation:
+      name: University of Washington Information School
+      city: Seattle
+      state: Washington
+      country: USA
+  - name: "Nicholas Weber"
+    email: nmweber@uw.edu
+    orcid: 0000-0002-6008-3763
+    affliation:
+      name: University of Washington Information School
+      city: Seattle
+      state: Washington
+      country: USA
+
+abstract: |
+  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur eget porta erat. Morbi consectetur est vel gravida pretium. Suspendisse ut dui eu ante cursus gravida non sed sem. Nullam sapien tellus, commodo id velit id, eleifend volutpat quam. Phasellus mauris velit, dapibus finibus elementum vel, pulvinar non tellus. Nunc pellentesque pretium diam, quis maximus dolor faucibus id. Nunc convallis sodales ante, ut ullamcorper est egestas vitae. Nam sit amet enim ultrices, ultrices elit pulvinar, volutpat risus.
+
+## Basics
+bibliography: main.bib
+
+## Number sections (required for section cross ref)
+number-sections: true
+
+## Citation Style Language
+# See https://github.com/citation-style-language/styles for more options
+# We default to PNAS (Proceedings of the National Academy of Sciences)
+# csl: support/acm-proceedings.csl
+
+## Specific for target format
+format:
+  html:
+    code-tools: true
+    code-fold: true
+    code-summary: "Show the code"
+    standalone: true
+    embed-resources: true
+    toc: true
+    toc-location: left
+    reference-location: margin
+    citation-location: margin
+
+  pdf:
+    toc: false
+
+---
+
+# Introduction
+
+```{python}
+print("hello world")
+```
+
+- Contemporary scientific research has become increasingly dependent on specialized software tools and computational methods.
+  - define scientific software (scripts, tools, infrastructure)
+  - importance in enabling large scale experiments and acting as a direct log of processing and analysis
+  - scientific code sharing is on the rise
+
+- Despite increased reliance on computational methodologies, the developers of scientific software have historically not been given traditional academic credit for their work: authorship on research articles.
+  - qualitative research which talks about acknowledgements sections instead of authorship
+  - lack of authorship can affect career prospects
+
+- While new credit systems aim to be more inclusive towards more contribution types, they still suffer from two key problems.
+	- Contributor Roles Taxonomy (CRediT) allows for specific “software” contribution
+  - Others have used CREDIT to understand distribution of labor… 
+	- they are still based around an author list (it’s hard to change existing human practices, especially biased ones)
+	- they aren’t verifiable, they are self-reported
+
+- To address these problems, we create a novel predictive model that enables matching scientific article authors and source code developer accounts.
+	- a predictive model is the best choice for entity matching because while authors have ORCIDs, developer accounts do not***
+	- further, developer account information may be slightly different from publication information (preferred name / legal name), username’s, etc
+	- a fine-tuned transformer model enables us to connect accounts which have similar enough information, hopefully providing us with many more author-code-contributor matches than would be possible on exact name or email address matching alone
+
+- Our predictive model serves two primary purposes: identifying authors who directly contribute to an article’s associated codebase, and, revealing developers who were not included on the article’s authorship list.
+	- while predictive, it is grounded in the commit logs of source code repositories, no longer self reported
+	- individuals who have been left off can at least for now be identified by their developer account
+
+- Further, by applying our model across a large corpora of paired research articles and source code repositories, we enable objective insight into the software development dynamics of research teams.
+	- much like studies of CRediT, we can investigate both how many article authors contribute code
+	- similarly, we can investigate who contributes code (by author position and external characteristics
+	- again, this is via commit logs and contribution histories, rather than self-reported data
+
+- To summarize, this paper makes the following contributions:
+	- we train, evaluate, and make publicly available a predictive model to match article authors with developer accounts together
+	- we create a large dataset of linked articles and source code repositories with accompanying bibliometric and repository information, and, further match article authors with repository developers
+	- demonstration of the value of our predictive model through preliminary analysis of research team software development dynamics and code contributor characteristics
+
+- The rest of this paper is organized as follows:
+	- …
+
+# Data and Methods
+
+## Linking Scientific Articles and Associated Source Code Repositories
+
+- Our trained predictive model and our preliminary analyses are based on datasets of linked bibliographic and source code repository information from multiple journals and publication platforms.
+	- Each data source (the journals and publication platforms) either requires or recommends the sharing of code repositories related to a piece of work at the time of publication.
+	- In turn, this allows us to mine article information for their either required, or recommended “data or code availability” links.
+	- our data sources are:
+    - PLOS: research articles
+    - JOSS: software articles
+    - SoftwareX: software articles
+    - Papers with Code / ArXiv: pre-prints
+
+- Using each data source, we process the pairs of scientific articles and associated source code repositories, in order to extract the authorship and source code repository contributor lists as well as other bibliometric and repository information.
+	- we use open alex to extract bibliometric information
+	- we use the github API to extract repository information
+
+```{python}
+print("INSERT WORKFLOW DIAGRAM")
+```
+
+- Our final dataset contains the bibliometric and code repository information for hundreds of thousands of scientific-article-source-code-repository pairs from multiple article types and fields.
+	- specifics about the whole dataset (size, number of unique article-repository pairs, number of unique authors, number of unique developer accounts)
+	- table of data descriptive statistics broken out by data source and providing things like:
+    - Number of unique article-repository pairs
+    - Number of unique authors
+    - Number of unique contributors
+    - Number of unique article-repository pairs in each domain (top 4)
+    - Number of unique article-repository pairs by year
+
+```{python}
+from rs_graph.db import models as db_models
+from rs_graph.db import utils as db_utils
+from sqlmodel import Session, select
+from sqlalchemy import text
+import pandas as pd
+
+# Get db engine for production database
+prod_db = db_utils.get_engine(use_prod=True)
+
+# SQL Statements
+article_repo_pairs_for_dataset = """
+SELECT COUNT(id)
+FROM document_repository_link
+WHERE dataset_source_id={source_id}
+""".strip()
+
+authors_for_dataset = """
+SELECT COUNT(researcher.id)
+FROM researcher
+JOIN document_contributor
+  ON researcher.id=document_contributor.researcher_id
+JOIN document_repository_link
+  ON document_contributor.document_id=document_repository_link.document_id
+WHERE document_repository_link.dataset_source_id={source_id}
+""".strip()
+
+developers_for_dataset = """
+SELECT COUNT(developer_account.id)
+FROM developer_account
+JOIN repository_contributor
+  ON developer_account.id=repository_contributor.developer_account_id
+JOIN document_repository_link
+  ON repository_contributor.repository_id=document_repository_link.repository_id
+WHERE document_repository_link.dataset_source_id={source_id}
+""".strip()
+
+# Execute SQL to get counts
+with Session(prod_db) as session:
+  # Get dataset source ids
+  dataset_sources = [
+    ds
+    for ds in session.exec(select(db_models.DatasetSource))
+  ]
+
+  # Create a lookup table of stats per source
+  source_stats = []
+
+  # For each source, get stats
+  for source in dataset_sources:
+    n_article_repo_pairs = session.exec(
+      text(
+        article_repo_pairs_for_dataset.format(
+          source_id=source.id,
+        )
+      )
+    ).first()[0]
+
+    n_authors = session.exec(
+      text(
+        authors_for_dataset.format(
+          source_id=source.id,
+        )
+      )
+    ).first()[0]
+
+    n_devs = session.exec(
+      text(
+        developers_for_dataset.format(
+          source_id=source.id,
+        )
+      )
+    ).first()[0]
+
+    source_stats.append({
+      "dataset": source.name,
+      "n_article_repo_pairs": n_article_repo_pairs,
+      "n_authors": n_authors,
+      "n_devs": n_devs,
+    })
+
+  # Totals
+  total_article_repo_pairs = session.exec(
+    text("SELECT COUNT(id) FROM document_repository_link")
+  ).first()[0]
+
+  total_authors = session.exec(
+    text("SELECT COUNT(id) FROM researcher")
+  ).first()[0]
+
+  total_devs = session.exec(
+    text("SELECT COUNT(id) FROM developer_account")
+  ).first()[0]
+
+  source_stats.append({
+    "dataset": "TOTAL",
+    "n_article_repo_pairs": total_article_repo_pairs,
+    "n_authors": total_authors,
+    "n_devs": total_devs,
+  })
+
+# Create dataframe using source names as index
+# Columns as count type
+counts_df = pd.DataFrame([
+  *source_stats,
+]).set_index("dataset")
+
+counts_df
+```
+
+## Manual Matching of Article Authors and Source Code Repository Contributors
+
+```{python}
+print("CREATE TABLE OF DATASET STATS")
+```
+
+- Before we can train and validate a predictive entity matching model, we must first create a large annotated dataset of article authors and source code repository contributor pairs.
+	- describe the task (we have info about an author identity and a developer identity, are they the same identity)
+	- add figure for more detail
+
+- We had two annotators each label 3000 pairs of article author and source code repository contributor information.
+	- we use the subset of our dataset of joss authors and contributors.
+	- we use JOSS as we believe a software article sample will provide us with the highest rate of positive identity matches for training (or a somewhat balanced dataset)
+	- we create author-developer-account annotation pairs using data from individual single paper-repository pairs.
+	- that is, developers and authors were only paired for annotation if they were paired together meaning that we would never annotate a author-developer-account pair that had developer information with an author from an unrelated paper
+	- After each annotator completed labeling all 3000 author-code-contributor pairs, annotators then resolved any differences between their labels.
+
+- Our final annotated dataset used for model training consists of the author names and source code repository contributor information from the 3000 labeled author-code-contributor pairs.
+	- basic numbers, number of “positive” and “negative” matches
+	- note however that some developer accounts do not have a complete set of information available
+	- table of number of developer accounts with each feature and by their match
+
+```{python}
+print("CREATE TABLE OF ANNOTATION STATS")
+```
+
+# A Predictive Model for Matching Article Authors and Source Code Contributors
+
+- To optimize our predictive model for author-contributor matching, we evaluate a variety of Transformer-based architectures and input features.
+	- multiple transformer base models available and there isn’t clear information as to which is “best” for entity matching
+	- we have minimal info for authors, just their name, but we have a few features for developer accounts and it isn’t clear which are most important or useful
+	- explain potential problems and benefits of certain features
+
+- To ensure that our trained model is as accurate as possible, we trained and evaluated multiple combinations of pre-trained Transformer base models and different developer account information feature sets.
+	- explain the feature sets a bit more (username only, username + name, etc.)
+	- explain the testing strategy (10% of unique authors and developers are used for testing)
+
+- After testing all base-model and feature set combinations, we find that our best performing model is fine-tuned from: Y and uses Z features.
+	- specifics of best model
+	- table of model configurations and results
+	- minor observations about feature sets that perform poorly
+
+```{python}
+print("TABLE FOR MODEL CONFIGURATIONS AND RESULTS")
+```
+
+- Finally, we additionally make our best performing model publicly available for reuse.
+	- We provide a structured python library for interaction with the model at link
+	- Direct access to the model files can be found on huggingface.
+
+# Preliminary Analysis Code Contributor Authorship and Development Dynamics of Research Teams
+
+- To enrich our pre-existing dataset, we apply our trained predictive model across pairs of authors and developer accounts.
+	- again, these pairs are all combinations of author and developer account within an individual paper
+	- specifics, how many unique author-developer account pairs are we able to find
+	- table of author-developer account pairs for by data source / by field
+	- we next use this enriched dataset to understand software development dynamics within research teams, and characterize the authors who are and who aren’t code contributors.
+
+## Software Development Dynamics Within Research Teams
+
+- We begin by measuring the distributions of different coding and non-coding contributors across all of the article-code-repository pairs within our dataset.
+	- explain more, what are the different types of contributions? (coding contributor, coding-with-authorship contributor, non-coding-author, etc.)
+	- what are the basics / what do we see across the board? What are the distributions of each of these contributor types
+	- compare against analysis built on CRediT statements?
+
+- Next we investigate if these distributions change over time, or, by “research team size”.
+	- define research team size, in our case this is the total number of author-developers + non-coding authors + non-credited developers
+	- plot the medians of the contributor type distributions over time (by publication year)
+	- create subplots of different bins of research team size (i.e. <= 3 members, >3 <= 5, >5 <= 10, >10) and show distributions again.
+	- results in summary
+
+- We further investigate how these distributions are affected by article type and research domain.
+	- refresher on article type (research articles, software articles, and pre-prints)
+	- explain research domains
+	- subplots of both
+	- results in summary
+
+## Characteristics of Scientific Code Contributors
+
+- Next we investigate the differences between coding and non-coding article authors.
+	- specifics, author position in authorship list is a commonly used tool in scientometrics
+	- similarly, metrics of “scientific impact” such as h-index, i10 index, and two-year mean citedness are also available to us.
+	- plot / table of the distributions between coding and non-coding authors
+	- ANOVA / Chi2 tests to see if these differences are significant
+	- results in summary
+
+- Just as before, we next investigate if these results are affected by article type and research domain.
+	- subplot + stats tests for differences by each article type
+	- subplot + stats tests for differences by each domain
+	- results in summary
+
+# Discussion
