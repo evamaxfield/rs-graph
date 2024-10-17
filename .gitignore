@@ -136,6 +136,7 @@ rs-graph-upstream-deps-failed.parquet
 rs-graph-upstream-deps.parquet
 .github-tokens.json
 .github-tokens.yml
+.open-alex-emails.yml
 autotrain-text-classification-temp
 model-eval-results/
 prior-model-eval-results/

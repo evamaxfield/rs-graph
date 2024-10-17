@@ -32,6 +32,7 @@ app = typer.Typer()
 
 DEFAULT_RESULTS_DIR = Path("processing-results")
 DEFAULT_GITHUB_TOKENS_FILE = ".github-tokens.yml"
+DEFAULT_OPEN_ALEX_EMAILS_FILE = ".open-alex-emails.yml"
 
 ###############################################################################
 
@@ -89,6 +90,25 @@ def _load_github_tokens(
     return tokens_list
 
 
+def _load_open_alex_emails(
+    open_alex_emails_file: str,
+) -> list[str]:
+    # Load emails
+    try:
+        with open(open_alex_emails_file) as f:
+            emails_file = yaml.safe_load(f)
+
+    except FileNotFoundError as e:
+        raise FileNotFoundError(
+            f"Open Alex emails file not found at path: {open_alex_emails_file}"
+        ) from e
+
+    # Get emails
+    emails_list = emails_file["emails"].values()
+
+    return emails_list
+
+
 def _upload_db(
     prod: bool,
 ) -> None:
@@ -124,29 +144,39 @@ def _prelinked_dataset_ingestion_flow(
     source: str,
     use_prod: bool,
     github_tokens: list[str],
+    open_alex_emails: list[str],
     semantic_scholar_api_key: str,
     use_coiled: bool,
     batch_size: int,
     errored_store_path: Path,
 ) -> None:
+    # Get an infinite cycle of github tokens
+    cycled_github_tokens = itertools.cycle(github_tokens)
+
+    # Workers is the number of github tokens
+    n_github_tokens = len(github_tokens)
+
+    # Get an infinite cycle of open alex emails
+    cycled_open_alex_emails = itertools.cycle(open_alex_emails)
+
+    # Get the number of open alex emails
+    n_open_alex_emails = len(open_alex_emails)
+
     # Print dataset and coiled status
     print("-" * 80)
     print("Pipeline Options:")
     print(f"Source: {source}")
     print(f"Use Prod Database: {use_prod}")
     print(f"Use Coiled: {use_coiled}")
+    print(f"Batch Size: {batch_size}")
+    print(f"GitHub Token Count: {n_github_tokens}")
+    print(f"Open Alex Email Count: {n_open_alex_emails}")
     print("-" * 80)
 
     # Get dataset
     source_func = SOURCE_MAP[source]
     print("Getting dataset...")
     source_results = source_func()
-
-    # Get an infinite cycle of github tokens
-    cycled_github_tokens = itertools.cycle(github_tokens)
-
-    # Workers is the number of github tokens
-    n_github_tokens = len(github_tokens)
 
     # Construct different cluster parameters
     github_cluster_config = {
@@ -205,6 +235,10 @@ def _prelinked_dataset_ingestion_flow(
             )
             article_processing_futures = process_article_wrapped_task.map(
                 pair=chunk,
+                open_alex_email=[
+                    next(cycled_open_alex_emails) for _ in range(len(chunk))
+                ],
+                open_alex_email_count=n_open_alex_emails,
                 semantic_scholar_api_key=unmapped(semantic_scholar_api_key),
             )
 
@@ -276,6 +310,7 @@ def prelinked_dataset_ingestion(
     use_prod: bool = False,
     use_coiled: bool = False,
     github_tokens_file: str = DEFAULT_GITHUB_TOKENS_FILE,
+    open_alex_emails_file: str = DEFAULT_OPEN_ALEX_EMAILS_FILE,
     batch_size: int = 50,
 ) -> None:
     """
@@ -321,11 +356,15 @@ def prelinked_dataset_ingestion(
     # Load GitHub tokens
     github_tokens = _load_github_tokens(github_tokens_file)
 
+    # Load Open Alex emails
+    open_alex_emails = _load_open_alex_emails(open_alex_emails_file)
+
     # Start the flow
     _prelinked_dataset_ingestion_flow(
         source=source,
         use_prod=use_prod,
         github_tokens=github_tokens,
+        open_alex_emails=open_alex_emails,
         semantic_scholar_api_key=semantic_scholar_api_key,
         use_coiled=use_coiled,
         batch_size=batch_size,

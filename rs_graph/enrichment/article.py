@@ -22,8 +22,6 @@ log = logging.getLogger(__name__)
 
 #######################################################################################
 
-DEFAULT_ALEX_EMAIL = "evamxb@uw.edu"
-
 
 class OpenAlexAPICallStatus(msgspec.Struct):
     call_count: int
@@ -80,10 +78,10 @@ def _create_api_call_status_file() -> None:
         )
 
 
-def _setup() -> None:
+def _setup_open_alex(open_alex_email: str) -> None:
     """Set up a pool of polite workers for OpenAlex."""
     # Add email for polite pool
-    pyalex.config.email = DEFAULT_ALEX_EMAIL
+    pyalex.config.email = open_alex_email
 
     # Add retries
     pyalex.config.max_retries = 3
@@ -93,7 +91,7 @@ def _setup() -> None:
     _create_api_call_status_file()
 
 
-def _increment_call_count_and_check() -> None:
+def _increment_call_count_and_check(open_alex_email_count: int) -> None:
     """Increment the API call count and check if we need to sleep."""
     # Read latest
     current_status = _read_api_call_status()
@@ -102,9 +100,9 @@ def _increment_call_count_and_check() -> None:
     if current_status.call_count % 1000 == 0:
         print(f"OpenAlex Daily API call count: {current_status.call_count}")
 
-    # If we've made 80,000 calls in a single day
+    # If we've made 60,000 calls in a single day (per OpenAlex email)
     # pause all processing until tomorrow
-    if current_status.call_count >= 80_000:
+    if current_status.call_count >= (60_000 * open_alex_email_count):
         print("Sleeping until tomorrow to avoid OpenAlex API limit.")
         while date.today() == current_status.current_date:
             time.sleep(600)
@@ -119,15 +117,9 @@ def _increment_call_count_and_check() -> None:
     current_status.call_count += 1
     _write_api_call_status(current_status)
 
-    # Sleep for a random amount of time
-    time.sleep(0.6)
+    # Sleep for 1 seconds to avoid rate limiting
+    time.sleep(1)
 
-
-_setup()
-
-# Create APIs
-OPENALEX_WORKS = pyalex.Works()
-OPENALEX_AUTHORS = pyalex.Authors()
 
 #######################################################################################
 
@@ -159,7 +151,11 @@ def get_updated_doi_from_semantic_scholar(
         return doi
 
 
-def get_open_alex_work_from_doi(doi: str) -> pyalex.Work:
+def get_open_alex_work_from_doi(
+    open_alex_email: str,
+    open_alex_email_count: int,
+    doi: str,
+) -> pyalex.Work:
     """Get work from a DOI."""
     # Lowercase DOI
     doi = doi.lower()
@@ -168,8 +164,15 @@ def get_open_alex_work_from_doi(doi: str) -> pyalex.Work:
     if "doi.org" not in doi:
         doi = f"https://doi.org/{doi}"
 
-    _increment_call_count_and_check()
-    return OPENALEX_WORKS[doi]
+    # Setup OpenAlex API
+    _setup_open_alex(open_alex_email=open_alex_email)
+
+    # Create works api
+    open_alex_works = pyalex.Works()
+
+    # Increment call count and then actually request
+    _increment_call_count_and_check(open_alex_email_count=open_alex_email_count)
+    return open_alex_works[doi]
 
 
 def convert_from_inverted_index_abstract(abstract: dict) -> str:
@@ -185,7 +188,7 @@ def convert_from_inverted_index_abstract(abstract: dict) -> str:
     # }
     # Convert to:
     # "Despite growing interest in Open Access ..."
-    abstract_as_list: list[str | None] = [None] * 10000
+    abstract_as_list: list[str | None] = [None] * 20000
     for word, indices in abstract.items():
         for index in indices:
             abstract_as_list[index] = word
@@ -195,14 +198,27 @@ def convert_from_inverted_index_abstract(abstract: dict) -> str:
     return " ".join(abstract_as_list_of_str)
 
 
-def get_open_alex_author_from_id(author_id: str) -> pyalex.Author:
+def get_open_alex_author_from_id(
+    open_alex_email: str,
+    open_alex_email_count: int,
+    author_id: str,
+) -> pyalex.Author:
     """Get author from an ID."""
-    _increment_call_count_and_check()
-    return OPENALEX_AUTHORS[author_id]
+    # Create OpenAlex API
+    _setup_open_alex(open_alex_email=open_alex_email)
+
+    # Create authors api
+    open_alex_authors = pyalex.Authors()
+
+    # Increment call count and then actually request
+    _increment_call_count_and_check(open_alex_email_count=open_alex_email_count)
+    return open_alex_authors[author_id]
 
 
 def process_article(
     pair: types.ExpandedRepositoryDocumentPair,
+    open_alex_email: str,
+    open_alex_email_count: int,
     semantic_scholar_api_key: str,
 ) -> types.ExpandedRepositoryDocumentPair | types.ErrorResult:
     try:
@@ -222,7 +238,11 @@ def process_article(
             )
 
         # Get the OpenAlex work
-        open_alex_work = get_open_alex_work_from_doi(updated_doi)
+        open_alex_work = get_open_alex_work_from_doi(
+            open_alex_email=open_alex_email,
+            open_alex_email_count=open_alex_email_count,
+            doi=updated_doi,
+        )
 
         # Get FWCI
         document_fwci = open_alex_work["fwci"]
@@ -298,7 +318,9 @@ def process_article(
         for author_details in open_alex_work["authorships"]:
             # Fetch extra author details
             open_alex_author = get_open_alex_author_from_id(
-                author_details["author"]["id"]
+                open_alex_email=open_alex_email,
+                open_alex_email_count=open_alex_email_count,
+                author_id=author_details["author"]["id"],
             )
 
             # Create the Researcher
@@ -396,6 +418,8 @@ def process_article(
 
 def process_article_task(
     pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,
+    open_alex_email: str,
+    open_alex_email_count: int,
     semantic_scholar_api_key: str,
 ) -> types.ExpandedRepositoryDocumentPair | types.ErrorResult:
     # Pass through
@@ -404,5 +428,7 @@ def process_article_task(
 
     return process_article(
         pair=pair,
+        open_alex_email=open_alex_email,
+        open_alex_email_count=open_alex_email_count,
         semantic_scholar_api_key=semantic_scholar_api_key,
     )
