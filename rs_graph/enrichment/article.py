@@ -224,6 +224,9 @@ def process_article(
         # Get the OpenAlex work
         open_alex_work = get_open_alex_work_from_doi(updated_doi)
 
+        # Get FWCI
+        document_fwci = open_alex_work["fwci"]
+
         # Convert inverted index abstract to string
         if open_alex_work["abstract_inverted_index"] is None:
             abstract_text = None
@@ -248,7 +251,7 @@ def process_article(
             cited_by_percentile_year_max=open_alex_work["cited_by_percentile_year"][
                 "max"
             ],
-            fwci=open_alex_work["fwci"],
+            fwci=document_fwci,
             document_type=open_alex_work["type"],
             is_open_access=open_alex_work["open_access"]["is_oa"],
             open_access_status=open_alex_work["open_access"]["oa_status"],
