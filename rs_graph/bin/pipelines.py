@@ -201,8 +201,9 @@ def _prelinked_dataset_ingestion_flow(
         "keepalive": "15m",
         "cpu": [4, 8],
         "memory": ["4GiB", "8GiB"],
-        "n_workers": [3, 6],
+        "n_workers": [3, 4],
         "spot_policy": "spot_with_fallback",
+        # "gpu": True,
         "local": not use_coiled,
     }
 
