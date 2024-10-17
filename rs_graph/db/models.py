@@ -56,7 +56,7 @@ class Document(StrippedSQLModel, table=True):  # type: ignore
     cited_by_count: int
     cited_by_percentile_year_min: int
     cited_by_percentile_year_max: int
-    fwci: float
+    fwci: float | None
     document_type: str
     is_open_access: bool
     open_access_status: str
