@@ -227,7 +227,7 @@ source_counts_df = pd.DataFrame([
 source_counts_df
 ```
 
-```{python}
+<!-- ```{python}
 # SQL Statements
 article_repo_pairs_for_field = """
 SELECT COUNT(document_repository_link.id)
@@ -339,7 +339,208 @@ field_counts_df = pd.DataFrame([
 ]).set_index("field").sort_values("n_article_repo_pairs", ascending=False)
 
 field_counts_df
+``` -->
+
+```{python}
+# SQL Statements
+article_repo_pairs_for_domain = """
+SELECT COUNT(document_repository_link.id)
+FROM document_repository_link
+JOIN document
+  ON document_repository_link.document_id=document.id
+JOIN document_topic
+  ON document.id=document_topic.document_id
+JOIN topic
+  ON document_topic.topic_id=topic.id
+WHERE topic.domain_name='{domain_name}'
+AND document_topic.id = (
+    SELECT document_topic.id
+    FROM document_topic 
+    WHERE document_topic.document_id = document.id
+    ORDER BY document_topic.score DESC
+    LIMIT 1
+)
+""".strip()
+
+authors_for_domain = """
+SELECT COUNT(researcher.id)
+FROM researcher
+JOIN document_contributor
+  ON researcher.id=document_contributor.researcher_id
+JOIN document_topic
+  ON document_contributor.document_id=document_topic.document_id
+JOIN topic
+  ON document_topic.topic_id=topic.id
+WHERE topic.domain_name='{domain_name}'
+AND document_topic.id = (
+    SELECT document_topic.id
+    FROM document_topic 
+    WHERE document_topic.document_id = document_contributor.document_id
+    ORDER BY document_topic.score DESC
+    LIMIT 1
+)
+""".strip()
+
+developers_for_domain = """
+SELECT COUNT(developer_account.id)
+FROM developer_account
+JOIN repository_contributor
+  ON developer_account.id=repository_contributor.developer_account_id
+JOIN document_repository_link
+  ON repository_contributor.repository_id=document_repository_link.repository_id
+JOIN document_topic
+  ON document_repository_link.document_id=document_topic.document_id
+JOIN topic
+  ON document_topic.topic_id=topic.id
+WHERE topic.domain_name='{domain_name}'
+AND document_topic.id = (
+    SELECT document_topic.id
+    FROM document_topic 
+    WHERE document_topic.document_id = document_repository_link.document_id
+    ORDER BY document_topic.score DESC
+    LIMIT 1
+)
+""".strip()
+
+# Execute SQL to get counts
+with Session(prod_db) as session:
+  # Get domains
+  domains = [
+    domain[0]
+    for domain in session.exec(text("SELECT DISTINCT domain_name FROM topic"))
+  ]
+
+  # Create a lookup table of stats per domain
+  domain_stats = []
+
+  # For each source, get stats
+  for domain in domains:
+    n_article_repo_pairs = session.exec(
+      text(
+        article_repo_pairs_for_domain.format(
+          domain_name=domain,
+        )
+      )
+    ).first()[0]
+
+    n_authors = session.exec(
+      text(
+        authors_for_domain.format(
+          domain_name=domain,
+        )
+      )
+    ).first()[0]
+
+    n_devs = session.exec(
+      text(
+        developers_for_domain.format(
+          domain_name=domain,
+        )
+      )
+    ).first()[0]
+
+    domain_stats.append({
+      "domain": domain,
+      "n_article_repo_pairs": n_article_repo_pairs,
+      "n_authors": n_authors,
+      "n_devs": n_devs,
+    })
+
+# Create dataframe using source names as index
+# Columns as count type
+domain_counts_df = pd.DataFrame([
+  *domain_stats,
+]).set_index("domain").sort_values("n_article_repo_pairs", ascending=False)
+
+domain_counts_df
 ```
+
+
+```{python}
+# SQL Statements
+article_repo_pairs_for_document_type = """
+SELECT COUNT(document_repository_link.id)
+FROM document_repository_link
+JOIN document
+  ON document_repository_link.document_id=document.id
+WHERE document.document_type='{document_type}'
+""".strip()
+
+authors_for_document_type = """
+SELECT COUNT(researcher.id)
+FROM researcher
+JOIN document_contributor
+  ON researcher.id=document_contributor.researcher_id
+JOIN document
+  ON document_contributor.document_id=document.id
+WHERE document.document_type='{document_type}'
+""".strip()
+
+developers_for_document_type = """
+SELECT COUNT(developer_account.id)
+FROM developer_account
+JOIN repository_contributor
+  ON developer_account.id=repository_contributor.developer_account_id
+JOIN document_repository_link
+  ON repository_contributor.repository_id=document_repository_link.repository_id
+JOIN document
+  ON document_repository_link.document_id=document.id
+WHERE document.document_type='{document_type}'
+""".strip()
+
+# Execute SQL to get counts
+with Session(prod_db) as session:
+  # Get doc types
+  doc_types = [
+    dt[0]
+    for dt in session.exec(text("SELECT DISTINCT document_type FROM document"))
+  ]
+
+  # Create a lookup table of stats per doc type
+  doc_type_stats = []
+
+  # For each doc type, get stats
+  for doc_type in doc_types:
+    n_article_repo_pairs = session.exec(
+      text(
+        article_repo_pairs_for_document_type.format(
+          document_type=doc_type,
+        )
+      )
+    ).first()[0]
+
+    n_authors = session.exec(
+      text(
+        authors_for_document_type.format(
+          document_type=doc_type,
+        )
+      )
+    ).first()[0]
+
+    n_devs = session.exec(
+      text(
+        developers_for_document_type.format(
+          document_type=doc_type,
+        )
+      )
+    ).first()[0]
+
+    doc_type_stats.append({
+      "document_type": doc_type,
+      "n_article_repo_pairs": n_article_repo_pairs,
+      "n_authors": n_authors,
+      "n_devs": n_devs,
+    })
+
+# Create dataframe using source names as index
+# Columns as count type
+doc_type_counts_df = pd.DataFrame([
+  *doc_type_stats,
+]).set_index("document_type").sort_values("n_article_repo_pairs", ascending=False)
+
+doc_type_counts_df
+```
+
 
 ## Manual Matching of Article Authors and Source Code Repository Contributors
 
