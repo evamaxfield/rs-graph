@@ -78,6 +78,16 @@ def _process_item(
                 error="Not an official paper",
                 traceback="",
             )
+        
+        # If no paper arxiv id, reject
+        if not item["paper_arxiv_id"]:
+            return types.ErrorResult(
+                source="pwc",
+                step="pwc-json-processing",
+                identifier=item["paper_url"],
+                error="No arxiv id",
+                traceback="",
+            )
 
         # Construct the doi
         doi = f"10.48550/arxiv.{item['paper_arxiv_id']}"
