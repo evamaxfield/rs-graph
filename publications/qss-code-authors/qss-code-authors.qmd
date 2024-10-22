@@ -53,14 +53,65 @@ format:
 # Introduction
 
 ```{python}
+from pathlib import Path
+
 from rs_graph.db import models as db_models
 from rs_graph.db import utils as db_utils
-from sqlmodel import Session, select
+from sqlmodel import Session, select, create_engine
 from sqlalchemy import text
 import pandas as pd
 
+# Define the base CTE for unique document-repository links
+unique_doc_repo_links_sql = """
+WITH unique_doc_repo_links AS (
+    SELECT drl.id, drl.document_id, drl.repository_id, drl.dataset_source_id
+    FROM document_repository_link drl
+    INNER JOIN (
+        SELECT document_id
+        FROM document_repository_link
+        GROUP BY document_id
+        HAVING COUNT(*) = 1
+    ) d ON drl.document_id = d.document_id
+    INNER JOIN (
+        SELECT repository_id
+        FROM document_repository_link
+        GROUP BY repository_id
+        HAVING COUNT(*) = 1
+    ) r ON drl.repository_id = r.repository_id
+)
+"""
+
+def create_count_query(
+  entity_table: str,
+  join_conditions: list[str],
+  udrl_join_table: str,
+  filter_condition: str = "",
+):
+  # Create join conditions string
+  join_conditions_str = "\n".join(join_conditions)
+
+  return f"""
+{unique_doc_repo_links_sql}
+
+SELECT COUNT(DISTINCT {entity_table}.id)
+FROM {entity_table}
+{join_conditions_str}
+JOIN unique_doc_repo_links ON {udrl_join_table}.id = unique_doc_repo_links.{udrl_join_table}_id
+{filter_condition}
+""".strip()
+
+def execute_count_query(
+  session: Session,
+  query: str,
+  params: dict | None = None,
+):
+  # Exec and return first
+  result = session.exec(text(query), params=params or {})
+  return result.first()[0]
+
 # Get db engine for production database
-prod_db = db_utils.get_engine(use_prod=True)
+db_path = Path("rs-graph-temp.db").resolve().absolute()
+prod_db = create_engine(f"sqlite:///{db_path}")
 ```
 
 - Contemporary scientific research has become increasingly dependent on specialized software tools and computational methods.
@@ -74,7 +125,7 @@ prod_db = db_utils.get_engine(use_prod=True)
 
 - While new credit systems aim to be more inclusive towards more contribution types, they still suffer from two key problems.
 	- Contributor Roles Taxonomy (CRediT) allows for specific “software” contribution
-  - Others have used CREDIT to understand distribution of labor… 
+  - Others have used CREDIT to understand distribution of labor…
 	- they are still based around an author list (it’s hard to change existing human practices, especially biased ones)
 	- they aren’t verifiable, they are self-reported
 
@@ -118,23 +169,36 @@ prod_db = db_utils.get_engine(use_prod=True)
 	- we use the github API to extract repository information
 
 ```{python}
-print("INSERT WORKFLOW DIAGRAM")
-```
-
-```{python}
+# Unique document repository links where repo or doc only have 1 link
 with Session(prod_db) as session:
-  # Totals
-  total_article_repo_pairs = session.exec(
-    text("SELECT COUNT(id) FROM document_repository_link")
-  ).first()[0]
+    # Totals
+    total_article_repo_pairs_query = f"{unique_doc_repo_links_sql} SELECT COUNT(*) FROM unique_doc_repo_links"
+    total_article_repo_pairs = execute_count_query(session, total_article_repo_pairs_query)
 
-  total_authors = session.exec(
-    text("SELECT COUNT(id) FROM researcher")
-  ).first()[0]
+    total_authors_query = create_count_query(
+        entity_table="researcher",
+        join_conditions=[
+          "JOIN document_contributor ON researcher.id = document_contributor.researcher_id",
+          "JOIN document ON document_contributor.document_id = document.id"
+        ],
+        udrl_join_table="document",
+    )
+    print(total_authors_query)
+    total_authors = execute_count_query(session, total_authors_query)
 
-  total_devs = session.exec(
-    text("SELECT COUNT(id) FROM developer_account")
-  ).first()[0]
+    total_devs_query = create_count_query(
+        entity_table="developer_account",
+        join_conditions=[
+          "JOIN repository_contributor ON developer_account.id = repository_contributor.developer_account_id",
+          "JOIN repository ON repository_contributor.repository_id = repository.id"
+        ],
+        udrl_join_table="repository",
+    )
+    print()
+    print()
+    print()
+    print(total_devs_query)
+    total_devs = execute_count_query(session, total_devs_query)
 ```
 
 - Our final dataset contains the bibliometric and code repository information for hundreds of thousands of scientific-article-source-code-repository pairs from multiple article types and fields.
@@ -148,477 +212,194 @@ with Session(prod_db) as session:
 
 ```{python}
 # SQL Statements
-article_repo_pairs_for_dataset = """
-SELECT COUNT(id)
-FROM document_repository_link
-WHERE dataset_source_id={source_id}
-""".strip()
+def get_dataset_counts(session, source):
+    article_repo_pairs_query = create_count_query(
+        "unique_doc_repo_links",
+        "",
+        "WHERE dataset_source_id = :source_id"
+    )
+    authors_query = create_count_query(
+        "researcher",
+        "JOIN document_contributor ON researcher.id = document_contributor.researcher_id",
+        "WHERE unique_doc_repo_links.dataset_source_id = :source_id"
+    )
+    devs_query = create_count_query(
+        "developer_account",
+        "JOIN repository_contributor ON developer_account.id = repository_contributor.developer_account_id",
+        "WHERE unique_doc_repo_links.dataset_source_id = :source_id"
+    )
 
-authors_for_dataset = """
-SELECT COUNT(researcher.id)
-FROM researcher
-JOIN document_contributor
-  ON researcher.id=document_contributor.researcher_id
-JOIN document_repository_link
-  ON document_contributor.document_id=document_repository_link.document_id
-WHERE document_repository_link.dataset_source_id={source_id}
-""".strip()
-
-developers_for_dataset = """
-SELECT COUNT(developer_account.id)
-FROM developer_account
-JOIN repository_contributor
-  ON developer_account.id=repository_contributor.developer_account_id
-JOIN document_repository_link
-  ON repository_contributor.repository_id=document_repository_link.repository_id
-WHERE document_repository_link.dataset_source_id={source_id}
-""".strip()
+    params = {"source_id": source.id}
+    return {
+        "dataset": source.name,
+        "n_article_repo_pairs": execute_count_query(session, article_repo_pairs_query, params),
+        "n_authors": execute_count_query(session, authors_query, params),
+        "n_devs": execute_count_query(session, devs_query, params),
+    }
 
 # Execute SQL to get counts
 with Session(prod_db) as session:
-  # Get dataset source ids
-  dataset_sources = [
-    ds
-    for ds in session.exec(select(db_models.DatasetSource))
-  ]
+    # Get dataset sources
+    dataset_sources = session.exec(select(db_models.DatasetSource)).all()
 
-  # Create a lookup table of stats per source
-  source_stats = []
-
-  # For each source, get stats
-  for source in dataset_sources:
-    n_article_repo_pairs = session.exec(
-      text(
-        article_repo_pairs_for_dataset.format(
-          source_id=source.id,
-        )
-      )
-    ).first()[0]
-
-    n_authors = session.exec(
-      text(
-        authors_for_dataset.format(
-          source_id=source.id,
-        )
-      )
-    ).first()[0]
-
-    n_devs = session.exec(
-      text(
-        developers_for_dataset.format(
-          source_id=source.id,
-        )
-      )
-    ).first()[0]
-
-    source_stats.append({
-      "dataset": source.name,
-      "n_article_repo_pairs": n_article_repo_pairs,
-      "n_authors": n_authors,
-      "n_devs": n_devs,
-    })
+    # Get stats for each source
+    source_stats = [get_dataset_counts(session, source) for source in dataset_sources]
 
 # Create dataframe using source names as index
 # Columns as count type
-source_counts_df = pd.DataFrame([
-  *source_stats,
-]).set_index("dataset").sort_values("n_article_repo_pairs", ascending=False)
-
+source_counts_df = pd.DataFrame(source_stats).set_index("dataset").sort_values("n_article_repo_pairs", ascending=False)
 source_counts_df
 ```
 
-<!-- ```{python}
-# SQL Statements
-article_repo_pairs_for_field = """
-SELECT COUNT(document_repository_link.id)
-FROM document_repository_link
-JOIN document
-  ON document_repository_link.document_id=document.id
-JOIN document_topic
-  ON document.id=document_topic.document_id
-JOIN topic
-  ON document_topic.topic_id=topic.id
-WHERE topic.field_name='{field_name}'
-AND document_topic.id = (
-    SELECT document_topic.id
-    FROM document_topic 
-    WHERE document_topic.document_id = document.id
-    ORDER BY document_topic.score DESC
-    LIMIT 1
-)
-""".strip()
+```{python}
+def get_field_counts(session, field):
+    base_filter = f"""
+    JOIN document_topic ON unique_doc_repo_links.document_id = document_topic.document_id
+    JOIN topic ON document_topic.topic_id = topic.id
+    WHERE topic.field_name = :field_name
+    AND document_topic.id = (
+        SELECT dt.id
+        FROM document_topic dt
+        WHERE dt.document_id = unique_doc_repo_links.document_id
+        ORDER BY dt.score DESC
+        LIMIT 1
+    )
+    """
 
-authors_for_field = """
-SELECT COUNT(researcher.id)
-FROM researcher
-JOIN document_contributor
-  ON researcher.id=document_contributor.researcher_id
-JOIN document_topic
-  ON document_contributor.document_id=document_topic.document_id
-JOIN topic
-  ON document_topic.topic_id=topic.id
-WHERE topic.field_name='{field_name}'
-AND document_topic.id = (
-    SELECT document_topic.id
-    FROM document_topic 
-    WHERE document_topic.document_id = document_contributor.document_id
-    ORDER BY document_topic.score DESC
-    LIMIT 1
-)
-""".strip()
+    article_repo_pairs_query = create_count_query("unique_doc_repo_links", "", base_filter)
+    authors_query = create_count_query(
+        "researcher",
+        "JOIN document_contributor ON researcher.id = document_contributor.researcher_id",
+        base_filter
+    )
+    devs_query = create_count_query(
+        "developer_account",
+        "JOIN repository_contributor ON developer_account.id = repository_contributor.developer_account_id",
+        base_filter
+    )
 
-developers_for_field = """
-SELECT COUNT(developer_account.id)
-FROM developer_account
-JOIN repository_contributor
-  ON developer_account.id=repository_contributor.developer_account_id
-JOIN document_repository_link
-  ON repository_contributor.repository_id=document_repository_link.repository_id
-JOIN document_topic
-  ON document_repository_link.document_id=document_topic.document_id
-JOIN topic
-  ON document_topic.topic_id=topic.id
-WHERE topic.field_name='{field_name}'
-AND document_topic.id = (
-    SELECT document_topic.id
-    FROM document_topic 
-    WHERE document_topic.document_id = document_repository_link.document_id
-    ORDER BY document_topic.score DESC
-    LIMIT 1
-)
-""".strip()
+    params = {"field_name": field}
+    return {
+        "field": field,
+        "n_article_repo_pairs": execute_count_query(session, article_repo_pairs_query, params),
+        "n_authors": execute_count_query(session, authors_query, params),
+        "n_devs": execute_count_query(session, devs_query, params),
+    }
 
-# Execute SQL to get counts
 with Session(prod_db) as session:
-  # Get fields
-  field_names = [
-    field[0]
-    for field in session.exec(text("SELECT DISTINCT field_name FROM topic"))
-  ]
+    field_names = [field[0] for field in session.exec(text("SELECT DISTINCT field_name FROM topic"))]
+    field_stats = [get_field_counts(session, field) for field in field_names]
 
-  # Create a lookup table of stats per field
-  field_stats = []
-
-  # For each source, get stats
-  for field in field_names:
-    n_article_repo_pairs = session.exec(
-      text(
-        article_repo_pairs_for_field.format(
-          field_name=field,
-        )
-      )
-    ).first()[0]
-
-    n_authors = session.exec(
-      text(
-        authors_for_field.format(
-          field_name=field,
-        )
-      )
-    ).first()[0]
-
-    n_devs = session.exec(
-      text(
-        developers_for_field.format(
-          field_name=field,
-        )
-      )
-    ).first()[0]
-
-    field_stats.append({
-      "field": field,
-      "n_article_repo_pairs": n_article_repo_pairs,
-      "n_authors": n_authors,
-      "n_devs": n_devs,
-    })
-
-# Create dataframe using source names as index
-# Columns as count type
-field_counts_df = pd.DataFrame([
-  *field_stats,
-]).set_index("field").sort_values("n_article_repo_pairs", ascending=False)
-
+field_counts_df = pd.DataFrame(field_stats).set_index("field").sort_values("n_article_repo_pairs", ascending=False)
 field_counts_df
-``` -->
+```
 
 ```{python}
-# SQL Statements
-article_repo_pairs_for_domain = """
-SELECT COUNT(document_repository_link.id)
-FROM document_repository_link
-JOIN document
-  ON document_repository_link.document_id=document.id
-JOIN document_topic
-  ON document.id=document_topic.document_id
-JOIN topic
-  ON document_topic.topic_id=topic.id
-WHERE topic.domain_name='{domain_name}'
-AND document_topic.id = (
-    SELECT document_topic.id
-    FROM document_topic 
-    WHERE document_topic.document_id = document.id
-    ORDER BY document_topic.score DESC
-    LIMIT 1
-)
-""".strip()
+def get_domain_counts(session, domain):
+    base_filter = f"""
+    JOIN document_topic ON unique_doc_repo_links.document_id = document_topic.document_id
+    JOIN topic ON document_topic.topic_id = topic.id
+    WHERE topic.domain_name = :domain_name
+    AND document_topic.id = (
+        SELECT dt.id
+        FROM document_topic dt
+        WHERE dt.document_id = unique_doc_repo_links.document_id
+        ORDER BY dt.score DESC
+        LIMIT 1
+    )
+    """
 
-authors_for_domain = """
-SELECT COUNT(researcher.id)
-FROM researcher
-JOIN document_contributor
-  ON researcher.id=document_contributor.researcher_id
-JOIN document_topic
-  ON document_contributor.document_id=document_topic.document_id
-JOIN topic
-  ON document_topic.topic_id=topic.id
-WHERE topic.domain_name='{domain_name}'
-AND document_topic.id = (
-    SELECT document_topic.id
-    FROM document_topic 
-    WHERE document_topic.document_id = document_contributor.document_id
-    ORDER BY document_topic.score DESC
-    LIMIT 1
-)
-""".strip()
+    article_repo_pairs_query = create_count_query("unique_doc_repo_links", "", base_filter)
+    authors_query = create_count_query(
+        "researcher",
+        "JOIN document_contributor ON researcher.id = document_contributor.researcher_id",
+        base_filter
+    )
+    devs_query = create_count_query(
+        "developer_account",
+        "JOIN repository_contributor ON developer_account.id = repository_contributor.developer_account_id",
+        base_filter
+    )
 
-developers_for_domain = """
-SELECT COUNT(developer_account.id)
-FROM developer_account
-JOIN repository_contributor
-  ON developer_account.id=repository_contributor.developer_account_id
-JOIN document_repository_link
-  ON repository_contributor.repository_id=document_repository_link.repository_id
-JOIN document_topic
-  ON document_repository_link.document_id=document_topic.document_id
-JOIN topic
-  ON document_topic.topic_id=topic.id
-WHERE topic.domain_name='{domain_name}'
-AND document_topic.id = (
-    SELECT document_topic.id
-    FROM document_topic 
-    WHERE document_topic.document_id = document_repository_link.document_id
-    ORDER BY document_topic.score DESC
-    LIMIT 1
-)
-""".strip()
+    params = {"domain_name": domain}
+    return {
+        "domain": domain,
+        "n_article_repo_pairs": execute_count_query(session, article_repo_pairs_query, params),
+        "n_authors": execute_count_query(session, authors_query, params),
+        "n_devs": execute_count_query(session, devs_query, params),
+    }
 
-# Execute SQL to get counts
 with Session(prod_db) as session:
-  # Get domains
-  domains = [
-    domain[0]
-    for domain in session.exec(text("SELECT DISTINCT domain_name FROM topic"))
-  ]
+    domains = [domain[0] for domain in session.exec(text("SELECT DISTINCT domain_name FROM topic"))]
+    domain_stats = [get_domain_counts(session, domain) for domain in domains]
 
-  # Create a lookup table of stats per domain
-  domain_stats = []
-
-  # For each source, get stats
-  for domain in domains:
-    n_article_repo_pairs = session.exec(
-      text(
-        article_repo_pairs_for_domain.format(
-          domain_name=domain,
-        )
-      )
-    ).first()[0]
-
-    n_authors = session.exec(
-      text(
-        authors_for_domain.format(
-          domain_name=domain,
-        )
-      )
-    ).first()[0]
-
-    n_devs = session.exec(
-      text(
-        developers_for_domain.format(
-          domain_name=domain,
-        )
-      )
-    ).first()[0]
-
-    domain_stats.append({
-      "domain": domain,
-      "n_article_repo_pairs": n_article_repo_pairs,
-      "n_authors": n_authors,
-      "n_devs": n_devs,
-    })
-
-# Create dataframe using source names as index
-# Columns as count type
-domain_counts_df = pd.DataFrame([
-  *domain_stats,
-]).set_index("domain").sort_values("n_article_repo_pairs", ascending=False)
-
+domain_counts_df = pd.DataFrame(domain_stats).set_index("domain").sort_values("n_article_repo_pairs", ascending=False)
 domain_counts_df
 ```
 
 ```{python}
-# SQL Statements
-article_repo_pairs_for_document_type = """
-SELECT COUNT(document_repository_link.id)
-FROM document_repository_link
-JOIN document
-  ON document_repository_link.document_id=document.id
-WHERE document.document_type='{document_type}'
-""".strip()
+def get_document_type_counts(session, doc_type):
+    base_filter = "JOIN document ON unique_doc_repo_links.document_id = document.id WHERE document.document_type = :document_type"
 
-authors_for_document_type = """
-SELECT COUNT(researcher.id)
-FROM researcher
-JOIN document_contributor
-  ON researcher.id=document_contributor.researcher_id
-JOIN document
-  ON document_contributor.document_id=document.id
-WHERE document.document_type='{document_type}'
-""".strip()
+    article_repo_pairs_query = create_count_query("unique_doc_repo_links", "", base_filter)
+    authors_query = create_count_query(
+        "researcher",
+        "JOIN document_contributor ON researcher.id = document_contributor.researcher_id",
+        base_filter
+    )
+    devs_query = create_count_query(
+        "developer_account",
+        "JOIN repository_contributor ON developer_account.id = repository_contributor.developer_account_id",
+        base_filter
+    )
 
-developers_for_document_type = """
-SELECT COUNT(developer_account.id)
-FROM developer_account
-JOIN repository_contributor
-  ON developer_account.id=repository_contributor.developer_account_id
-JOIN document_repository_link
-  ON repository_contributor.repository_id=document_repository_link.repository_id
-JOIN document
-  ON document_repository_link.document_id=document.id
-WHERE document.document_type='{document_type}'
-""".strip()
+    params = {"document_type": doc_type}
+    return {
+        "document_type": doc_type,
+        "n_article_repo_pairs": execute_count_query(session, article_repo_pairs_query, params),
+        "n_authors": execute_count_query(session, authors_query, params),
+        "n_devs": execute_count_query(session, devs_query, params),
+    }
 
-# Execute SQL to get counts
 with Session(prod_db) as session:
-  # Get doc types
-  doc_types = [
-    dt[0]
-    for dt in session.exec(text("SELECT DISTINCT document_type FROM document"))
-  ]
+    doc_types = [dt[0] for dt in session.exec(text("SELECT DISTINCT document_type FROM document"))]
+    doc_type_stats = [get_document_type_counts(session, doc_type) for doc_type in doc_types]
 
-  # Create a lookup table of stats per doc type
-  doc_type_stats = []
-
-  # For each doc type, get stats
-  for doc_type in doc_types:
-    n_article_repo_pairs = session.exec(
-      text(
-        article_repo_pairs_for_document_type.format(
-          document_type=doc_type,
-        )
-      )
-    ).first()[0]
-
-    n_authors = session.exec(
-      text(
-        authors_for_document_type.format(
-          document_type=doc_type,
-        )
-      )
-    ).first()[0]
-
-    n_devs = session.exec(
-      text(
-        developers_for_document_type.format(
-          document_type=doc_type,
-        )
-      )
-    ).first()[0]
-
-    doc_type_stats.append({
-      "document_type": doc_type,
-      "n_article_repo_pairs": n_article_repo_pairs,
-      "n_authors": n_authors,
-      "n_devs": n_devs,
-    })
-
-# Create dataframe using source names as index
-# Columns as count type
-doc_type_counts_df = pd.DataFrame([
-  *doc_type_stats,
-]).set_index("document_type").sort_values("n_article_repo_pairs", ascending=False)
-
+doc_type_counts_df = pd.DataFrame(doc_type_stats).set_index("document_type").sort_values("n_article_repo_pairs", ascending=False)
 doc_type_counts_df
 ```
 
+
 ```{python}
-# SQL Statements
-article_repo_pairs_for_oa_type = """
-SELECT COUNT(document_repository_link.id)
-FROM document_repository_link
-JOIN document
-  ON document_repository_link.document_id=document.id
-WHERE document.is_open_access={oa_bool}
-""".strip()
+def get_oa_type_counts(session, oa_bool):
+    base_filter = "JOIN document ON unique_doc_repo_links.document_id = document.id WHERE document.is_open_access = :oa_bool"
 
-authors_for_oa_type = """
-SELECT COUNT(researcher.id)
-FROM researcher
-JOIN document_contributor
-  ON researcher.id=document_contributor.researcher_id
-JOIN document
-  ON document_contributor.document_id=document.id
-WHERE document.is_open_access={oa_bool}
-""".strip()
+    article_repo_pairs_query = create_count_query("unique_doc_repo_links", "", base_filter)
+    authors_query = create_count_query(
+        "researcher",
+        "JOIN document_contributor ON researcher.id = document_contributor.researcher_id",
+        base_filter
+    )
+    devs_query = create_count_query(
+        "developer_account",
+        "JOIN repository_contributor ON developer_account.id = repository_contributor.developer_account_id",
+        base_filter
+    )
 
-developers_for_oa_type = """
-SELECT COUNT(developer_account.id)
-FROM developer_account
-JOIN repository_contributor
-  ON developer_account.id=repository_contributor.developer_account_id
-JOIN document_repository_link
-  ON repository_contributor.repository_id=document_repository_link.repository_id
-JOIN document
-  ON document_repository_link.document_id=document.id
-WHERE document.is_open_access={oa_bool}
-""".strip()
+    params = {"oa_bool": oa_bool}
+    return {
+        "open_access": "open" if oa_bool else "closed",
+        "n_article_repo_pairs": execute_count_query(session, article_repo_pairs_query, params),
+        "n_authors": execute_count_query(session, authors_query, params),
+        "n_devs": execute_count_query(session, devs_query, params),
+    }
 
-# Execute SQL to get counts
 with Session(prod_db) as session:
-  # Create a lookup table of stats per oa flag
-  oa_stats = []
+    oa_stats = [get_oa_type_counts(session, oa_bool) for oa_bool in (True, False)]
 
-  # For each doc type, get stats
-  for oa_value, oa_bool in {"open": 1, "closed": 0}.items():
-    n_article_repo_pairs = session.exec(
-      text(
-        article_repo_pairs_for_oa_type.format(
-          oa_bool=oa_bool,
-        )
-      )
-    ).first()[0]
-
-    n_authors = session.exec(
-      text(
-        authors_for_oa_type.format(
-          oa_bool=oa_bool,
-        )
-      )
-    ).first()[0]
-
-    n_devs = session.exec(
-      text(
-        developers_for_oa_type.format(
-          oa_bool=oa_bool,
-        )
-      )
-    ).first()[0]
-
-    oa_stats.append({
-      "open_access": oa_value,
-      "n_article_repo_pairs": n_article_repo_pairs,
-      "n_authors": n_authors,
-      "n_devs": n_devs,
-    })
-
-# Create dataframe using source names as index
-# Columns as count type
-oa_counts_df = pd.DataFrame([
-  *oa_stats,
-]).set_index("open_access").sort_values("n_article_repo_pairs", ascending=False)
-
+oa_counts_df = pd.DataFrame(oa_stats).set_index("open_access").sort_values("n_article_repo_pairs", ascending=False)
 oa_counts_df
 ```
-
 
 ## Manual Matching of Article Authors and Source Code Repository Contributors
 
@@ -642,10 +423,6 @@ print("CREATE TABLE OF DATASET STATS")
 	- note however that some developer accounts do not have a complete set of information available
 	- table of number of developer accounts with each feature and by their match
 
-```{python}
-print("CREATE TABLE OF ANNOTATION STATS")
-```
-
 # A Predictive Model for Matching Article Authors and Source Code Contributors
 
 - To optimize our predictive model for author-contributor matching, we evaluate a variety of Transformer-based architectures and input features.
@@ -661,10 +438,6 @@ print("CREATE TABLE OF ANNOTATION STATS")
 	- specifics of best model
 	- table of model configurations and results
 	- minor observations about feature sets that perform poorly
-
-```{python}
-print("TABLE FOR MODEL CONFIGURATIONS AND RESULTS")
-```
 
 - Finally, we additionally make our best performing model publicly available for reuse.
 	- We provide a structured python library for interaction with the model at link
