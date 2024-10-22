@@ -52,14 +52,14 @@ class Document(StrippedSQLModel, table=True):  # type: ignore
     # Data
     open_alex_id: str
     title: str
-    publication_date: date
-    cited_by_count: int
-    cited_by_percentile_year_min: int
-    cited_by_percentile_year_max: int
-    fwci: float | None
-    document_type: str
-    is_open_access: bool
-    open_access_status: str
+    publication_date: date = Field(index=True)
+    cited_by_count: int = Field(index=True)
+    cited_by_percentile_year_min: int = Field(index=True)
+    cited_by_percentile_year_max: int = Field(index=True)
+    fwci: float | None = Field(index=True, nullable=True)
+    document_type: str = Field(index=True)
+    is_open_access: bool = Field(index=True)
+    open_access_status: str = Field(index=True)
 
     # Updates
     created_datetime: datetime = Field(
@@ -82,7 +82,7 @@ class DocumentAlternateDOI(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    document_id: int = Field(foreign_key="document.id")
+    document_id: int = Field(foreign_key="document.id", index=True)
     doi: str = Field(unique=True)
 
     # Updates
@@ -101,7 +101,7 @@ class DocumentAbstract(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    document_id: int = Field(foreign_key="document.id")
+    document_id: int = Field(foreign_key="document.id", index=True)
 
     __table_args__ = (UniqueConstraint("document_id"),)
 
@@ -125,12 +125,12 @@ class Topic(StrippedSQLModel, table=True):  # type: ignore
     open_alex_id: str = Field(unique=True)
 
     # Data
-    name: str
-    field_name: str
+    name: str = Field(index=True)
+    field_name: str = Field(index=True)
     field_open_alex_id: str
-    subfield_name: str
+    subfield_name: str = Field(index=True)
     subfield_open_alex_id: str
-    domain_name: str
+    domain_name: str = Field(index=True)
     domain_open_alex_id: str
 
     # Updates
@@ -149,13 +149,13 @@ class DocumentTopic(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    document_id: int = Field(foreign_key="document.id")
-    topic_id: int = Field(foreign_key="topic.id")
+    document_id: int = Field(foreign_key="document.id", index=True)
+    topic_id: int = Field(foreign_key="topic.id", index=True)
 
     __table_args__ = (UniqueConstraint("document_id", "topic_id"),)
 
     # Data
-    score: float
+    score: float = Field(index=True)
 
     # Updates
     created_datetime: datetime = Field(
@@ -175,11 +175,11 @@ class Researcher(StrippedSQLModel, table=True):  # type: ignore
 
     # Data
     name: str
-    works_count: int
-    cited_by_count: int
-    h_index: int
-    i10_index: int
-    two_year_mean_citedness: float
+    works_count: int = Field(index=True)
+    cited_by_count: int = Field(index=True)
+    h_index: int = Field(index=True)
+    i10_index: int = Field(index=True)
+    two_year_mean_citedness: float = Field(index=True)
 
     # Updates
     created_datetime: datetime = Field(
@@ -197,14 +197,14 @@ class DocumentContributor(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    researcher_id: int = Field(foreign_key="researcher.id")
-    document_id: int = Field(foreign_key="document.id")
+    researcher_id: int = Field(foreign_key="researcher.id", index=True)
+    document_id: int = Field(foreign_key="document.id", index=True)
 
     __table_args__ = (UniqueConstraint("researcher_id", "document_id"),)
 
     # Data
-    position: str
-    is_corresponding: bool
+    position: str = Field(index=True)
+    is_corresponding: bool = Field(index=True)
 
     # Updates
     created_datetime: datetime = Field(
@@ -223,7 +223,7 @@ class Institution(StrippedSQLModel, table=True):  # type: ignore
     open_alex_id: str = Field(unique=True)
 
     # Data
-    name: str
+    name: str = Field(index=True)
     ror: str
 
     # Updates
@@ -242,8 +242,8 @@ class DocumentContributorInstitution(StrippedSQLModel, table=True):  # type: ign
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    document_contributor_id: int = Field(foreign_key="document_contributor.id")
-    institution_id: int = Field(foreign_key="institution.id")
+    document_contributor_id: int = Field(foreign_key="document_contributor.id", index=True)
+    institution_id: int = Field(foreign_key="institution.id", index=True)
 
     __table_args__ = (UniqueConstraint("document_contributor_id", "institution_id"),)
 
@@ -264,7 +264,7 @@ class Funder(StrippedSQLModel, table=True):  # type: ignore
     open_alex_id: str = Field(unique=True)
 
     # Data
-    name: str
+    name: str = Field(index=True)
 
     # Updates
     created_datetime: datetime = Field(
@@ -282,8 +282,8 @@ class FundingInstance(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    funder_id: int = Field(foreign_key="funder.id")
-    award_id: str
+    funder_id: int = Field(foreign_key="funder.id", index=True)
+    award_id: str  = Field(index=True)
 
     __table_args__ = (UniqueConstraint("funder_id", "award_id"),)
 
@@ -303,8 +303,8 @@ class DocumentFundingInstance(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    document_id: int = Field(foreign_key="document.id")
-    funding_instance_id: int = Field(foreign_key="funding_instance.id")
+    document_id: int = Field(foreign_key="document.id", index=True)
+    funding_instance_id: int = Field(foreign_key="funding_instance.id", index=True)
 
     __table_args__ = (UniqueConstraint("document_id", "funding_instance_id"),)
 
@@ -326,7 +326,7 @@ class CodeHost(StrippedSQLModel, table=True):  # type: ignore
     id: int | None = Field(default=None, primary_key=True)
 
     # Data
-    name: str = Field(unique=True)
+    name: str = Field(unique=True, index=True)
 
     # Updates
     created_datetime: datetime = Field(
@@ -342,7 +342,7 @@ class Repository(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    code_host_id: int = Field(foreign_key="code_host.id")
+    code_host_id: int = Field(foreign_key="code_host.id", index=True)
     owner: str
     name: str
 
@@ -350,14 +350,14 @@ class Repository(StrippedSQLModel, table=True):  # type: ignore
 
     # Data
     description: str | None = None
-    is_fork: bool
-    forks_count: int
-    stargazers_count: int
-    watchers_count: int
-    open_issues_count: int
+    is_fork: bool = Field(index=True)
+    forks_count: int = Field(index=True)
+    stargazers_count: int = Field(index=True)
+    watchers_count: int = Field(index=True)
+    open_issues_count: int = Field(index=True)
     size_kb: int
-    creation_datetime: datetime
-    last_pushed_datetime: datetime
+    creation_datetime: datetime = Field(index=True)
+    last_pushed_datetime: datetime = Field(index=True)
 
     # TODO: add total commits field
 
@@ -377,7 +377,7 @@ class RepositoryReadme(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    repository_id: int = Field(foreign_key="repository.id")
+    repository_id: int = Field(foreign_key="repository.id", index=True)
 
     __table_args__ = (UniqueConstraint("repository_id"),)
 
@@ -400,8 +400,8 @@ class RepositoryLanguage(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    repository_id: int = Field(foreign_key="repository.id")
-    language: str
+    repository_id: int = Field(foreign_key="repository.id", index=True)
+    language: str = Field(index=True)
 
     __table_args__ = (UniqueConstraint("repository_id", "language"),)
 
@@ -424,7 +424,7 @@ class DeveloperAccount(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    code_host_id: int = Field(foreign_key="code_host.id")
+    code_host_id: int = Field(foreign_key="code_host.id", index=True)
     username: str
 
     __table_args__ = (UniqueConstraint("code_host_id", "username"),)
@@ -449,8 +449,8 @@ class RepositoryContributor(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    repository_id: int = Field(foreign_key="repository.id")
-    developer_account_id: int = Field(foreign_key="developer_account.id")
+    repository_id: int = Field(foreign_key="repository.id", index=True)
+    developer_account_id: int = Field(foreign_key="developer_account.id", index=True)
 
     __table_args__ = (UniqueConstraint("repository_id", "developer_account_id"),)
 
@@ -479,13 +479,13 @@ class DocumentRepositoryLink(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    document_id: int = Field(foreign_key="document.id")
-    repository_id: int = Field(foreign_key="repository.id")
+    document_id: int = Field(foreign_key="document.id", index=True)
+    repository_id: int = Field(foreign_key="repository.id", index=True)
 
     __table_args__ = (UniqueConstraint("document_id", "repository_id"),)
 
     # Data
-    dataset_source_id: int = Field(foreign_key="dataset_source.id")
+    dataset_source_id: int = Field(foreign_key="dataset_source.id", index=True)
     predictive_model_name: str | None = None
     predictive_model_version: str | None = None
     predictive_model_confidence: float | None = None
@@ -506,8 +506,8 @@ class ResearcherDeveloperAccountLink(StrippedSQLModel, table=True):  # type: ign
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    researcher_id: int = Field(foreign_key="researcher.id")
-    developer_account_id: int = Field(foreign_key="developer_account.id")
+    researcher_id: int = Field(foreign_key="researcher.id", index=True)
+    developer_account_id: int = Field(foreign_key="developer_account.id", index=True)
 
     __table_args__ = (UniqueConstraint("researcher_id", "developer_account_id"),)
 
