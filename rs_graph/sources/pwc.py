@@ -78,7 +78,7 @@ def _process_item(
                 error="Not an official paper",
                 traceback="",
             )
-        
+
         # If no paper arxiv id, reject
         if not item["paper_arxiv_id"]:
             return types.ErrorResult(

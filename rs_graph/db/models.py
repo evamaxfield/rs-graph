@@ -242,7 +242,9 @@ class DocumentContributorInstitution(StrippedSQLModel, table=True):  # type: ign
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    document_contributor_id: int = Field(foreign_key="document_contributor.id", index=True)
+    document_contributor_id: int = Field(
+        foreign_key="document_contributor.id", index=True
+    )
     institution_id: int = Field(foreign_key="institution.id", index=True)
 
     __table_args__ = (UniqueConstraint("document_contributor_id", "institution_id"),)
@@ -283,7 +285,7 @@ class FundingInstance(StrippedSQLModel, table=True):  # type: ignore
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
     funder_id: int = Field(foreign_key="funder.id", index=True)
-    award_id: str  = Field(index=True)
+    award_id: str = Field(index=True)
 
     __table_args__ = (UniqueConstraint("funder_id", "award_id"),)
 
