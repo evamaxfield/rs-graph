@@ -47,6 +47,11 @@ format:
 
   pdf:
     toc: false
+    execute:
+      echo: false
+    include-in-header:  
+      - text: |
+          \usepackage{multirow}
 
 ---
 
@@ -607,7 +612,6 @@ for stats_portion, stats_name, value_key in [
 # Concat and wrap in table
 stats_table_html = f"""
 <table>
-  <caption>Counts of Article-Repository Pairs, Authors, and Developers broken out by Data Sources, Domains, Document Types, and Access Status.</caption>
   <tr>
     <th><b>Category</b></th>
     <th><b>Subset</b></th>
@@ -624,6 +628,10 @@ stats_table_html = f"""
 	- Specifically, our dataset contains `{python} total_article_repo_pairs` article-repository pairs, `{python} total_authors` distinct authors, and `{python} total_devs` distinct developer accounts.
 
 ```{python}
+#| label: tbl-rs-graph-overall-counts
+#| tbl-cap: "Counts of Article-Repository Pairs, Authors, and Developers broken out by Data Sources, Domains, Document Types, and Access Status."
+#| echo: false
+
 IPython.display.HTML(stats_table_html)
 ```
 
