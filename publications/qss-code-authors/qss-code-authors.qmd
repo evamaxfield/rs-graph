@@ -63,6 +63,7 @@ from pathlib import Path
 import IPython.display
 from sqlalchemy import text
 from sqlmodel import Session, create_engine, select
+import pandas as pd
 
 from rs_graph.db import models as db_models
 
@@ -126,410 +127,227 @@ db_conn = create_engine(f"sqlite:///{db_path}")
 	- we use the github API to extract repository information
 
 ```{python}
-# Used across all queries
+# Read all data from the database to pandas
 
-# Define the base CTE for unique document-repository links
-unique_doc_repo_links_sql = """
-WITH unique_doc_repo_links AS (
-  SELECT drl.id, drl.document_id, drl.repository_id, drl.dataset_source_id
-  FROM document_repository_link drl
-  INNER JOIN (
-    SELECT document_id
-    FROM document_repository_link
-    GROUP BY document_id
-    HAVING COUNT(*) = 1
-  ) d ON drl.document_id = d.document_id
-  INNER JOIN (
-    SELECT repository_id
-    FROM document_repository_link
-    GROUP BY repository_id
-    HAVING COUNT(*) = 1
-  ) r ON drl.repository_id = r.repository_id
+
+def read_table(table: str) -> pd.DataFrame:
+    return pd.read_sql(text(f"SELECT * FROM {table}"), db_conn)
+
+
+# Read all data from database
+doc_repo_links = read_table(db_models.DocumentRepositoryLink.__tablename__)
+researchers = read_table(db_models.Researcher.__tablename__)
+devs = read_table(db_models.DeveloperAccount.__tablename__)
+documents = read_table(db_models.Document.__tablename__)
+document_contributors = read_table(db_models.DocumentContributor.__tablename__)
+repositories = read_table(db_models.Repository.__tablename__)
+repository_contributors = read_table(db_models.RepositoryContributor.__tablename__)
+topics = read_table(db_models.Topic.__tablename__)
+document_topics = read_table(db_models.DocumentTopic.__tablename__)
+dataset_sources = read_table(db_models.DatasetSource.__tablename__)
+researcher_dev_links = read_table(
+    db_models.ResearcherDeveloperAccountLink.__tablename__
 )
-""".strip()
 
+# Drop all "updated_datetime" and "created_datetime" columns
+for df in [
+    doc_repo_links,
+    researchers,
+    devs,
+    documents,
+    document_contributors,
+    repositories,
+    repository_contributors,
+    topics,
+    document_topics,
+    dataset_sources,
+    researcher_dev_links,
+]:
+    df.drop(columns=["updated_datetime", "created_datetime"], inplace=True)
 
-def execute_count_query(
-    session: Session,
-    query: str,
-):
-    # Exec and return first
-    result = session.exec(text(query.strip()))
-    return result.first()[0]
+# Specifically drop doc_repo_links "id" column
+# It isn't used and will get in the way later when we do a lot of joins
+doc_repo_links.drop(columns=["id"], inplace=True)
 
-###############################################################################
-# SQL Statements for Totals
-total_doc_repo_pairs_query = f"""
-{unique_doc_repo_links_sql}
+# Construct reduced doc_repo_links
+doc_repo_links = doc_repo_links.drop_duplicates(subset=["document_id"], keep=False)
+doc_repo_links = doc_repo_links.drop_duplicates(subset=["repository_id"], keep=False)
 
-SELECT COUNT(DISTINCT id)
-FROM unique_doc_repo_links
-"""
+# Reduce other tables to only documents / repositories in the updated doc_repo_links
+documents = documents[documents["id"].isin(doc_repo_links["document_id"])]
+repositories = repositories[repositories["id"].isin(doc_repo_links["repository_id"])]
+document_contributors = document_contributors[
+    document_contributors["document_id"].isin(documents["id"])
+]
+repository_contributors = repository_contributors[
+    repository_contributors["repository_id"].isin(repositories["id"])
+]
+document_topics = document_topics[document_topics["document_id"].isin(documents["id"])]
 
-total_authors_query = f"""
-{unique_doc_repo_links_sql}
-
-SELECT COUNT(DISTINCT researcher.id)
-FROM researcher
-JOIN document_contributor
-  ON researcher.id = document_contributor.researcher_id
-WHERE document_contributor.document_id IN (
-  SELECT document_id
-  FROM unique_doc_repo_links
-)
-"""
-
-total_devs_query = f"""
-{unique_doc_repo_links_sql}
-
-SELECT COUNT(DISTINCT developer_account.id)
-FROM developer_account
-JOIN repository_contributor
-  ON developer_account.id = repository_contributor.developer_account_id
-WHERE repository_contributor.repository_id IN (
-  SELECT repository_id
-  FROM unique_doc_repo_links
-)
-"""
-
-###############################################################################
-# SQL Statements for Dataset Counts
-data_source_doc_repo_pairs_query_template = """
-{udrl_sql}
-
-SELECT COUNT(DISTINCT unique_doc_repo_links.id)
-FROM unique_doc_repo_links
-WHERE unique_doc_repo_links.dataset_source_id = {source_id}
-"""
-
-data_source_authors_query_template = """
-{udrl_sql}
-
-SELECT COUNT(DISTINCT researcher.id)
-FROM researcher
-JOIN document_contributor
-    ON researcher.id = document_contributor.researcher_id
-JOIN unique_doc_repo_links
-    ON document_contributor.document_id = unique_doc_repo_links.document_id
-WHERE unique_doc_repo_links.dataset_source_id = {source_id}
-"""
-
-data_source_devs_query_template = """
-{udrl_sql}
-
-SELECT COUNT(DISTINCT developer_account.id)
-FROM developer_account
-JOIN repository_contributor
-    ON developer_account.id = repository_contributor.developer_account_id
-JOIN unique_doc_repo_links
-    ON repository_contributor.repository_id = unique_doc_repo_links.repository_id
-WHERE unique_doc_repo_links.dataset_source_id = {source_id}
-"""
-
-###############################################################################
-# SQL Statements for Domain Counts
-domain_doc_repo_pairs_query_template = """
-{udrl_sql}
-
-SELECT COUNT(DISTINCT unique_doc_repo_links.id)
-FROM unique_doc_repo_links
-JOIN document_topic
-    ON unique_doc_repo_links.document_id = document_topic.document_id
-JOIN topic
-    ON document_topic.topic_id = topic.id
-WHERE topic.domain_name = '{domain_name}'
-AND document_topic.id = (
-  SELECT dt.id
-  FROM document_topic dt
-  WHERE dt.document_id = unique_doc_repo_links.document_id
-  ORDER BY dt.score DESC
-  LIMIT 1
-)
-"""
-
-domain_authors_query_template = """
-{udrl_sql}
-
-SELECT COUNT(DISTINCT researcher.id)
-FROM researcher
-JOIN document_contributor
-    ON researcher.id = document_contributor.researcher_id
-JOIN unique_doc_repo_links
-    ON document_contributor.document_id = unique_doc_repo_links.document_id
-JOIN document_topic
-    ON document_contributor.document_id = document_topic.document_id
-JOIN topic
-    ON document_topic.topic_id = topic.id
-WHERE topic.domain_name = '{domain_name}'
-AND document_topic.id = (
-  SELECT dt.id
-  FROM document_topic dt
-  WHERE dt.document_id = unique_doc_repo_links.document_id
-  ORDER BY dt.score DESC
-  LIMIT 1
-)
-"""
-
-domain_devs_query_template = """
-{udrl_sql}
-
-SELECT COUNT(DISTINCT developer_account.id)
-FROM developer_account
-JOIN repository_contributor
-    ON developer_account.id = repository_contributor.developer_account_id
-JOIN unique_doc_repo_links
-    ON repository_contributor.repository_id = unique_doc_repo_links.repository_id
-JOIN document_topic
-    ON unique_doc_repo_links.document_id = document_topic.document_id
-JOIN topic
-    ON document_topic.topic_id = topic.id
-WHERE topic.domain_name = '{domain_name}'
-AND document_topic.id = (
-  SELECT dt.id
-  FROM document_topic dt
-  WHERE dt.document_id = unique_doc_repo_links.document_id
-  ORDER BY dt.score DESC
-  LIMIT 1
-)
-"""
-
-###############################################################################
-# SQL Statements for Doc Type Counts
-doc_type_doc_repo_pairs_query_template = """
-{udrl_sql}
-
-SELECT COUNT(DISTINCT unique_doc_repo_links.id)
-FROM unique_doc_repo_links
-JOIN document
-    ON unique_doc_repo_links.document_id = document.id
-WHERE document.document_type = '{doc_type}'
-"""
-
-doc_type_authors_query_template = """
-{udrl_sql}
-
-SELECT COUNT(DISTINCT researcher.id)
-FROM researcher
-JOIN document_contributor
-    ON researcher.id = document_contributor.researcher_id
-JOIN document
-    ON document_contributor.document_id = document.id
-WHERE document.document_type = '{doc_type}'
-AND document.id IN (
-  SELECT document_id FROM unique_doc_repo_links
-)
-"""
-
-doc_type_devs_query_template = """
-{udrl_sql}
-
-SELECT COUNT(DISTINCT developer_account.id)
-FROM developer_account
-JOIN repository_contributor
-    ON developer_account.id = repository_contributor.developer_account_id
-JOIN unique_doc_repo_links
-    ON repository_contributor.repository_id = unique_doc_repo_links.repository_id
-JOIN document
-    ON unique_doc_repo_links.document_id = document.id
-WHERE document.document_type = '{doc_type}'
-"""
-
-###############################################################################
-# SQL Statements for Access Counts
-access_doc_repo_pairs_query_template = """
-{udrl_sql}
-
-SELECT COUNT(DISTINCT unique_doc_repo_links.id)
-FROM unique_doc_repo_links
-JOIN document
-    ON unique_doc_repo_links.document_id = document.id
-WHERE document.is_open_access = '{oa_status_int}'
-"""
-
-access_authors_query_template = """
-{udrl_sql}
-
-SELECT COUNT(DISTINCT researcher.id)
-FROM researcher
-JOIN document_contributor
-    ON researcher.id = document_contributor.researcher_id
-JOIN document
-    ON document_contributor.document_id = document.id
-WHERE document.is_open_access = '{oa_status_int}'
-AND document.id IN (
-  SELECT document_id FROM unique_doc_repo_links
-)
-"""
-
-access_devs_query_template = """
-{udrl_sql}
-
-SELECT COUNT(DISTINCT developer_account.id)
-FROM developer_account
-JOIN repository_contributor
-    ON developer_account.id = repository_contributor.developer_account_id
-JOIN unique_doc_repo_links
-    ON repository_contributor.repository_id = unique_doc_repo_links.repository_id
-JOIN document
-    ON unique_doc_repo_links.document_id = document.id
-WHERE document.is_open_access = '{oa_status_int}'
-"""
-
-###############################################################################
-# Execute queries
-
-with Session(db_conn) as session:
-  # Get totals
-  total_article_repo_pairs = execute_count_query(session, total_doc_repo_pairs_query)
-  total_authors = execute_count_query(session, total_authors_query)
-  total_devs = execute_count_query(session, total_devs_query)
-
-  # Get data source stats
-  data_sources = session.exec(select(db_models.DatasetSource)).all()
-  data_source_stats = []
-  for data_source in data_sources:
-    source_id = data_source.id
-    n_article_repo_pairs = execute_count_query(
-      session,
-      data_source_doc_repo_pairs_query_template.format(
-        udrl_sql=unique_doc_repo_links_sql, source_id=source_id
-      ),
+# Reduce researchers and devs to only those in the
+# updated document_contributors and repository_contributors
+researchers = researchers[
+    researchers["id"].isin(document_contributors["researcher_id"])
+]
+devs = devs[devs["id"].isin(repository_contributors["developer_account_id"])]
+researcher_dev_links = researcher_dev_links[
+    (
+        researcher_dev_links["researcher_id"].isin(researchers["id"])
+        & researcher_dev_links["developer_account_id"].isin(devs["id"])
     )
-    n_authors = execute_count_query(
-      session,
-      data_source_authors_query_template.format(
-        udrl_sql=unique_doc_repo_links_sql, source_id=source_id
-      ),
-    )
-    n_devs = execute_count_query(
-      session,
-      data_source_devs_query_template.format(
-        udrl_sql=unique_doc_repo_links_sql, source_id=source_id
-      ),
-    )
+]
 
+# Sort document topics and keep first
+document_topics = document_topics.sort_values("score", ascending=False)
+document_topics = document_topics.drop_duplicates(subset=["document_id"], keep="first")
+
+# Create basic merged tables
+merged_document_contributor_doc_repo_links = pd.merge(
+    document_contributors, doc_repo_links, left_on="document_id", right_on="document_id"
+)
+merged_repository_contributor_doc_repo_links = pd.merge(
+    repository_contributors,
+    doc_repo_links,
+    left_on="repository_id",
+    right_on="repository_id",
+)
+
+# Compute stats for data sources
+data_source_stats = []
+for _, data_source in dataset_sources.iterrows():
+    # Get total article-repo pairs
     data_source_stats.append(
-      {
-        "data_source": data_source.name,
-        "n_article_repo_pairs": n_article_repo_pairs,
-        "n_authors": n_authors,
-        "n_devs": n_devs,
-      }
+        {
+            "data_source": data_source["name"],
+            "n_article_repo_pairs": len(
+                doc_repo_links[doc_repo_links["dataset_source_id"] == data_source["id"]]
+            ),
+            "n_authors": merged_document_contributor_doc_repo_links.loc[
+                merged_document_contributor_doc_repo_links["dataset_source_id"]
+                == data_source["id"]
+            ]["researcher_id"].nunique(),
+            "n_devs": merged_repository_contributor_doc_repo_links.loc[
+                merged_repository_contributor_doc_repo_links["dataset_source_id"]
+                == data_source["id"]
+            ]["developer_account_id"].nunique(),
+        }
     )
 
-    domains = [
-    domain[0]
-    for domain in session.exec(text("SELECT DISTINCT domain_name FROM topic"))
-  ]
+# Create topic merged tables
+merged_doc_repo_links_topics = pd.merge(
+    doc_repo_links, document_topics, left_on="document_id", right_on="document_id"
+).merge(topics, left_on="topic_id", right_on="id")
+merged_doc_repo_links_topics_document_contributors = pd.merge(
+    merged_doc_repo_links_topics,
+    document_contributors,
+    left_on="document_id",
+    right_on="document_id",
+)
+merged_doc_repo_links_topics_repository_contributors = pd.merge(
+    merged_doc_repo_links_topics,
+    repository_contributors,
+    left_on="repository_id",
+    right_on="repository_id",
+)
 
-  # Get domain stats
-  domain_stats = []
-  for domain in domains:
-    n_article_repo_pairs = execute_count_query(
-      session,
-      domain_doc_repo_pairs_query_template.format(
-        udrl_sql=unique_doc_repo_links_sql, domain_name=domain
-      ),
-    )
-    n_authors = execute_count_query(
-      session,
-      domain_authors_query_template.format(
-        udrl_sql=unique_doc_repo_links_sql, domain_name=domain
-      ),
-    )
-    n_devs = execute_count_query(
-      session,
-      domain_devs_query_template.format(
-        udrl_sql=unique_doc_repo_links_sql, domain_name=domain
-      ),
-    )
-
+# Compute stats for domains
+domain_stats = []
+for domain in merged_doc_repo_links_topics.domain_name.unique():
+    # Get total article-repo pairs
     domain_stats.append(
-      {
-        "domain": domain,
-        "n_article_repo_pairs": n_article_repo_pairs,
-        "n_authors": n_authors,
-        "n_devs": n_devs,
-      }
+        {
+            "domain": domain,
+            "n_article_repo_pairs": len(
+                merged_doc_repo_links_topics[
+                    merged_doc_repo_links_topics["domain_name"] == domain
+                ]
+            ),
+            "n_authors": merged_doc_repo_links_topics_document_contributors.loc[
+                merged_doc_repo_links_topics_document_contributors["domain_name"]
+                == domain
+            ]["researcher_id"].nunique(),
+            "n_devs": merged_doc_repo_links_topics_repository_contributors.loc[
+                merged_doc_repo_links_topics_repository_contributors["domain_name"]
+                == domain
+            ]["developer_account_id"].nunique(),
+        }
     )
 
-  # Get doc type stats
-  doc_types = [
-    doc_type[0]
-    for doc_type in session.exec(
-      text("SELECT DISTINCT document_type FROM document")
-    )
-  ]
+# Create document merged tables
+merged_doc_repo_links_documents = pd.merge(
+    doc_repo_links, documents, left_on="document_id", right_on="id"
+)
+merged_doc_repo_links_documents_document_contributors = pd.merge(
+    merged_doc_repo_links_documents,
+    document_contributors,
+    left_on="document_id",
+    right_on="document_id",
+)
+merged_doc_repo_links_documents_repository_contributors = pd.merge(
+    merged_doc_repo_links_documents,
+    repository_contributors,
+    left_on="repository_id",
+    right_on="repository_id",
+)
 
-  doc_type_stats = []
-  for doc_type in doc_types:
-    n_article_repo_pairs = execute_count_query(
-      session,
-      doc_type_doc_repo_pairs_query_template.format(
-        udrl_sql=unique_doc_repo_links_sql, doc_type=doc_type
-      ),
-    )
-    authors_query = doc_type_authors_query_template.format(
-      udrl_sql=unique_doc_repo_links_sql, doc_type=doc_type
-    )
-    n_authors = execute_count_query(
-      session,
-      doc_type_authors_query_template.format(
-        udrl_sql=unique_doc_repo_links_sql, doc_type=doc_type
-      ),
-    )
-    n_devs = execute_count_query(
-      session,
-      doc_type_devs_query_template.format(
-        udrl_sql=unique_doc_repo_links_sql, doc_type=doc_type
-      ),
-    )
-
+# Compute stats for document types
+doc_type_stats = []
+for document_type in merged_doc_repo_links_documents.document_type.unique():
+    # Get total article-repo pairs
     doc_type_stats.append(
-      {
-        "doc_type": doc_type,
-        "n_article_repo_pairs": n_article_repo_pairs,
-        "n_authors": n_authors,
-        "n_devs": n_devs,
-      }
+        {
+            "doc_type": document_type,
+            "n_article_repo_pairs": len(
+                merged_doc_repo_links_documents[
+                    merged_doc_repo_links_documents["document_type"] == document_type
+                ]
+            ),
+            "n_authors": merged_doc_repo_links_documents_document_contributors.loc[
+                merged_doc_repo_links_documents_document_contributors["document_type"]
+                == document_type
+            ]["researcher_id"].nunique(),
+            "n_devs": merged_doc_repo_links_documents_repository_contributors.loc[
+                merged_doc_repo_links_documents_repository_contributors["document_type"]
+                == document_type
+            ]["developer_account_id"].nunique(),
+        }
     )
 
-  # Get access stats
-  access_statuses = [
-    {"name": "Open", "value": 1},
-    {"name": "Closed", "value": 0},
-  ]
-
-  access_stats = []
-  for access_status in access_statuses:
-    n_article_repo_pairs = execute_count_query(
-      session,
-      access_doc_repo_pairs_query_template.format(
-        udrl_sql=unique_doc_repo_links_sql,
-        oa_status_int=access_status["value"],
-      ),
-    )
-    n_authors = execute_count_query(
-      session,
-      access_authors_query_template.format(
-        udrl_sql=unique_doc_repo_links_sql, oa_status_int=access_status["value"]
-      ),
-    )
-    n_devs = execute_count_query(
-      session,
-      access_devs_query_template.format(
-        udrl_sql=unique_doc_repo_links_sql, oa_status_int=access_status["value"]
-      ),
-    )
-
+# Compute stats for access status
+access_stats = []
+for access_status_int, access_status_name in [
+    (0, "Closed"),
+    (1, "Open"),
+]:
+    # Get total article-repo pairs
     access_stats.append(
-      {
-        "access_status": access_status["name"],
-        "n_article_repo_pairs": n_article_repo_pairs,
-        "n_authors": n_authors,
-        "n_devs": n_devs,
-      }
+        {
+            "access_status": access_status_name,
+            "n_article_repo_pairs": len(
+                merged_doc_repo_links_documents[
+                    merged_doc_repo_links_documents["is_open_access"]
+                    == access_status_int
+                ]
+            ),
+            "n_authors": merged_doc_repo_links_documents_document_contributors.loc[
+                merged_doc_repo_links_documents_document_contributors["is_open_access"]
+                == access_status_int
+            ]["researcher_id"].nunique(),
+            "n_devs": merged_doc_repo_links_documents_repository_contributors.loc[
+                merged_doc_repo_links_documents_repository_contributors[
+                    "is_open_access"
+                ]
+                == access_status_int
+            ]["developer_account_id"].nunique(),
+        }
     )
+
+# Compute totals
+total_article_repo_pairs = len(doc_repo_links)
+total_authors = merged_document_contributor_doc_repo_links["researcher_id"].nunique()
+total_devs = merged_repository_contributor_doc_repo_links[
+    "developer_account_id"
+].nunique()
 
 ###############################################################################
 # Constuct HTML Table
@@ -562,52 +380,52 @@ stats_piece_subsequent_row_template = """
 # Iter over stats portions (and total)
 stats_portions_html = []
 for stats_portion, stats_name, value_key in [
-  (data_source_stats, "<b>By Data Source</b>", "data_source"),
-  (domain_stats, "<b>By Domain</b>", "domain"),
-  (doc_type_stats, "<b>By Document Type</b>", "doc_type"),
-  (access_stats, "<b>By Access Status</b>", "access_status"),
-  (
-    [
-      {
-        "empty": "",
-        "n_article_repo_pairs": f"<b>{total_article_repo_pairs}</b>",
-        "n_authors": f"<b>{total_authors}</b>",
-        "n_devs": f"<b>{total_devs}</b>",
-      }
-    ],
-    "<b>Total</b>",
-    "empty",
-  ),
+    (data_source_stats, "<b>By Data Source</b>", "data_source"),
+    (domain_stats, "<b>By Domain</b>", "domain"),
+    (doc_type_stats, "<b>By Document Type</b>", "doc_type"),
+    (access_stats, "<b>By Access Status</b>", "access_status"),
+    (
+        [
+            {
+                "empty": "",
+                "n_article_repo_pairs": f"<b>{total_article_repo_pairs}</b>",
+                "n_authors": f"<b>{total_authors}</b>",
+                "n_devs": f"<b>{total_devs}</b>",
+            }
+        ],
+        "<b>Total</b>",
+        "empty",
+    ),
 ]:
-  # Order by article-repo pairs
-  stats_portion = sorted(
-    stats_portion, key=lambda x: x["n_article_repo_pairs"], reverse=True
-  )
+    # Order by article-repo pairs
+    stats_portion = sorted(
+        stats_portion, key=lambda x: x["n_article_repo_pairs"], reverse=True
+    )
 
-  stats_portion_html = []
-  for i, stats_piece in enumerate(stats_portion):
-    if i == 0:
-      stats_portion_html.append(
-        stats_piece_inital_row_template.format(
-          n_rows=len(stats_portion),
-          row_name=stats_name,
-          value_name=stats_piece[value_key],
-          n_article_repo_pairs=stats_piece["n_article_repo_pairs"],
-          n_authors=stats_piece["n_authors"],
-          n_devs=stats_piece["n_devs"],
-        )
-      )
-    else:
-      stats_portion_html.append(
-        stats_piece_subsequent_row_template.format(
-          value_name=stats_piece[value_key],
-          n_article_repo_pairs=stats_piece["n_article_repo_pairs"],
-          n_authors=stats_piece["n_authors"],
-          n_devs=stats_piece["n_devs"],
-        )
-      )
+    stats_portion_html = []
+    for i, stats_piece in enumerate(stats_portion):
+        if i == 0:
+            stats_portion_html.append(
+                stats_piece_inital_row_template.format(
+                    n_rows=len(stats_portion),
+                    row_name=stats_name,
+                    value_name=stats_piece[value_key],
+                    n_article_repo_pairs=stats_piece["n_article_repo_pairs"],
+                    n_authors=stats_piece["n_authors"],
+                    n_devs=stats_piece["n_devs"],
+                )
+            )
+        else:
+            stats_portion_html.append(
+                stats_piece_subsequent_row_template.format(
+                    value_name=stats_piece[value_key],
+                    n_article_repo_pairs=stats_piece["n_article_repo_pairs"],
+                    n_authors=stats_piece["n_authors"],
+                    n_devs=stats_piece["n_devs"],
+                )
+            )
 
-  stats_portions_html.append("\n".join(stats_portion_html))
+    stats_portions_html.append("\n".join(stats_portion_html))
 
 # Concat and wrap in table
 stats_table_html = f"""
@@ -625,7 +443,7 @@ stats_table_html = f"""
 ```
 
 - Our final dataset contains the bibliometric and code repository information for hundreds of thousands of scientific-article-source-code-repository pairs from multiple article types and fields.
-	- Specifically, our dataset contains `{python} total_article_repo_pairs` article-repository pairs, `{python} total_authors` distinct authors, and `{python} total_devs` distinct developer accounts.
+  - Specifically, our dataset contains `{python} total_article_repo_pairs` article-repository pairs, `{python} total_authors` distinct authors, and `{python} total_devs` distinct developer accounts.
 
 ```{python}
 #| label: tbl-rs-graph-overall-counts
