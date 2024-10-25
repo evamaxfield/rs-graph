@@ -42,7 +42,7 @@ dependencies = [
   "parse>=1,<2",
   "prefect>=3,<4",
   "requests>=2,<3",
-  "sci-soft-models>=0.2.3",
+  "sci-soft-models>=0.2.4",
   # database
   "alembic[tz]>=1,<2",
   "sqlmodel>=0.0.16,<0.0.17",
