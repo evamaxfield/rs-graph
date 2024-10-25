@@ -117,8 +117,8 @@ def _increment_call_count_and_check(open_alex_email_count: int) -> None:
     current_status.call_count += 1
     _write_api_call_status(current_status)
 
-    # Sleep for 1 seconds to avoid rate limiting
-    time.sleep(1)
+    # Sleep for 0.6 seconds to avoid rate limiting
+    time.sleep(0.6)
 
 
 #######################################################################################
