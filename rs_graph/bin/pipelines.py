@@ -179,31 +179,30 @@ def _prelinked_dataset_ingestion_flow(
     source_results = source_func()
 
     # Construct different cluster parameters
-    github_cluster_config = {
-        "keepalive": "15m",
-        "cpu": [2, 4],
-        "memory": ["2GiB", "8GiB"],
-        "n_workers": 1,
-        "threads_per_worker": n_github_tokens,
-        "spot_policy": "spot_with_fallback",
-        "local": not use_coiled,
-    }
     article_processing_cluster_config = {
         "keepalive": "15m",
-        "cpu": [2, 8],
-        "memory": ["2GiB", "8GiB"],
+        "cpu": [1, 2],
+        "memory": "2GiB",
         "n_workers": 1,
         "threads_per_worker": 6,
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
     }
+    github_cluster_config = {
+        "keepalive": "15m",
+        "cpu": [1, 2],
+        "memory": "2GiB",
+        "n_workers": 1,
+        "threads_per_worker": n_github_tokens,
+        "spot_policy": "spot_with_fallback",
+        "local": not use_coiled,
+    }
     gpu_cluster_config = {
         "keepalive": "15m",
-        "cpu": [4, 8],
-        "memory": ["4GiB", "8GiB"],
+        "cpu": 2,
+        "memory": ["2GiB", "4GiB"],
         "n_workers": [3, 4],
         "spot_policy": "spot_with_fallback",
-        # "gpu": True,
         "local": not use_coiled,
     }
 
