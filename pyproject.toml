@@ -72,11 +72,10 @@ dev = [
   "jupyterlab",
 ]
 modeling = [
-  "scikit-learn>=1,<2",
-  "skops==0.9.0",
-  "statsmodels>=0.14,<0.15",
   "matplotlib==3.8.4",  # pinned for compatibility with colormaps
   "opinionated>=0.0.3,<0.0.4",
+  "statsmodels>=0.14,<0.15",
+  "swifter>=1,<2",
 ]
 
 # entry points

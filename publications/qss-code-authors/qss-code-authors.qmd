@@ -61,9 +61,12 @@ format:
 from pathlib import Path
 
 import IPython.display
-from sqlalchemy import text
-from sqlmodel import Session, create_engine, select
 import pandas as pd
+import statsmodels.api as sm
+from sci_soft_models.dev_author_em.data import load_annotated_dev_author_em_dataset
+import swifter  # noqa
+from sqlalchemy import text
+from sqlmodel import create_engine
 
 from rs_graph.db import models as db_models
 
@@ -127,9 +130,6 @@ db_conn = create_engine(f"sqlite:///{db_path}")
 	- we use the github API to extract repository information
 
 ```{python}
-# Read all data from the database to pandas
-
-
 def read_table(table: str) -> pd.DataFrame:
     return pd.read_sql(text(f"SELECT * FROM {table}"), db_conn)
 
@@ -170,8 +170,14 @@ for df in [
 doc_repo_links.drop(columns=["id"], inplace=True)
 
 # Construct reduced doc_repo_links
+original_doc_repo_links_len = len(doc_repo_links)
 doc_repo_links = doc_repo_links.drop_duplicates(subset=["document_id"], keep=False)
 doc_repo_links = doc_repo_links.drop_duplicates(subset=["repository_id"], keep=False)
+print(
+    "doc-repo-links that point at mult- docs or repos:",
+    original_doc_repo_links_len - len(doc_repo_links),
+)
+print("these are currently ignored / dropped before analysis")
 
 # Reduce other tables to only documents / repositories in the updated doc_repo_links
 documents = documents[documents["id"].isin(doc_repo_links["document_id"])]
@@ -200,6 +206,11 @@ researcher_dev_links = researcher_dev_links[
 # Sort document topics and keep first
 document_topics = document_topics.sort_values("score", ascending=False)
 document_topics = document_topics.drop_duplicates(subset=["document_id"], keep="first")
+
+# Create document, document topic merged table
+merged_document_topics = pd.merge(
+    document_topics, topics, left_on="topic_id", right_on="id"
+)
 
 # Create basic merged tables
 merged_document_contributor_doc_repo_links = pd.merge(
@@ -291,27 +302,96 @@ merged_doc_repo_links_documents_repository_contributors = pd.merge(
 )
 
 # Compute stats for document types
-doc_type_stats = []
-for document_type in merged_doc_repo_links_documents.document_type.unique():
+# This isn't a standard data pull
+# In short:
+# - pairs from PLOS are "research articles"
+# - pairs from JOSS are "software articles"
+# - pairs from SoftwareX are "software articles"
+# - pairs from Papers with Code / ArXiv are "pre-prints"
+#   UNLESS they have been published in a journal
+# All of those should be easy to assert / apply a label to with the exception
+# of Papers with Code / ArXiv pre-prints that have been published in a journal
+# In that case, we need to look at the existing document type in the database
+# If the document type is "preprint" use preprint, otherwise, if it's anything else,
+# use "research article"
+
+# Create a "reduced_doc_types" dataframe with document_id and "reduced_doc_type"
+# columns
+reduced_doc_types_rows = []
+# We can use the "reduced_doc_types" dataframe to calculate the stats
+
+# Iter over data sources even though we are looking for doc types
+for _, data_source in dataset_sources.iterrows():
     # Get total article-repo pairs
-    doc_type_stats.append(
-        {
-            "doc_type": document_type,
-            "n_article_repo_pairs": len(
-                merged_doc_repo_links_documents[
-                    merged_doc_repo_links_documents["document_type"] == document_type
-                ]
-            ),
-            "n_authors": merged_doc_repo_links_documents_document_contributors.loc[
-                merged_doc_repo_links_documents_document_contributors["document_type"]
-                == document_type
-            ]["researcher_id"].nunique(),
-            "n_devs": merged_doc_repo_links_documents_repository_contributors.loc[
-                merged_doc_repo_links_documents_repository_contributors["document_type"]
-                == document_type
-            ]["developer_account_id"].nunique(),
-        }
-    )
+    doc_type = None
+    if data_source["name"] in ["plos", "joss", "softwarex"]:
+        if data_source["name"] == "plos":
+            doc_type = "research article"
+        else:
+            doc_type = "software article"
+
+        # Add all document_ids to reduced_doc_types_rows
+        reduced_doc_types_rows.extend(
+            [
+                {"document_id": doc_id, "reduced_doc_type": doc_type}
+                for doc_id in doc_repo_links[
+                    (doc_repo_links["dataset_source_id"] == data_source["id"])
+                ]["document_id"]
+            ]
+        )
+
+    # Handle PwC
+    else:
+        # Get preprint pairs
+        preprint_pairs = merged_doc_repo_links_documents[
+            (merged_doc_repo_links_documents["dataset_source_id"] == data_source["id"])
+            & (merged_doc_repo_links_documents["document_type"] == "preprint")
+        ]
+
+        # Add all document_ids to reduced_doc_types_rows
+        reduced_doc_types_rows.extend(
+            [
+                {"document_id": doc_id, "reduced_doc_type": "preprint"}
+                for doc_id in preprint_pairs["document_id"]
+            ]
+        )
+
+        # Get research article pairs
+        # This is the same just inverted to != "preprint"
+        research_article_pairs = merged_doc_repo_links_documents[
+            (merged_doc_repo_links_documents["dataset_source_id"] == data_source["id"])
+            & (merged_doc_repo_links_documents["document_type"] != "preprint")
+        ]
+
+        # Add all document_ids to reduced_doc_types_rows
+        reduced_doc_types_rows.extend(
+            [
+                {"document_id": doc_id, "reduced_doc_type": "research article"}
+                for doc_id in research_article_pairs["document_id"]
+            ]
+        )
+
+# Create reduced_doc_types dataframe
+reduced_doc_types = pd.DataFrame(reduced_doc_types_rows)
+
+# Now compute stats
+doc_type_stats = reduced_doc_types.groupby("reduced_doc_type").apply(
+    lambda x: {
+        "doc_type": x.name,
+        "n_article_repo_pairs": len(x),
+        "n_authors": merged_doc_repo_links_documents_document_contributors.loc[
+            merged_doc_repo_links_documents_document_contributors["document_id"].isin(
+                x["document_id"]
+            )
+        ]["researcher_id"].nunique(),
+        "n_devs": merged_doc_repo_links_documents_repository_contributors.loc[
+            merged_doc_repo_links_documents_repository_contributors["document_id"].isin(
+                x["document_id"]
+            )
+        ]["developer_account_id"].nunique(),
+    },
+    include_groups=False,
+)
 
 # Compute stats for access status
 access_stats = []
@@ -455,10 +535,6 @@ IPython.display.HTML(stats_table_html)
 
 ## Manual Matching of Article Authors and Source Code Repository Contributors
 
-```{python}
-print("CREATE TABLE OF DATASET STATS")
-```
-
 - Before we can train and validate a predictive entity matching model, we must first create a large annotated dataset of article authors and source code repository contributor pairs.
 	- describe the task (we have info about an author identity and a developer identity, are they the same identity)
 	- add figure for more detail
@@ -474,6 +550,13 @@ print("CREATE TABLE OF DATASET STATS")
 	- basic numbers, number of “positive” and “negative” matches
 	- note however that some developer accounts do not have a complete set of information available
 	- table of number of developer accounts with each feature and by their match
+
+```{python}
+# Load annotated dataset
+annotated_dataset = load_annotated_dev_author_em_dataset()
+
+annotated_dataset
+```
 
 # A Predictive Model for Matching Article Authors and Source Code Contributors
 
@@ -496,6 +579,177 @@ print("CREATE TABLE OF DATASET STATS")
 	- Direct access to the model files can be found on huggingface.
 
 # Preliminary Analysis Code Contributor Authorship and Development Dynamics of Research Teams
+
+```{python}
+# We want to create a dataset of author h-index and i10-index for each author
+# We want additional columns of author position in authorship list and whether they are a coding author
+# Further, we want to record the data source, the domain, the doc type, and the access status
+# There will be multiple rows for each author (if they have multiple pubs in the stored data)
+# So really we should iter over the doc-repo pairs and get all the info we need as we go
+
+# Get JOSS and PLOS subset
+joss_plos_subset_doc_repo_links = doc_repo_links.loc[
+    doc_repo_links["dataset_source_id"].isin(
+        dataset_sources[dataset_sources["name"].isin(["joss", "plos"])].id
+    )
+]
+
+
+def _process_doc_repo_link(doc_repo_link: pd.Series) -> list[dict]:
+    # Get document
+    document = documents.loc[documents["id"] == doc_repo_link["document_id"]].iloc[0]
+
+    # Get document contributors
+    document_contributors_subset = document_contributors.loc[
+        document_contributors["document_id"] == document["id"]
+    ]
+
+    # Get repo contributors
+    repository_contributors_subset = repository_contributors.loc[
+        repository_contributors["repository_id"] == doc_repo_link["repository_id"]
+    ]
+
+    # Iter over each document contributor
+    this_doc_contributor_rows = []
+    for _, document_contributor in document_contributors_subset.iterrows():
+        # Get author
+        author = researchers.loc[
+            researchers["id"] == document_contributor["researcher_id"]
+        ].iloc[0]
+
+        # Try and see if this author contributed code in this paper
+        # We can do this by checking if the author has a developer account
+        # then if that developer account is tied to the repo linked to this document
+
+        # Start false, only switch if we find a match
+        author_was_coding_contributor = False
+        if len(repository_contributors_subset) > 0:
+            # Find any developer account linked to this author
+            author_dev_link = researcher_dev_links.loc[
+                researcher_dev_links["researcher_id"] == author["id"]
+            ]
+            if len(author_dev_link) > 0:
+                # Iter over each checking for dev on repo
+                for _, dev_link in author_dev_link.iterrows():
+                    # Get dev
+                    dev = devs.loc[devs["id"] == dev_link["developer_account_id"]].iloc[
+                        0
+                    ]
+
+                    # Check if dev is in repo contributors
+                    if (
+                        len(
+                            repository_contributors_subset.loc[
+                                repository_contributors_subset["developer_account_id"]
+                                == dev["id"]
+                            ]
+                        )
+                        > 0
+                    ):
+                        author_was_coding_contributor = True
+                        break
+
+        # Get author position
+        author_position = document_contributor["position"]
+
+        # Get author is corresponding author
+        author_is_corresponding = document_contributor["is_corresponding"]
+
+        # Get author h-index and i10-index
+        author_h_index = author["h_index"]
+        author_i10_index = author["i10_index"]
+
+        # Get document type
+        document_type = reduced_doc_types.loc[
+            reduced_doc_types["document_id"] == document["id"]
+        ].iloc[0]["reduced_doc_type"]
+
+        # Get access status
+        access_status = document["is_open_access"]
+
+        # Get domain
+        domain = merged_document_topics.loc[
+            merged_document_topics["document_id"] == document["id"]
+        ]
+        if len(domain) > 0:
+            domain = domain.iloc[0]["domain_name"]
+        else:
+            return None
+
+        # Get data source
+        data_source = dataset_sources.loc[
+            dataset_sources["id"] == doc_repo_link["dataset_source_id"]
+        ].iloc[0]["name"]
+
+        # Append row
+        this_doc_contributor_rows.append(
+            {
+                "document_id": document["id"],
+                "author_id": author["id"],
+                "author_total_works": author["works_count"],
+                "author_h_index": author_h_index,
+                "author_i10_index": author_i10_index,
+                "author_total_citations": author["cited_by_count"],
+                "author_two_year_mean_citedness": author["two_year_mean_citedness"],
+                "author_position": author_position,
+                "author_was_coding_contributor": author_was_coding_contributor,
+                "document_type": document_type,
+                "is_open_access": access_status,
+                "domain": domain,
+                "data_source": data_source,
+                "author_is_corresponding": author_is_corresponding,
+                "number_authors_on_article": len(document_contributors_subset),
+                "number_devs_on_repo": len(repository_contributors_subset),
+            }
+        )
+
+    return this_doc_contributor_rows
+
+
+# Process each doc-repo link
+doc_contributor_lists_of_rows = joss_plos_subset_doc_repo_links.swifter.apply(
+    _process_doc_repo_link, axis=1
+)
+
+# Create dataframe
+doc_contributor_rows = [
+    row
+    for sublist in doc_contributor_lists_of_rows
+    if sublist is not None
+    for row in sublist
+]
+doc_contributor_df = pd.DataFrame(doc_contributor_rows)
+
+# Create dummies for author_position, document_type, domain, and data_source
+doc_contributor_df_with_dummies = pd.get_dummies(
+    doc_contributor_df,
+    columns=["author_position", "document_type", "domain", "data_source"],
+)
+
+# Create model
+X = doc_contributor_df_with_dummies.drop(
+    columns=[
+        "author_id",
+        "document_id",
+        "author_h_index",
+        "author_i10_index",
+        "author_total_citations",
+        "author_two_year_mean_citedness",
+    ],
+)
+
+# Remove spaces from column names
+X = X.rename(columns=lambda x: x.replace(" ", "_"))
+
+# Add constant
+X = sm.add_constant(X)
+X = X.astype(int)
+
+# Fit model
+y = doc_contributor_df_with_dummies["author_h_index"]
+model = sm.GLM(y, X, family=sm.families.Poisson()).fit(maxiter=100)
+model.summary()
+```
 
 - To enrich our pre-existing dataset, we apply our trained predictive model across pairs of authors and developer accounts.
 	- again, these pairs are all combinations of author and developer account within an individual paper
