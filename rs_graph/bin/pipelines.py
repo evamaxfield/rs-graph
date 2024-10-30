@@ -190,7 +190,6 @@ def _prelinked_dataset_ingestion_flow(
     github_cluster_config = {
         "keepalive": "15m",
         "vm_type": "t4g.small",
-        "memory": "2GiB",
         "n_workers": 1,
         "threads_per_worker": n_github_tokens,
         "spot_policy": "spot_with_fallback",
