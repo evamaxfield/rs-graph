@@ -181,8 +181,7 @@ def _prelinked_dataset_ingestion_flow(
     # Construct different cluster parameters
     article_processing_cluster_config = {
         "keepalive": "15m",
-        "cpu": [1, 2],
-        "memory": "2GiB",
+        "vm_type": ["t4g.small", "t3.small", "t3a.small"],
         "n_workers": 1,
         "threads_per_worker": 6,
         "spot_policy": "spot_with_fallback",
@@ -190,7 +189,7 @@ def _prelinked_dataset_ingestion_flow(
     }
     github_cluster_config = {
         "keepalive": "15m",
-        "cpu": [1, 2],
+        "vm_type": ["t4g.small", "t3.small", "t3a.small"],
         "memory": "2GiB",
         "n_workers": 1,
         "threads_per_worker": n_github_tokens,
@@ -199,8 +198,7 @@ def _prelinked_dataset_ingestion_flow(
     }
     gpu_cluster_config = {
         "keepalive": "15m",
-        "cpu": 2,
-        "memory": ["2GiB", "4GiB"],
+        "vm_type": ["t4g.medium", "t3.medium", "t3a.medium"],
         "n_workers": [3, 4],
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,

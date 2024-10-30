@@ -2,17 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 import traceback
 
 from sci_soft_models import dev_author_em
 
 from .. import types
 from ..db import models as db_models
-
-###############################################################################
-
-log = logging.getLogger(__name__)
 
 ###############################################################################
 
