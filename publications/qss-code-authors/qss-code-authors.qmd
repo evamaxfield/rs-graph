@@ -724,6 +724,8 @@ doc_contributor_df = pd.DataFrame(doc_contributor_rows)
 doc_contributor_df_with_dummies = pd.get_dummies(
     doc_contributor_df,
     columns=["author_position", "document_type", "domain", "data_source"],
+    prefix_sep=": ",
+    drop_first=True,
 )
 
 # Create model
@@ -737,9 +739,6 @@ X = doc_contributor_df_with_dummies.drop(
         "author_two_year_mean_citedness",
     ],
 )
-
-# Remove spaces from column names
-X = X.rename(columns=lambda x: x.replace(" ", "_"))
 
 # Add constant
 X = sm.add_constant(X)
