@@ -24,6 +24,21 @@ ELSEVIER_PAPER_SEARCH_URL_TEMPLATE = (
 
 ###############################################################################
 
+# TODO: use pybliometrics and "ScienceDirectSearch" as follows
+# to search for the softwarex papers associated to a github repo
+# pybliometrics.sciencedirect.init(keys=LIST_OF_API_KEYS)
+# s = ScienceDirectSearch(
+#     query="SOFTX-D-24-00113",
+#     subscriber=False,
+# )
+# s.results
+#
+# In some cases this will give us a single item list
+# and in others it will give back multiple items.
+# As a first pass we can try with just single items
+# There may be a way to find the correct item in the multi-item case
+# by comparing repo creation date with paper publication date
+
 
 class RateLimitError(Exception):
     pass
