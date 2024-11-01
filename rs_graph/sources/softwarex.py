@@ -28,7 +28,7 @@ ELSEVIER_PAPER_SEARCH_URL_TEMPLATE = (
 # to search for the softwarex papers associated to a github repo
 # pybliometrics.sciencedirect.init(keys=LIST_OF_API_KEYS)
 # s = ScienceDirectSearch(
-#     query="SOFTX-D-24-00113",
+#     query="SOFTX-D-24-00113",  # this is the repo name
 #     subscriber=False,
 # )
 # s.results
