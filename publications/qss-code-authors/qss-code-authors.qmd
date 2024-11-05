@@ -58,13 +58,13 @@ format:
 # Introduction
 
 ```{python}
+from datetime import datetime
 from pathlib import Path
 
 import IPython.display
 import pandas as pd
 import statsmodels.api as sm
 from sci_soft_models.dev_author_em.data import load_annotated_dev_author_em_dataset
-import swifter  # noqa
 from sqlalchemy import text
 from sqlmodel import create_engine
 
@@ -580,176 +580,6 @@ annotated_dataset
 
 # Preliminary Analysis Code Contributor Authorship and Development Dynamics of Research Teams
 
-```{python}
-# We want to create a dataset of author h-index and i10-index for each author
-# We want additional columns of author position in authorship list and whether they are a coding author
-# Further, we want to record the data source, the domain, the doc type, and the access status
-# There will be multiple rows for each author (if they have multiple pubs in the stored data)
-# So really we should iter over the doc-repo pairs and get all the info we need as we go
-
-# Get JOSS and PLOS subset
-joss_plos_subset_doc_repo_links = doc_repo_links.loc[
-    doc_repo_links["dataset_source_id"].isin(
-        dataset_sources[dataset_sources["name"].isin(["joss", "plos"])].id
-    )
-]
-
-
-def _process_doc_repo_link(doc_repo_link: pd.Series) -> list[dict]:
-    # Get document
-    document = documents.loc[documents["id"] == doc_repo_link["document_id"]].iloc[0]
-
-    # Get document contributors
-    document_contributors_subset = document_contributors.loc[
-        document_contributors["document_id"] == document["id"]
-    ]
-
-    # Get repo contributors
-    repository_contributors_subset = repository_contributors.loc[
-        repository_contributors["repository_id"] == doc_repo_link["repository_id"]
-    ]
-
-    # Iter over each document contributor
-    this_doc_contributor_rows = []
-    for _, document_contributor in document_contributors_subset.iterrows():
-        # Get author
-        author = researchers.loc[
-            researchers["id"] == document_contributor["researcher_id"]
-        ].iloc[0]
-
-        # Try and see if this author contributed code in this paper
-        # We can do this by checking if the author has a developer account
-        # then if that developer account is tied to the repo linked to this document
-
-        # Start false, only switch if we find a match
-        author_was_coding_contributor = False
-        if len(repository_contributors_subset) > 0:
-            # Find any developer account linked to this author
-            author_dev_link = researcher_dev_links.loc[
-                researcher_dev_links["researcher_id"] == author["id"]
-            ]
-            if len(author_dev_link) > 0:
-                # Iter over each checking for dev on repo
-                for _, dev_link in author_dev_link.iterrows():
-                    # Get dev
-                    dev = devs.loc[devs["id"] == dev_link["developer_account_id"]].iloc[
-                        0
-                    ]
-
-                    # Check if dev is in repo contributors
-                    if (
-                        len(
-                            repository_contributors_subset.loc[
-                                repository_contributors_subset["developer_account_id"]
-                                == dev["id"]
-                            ]
-                        )
-                        > 0
-                    ):
-                        author_was_coding_contributor = True
-                        break
-
-        # Get author position
-        author_position = document_contributor["position"]
-
-        # Get author is corresponding author
-        author_is_corresponding = document_contributor["is_corresponding"]
-
-        # Get author h-index and i10-index
-        author_h_index = author["h_index"]
-        author_i10_index = author["i10_index"]
-
-        # Get document type
-        document_type = reduced_doc_types.loc[
-            reduced_doc_types["document_id"] == document["id"]
-        ].iloc[0]["reduced_doc_type"]
-
-        # Get access status
-        access_status = document["is_open_access"]
-
-        # Get domain
-        domain = merged_document_topics.loc[
-            merged_document_topics["document_id"] == document["id"]
-        ]
-        if len(domain) > 0:
-            domain = domain.iloc[0]["domain_name"]
-        else:
-            return None
-
-        # Get data source
-        data_source = dataset_sources.loc[
-            dataset_sources["id"] == doc_repo_link["dataset_source_id"]
-        ].iloc[0]["name"]
-
-        # Append row
-        this_doc_contributor_rows.append(
-            {
-                "document_id": document["id"],
-                "author_id": author["id"],
-                "author_total_works": author["works_count"],
-                "author_h_index": author_h_index,
-                "author_i10_index": author_i10_index,
-                "author_total_citations": author["cited_by_count"],
-                "author_two_year_mean_citedness": author["two_year_mean_citedness"],
-                "author_position": author_position,
-                "author_was_coding_contributor": author_was_coding_contributor,
-                "document_type": document_type,
-                "is_open_access": access_status,
-                "domain": domain,
-                "data_source": data_source,
-                "author_is_corresponding": author_is_corresponding,
-                "number_authors_on_article": len(document_contributors_subset),
-                "number_devs_on_repo": len(repository_contributors_subset),
-            }
-        )
-
-    return this_doc_contributor_rows
-
-
-# Process each doc-repo link
-doc_contributor_lists_of_rows = joss_plos_subset_doc_repo_links.swifter.apply(
-    _process_doc_repo_link, axis=1
-)
-
-# Create dataframe
-doc_contributor_rows = [
-    row
-    for sublist in doc_contributor_lists_of_rows
-    if sublist is not None
-    for row in sublist
-]
-doc_contributor_df = pd.DataFrame(doc_contributor_rows)
-
-# Create dummies for author_position, document_type, domain, and data_source
-doc_contributor_df_with_dummies = pd.get_dummies(
-    doc_contributor_df,
-    columns=["author_position", "document_type", "domain", "data_source"],
-    prefix_sep=": ",
-    drop_first=True,
-)
-
-# Create model
-X = doc_contributor_df_with_dummies.drop(
-    columns=[
-        "author_id",
-        "document_id",
-        "author_h_index",
-        "author_i10_index",
-        "author_total_citations",
-        "author_two_year_mean_citedness",
-    ],
-)
-
-# Add constant
-X = sm.add_constant(X)
-X = X.astype(int)
-
-# Fit model
-y = doc_contributor_df_with_dummies["author_h_index"]
-model = sm.GLM(y, X, family=sm.families.Poisson()).fit(maxiter=100)
-model.summary()
-```
-
 - To enrich our pre-existing dataset, we apply our trained predictive model across pairs of authors and developer accounts.
 	- again, these pairs are all combinations of author and developer account within an individual paper
 	- specifics, how many unique author-developer account pairs are we able to find
@@ -775,6 +605,349 @@ model.summary()
 	- subplots of both
 	- results in summary
 
+```{python}
+# Create rolled up table for each document
+
+# Create rollup tables
+team_members_per_doc = (
+    document_contributors.groupby("document_id")
+    .size()
+    .reset_index()
+    .rename(columns={0: "n_authors"})
+)
+
+# Create lookup table for document code contributors
+document_repository_contribs_lookup = (
+    repository_contributors[
+        [
+            "repository_id",
+            "developer_account_id",
+        ]
+    ]
+    .merge(
+        doc_repo_links[
+            [
+                "repository_id",
+                "document_id",
+            ]
+        ],
+        left_on="repository_id",
+        right_on="repository_id",
+    )
+    .groupby("document_id")
+    .size()
+    .reset_index()
+    .rename(columns={0: "n_code_contributors"})
+)
+
+team_members_per_doc = team_members_per_doc.merge(
+    document_repository_contribs_lookup,
+    on="document_id",
+    how="left",
+).fillna(0)
+
+# Create a lookup table for document code contributing authors
+doc_code_contrib_authors = (
+    repository_contributors[
+        [
+            "repository_id",
+            "developer_account_id",
+        ]
+    ]
+    .merge(
+        researcher_dev_links[
+            [
+                "researcher_id",
+                "developer_account_id",
+            ]
+        ],
+        left_on="developer_account_id",
+        right_on="developer_account_id",
+        how="right",
+    )
+    .merge(
+        doc_repo_links[
+            [
+                "repository_id",
+                "document_id",
+            ]
+        ],
+        left_on="repository_id",
+        right_on="repository_id",
+        how="left",
+    )
+)
+
+team_members_per_doc = (
+    team_members_per_doc.merge(
+        doc_code_contrib_authors,
+        on="document_id",
+        how="left",
+    )
+    .groupby("document_id")
+    .agg(
+        {
+            "n_authors": "first",
+            "n_code_contributors": "first",
+            "developer_account_id": "nunique",
+        }
+    )
+    .reset_index()
+    .rename(columns={"developer_account_id": "n_code_contributing_authors"})
+)
+
+team_members_per_doc["n_code_contributing_non_authors"] = (
+    team_members_per_doc["n_code_contributors"]
+    - team_members_per_doc["n_code_contributing_authors"]
+)
+
+# Merge the document metadata
+team_members_per_doc = (
+    team_members_per_doc.merge(
+        documents[
+            [
+                "id",
+                "publication_date",
+                "cited_by_count",
+                "cited_by_percentile_year_min",
+                "fwci",
+                "is_open_access",
+            ]
+        ],
+        left_on="document_id",
+        right_on="id",
+    )
+    .drop(
+        columns=["id"],  # drop document id
+    )
+    .merge(
+        reduced_doc_types[
+            [
+                "document_id",
+                "reduced_doc_type",
+            ]
+        ].rename(columns={"reduced_doc_type": "document_type"}),
+    )
+    .merge(
+        document_topics[
+            [
+                "document_id",
+                "topic_id",
+            ]
+        ],
+        left_on="document_id",
+        right_on="document_id",
+    )
+    .merge(
+        topics[
+            [
+                "id",
+                "domain_name",
+            ]
+        ],
+        left_on="topic_id",
+        right_on="id",
+    )
+    .drop(
+        columns=["topic_id", "id"],  # drop topic ids
+    )
+    .merge(
+        doc_repo_links[
+            [
+                "document_id",
+                "dataset_source_id",
+            ]
+        ],
+        left_on="document_id",
+        right_on="document_id",
+    )
+    .merge(
+        dataset_sources[
+            [
+                "id",
+                "name",
+            ]
+        ].rename(columns={"name": "data_source"}),
+        left_on="dataset_source_id",
+        right_on="id",
+    )
+    .drop(
+        columns=["dataset_source_id", "id"],  # drop dataset source id
+    )
+)
+
+# Compute duration in years since publication from current datetime
+team_members_per_doc["years_since_publication"] = (
+    datetime.now() - pd.to_datetime(team_members_per_doc["publication_date"])
+).dt.days / 365.25
+
+# Remove publication date
+team_members_per_doc = team_members_per_doc.drop(columns=["publication_date"])
+
+# Add total team size column (n_authors + n_code_contributing_non_authors)
+team_members_per_doc["total_team_size"] = (
+    team_members_per_doc["n_authors"]
+    + team_members_per_doc["n_code_contributing_non_authors"]
+)
+
+# Add columns for each of the counts as a percentage of the total team size
+team_members_per_doc["percent_authors"] = (
+    team_members_per_doc["n_authors"] / team_members_per_doc["total_team_size"]
+)
+team_members_per_doc["percent_code_contributors"] = (
+    team_members_per_doc["n_code_contributors"]
+    / team_members_per_doc["total_team_size"]
+)
+team_members_per_doc["percent_code_contributing_authors"] = (
+    team_members_per_doc["n_code_contributing_authors"]
+    / team_members_per_doc["total_team_size"]
+)
+team_members_per_doc["percent_code_contributing_non_authors"] = (
+    team_members_per_doc["n_code_contributing_non_authors"]
+    / team_members_per_doc["total_team_size"]
+)
+
+# Remove any publications published in the last year
+team_members_per_doc = team_members_per_doc[
+    team_members_per_doc["years_since_publication"] >= 1
+]
+
+# Create dummies for document_type, domain, and data_source
+team_members_per_doc_with_dummies = pd.get_dummies(
+    team_members_per_doc,
+    columns=["document_type", "domain_name", "data_source"],
+    drop_first=True,
+)
+```
+
+```{python}
+#| label: doc-model-cited-by-count
+#| tbl-cap: "Model summary from Poisson Generalized Linear Model for Total Article Citations."
+
+# Remove outliers for cited_by_count
+data_for_cited_by_count = team_members_per_doc_with_dummies.copy()
+
+data_for_cited_by_count = data_for_cited_by_count[
+    data_for_cited_by_count["cited_by_count"]
+    < data_for_cited_by_count["cited_by_count"].quantile(0.95)
+]
+data_for_cited_by_count = data_for_cited_by_count[
+    data_for_cited_by_count["cited_by_count"]
+    > data_for_cited_by_count["cited_by_count"].quantile(0.05)
+]
+
+# Create model
+X = data_for_cited_by_count.drop(
+    columns=[
+        "document_id",
+        "cited_by_count",
+        "fwci",
+        "cited_by_percentile_year_min",
+        "n_authors",
+        "n_code_contributors",
+        "n_code_contributing_authors",
+        "n_code_contributing_non_authors",
+        # "percent_authors",
+        # "percent_code_contributors",
+        # "percent_code_contributing_authors",
+        # "percent_code_contributing_non_authors",
+    ],
+)
+
+# Add constant
+X = sm.add_constant(X)
+X = X.astype(float)
+
+# Fit model
+y = data_for_cited_by_count["cited_by_count"]
+model = sm.GLM(y, X, family=sm.families.Poisson()).fit(maxiter=100)
+model.summary()
+```
+
+```{python}
+#| label: doc-model-fwci
+#| tbl-cap: "Model summary from Poisson Generalized Linear Model for Field-Weighted Citation Impact."
+
+# Remove outliers for cited_by_count
+data_for_fwci = team_members_per_doc_with_dummies.copy()
+
+data_for_fwci = data_for_fwci[
+    data_for_fwci["fwci"] < data_for_fwci["fwci"].quantile(0.95)
+]
+data_for_fwci = data_for_fwci[
+    data_for_fwci["fwci"] > data_for_fwci["fwci"].quantile(0.05)
+]
+
+# Create model
+X = data_for_fwci.drop(
+    columns=[
+        "document_id",
+        "cited_by_count",
+        "fwci",
+        "cited_by_percentile_year_min",
+        "n_authors",
+        "n_code_contributors",
+        "n_code_contributing_authors",
+        "n_code_contributing_non_authors",
+        # "percent_authors",
+        # "percent_code_contributors",
+        # "percent_code_contributing_authors",
+        # "percent_code_contributing_non_authors",
+    ],
+)
+
+# Add constant
+X = sm.add_constant(X)
+X = X.astype(float)
+
+# Fit model
+y = data_for_fwci["fwci"]
+model = sm.GLM(y, X, family=sm.families.Poisson()).fit(maxiter=100)
+model.summary()
+```
+
+```{python}
+#| label: doc-model-cited-by-percentile-year-min
+#| tbl-cap: "Model summary from Poisson Generalized Linear Model for Cited by Percentile Year Minimum."
+
+# Remove outliers for cited_by_count
+data_for_cbpym = team_members_per_doc_with_dummies.copy()
+
+# data_for_cbpym = data_for_cbpym[
+#     data_for_cbpym["cited_by_percentile_year_min"] < data_for_cbpym["cited_by_percentile_year_min"].quantile(0.97)
+# ]
+# data_for_cbpym = data_for_cbpym[
+#     data_for_cbpym["cited_by_percentile_year_min"] > data_for_cbpym["cited_by_percentile_year_min"].quantile(0.03)
+# ]
+
+# Create model
+X = data_for_cbpym.drop(
+    columns=[
+        "document_id",
+        "cited_by_count",
+        "fwci",
+        "cited_by_percentile_year_min",
+        "n_authors",
+        "n_code_contributors",
+        "n_code_contributing_authors",
+        "n_code_contributing_non_authors",
+        # "percent_authors",
+        # "percent_code_contributors",
+        # "percent_code_contributing_authors",
+        # "percent_code_contributing_non_authors",
+    ],
+)
+
+# Add constant
+X = sm.add_constant(X)
+X = X.astype(float)
+
+# Fit model
+y = data_for_cbpym["cited_by_percentile_year_min"]
+model = sm.GLM(y, X, family=sm.families.Poisson()).fit(maxiter=100)
+model.summary()
+```
+
 ## Characteristics of Scientific Code Contributors
 
 - Next we investigate the differences between coding and non-coding article authors.
@@ -788,5 +961,350 @@ model.summary()
 	- subplot + stats tests for differences by each article type
 	- subplot + stats tests for differences by each domain
 	- results in summary
+
+
+```{python}
+# Create rolled up counts for each researcher
+
+# Get all documents tied to this researcher
+researcher_docs = (
+    document_contributors[
+        [
+            "researcher_id",
+            "document_id",
+            "position",
+            "is_corresponding",
+        ]
+    ]
+    .rename(
+        columns={
+            "position": "author_position",
+            "is_corresponding": "is_corresponding_author",
+        },
+    )
+    .replace({0: "is not", 1: "is"})
+    .merge(
+        documents[
+            [
+                "id",
+                "is_open_access",
+            ]
+        ]
+        .rename(
+            columns={"is_open_access": "is_open_access_document"},
+        )
+        .replace({0: "is not", 1: "is"}),
+        left_on="document_id",
+        right_on="id",
+    )
+    .drop(
+        columns=["id"],  # remove "id" from document table
+    )
+    .merge(
+        reduced_doc_types.rename(
+            columns={"reduced_doc_type": "document_type"},
+        ),
+        left_on="document_id",
+        right_on="document_id",
+    )
+    .merge(
+        document_topics[
+            [
+                "document_id",
+                "topic_id",
+            ]
+        ],
+        left_on="document_id",
+        right_on="document_id",
+    )
+    .merge(
+        topics[
+            [
+                "id",
+                "domain_name",
+            ]
+        ],
+        left_on="topic_id",
+        right_on="id",
+    )
+    .drop(
+        columns=["id", "topic_id"],  # remove "id" from topics table
+    )
+    .merge(
+        doc_repo_links[
+            [
+                "document_id",
+                "dataset_source_id",
+            ]
+        ],
+        left_on="document_id",
+        right_on="document_id",
+    )
+    .merge(
+        dataset_sources[
+            [
+                "id",
+                "name",
+            ]
+        ].rename(columns={"name": "dataset"}),
+        left_on="dataset_source_id",
+        right_on="id",
+    )
+    .drop(
+        columns=["id", "dataset_source_id"],  # remove "id" from dataset_sources table
+    )
+)
+
+researcher_position_counts = (
+    researcher_docs.groupby("researcher_id")["author_position"]
+    .value_counts()
+    .unstack(fill_value=0)
+)
+researcher_position_counts["most_frequent_author_position"] = (
+    researcher_position_counts.idxmax(axis=1)
+)
+researcher_position_counts = researcher_position_counts.rename(
+    columns={
+        position: f"n_times_{position}_author"
+        for position in researcher_docs["author_position"].unique()
+    }
+)
+
+researcher_is_corresponding_counts = (
+    researcher_docs.groupby("researcher_id")["is_corresponding_author"]
+    .value_counts()
+    .unstack(fill_value=0)
+)
+researcher_is_corresponding_counts["most_frequent_corresponding_author_status"] = (
+    researcher_is_corresponding_counts.idxmax(axis=1)
+)
+researcher_is_corresponding_counts = researcher_is_corresponding_counts.rename(
+    columns={
+        is_corresponding: f"n_times_{is_corresponding.replace(' ', '_')}_corresponding_author"
+        for is_corresponding in researcher_docs["is_corresponding_author"].unique()
+    }
+)
+
+document_is_open_access_counts = (
+    researcher_docs.groupby("researcher_id")["is_open_access_document"]
+    .value_counts()
+    .unstack(fill_value=0)
+)
+document_is_open_access_counts["most_frequent_document_open_access_status"] = (
+    document_is_open_access_counts.idxmax(axis=1)
+)
+document_is_open_access_counts = document_is_open_access_counts.rename(
+    columns={
+        is_open_access: f"n_times_document_{is_open_access.replace(' ', '_')}_open_access"
+        for is_open_access in researcher_docs["is_open_access_document"].unique()
+    }
+)
+
+document_type_counts = (
+    researcher_docs.groupby("researcher_id")["document_type"]
+    .value_counts()
+    .unstack(fill_value=0)
+)
+document_type_counts["most_frequent_document_type"] = document_type_counts.idxmax(
+    axis=1
+)
+document_type_counts = document_type_counts.rename(
+    columns={
+        doc_type: f"n_times_document_{doc_type.replace(' ', '_')}"
+        for doc_type in researcher_docs["document_type"].unique()
+    }
+)
+
+domain_counts = (
+    researcher_docs.groupby("researcher_id")["domain_name"]
+    .value_counts()
+    .unstack(fill_value=0)
+)
+domain_counts["most_frequent_domain"] = domain_counts.idxmax(axis=1)
+domain_counts = domain_counts.rename(
+    columns={
+        domain: f"n_times_domain_{domain.replace(' ', '_')}"
+        for domain in researcher_docs["domain_name"].unique()
+    }
+)
+
+dataset_counts = (
+    researcher_docs.groupby("researcher_id")["dataset"]
+    .value_counts()
+    .unstack(fill_value=0)
+)
+dataset_counts["most_frequent_dataset"] = dataset_counts.idxmax(axis=1)
+dataset_counts = dataset_counts.rename(
+    columns={
+        dataset: f"n_times_dataset_{dataset.replace(' ', '_')}"
+        for dataset in researcher_docs["dataset"].unique()
+    }
+)
+
+# Merge all the counts
+researcher_counts = (
+    researchers[
+        [
+            "id",
+            "works_count",
+            "cited_by_count",
+            "h_index",
+            "i10_index",
+            "two_year_mean_citedness",
+        ]
+    ]
+    .rename(columns={"id": "researcher_id"})
+    .copy()
+)
+researcher_counts = (
+    researcher_counts.merge(
+        researcher_position_counts,
+        left_on="researcher_id",
+        right_on="researcher_id",
+    )
+    .merge(
+        researcher_is_corresponding_counts,
+        left_on="researcher_id",
+        right_on="researcher_id",
+    )
+    .merge(
+        document_is_open_access_counts,
+        left_on="researcher_id",
+        right_on="researcher_id",
+    )
+    .merge(
+        document_type_counts,
+        left_on="researcher_id",
+        right_on="researcher_id",
+    )
+    .merge(
+        domain_counts,
+        left_on="researcher_id",
+        right_on="researcher_id",
+    )
+    .merge(
+        dataset_counts,
+        left_on="researcher_id",
+        right_on="researcher_id",
+    )
+)
+
+# Get the count of the number of documents we have for each researcher
+researcher_docs_count = researcher_docs["researcher_id"].value_counts().to_dict()
+researcher_counts["n_documents"] = researcher_counts["researcher_id"].map(
+    researcher_docs_count
+)
+
+# Get the number of time a researcher has coded on a document
+researcher_coded_counts = researcher_dev_links[
+    [
+        "researcher_id",
+        "developer_account_id",
+    ]
+].merge(
+    document_contributors[
+        [
+            "document_id",
+            "researcher_id",
+        ]
+    ],
+    left_on="researcher_id",
+    right_on="researcher_id",
+)
+
+# Get the number of times a researcher has coded
+researcher_coded_counts = (
+    researcher_coded_counts.groupby("researcher_id")["document_id"]
+    .count()
+    .to_frame()
+    .reset_index()
+    .rename(columns={"document_id": "n_times_coded"})
+)
+
+# Merge the counts
+researcher_counts = researcher_counts.merge(
+    researcher_coded_counts,
+    left_on="researcher_id",
+    right_on="researcher_id",
+    how="left",
+)
+researcher_counts["n_times_coded"] = researcher_counts["n_times_coded"].fillna(0)
+
+# Finally, add "most_frequent_coding_status" which is if "n_times_coded" is greater than or equal to 50% n_documents
+researcher_counts["most_frequent_coding_status"] = researcher_counts[
+    "n_times_coded"
+] >= (0.5 * researcher_counts["n_documents"])
+
+# Convert specific columns to 1 and 0
+for col in [
+    "most_frequent_corresponding_author_status",
+    "most_frequent_document_open_access_status",
+]:
+    researcher_counts[col] = researcher_counts[col].apply(
+        lambda x: 1 if x == "is" else 0
+    )
+
+# Get dummies
+researcher_counts_with_dummies = pd.get_dummies(
+    researcher_counts,
+    columns=[
+        "most_frequent_author_position",
+        "most_frequent_document_type",
+        "most_frequent_domain",
+        "most_frequent_dataset",
+    ],
+    drop_first=True,
+)
+
+# Construct X and y, add constant, convert to float
+X = researcher_counts_with_dummies.drop(
+    columns=[
+        "researcher_id",
+        "cited_by_count",
+        "h_index",
+        "i10_index",
+        "two_year_mean_citedness",
+    ],
+)
+X = sm.add_constant(X)
+X = X.astype(float)
+```
+
+```{python}
+#| label: researcher-model-cited-by-count
+#| tbl-cap: "Model summary from Poisson Generalized Linear Model for Total Researcher Citations."
+
+y = researcher_counts_with_dummies["cited_by_count"]
+model = sm.GLM(y, X, family=sm.families.Poisson()).fit()
+model.summary()
+```
+
+```{python}
+#| label: researcher-model-h-index
+#| tbl-cap: "Model summary from Poisson Generalized Linear Model for Researcher h-index."
+
+y = researcher_counts_with_dummies["h_index"]
+model = sm.GLM(y, X, family=sm.families.Poisson()).fit()
+model.summary()
+```
+
+```{python}
+#| label: researcher-model-i10-index
+#| tbl-cap: "Model summary from Poisson Generalized Linear Model for Researcher i10-index."
+
+y = researcher_counts_with_dummies["i10_index"]
+model = sm.GLM(y, X, family=sm.families.Poisson()).fit()
+model.summary()
+```
+
+```{python}
+#| label: researcher-model-two-year-mean-citedness
+#| tbl-cap: "Model summary from Poisson Generalized Linear Model for Researcher Two-Year Mean Citedness."
+
+y = researcher_counts_with_dummies["two_year_mean_citedness"]
+model = sm.GLM(y, X, family=sm.families.Poisson()).fit()
+model.summary()
+```
+
 
 # Discussion
