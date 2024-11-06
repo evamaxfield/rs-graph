@@ -442,28 +442,28 @@ stats_piece_inital_row_template = """
 <tr>
   <td rowspan="{n_rows}">{row_name}</td>
   <td>{value_name}</td>
-  <td>{n_article_repo_pairs}</td>
-  <td>{n_authors}</td>
-  <td>{n_devs}</td>
+  <td>{article_repo_pairs}</td>
+  <td>{authors}</td>
+  <td>{devs}</td>
 </tr>
 """.strip()
 
 stats_piece_subsequent_row_template = """
 <tr>
   <td>{value_name}</td>
-  <td>{n_article_repo_pairs}</td>
-  <td>{n_authors}</td>
-  <td>{n_devs}</td>
+  <td>{article_repo_pairs}</td>
+  <td>{authors}</td>
+  <td>{devs}</td>
 </tr>
 """.strip()
 
 # Iter over stats portions (and total)
 stats_portions_html = []
 for stats_portion, stats_name, value_key in [
-    (data_source_stats, "<b>By Data Source</b>", "data_source"),
     (domain_stats, "<b>By Domain</b>", "domain"),
     (doc_type_stats, "<b>By Document Type</b>", "doc_type"),
     (access_stats, "<b>By Access Status</b>", "access_status"),
+    (data_source_stats, "<b>By Data Source</b>", "data_source"),
     (
         [
             {
@@ -490,18 +490,18 @@ for stats_portion, stats_name, value_key in [
                     n_rows=len(stats_portion),
                     row_name=stats_name,
                     value_name=stats_piece[value_key],
-                    n_article_repo_pairs=stats_piece["n_article_repo_pairs"],
-                    n_authors=stats_piece["n_authors"],
-                    n_devs=stats_piece["n_devs"],
+                    article_repo_pairs=stats_piece["n_article_repo_pairs"],
+                    authors=stats_piece["n_authors"],
+                    devs=stats_piece["n_devs"],
                 )
             )
         else:
             stats_portion_html.append(
                 stats_piece_subsequent_row_template.format(
                     value_name=stats_piece[value_key],
-                    n_article_repo_pairs=stats_piece["n_article_repo_pairs"],
-                    n_authors=stats_piece["n_authors"],
-                    n_devs=stats_piece["n_devs"],
+                    article_repo_pairs=stats_piece["n_article_repo_pairs"],
+                    authors=stats_piece["n_authors"],
+                    devs=stats_piece["n_devs"],
                 )
             )
 
@@ -513,9 +513,9 @@ stats_table_html = f"""
   <tr>
     <th><b>Category</b></th>
     <th><b>Subset</b></th>
-    <th><b># Article-Repository Pairs</b></th>
-    <th><b># Authors</b></th>
-    <th><b># Developers</b></th>
+    <th><b>Article-Repository Pairs</b></th>
+    <th><b>Authors</b></th>
+    <th><b>Developers</b></th>
   </tr>
   {" ".join(stats_portions_html)}
 </table>
@@ -751,29 +751,6 @@ team_members_per_doc = (
     .drop(
         columns=["topic_id", "id"],  # drop topic ids
     )
-    .merge(
-        doc_repo_links[
-            [
-                "document_id",
-                "dataset_source_id",
-            ]
-        ],
-        left_on="document_id",
-        right_on="document_id",
-    )
-    .merge(
-        dataset_sources[
-            [
-                "id",
-                "name",
-            ]
-        ].rename(columns={"name": "data_source"}),
-        left_on="dataset_source_id",
-        right_on="id",
-    )
-    .drop(
-        columns=["dataset_source_id", "id"],  # drop dataset source id
-    )
 )
 
 # Compute duration in years since publication from current datetime
@@ -791,20 +768,44 @@ team_members_per_doc["total_team_size"] = (
 )
 
 # Add columns for each of the counts as a percentage of the total team size
-team_members_per_doc["percent_authors"] = (
-    team_members_per_doc["n_authors"] / team_members_per_doc["total_team_size"]
-)
-team_members_per_doc["percent_code_contributors"] = (
-    team_members_per_doc["n_code_contributors"]
-    / team_members_per_doc["total_team_size"]
-)
+# team_members_per_doc["percent_authors"] = (
+#     team_members_per_doc["n_authors"] / team_members_per_doc["total_team_size"]
+# )
+# team_members_per_doc["percent_code_contributors"] = (
+#     team_members_per_doc["n_code_contributors"]
+#     / team_members_per_doc["total_team_size"]
+# )
+# team_members_per_doc["percent_code_contributing_authors"] = (
+#     team_members_per_doc["n_code_contributing_authors"]
+#     / team_members_per_doc["total_team_size"]
+# )
+# team_members_per_doc["percent_code_contributing_non_authors"] = (
+#     team_members_per_doc["n_code_contributing_non_authors"]
+#     / team_members_per_doc["total_team_size"]
+# )
+
+# # We have essentially created a dummy-trap here
+# # we need to drop two of the columns
+# team_members_per_doc = team_members_per_doc.drop(
+#     columns=[
+#         "n_authors",
+#         "percent_authors",
+#         "n_code_contributing_non_authors",
+#         "percent_code_contributing_non_authors",
+#     ]
+# )
+
 team_members_per_doc["percent_code_contributing_authors"] = (
     team_members_per_doc["n_code_contributing_authors"]
-    / team_members_per_doc["total_team_size"]
+    / team_members_per_doc["n_authors"]
 )
-team_members_per_doc["percent_code_contributing_non_authors"] = (
-    team_members_per_doc["n_code_contributing_non_authors"]
-    / team_members_per_doc["total_team_size"]
+team_members_per_doc = team_members_per_doc.drop(
+    columns=[
+        "n_authors",
+        "n_code_contributors",
+        "n_code_contributing_authors",
+        "n_code_contributing_non_authors",
+    ]
 )
 
 # Remove any publications published in the last year
@@ -812,12 +813,18 @@ team_members_per_doc = team_members_per_doc[
     team_members_per_doc["years_since_publication"] >= 1
 ]
 
-# Create dummies for document_type, domain, and data_source
+# Create dummies for document_type, domain
 team_members_per_doc_with_dummies = pd.get_dummies(
     team_members_per_doc,
-    columns=["document_type", "domain_name", "data_source"],
+    columns=["domain_name"],
     drop_first=True,
 )
+team_members_per_doc_with_dummies = team_members_per_doc_with_dummies.drop(
+    columns=["document_type"]
+)
+# team_members_per_doc_with_dummies = team_members_per_doc.drop(
+#     columns=["document_type", "domain_name", "years_since_publication"]
+# )
 ```
 
 ```{python}
@@ -829,11 +836,11 @@ data_for_cited_by_count = team_members_per_doc_with_dummies.copy()
 
 data_for_cited_by_count = data_for_cited_by_count[
     data_for_cited_by_count["cited_by_count"]
-    < data_for_cited_by_count["cited_by_count"].quantile(0.95)
+    < data_for_cited_by_count["cited_by_count"].quantile(0.97)
 ]
 data_for_cited_by_count = data_for_cited_by_count[
     data_for_cited_by_count["cited_by_count"]
-    > data_for_cited_by_count["cited_by_count"].quantile(0.05)
+    > data_for_cited_by_count["cited_by_count"].quantile(0.03)
 ]
 
 # Create model
@@ -843,16 +850,24 @@ X = data_for_cited_by_count.drop(
         "cited_by_count",
         "fwci",
         "cited_by_percentile_year_min",
-        "n_authors",
-        "n_code_contributors",
-        "n_code_contributing_authors",
-        "n_code_contributing_non_authors",
+        # "n_authors",
+        # "n_code_contributors",
+        # "n_code_contributing_authors",
+        # "n_code_contributing_non_authors",
         # "percent_authors",
         # "percent_code_contributors",
         # "percent_code_contributing_authors",
         # "percent_code_contributing_non_authors",
     ],
 )
+
+# Create interaction effects for
+# percent_code_contributors and percent_code_contributing_authors
+# with document_type and domain_name
+for col in X.columns:
+    if any([variable in col for variable in ["domain_name", "document_type"]]):
+        # X[f"percent_code_contributors * {col}"] = X["percent_code_contributors"] * X[col]
+        X[f"percent_code_contributing_authors * {col}"] = X["percent_code_contributing_authors"] * X[col]
 
 # Add constant
 X = sm.add_constant(X)
@@ -869,83 +884,83 @@ model.summary()
 #| tbl-cap: "Model summary from Poisson Generalized Linear Model for Field-Weighted Citation Impact."
 
 # Remove outliers for cited_by_count
-data_for_fwci = team_members_per_doc_with_dummies.copy()
+# data_for_fwci = team_members_per_doc_with_dummies.copy()
 
-data_for_fwci = data_for_fwci[
-    data_for_fwci["fwci"] < data_for_fwci["fwci"].quantile(0.95)
-]
-data_for_fwci = data_for_fwci[
-    data_for_fwci["fwci"] > data_for_fwci["fwci"].quantile(0.05)
-]
+# data_for_fwci = data_for_fwci[
+#     data_for_fwci["fwci"] < data_for_fwci["fwci"].quantile(0.95)
+# ]
+# data_for_fwci = data_for_fwci[
+#     data_for_fwci["fwci"] > data_for_fwci["fwci"].quantile(0.05)
+# ]
 
-# Create model
-X = data_for_fwci.drop(
-    columns=[
-        "document_id",
-        "cited_by_count",
-        "fwci",
-        "cited_by_percentile_year_min",
-        "n_authors",
-        "n_code_contributors",
-        "n_code_contributing_authors",
-        "n_code_contributing_non_authors",
-        # "percent_authors",
-        # "percent_code_contributors",
-        # "percent_code_contributing_authors",
-        # "percent_code_contributing_non_authors",
-    ],
-)
+# # Create model
+# X = data_for_fwci.drop(
+#     columns=[
+#         "document_id",
+#         "cited_by_count",
+#         "fwci",
+#         "cited_by_percentile_year_min",
+#         # "n_authors",
+#         "n_code_contributors",
+#         "n_code_contributing_authors",
+#         # "n_code_contributing_non_authors",
+#         # "percent_authors",
+#         # "percent_code_contributors",
+#         # "percent_code_contributing_authors",
+#         # "percent_code_contributing_non_authors",
+#     ],
+# )
 
-# Add constant
-X = sm.add_constant(X)
-X = X.astype(float)
+# # Add constant
+# X = sm.add_constant(X)
+# X = X.astype(float)
 
-# Fit model
-y = data_for_fwci["fwci"]
-model = sm.GLM(y, X, family=sm.families.Poisson()).fit(maxiter=100)
-model.summary()
+# # Fit model
+# y = data_for_fwci["fwci"]
+# model = sm.GLM(y, X, family=sm.families.Poisson()).fit(maxiter=100)
+# model.summary()
 ```
 
 ```{python}
 #| label: doc-model-cited-by-percentile-year-min
 #| tbl-cap: "Model summary from Poisson Generalized Linear Model for Cited by Percentile Year Minimum."
 
-# Remove outliers for cited_by_count
-data_for_cbpym = team_members_per_doc_with_dummies.copy()
+# # Remove outliers for cited_by_count
+# data_for_cbpym = team_members_per_doc_with_dummies.copy()
 
-# data_for_cbpym = data_for_cbpym[
-#     data_for_cbpym["cited_by_percentile_year_min"] < data_for_cbpym["cited_by_percentile_year_min"].quantile(0.97)
-# ]
-# data_for_cbpym = data_for_cbpym[
-#     data_for_cbpym["cited_by_percentile_year_min"] > data_for_cbpym["cited_by_percentile_year_min"].quantile(0.03)
-# ]
+# # data_for_cbpym = data_for_cbpym[
+# #     data_for_cbpym["cited_by_percentile_year_min"] < data_for_cbpym["cited_by_percentile_year_min"].quantile(0.97)
+# # ]
+# # data_for_cbpym = data_for_cbpym[
+# #     data_for_cbpym["cited_by_percentile_year_min"] > data_for_cbpym["cited_by_percentile_year_min"].quantile(0.03)
+# # ]
 
-# Create model
-X = data_for_cbpym.drop(
-    columns=[
-        "document_id",
-        "cited_by_count",
-        "fwci",
-        "cited_by_percentile_year_min",
-        "n_authors",
-        "n_code_contributors",
-        "n_code_contributing_authors",
-        "n_code_contributing_non_authors",
-        # "percent_authors",
-        # "percent_code_contributors",
-        # "percent_code_contributing_authors",
-        # "percent_code_contributing_non_authors",
-    ],
-)
+# # Create model
+# X = data_for_cbpym.drop(
+#     columns=[
+#         "document_id",
+#         "cited_by_count",
+#         "fwci",
+#         "cited_by_percentile_year_min",
+#         "n_authors",
+#         "n_code_contributors",
+#         "n_code_contributing_authors",
+#         "n_code_contributing_non_authors",
+#         # "percent_authors",
+#         # "percent_code_contributors",
+#         # "percent_code_contributing_authors",
+#         # "percent_code_contributing_non_authors",
+#     ],
+# )
 
-# Add constant
-X = sm.add_constant(X)
-X = X.astype(float)
+# # Add constant
+# X = sm.add_constant(X)
+# X = X.astype(float)
 
-# Fit model
-y = data_for_cbpym["cited_by_percentile_year_min"]
-model = sm.GLM(y, X, family=sm.families.Poisson()).fit(maxiter=100)
-model.summary()
+# # Fit model
+# y = data_for_cbpym["cited_by_percentile_year_min"]
+# model = sm.GLM(y, X, family=sm.families.Poisson()).fit(maxiter=100)
+# model.summary()
 ```
 
 ## Characteristics of Scientific Code Contributors
@@ -1274,14 +1289,26 @@ X = X.astype(float)
 #| label: researcher-model-cited-by-count
 #| tbl-cap: "Model summary from Poisson Generalized Linear Model for Total Researcher Citations."
 
-y = researcher_counts_with_dummies["cited_by_count"]
-model = sm.GLM(y, X, family=sm.families.Poisson()).fit()
-model.summary()
+# y = researcher_counts_with_dummies["cited_by_count"]
+# model = sm.GLM(y, X, family=sm.families.Poisson()).fit()
+# model.summary()
 ```
 
 ```{python}
 #| label: researcher-model-h-index
 #| tbl-cap: "Model summary from Poisson Generalized Linear Model for Researcher h-index."
+
+X = X.drop(columns=[col for col in X.columns if "n_times" in col])
+X = X.drop(columns=[col for col in X.columns if "dataset_" in col])
+X = X.drop(columns=[col for col in X.columns if "corresponding_" in col])
+X = X.drop(columns=[col for col in X.columns if "open_access_status" in col])
+X = X.drop(columns=[col for col in X.columns if "document_type" in col])
+X = X.drop(columns=[col for col in X.columns if "n_documents" in col])
+
+# Create interactions between "most_frequent_coding_status" and all other "most_frequent" columns
+for col in X.columns:
+    if "most_frequent" in col and col != "most_frequent_coding_status":
+        X[f"most_frequent_coding_status * {col}"] = X["most_frequent_coding_status"] * X[col]
 
 y = researcher_counts_with_dummies["h_index"]
 model = sm.GLM(y, X, family=sm.families.Poisson()).fit()
@@ -1292,18 +1319,18 @@ model.summary()
 #| label: researcher-model-i10-index
 #| tbl-cap: "Model summary from Poisson Generalized Linear Model for Researcher i10-index."
 
-y = researcher_counts_with_dummies["i10_index"]
-model = sm.GLM(y, X, family=sm.families.Poisson()).fit()
-model.summary()
+# y = researcher_counts_with_dummies["i10_index"]
+# model = sm.GLM(y, X, family=sm.families.Poisson()).fit()
+# model.summary()
 ```
 
 ```{python}
 #| label: researcher-model-two-year-mean-citedness
 #| tbl-cap: "Model summary from Poisson Generalized Linear Model for Researcher Two-Year Mean Citedness."
 
-y = researcher_counts_with_dummies["two_year_mean_citedness"]
-model = sm.GLM(y, X, family=sm.families.Poisson()).fit()
-model.summary()
+# y = researcher_counts_with_dummies["two_year_mean_citedness"]
+# model = sm.GLM(y, X, family=sm.families.Poisson()).fit()
+# model.summary()
 ```
 
 
