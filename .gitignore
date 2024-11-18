@@ -137,6 +137,7 @@ rs-graph-upstream-deps.parquet
 .github-tokens.json
 .github-tokens.yml
 .open-alex-emails.yml
+.elsevier-api-keys.yml
 autotrain-text-classification-temp
 model-eval-results/
 prior-model-eval-results/

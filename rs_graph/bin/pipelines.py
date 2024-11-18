@@ -23,7 +23,7 @@ from rs_graph.bin.data import download as download_rs_graph_data_files
 from rs_graph.bin.data import upload as upload_rs_graph_data_files
 from rs_graph.db import utils as db_utils
 from rs_graph.enrichment import article, entity_matching, github
-from rs_graph.sources import joss, plos, proto, pwc
+from rs_graph.sources import joss, plos, proto, pwc, softwarex
 from rs_graph.utils import code_host_parsing
 
 ###############################################################################
@@ -33,6 +33,7 @@ app = typer.Typer()
 DEFAULT_RESULTS_DIR = Path("processing-results")
 DEFAULT_GITHUB_TOKENS_FILE = ".github-tokens.yml"
 DEFAULT_OPEN_ALEX_EMAILS_FILE = ".open-alex-emails.yml"
+DEFAULT_ELSEVIER_API_KEYS_FILE = ".elsevier-api-keys.yml"
 
 ###############################################################################
 
@@ -40,7 +41,7 @@ DEFAULT_OPEN_ALEX_EMAILS_FILE = ".open-alex-emails.yml"
 SOURCE_MAP: dict[str, proto.DatasetRetrievalFunction] = {
     "joss": joss.get_dataset,
     "plos": plos.get_dataset,
-    # "softwarex": softwarex.get_dataset,
+    "softwarex": softwarex.get_dataset,
     "pwc": pwc.get_dataset,
 }
 
@@ -109,6 +110,25 @@ def _load_open_alex_emails(
     return emails_list
 
 
+def _load_elsevier_api_keys(
+    elsevier_api_keys_file: str,
+) -> list[str]:
+    # Load tokens
+    try:
+        with open(elsevier_api_keys_file) as f:
+            tokens_file = yaml.safe_load(f)
+
+    except FileNotFoundError as e:
+        raise FileNotFoundError(
+            f"GitHub tokens file not found at path: {elsevier_api_keys_file}"
+        ) from e
+
+    # Get tokens
+    tokens_list = tokens_file["keys"].values()
+
+    return tokens_list
+
+
 def _upload_db(
     prod: bool,
 ) -> None:
@@ -146,6 +166,7 @@ def _prelinked_dataset_ingestion_flow(
     github_tokens: list[str],
     open_alex_emails: list[str],
     semantic_scholar_api_key: str,
+    elsevier_api_keys: list[str],
     use_coiled: bool,
     batch_size: int,
     errored_store_path: Path,
@@ -171,12 +192,18 @@ def _prelinked_dataset_ingestion_flow(
     print(f"Batch Size: {batch_size}")
     print(f"GitHub Token Count: {n_github_tokens}")
     print(f"Open Alex Email Count: {n_open_alex_emails}")
+    print(f"Elsevier API Key Count: {len(elsevier_api_keys)}")
     print("-" * 80)
 
     # Get dataset
     source_func = SOURCE_MAP[source]
     print("Getting dataset...")
-    source_results = source_func()
+    source_results = source_func(
+        github_tokens=github_tokens,
+        elsevier_api_keys=elsevier_api_keys,
+        semantic_scholar_api_key=semantic_scholar_api_key,
+        open_alex_emails=open_alex_emails,
+    )
 
     # Construct different cluster parameters
     article_processing_cluster_config = {
@@ -308,6 +335,7 @@ def prelinked_dataset_ingestion(
     use_coiled: bool = False,
     github_tokens_file: str = DEFAULT_GITHUB_TOKENS_FILE,
     open_alex_emails_file: str = DEFAULT_OPEN_ALEX_EMAILS_FILE,
+    elsevier_api_keys_file: str = DEFAULT_ELSEVIER_API_KEYS_FILE,
     batch_size: int = 50,
 ) -> None:
     """
@@ -356,6 +384,9 @@ def prelinked_dataset_ingestion(
     # Load Open Alex emails
     open_alex_emails = _load_open_alex_emails(open_alex_emails_file)
 
+    # Load Elsevier API keys
+    elsevier_api_keys = _load_elsevier_api_keys(elsevier_api_keys_file)
+
     # Start the flow
     _prelinked_dataset_ingestion_flow(
         source=source,
@@ -363,6 +394,7 @@ def prelinked_dataset_ingestion(
         github_tokens=github_tokens,
         open_alex_emails=open_alex_emails,
         semantic_scholar_api_key=semantic_scholar_api_key,
+        elsevier_api_keys=elsevier_api_keys,
         use_coiled=use_coiled,
         batch_size=batch_size,
         errored_store_path=errored_store_path,
