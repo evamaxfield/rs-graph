@@ -62,6 +62,7 @@ from datetime import datetime
 from pathlib import Path
 
 import IPython.display
+import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 from sci_soft_models.dev_author_em.data import load_annotated_dev_author_em_dataset
@@ -1075,6 +1076,86 @@ two_year_citedness_models = compute_models(
     glm_family=sm.families.Gamma(link=sm.families.links.Log()),
 )
 ```
+
+### Modeling Citations
+
+- We model an authors total citations by their coding status and controlled by a number of different factors.
+- Each control variable is modeled separately and the results are presented in the tables below:
+  - Controlling for an authors most frequent author position: @{tbl-researcher-coding-status-author-position}
+  - Controlling for an authors most frequent domain: @{tbl-researcher-coding-status-domain}
+  - Controlling for an authors most frequent article type: @{tbl-researcher-coding-status-article-type}
+
+#### Author Position
+
+- first authors
+    - any coding has a positive association with citations (`{python} np.exp(0.234)`)
+    - majority coding has a negative association with citations (`-0.121`)
+    - always coding has a negative association with citations (`-0.269`)
+
+- middle authors
+    - any coding has a negative association with citations (`-0.290`)
+    - majority coding has a negative association with citations (`-0.101`)
+    - always coding is not significant
+
+- last authors
+    - any coding has a negative association with citations (`-0.135`)
+    - majority coding is not significant
+    - always coding is not significant
+
+In general, any coding has a positive association while majority and always coding have negative associations with citations.
+"The more you code the less you are cited" -- granted that we don't have a lot of data for always coding authors (which itself backs up qual lit).
+
+#### Domain
+
+- health sciences
+    - any coding is not significant
+    - majority coding has a negative association with citations (`-0.284`)
+    - always coding has a negative association with citations (`-0.491`)
+    
+- life sciences
+    - any coding is not significant
+    - majority coding is not significant
+    - always coding has a positive association with citations (`+0.469`)
+
+- physical sciences
+    - any coding is not significant
+    - majority coding is not significant
+    - always coding is not significant
+
+- social sciences
+    - any coding has a negative associate with citations (`-0.219`)
+    - majority coding is not significant
+    - always coding has a positive association with citations (`+0.462`)
+
+We couldn't significant results for a majority of the groupings so I don't think that we can say anything too strongly, however,
+health sciences doesn't seem to favor coding (which I think is inline most with "RSE" dynamics). Social sciences is split, and social science is broad so this may be a "qual" vs "quant" split, if you include mixed methods researchers in there its hard to parse.
+
+Physical sciences being entirely non-significant is interesting because a majority of our data comes from Physical sciences.
+
+I just don't know.
+
+#### Article Type
+
+- preprint
+    - any coding is not significant
+    - majority coding has a negative association with citations (`-0.395`)
+    - always coding has a negative association with citations (`-0.461`)
+
+- research article
+    - any coding is not significant
+    - majority coding has a positive association with citations (`+0.055`)
+    - always coding has a positive association with citations (`+0.081`)
+
+- software article
+    - any coding has a positive association with citations (`+0.558`)
+    - majority coding is not significant
+    - always coding has a positive association with citations (`+0.384`)
+
+Preprints (from arXiv) have a negative association with coding generally. Research articles have a very slim positive association with coding. Software articles have a strongly positive association with coding (unsuprising).
+
+#### Summary
+
+
 
 ```{python}
 #| label: tbl-researcher-coding-status-author-position
