@@ -1088,19 +1088,19 @@ two_year_citedness_models = compute_models(
 #### Author Position
 
 - first authors
-    - any coding has a positive association with citations (`{python} np.exp(0.234)`)
-    - majority coding has a negative association with citations (`-0.121`)
-    - always coding has a negative association with citations (`-0.269`)
+   - any coding has a positive association with citations (`{python} np.exp(0.234)`)
+   - majority coding has a negative association with citations (`{python} np.exp(-0.121)`)
+   - always coding has a negative association with citations (`{python} np.exp(-0.269)`)
 
 - middle authors
-    - any coding has a negative association with citations (`-0.290`)
-    - majority coding has a negative association with citations (`-0.101`)
-    - always coding is not significant
+   - any coding has a negative association with citations (`{python} np.exp(-0.290)`)
+   - majority coding has a negative association with citations (`{python} np.exp(-0.101)`)
+   - always coding is not significant
 
 - last authors
-    - any coding has a negative association with citations (`-0.135`)
-    - majority coding is not significant
-    - always coding is not significant
+   - any coding has a negative association with citations (`{python} np.exp(-0.135)`)
+   - majority coding is not significant
+   - always coding is not significant
 
 In general, any coding has a positive association while majority and always coding have negative associations with citations.
 "The more you code the less you are cited" -- granted that we don't have a lot of data for always coding authors (which itself backs up qual lit).
@@ -1108,24 +1108,24 @@ In general, any coding has a positive association while majority and always codi
 #### Domain
 
 - health sciences
-    - any coding is not significant
-    - majority coding has a negative association with citations (`-0.284`)
-    - always coding has a negative association with citations (`-0.491`)
-    
+   - any coding is not significant
+   - majority coding has a negative association with citations (`{python} np.exp(-0.284)`)
+   - always coding has a negative association with citations (`{python} np.exp(-0.491)`)
+   
 - life sciences
-    - any coding is not significant
-    - majority coding is not significant
-    - always coding has a positive association with citations (`+0.469`)
+   - any coding is not significant
+   - majority coding is not significant
+   - always coding has a positive association with citations (`{python} np.exp(+0.469)`)
 
 - physical sciences
-    - any coding is not significant
-    - majority coding is not significant
-    - always coding is not significant
+   - any coding is not significant
+   - majority coding is not significant
+   - always coding is not significant
 
 - social sciences
-    - any coding has a negative associate with citations (`-0.219`)
-    - majority coding is not significant
-    - always coding has a positive association with citations (`+0.462`)
+   - any coding has a negative associate with citations (`{python} np.exp(-0.219)`)
+   - majority coding is not significant
+   - always coding has a positive association with citations (`{python} np.exp(+0.462)`)
 
 We couldn't significant results for a majority of the groupings so I don't think that we can say anything too strongly, however,
 health sciences doesn't seem to favor coding (which I think is inline most with "RSE" dynamics). Social sciences is split, and social science is broad so this may be a "qual" vs "quant" split, if you include mixed methods researchers in there its hard to parse.
@@ -1137,23 +1137,21 @@ I just don't know.
 #### Article Type
 
 - preprint
-    - any coding is not significant
-    - majority coding has a negative association with citations (`-0.395`)
-    - always coding has a negative association with citations (`-0.461`)
+   - any coding is not significant
+   - majority coding has a negative association with citations (`{python} np.exp(-0.395)`)
+   - always coding has a negative association with citations (`{python} np.exp(-0.461)`)
 
 - research article
-    - any coding is not significant
-    - majority coding has a positive association with citations (`+0.055`)
-    - always coding has a positive association with citations (`+0.081`)
+   - any coding is not significant
+   - majority coding has a positive association with citations (`{python} np.exp(+0.055)`)
+   - always coding has a positive association with citations (`{python} np.exp(+0.081)`)
 
 - software article
-    - any coding has a positive association with citations (`+0.558`)
-    - majority coding is not significant
-    - always coding has a positive association with citations (`+0.384`)
+   - any coding has a positive association with citations (`{python} np.exp(+0.558)`)
+   - majority coding is not significant
+   - always coding has a positive association with citations (`{python} np.exp(+0.384)`)
 
 Preprints (from arXiv) have a negative association with coding generally. Research articles have a very slim positive association with coding. Software articles have a strongly positive association with coding (unsuprising).
-
-#### Summary
 
 
 
