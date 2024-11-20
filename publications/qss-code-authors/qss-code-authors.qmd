@@ -1105,6 +1105,8 @@ two_year_citedness_models = compute_models(
 In general, any coding has a positive association while majority and always coding have negative associations with citations.
 "The more you code the less you are cited" -- granted that we don't have a lot of data for always coding authors (which itself backs up qual lit).
 
+in general, coding is associated with about a ~10 - 30% decrease in citations for a number of conditions when compared to non-coding first authors.
+
 #### Domain
 
 - health sciences
@@ -1130,9 +1132,7 @@ In general, any coding has a positive association while majority and always codi
 We couldn't significant results for a majority of the groupings so I don't think that we can say anything too strongly, however,
 health sciences doesn't seem to favor coding (which I think is inline most with "RSE" dynamics). Social sciences is split, and social science is broad so this may be a "qual" vs "quant" split, if you include mixed methods researchers in there its hard to parse.
 
-Physical sciences being entirely non-significant is interesting because a majority of our data comes from Physical sciences.
-
-I just don't know.
+Physical sciences being entirely non-significant is interesting because a majority of our data comes from Physical sciences. this could indicate that coding is just a part of the culture and doesn't have a significant impact on citations (which is inline with CS being the bulk of our physical sciences data).
 
 #### Article Type
 
