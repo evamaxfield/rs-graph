@@ -61,10 +61,14 @@ format:
 from datetime import datetime
 from pathlib import Path
 
+import colormaps as cmaps
 import IPython.display
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 import statsmodels.api as sm
+from scipy.stats import pearsonr
 from sci_soft_models.dev_author_em.data import load_annotated_dev_author_em_dataset
 from sqlalchemy import text
 from sqlmodel import create_engine
@@ -74,6 +78,14 @@ from rs_graph.db import models as db_models
 # Get db engine for production database
 db_path = Path("rs-graph-temp.db").resolve().absolute()
 db_conn = create_engine(f"sqlite:///{db_path}")
+
+# Set seaborn style
+plt.style.use("opinionated_rc")
+sns.set_palette(
+    cmaps.bold[2:]._colors.tolist(),
+)
+
+USE_SAMPLE = True
 ```
 
 - Contemporary scientific research has become increasingly dependent on specialized software tools and computational methods.
@@ -597,14 +609,575 @@ annotated_dataset
 - Next we investigate if these distributions change over time, or, by “research team size”.
 	- define research team size, in our case this is the total number of author-developers + non-coding authors + non-credited developers
 	- plot the medians of the contributor type distributions over time (by publication year)
-	- create subplots of different bins of research team size (i.e. <= 3 members, >3 <= 5, >5 <= 10, >10) and show distributions again.
 	- results in summary
 
-- We further investigate how these distributions are affected by article type and research domain.
-	- refresher on article type (research articles, software articles, and pre-prints)
-	- explain research domains
-	- subplots of both
-	- results in summary
+```{python}
+# Create subset documents
+docs_w_1_citation = documents.loc[documents["cited_by_count"] >= 1].copy()
+
+# Take sample?
+if USE_SAMPLE:
+    docs_w_1_citation = docs_w_1_citation.sample(frac=0.1, random_state=12)
+
+# Subset to only certain columns
+docs_w_1_citation = docs_w_1_citation[
+    [
+        "id",
+        "publication_date",
+        "cited_by_count",
+        "fwci",
+        "is_open_access",
+    ]
+]
+
+# Rename id to document_id
+docs_w_1_citation = docs_w_1_citation.rename(columns={"id": "document_id"})
+
+# Merge repository id in
+docs_w_1_citation = docs_w_1_citation.merge(
+    doc_repo_links[
+        [
+            "document_id",
+            "repository_id",
+        ]
+    ],
+    left_on="document_id",
+    right_on="document_id",
+)
+
+# Merge in document details (domain, document type)
+docs_w_1_citation = (
+    docs_w_1_citation.merge(
+        document_topics[["document_id", "topic_id"]],
+        left_on="document_id",
+        right_on="document_id",
+    )
+    .merge(
+        repositories[["id", "creation_datetime", "last_pushed_datetime"]],
+        left_on="repository_id",
+        right_on="id",
+    )
+    .drop(
+        columns=["id"],
+    )
+    .merge(
+        topics[["id", "domain_name"]],
+        left_on="topic_id",
+        right_on="id",
+    )
+    .drop(
+        columns=["id", "topic_id"],
+    )
+    .merge(
+        reduced_doc_types,
+        left_on="document_id",
+        right_on="document_id",
+    )
+    .rename(
+        columns={
+            "domain_name": "domain",
+            "reduced_doc_type": "article_type",
+        }
+    )
+)
+
+# Drop any documents that have more than one repository (and vice versa)
+docs_w_1_citation = docs_w_1_citation.drop_duplicates(
+    subset=["document_id"], keep=False
+)
+docs_w_1_citation = docs_w_1_citation.drop_duplicates(
+    subset=["repository_id"], keep=False
+)
+
+# Iter over articles and get the team composition info
+team_composition_rows = []
+for _, row in docs_w_1_citation.iterrows():
+    # Get a boolean value for "no pushes after publication"
+    repo_details = repositories.loc[repositories["id"] == row["repository_id"]].iloc[0]
+
+    # Get the number of authors
+    author_ids = document_contributors.loc[
+        document_contributors["document_id"] == row["document_id"]
+    ]["researcher_id"].unique()
+    n_authors = len(author_ids)
+
+    # Get the number of devs
+    dev_ids = repository_contributors.loc[
+        repository_contributors["repository_id"] == row["repository_id"]
+    ]["developer_account_id"].unique()
+    n_devs = len(dev_ids)
+
+    # Get the set of researcher_dev_links for the authors
+    author_dev_links = researcher_dev_links.loc[
+        researcher_dev_links["researcher_id"].isin(author_ids)
+    ]
+
+    # Drop duplicates by developer_account_id (keeping first)
+    # as we may have accidently matched the same dev to the multiple authors
+    author_dev_links = author_dev_links.drop_duplicates(
+        subset=["developer_account_id"],
+        keep="first",
+    )
+
+    # Get the number of authors who were devs on this paper
+    n_author_devs = 0
+    n_non_author_devs = 0
+    for author_id in author_ids:
+        author_dev_ids = author_dev_links.loc[
+            author_dev_links["researcher_id"] == author_id
+        ]["developer_account_id"].unique()
+
+        # Fast exit
+        if len(author_dev_ids) == 0:
+            continue
+
+        # Something likely went wrong in matching
+        if len(author_dev_ids) > 3:
+            continue
+
+        if any(author_dev_id in dev_ids for author_dev_id in author_dev_ids):
+            n_author_devs += 1
+        else:
+            n_non_author_devs += 1
+
+
+    # Append
+    team_composition_rows.append(
+        {
+            "document_id": row["document_id"],
+            "repository_id": row["repository_id"],
+            "n_authors": n_authors,
+            "n_author_devs": n_author_devs,
+            "n_non_author_devs": n_non_author_devs,
+            "n_devs": n_devs,
+        }
+    )
+
+# Create dataframe
+team_composition = pd.DataFrame(team_composition_rows)
+
+# Merge with docs_w_1_citation
+team_composition = team_composition.merge(
+    docs_w_1_citation,
+    left_on=["document_id", "repository_id"],
+    right_on=["document_id", "repository_id"],
+)
+
+# Filter out papers with less than 3 authors or 1 dev
+team_composition = team_composition.loc[team_composition["n_authors"] >= 3]
+team_composition = team_composition.loc[team_composition["n_devs"] >= 1]
+
+# Convert datetimes to datetime
+team_composition["publication_date"] = pd.to_datetime(
+    team_composition["publication_date"],
+    utc=True,
+)
+team_composition["last_pushed_datetime"] = pd.to_datetime(
+    team_composition["last_pushed_datetime"],
+    utc=True,
+)
+team_composition["creation_datetime"] = pd.to_datetime(
+    team_composition["creation_datetime"],
+    utc=True,
+)
+
+# Calculate years since publication from 2024-11-01
+team_composition["years_since_publication"] = (
+    pd.to_datetime("2024-11-01", utc=True) - team_composition["publication_date"]
+).dt.days / 365.25
+
+# Calculate repo creation to last push
+team_composition["repo_commit_duration"] = (
+    team_composition["last_pushed_datetime"]
+    - team_composition["creation_datetime"]
+).dt.days / 365.25
+
+# Create a "days_since_last_push" column
+team_composition["days_from_publication_to_last_push"] = (
+    team_composition["last_pushed_datetime"]
+    - team_composition["publication_date"]
+).dt.days
+
+# Create a "days_since_last_push" column
+team_composition["days_from_publication_to_last_push"] = (
+    team_composition["last_pushed_datetime"]
+    - team_composition["publication_date"]
+).dt.days
+
+# Must have a push within 90 days of publication
+team_comp_no_push_after_pub = team_composition.loc[
+    team_composition["days_from_publication_to_last_push"] <= 90
+]
+
+# Drop columns that would conflict with conversion to float
+team_comp_no_push_after_pub = team_comp_no_push_after_pub.drop(
+    columns=[
+        "publication_date",
+        "last_pushed_datetime",
+        "creation_datetime",
+    ]
+)
+
+# Add dummies
+team_comp_no_push_after_pub_dummies = pd.get_dummies(
+    team_comp_no_push_after_pub,
+    columns=["article_type", "domain"],
+    drop_first=True,
+)
+
+# Cast all to float
+team_comp_no_push_after_pub_dummies = team_comp_no_push_after_pub_dummies.astype(float)
+```
+
+```{python}
+#| label: tbl-team-composition-counts
+#| tbl-cap: "Team Composition and Coding Status Counts Used in H1"
+#| echo: false
+
+# Create a copy of the team_comp_no_push_after_pub dataframe
+team_comp_no_push_after_pub_counts = team_comp_no_push_after_pub.copy()
+
+# Replace binary values in "is_open_access" to "Open Access" and "Closed Access"
+team_comp_no_push_after_pub_counts["is_open_access"] = team_comp_no_push_after_pub_counts.apply(
+    lambda x: "Open Access" if x["is_open_access"] == 1 else "Closed Access",
+    axis=1,
+)
+
+# Count team composition values and always for each control variable
+control_vars = {
+    "is_open_access": "Open Access Status",
+    "domain": "Domain",
+    "article_type": "Article Type",
+}
+control_var_tables = {}
+for control_var, control_display_name in control_vars.items():
+    # Instead of taking median, let's return the mean and std in the following format
+    # "mean ± std"
+    mean_table = (
+        team_comp_no_push_after_pub_counts.groupby(control_var)[
+            ["n_authors", "n_author_devs", "n_non_author_devs"]
+        ]
+        .mean()
+        .reset_index()
+    )
+    std_table = (
+        team_comp_no_push_after_pub_counts.groupby(control_var)[
+            ["n_authors", "n_author_devs", "n_non_author_devs"]
+        ]
+        .std()
+        .reset_index()
+    )
+
+    # Merge and format to string
+    count_table_rows = []
+    for _, row in mean_table.iterrows():
+        std_row = std_table.loc[std_table[control_var] == row[control_var]]
+        count_table_rows.append(
+            {
+                control_var: row[control_var],
+                "n_authors": f"{row['n_authors']:.1f} ± {std_row['n_authors'].iloc[0]:.1f}",
+                "n_author_devs": f"{row['n_author_devs']:.1f} ± {std_row['n_author_devs'].iloc[0]:.1f}",
+                "n_non_author_devs": f"{row['n_non_author_devs']:.1f} ± {std_row['n_non_author_devs'].iloc[0]:.1f}",
+            }
+        )
+
+    # Create dataframe
+    count_table = pd.DataFrame(count_table_rows)
+
+    # Change name of the control_var column to "Control Values"
+    count_table = count_table.rename(columns={control_var: "Control Values"})
+
+    # Order columns
+    count_table = count_table[
+        ["Control Values", "n_authors", "n_author_devs", "n_non_author_devs"]
+    ]
+    
+    # Rename columns
+    count_table = count_table.rename(
+        columns={
+            "n_authors": "Authors",
+            "n_author_devs": "Code Contrib. Authors",
+            "n_non_author_devs": "Non-Author Code Contribs.",
+        }
+    )
+
+    # Order alphabetically
+    count_table = count_table.sort_values("Control Values")
+    
+    # Append
+    control_var_tables[control_display_name] = count_table
+
+# Constuct HTML Table
+
+# Construct multi-row span HTML table
+# Columns should be: "Authors", "Code Contributing Authors", "Non-Author Code Contributors"
+# Rows should be:
+# "Open Access Status", "Domain", "Article Type"
+
+# HTML templates
+count_piece_inital_row_template = """
+<tr>
+  <td rowspan="{n_rows}">{row_name}</td>
+  <td>{value_name}</td>
+  <td>{n_authors}</td>
+  <td>{n_author_devs}</td>
+  <td>{n_non_author_devs}</td>
+</tr>
+""".strip()
+
+count_piece_subsequent_row_template = """
+<tr>
+  <td>{value_name}</td>
+  <td>{n_authors}</td>
+  <td>{n_author_devs}</td>
+  <td>{n_non_author_devs}</td>
+</tr>
+""".strip()
+
+# Iter over stats portions (and total)
+count_portions_html = []
+for key, count_table in control_var_tables.items():
+    count_portion_html = []
+    for i, control_value in enumerate(count_table["Control Values"].unique()):
+        if i == 0:
+            count_portion_html.append(
+                count_piece_inital_row_template.format(
+                    n_rows=len(count_table),
+                    row_name=key,
+                    value_name=control_value,
+                    n_authors=count_table.loc[
+                        count_table["Control Values"] == control_value, "Authors"
+                    ].iloc[0],
+                    n_author_devs=count_table.loc[
+                        count_table["Control Values"] == control_value, "Code Contrib. Authors"
+                    ].iloc[0],
+                    n_non_author_devs=count_table.loc[
+                        count_table["Control Values"] == control_value, "Non-Author Code Contribs."
+                    ].iloc[0],
+                )
+            )
+        else:
+            count_portion_html.append(
+                count_piece_subsequent_row_template.format(
+                    value_name=control_value,
+                    n_authors=count_table.loc[
+                        count_table["Control Values"] == control_value, "Authors"
+                    ].iloc[0],
+                    n_author_devs=count_table.loc[
+                        count_table["Control Values"] == control_value, "Code Contrib. Authors"
+                    ].iloc[0],
+                    n_non_author_devs=count_table.loc[
+                        count_table["Control Values"] == control_value, "Non-Author Code Contribs."
+                    ].iloc[0],
+                )
+            )
+
+    count_portions_html.append("\n".join(count_portion_html))
+
+# Concat and wrap in table
+count_table_html = f"""
+<table>
+  <tr>
+    <th><b>Control Variable</b></th>
+    <th><b>Control Values</b></th>
+    <th><b>Authors</b></th>
+    <th><b>Code Contrib. Authors</b></th>
+    <th><b>Non-Author Code Contribs.</b></th>
+  </tr>
+  {" ".join(count_portions_html)}
+</table>
+""".strip()
+
+IPython.display.HTML(count_table_html)
+```
+
+```{python}
+def compute_article_level_models(
+    y_col: str,
+    data: pd.DataFrame,
+    glm_family: sm.families.Family,
+) -> dict[str, sm.GLM]:
+    # Remove outliers
+    no_outliers = data[
+        data[y_col].between(
+            data[y_col].quantile(0.03),
+            data[y_col].quantile(0.97),
+        )
+    ].copy()
+
+    # Remove nans
+    no_outliers = no_outliers.dropna(subset=[y_col])
+
+    # Common features to use in all models
+    required_features = [
+        y_col,
+        "n_authors",
+        "n_author_devs",
+        "n_non_author_devs",
+        "years_since_publication",
+    ]
+
+    # Iter over different control variables and create models for each
+    models = {}
+    for control_var in [
+        "article_type",
+        "domain",
+        "is_open_access",
+    ]:
+        # Get control variable list
+        control_variables = [
+            col for col in no_outliers.columns if col.startswith(control_var)
+        ]
+
+        # Create control variable subset of the data
+        control_var_subset = no_outliers[required_features + control_variables].copy()
+
+        # Create interactions
+        for coding_status_col in ["n_author_devs", "n_non_author_devs"]:
+            for control_col in control_variables:
+                control_var_subset[f"{coding_status_col} * {control_col}"] = (
+                    control_var_subset[coding_status_col]
+                    * control_var_subset[control_col]
+                )
+
+        # Drop inf and nan
+        control_var_subset = control_var_subset.replace(
+            [float("inf"), -float("inf")], float("nan")
+        ).dropna()
+
+        # Create x and y
+        y = control_var_subset[y_col]
+        x = control_var_subset.drop(columns=[y_col])
+        x = sm.add_constant(x)
+
+        # Fit model
+        model = sm.GLM(y, x, family=glm_family).fit()
+        models[control_var] = model
+
+    return models
+```
+
+```{python}
+# Create models for cited_by_count
+article_cited_by_count_models = compute_article_level_models(
+    "cited_by_count",
+    team_comp_no_push_after_pub_dummies,
+    glm_family=sm.families.NegativeBinomial(),
+)
+```
+
+### Modeling Citations
+
+- We model an article's total citations by the coding contributorship of the research team and controlled by a number of different factors.
+- Each control variable is modeled separately and the results are presented in the tables below:
+  - Controlling for article open access status: @{tbl-article-composition-oa-status}
+  - Controlling for article domain: @{tbl-article-composition-domain}
+  - Controlling for article type: @{tbl-article-composition-type}
+
+#### Open Access Status
+
+```{python}
+#| label: tbl-article-composition-oa-status
+#| tbl-cap: "Article Citations by Code Contributorship of Research Team Controlled by Open Access Status"
+
+article_cited_by_count_models["is_open_access"].summary()
+```
+
+
+- open access articles
+    - n_author_devs is not significant
+    - gain `{python} np.exp(0.1554 - 0.0051)` more citations per non-author code contributor
+
+- closed access articles
+    - n_author_devs is not significant
+    - gain `{python} np.exp(0.1554)` more citations per non-author code contributor
+
+#### Domain
+
+```{python}
+#| label: tbl-article-composition-domain
+#| tbl-cap: "Article Citations by Code Contributorship of Research Team Controlled by Domain"
+
+article_cited_by_count_models["domain"].summary()
+```
+
+
+- health sciences
+    - gain `{python} np.exp(0.0944)` more citations per author code contributor compared to no author code contributor health science papers
+    - gain `{python} np.exp(0.0708)` more citations per non-author code contributor compared to no non-author code contributor health science papers
+   
+- life sciences
+    - n_author_devs is not significant
+    - n_non_author_devs is not significant
+
+- physical sciences
+    - n_author_devs is not significant
+    - gain `{python} np.exp(0.0803)` more citations per non-author code contributor compared to no non-author code contributor physical science papers
+
+- social sciences
+    - n_author_devs is not significant
+    - n_non_author_devs is not significant
+
+#### Article Type
+
+```{python}
+#| label: tbl-article-composition-type
+#| tbl-cap: "Article Citations by Code Contributorship of Research Team Controlled by Article Type"
+
+article_cited_by_count_models["article_type"].summary()
+```
+
+- preprint
+    - n_author_devs is not significant
+    - gain `{python} np.exp(0.1242)` more citations per non-author code contributor compared to no non-author code contributor preprints
+
+- research article
+    - gain `{python} np.exp(0.0893)` more citations per author code contributor compared to no author code contributor research articles
+    - gain `{python} np.exp(0.0374)` more citations per non-author code contributor compared to no non-author code contributor research articles
+
+- software article
+    - n_author_devs is not significant
+    - n_non_author_devs is not significant
+
+### Project Duration
+
+- We next investigate the relationship between the duration of a project and the coding contributorship of the research team.
+
+```{python}
+team_comp_no_push_after_pub_for_duration = team_comp_no_push_after_pub.copy()
+
+# Calculate ratio
+team_comp_no_push_after_pub_for_duration["non_author_to_author_devs_ratio"] = (
+    team_comp_no_push_after_pub_for_duration["n_non_author_devs"] / team_comp_no_push_after_pub_for_duration["n_author_devs"]
+)
+
+# Drop inf and nan
+team_comp_no_push_after_pub_for_duration = team_comp_no_push_after_pub_for_duration.replace(
+    [float("inf"), -float("inf")], float("nan")
+).dropna()
+
+# Remove negative "repo_commit_duration" repos
+team_comp_no_push_after_pub_for_duration = team_comp_no_push_after_pub_for_duration[
+    team_comp_no_push_after_pub_for_duration["repo_commit_duration"] >= 0
+]
+
+# Plot
+sns.lmplot(
+    data=team_comp_no_push_after_pub_for_duration,
+    y="non_author_to_author_devs_ratio",
+    x="repo_commit_duration",
+    scatter_kws={"alpha": 0.2},
+    line_kws={"color": "red"},
+    order=1,
+)
+```
+
+```{python}
+pearsonr(
+    team_comp_no_push_after_pub_for_duration["non_author_to_author_devs_ratio"],
+    team_comp_no_push_after_pub_for_duration["repo_commit_duration"],
+)
+```
 
 ## Characteristics of Scientific Code Contributors
 
@@ -631,6 +1204,10 @@ researchers_w_3_docs = researchers.loc[
         .index
     )
 ]
+
+# Use sample?
+if USE_SAMPLE:
+    researchers_w_3_docs = researchers_w_3_docs.sample(frac=0.1, random_state=12)
 
 # Next, for each researcher, get the set of documents they have contributed to
 researchers_w_3_docs = document_contributors.loc[
@@ -846,7 +1423,7 @@ researchers_w_3_docs_and_coded_agg_dummies = (
 ```
 
 ```{python}
-def compute_models(
+def compute_researcher_level_models(
     y_col: str,
     data: pd.DataFrame,
     glm_family: sm.families.Family,
@@ -1064,16 +1641,11 @@ IPython.display.HTML(count_table_html)
 ```
 
 ```{python}
-# Create models for cited_by_count and two_year_mean_citedness
-cited_by_count_models = compute_models(
+# Create models for cited_by_count
+author_cited_by_count_models = compute_researcher_level_models(
     "cited_by_count",
     researchers_w_3_docs_and_coded_agg_dummies,
     glm_family=sm.families.NegativeBinomial(),
-)
-two_year_citedness_models = compute_models(
-    "two_year_mean_citedness",
-    researchers_w_3_docs_and_coded_agg_dummies,
-    glm_family=sm.families.Gamma(link=sm.families.links.Log()),
 )
 ```
 
@@ -1086,6 +1658,13 @@ two_year_citedness_models = compute_models(
   - Controlling for an authors most frequent article type: @{tbl-researcher-coding-status-article-type}
 
 #### Author Position
+
+```{python}
+#| label: tbl-researcher-coding-status-author-position
+#| tbl-cap: "Researcher Total Citations by Coding Status Controlled by Most Freq. Author Position"
+
+author_cited_by_count_models["common_author_position"].summary()
+```
 
 - first authors
    - any coding has a positive association with citations (`{python} np.exp(0.234)`)
@@ -1108,6 +1687,13 @@ In general, any coding has a positive association while majority and always codi
 in general, coding is associated with about a ~10 - 30% decrease in citations for a number of conditions when compared to non-coding first authors.
 
 #### Domain
+
+```{python}
+#| label: tbl-researcher-coding-status-domain
+#| tbl-cap: "Researcher Total Citations by Coding Status Controlled by Most Freq. Domain"
+
+author_cited_by_count_models["common_domain"].summary()
+```
 
 - health sciences
    - any coding is not significant
@@ -1136,6 +1722,13 @@ Physical sciences being entirely non-significant is interesting because a majori
 
 #### Article Type
 
+```{python}
+#| label: tbl-researcher-coding-status-article-type
+#| tbl-cap: "Researcher Total Citations by Coding Status Controlled by Most Freq. Article Type"
+
+author_cited_by_count_models["common_article_type"].summary()
+```
+
 - preprint
    - any coding is not significant
    - majority coding has a negative association with citations (`{python} np.exp(-0.395)`)
@@ -1152,26 +1745,3 @@ Physical sciences being entirely non-significant is interesting because a majori
    - always coding has a positive association with citations (`{python} np.exp(+0.384)`)
 
 Preprints (from arXiv) have a negative association with coding generally. Research articles have a very slim positive association with coding. Software articles have a strongly positive association with coding (unsuprising).
-
-
-
-```{python}
-#| label: tbl-researcher-coding-status-author-position
-#| tbl-cap: "Researcher Total Citations by Coding Status Controlled by Most Freq. Author Position"
-
-cited_by_count_models["common_author_position"].summary()
-```
-
-```{python}
-#| label: tbl-researcher-coding-status-domain
-#| tbl-cap: "Researcher Total Citations by Coding Status Controlled by Most Freq. Domain"
-
-cited_by_count_models["common_domain"].summary()
-```
-
-```{python}
-#| label: tbl-researcher-coding-status-article-type
-#| tbl-cap: "Researcher Total Citations by Coding Status Controlled by Most Freq. Article Type"
-
-cited_by_count_models["common_article_type"].summary()
-```
