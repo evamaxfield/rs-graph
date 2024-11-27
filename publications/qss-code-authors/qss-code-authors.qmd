@@ -68,8 +68,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import statsmodels.api as sm
-from scipy.stats import pearsonr
 from sci_soft_models.dev_author_em.data import load_annotated_dev_author_em_dataset
+from scipy.stats import pearsonr
 from sqlalchemy import text
 from sqlmodel import create_engine
 
@@ -740,7 +740,6 @@ for _, row in docs_w_1_citation.iterrows():
         else:
             n_non_author_devs += 1
 
-
     # Append
     team_composition_rows.append(
         {
@@ -788,20 +787,17 @@ team_composition["years_since_publication"] = (
 
 # Calculate repo creation to last push
 team_composition["repo_commit_duration"] = (
-    team_composition["last_pushed_datetime"]
-    - team_composition["creation_datetime"]
+    team_composition["last_pushed_datetime"] - team_composition["creation_datetime"]
 ).dt.days / 365.25
 
 # Create a "days_since_last_push" column
 team_composition["days_from_publication_to_last_push"] = (
-    team_composition["last_pushed_datetime"]
-    - team_composition["publication_date"]
+    team_composition["last_pushed_datetime"] - team_composition["publication_date"]
 ).dt.days
 
 # Create a "days_since_last_push" column
 team_composition["days_from_publication_to_last_push"] = (
-    team_composition["last_pushed_datetime"]
-    - team_composition["publication_date"]
+    team_composition["last_pushed_datetime"] - team_composition["publication_date"]
 ).dt.days
 
 # Must have a push within 90 days of publication
@@ -838,9 +834,11 @@ team_comp_no_push_after_pub_dummies = team_comp_no_push_after_pub_dummies.astype
 team_comp_no_push_after_pub_counts = team_comp_no_push_after_pub.copy()
 
 # Replace binary values in "is_open_access" to "Open Access" and "Closed Access"
-team_comp_no_push_after_pub_counts["is_open_access"] = team_comp_no_push_after_pub_counts.apply(
-    lambda x: "Open Access" if x["is_open_access"] == 1 else "Closed Access",
-    axis=1,
+team_comp_no_push_after_pub_counts["is_open_access"] = (
+    team_comp_no_push_after_pub_counts.apply(
+        lambda x: "Open Access" if x["is_open_access"] == 1 else "Closed Access",
+        axis=1,
+    )
 )
 
 # Count team composition values and always for each control variable
@@ -946,13 +944,16 @@ for key, count_table in control_var_tables.items():
                     row_name=key,
                     value_name=control_value,
                     n_authors=count_table.loc[
-                        count_table["Control Values"] == control_value, "Authors"
+                        count_table["Control Values"] == control_value,
+                        "Authors",
                     ].iloc[0],
                     n_author_devs=count_table.loc[
-                        count_table["Control Values"] == control_value, "Code Contrib. Authors"
+                        count_table["Control Values"] == control_value,
+                        "Code Contrib. Authors",
                     ].iloc[0],
                     n_non_author_devs=count_table.loc[
-                        count_table["Control Values"] == control_value, "Non-Author Code Contribs."
+                        count_table["Control Values"] == control_value,
+                        "Non-Author Code Contribs.",
                     ].iloc[0],
                 )
             )
@@ -961,13 +962,16 @@ for key, count_table in control_var_tables.items():
                 count_piece_subsequent_row_template.format(
                     value_name=control_value,
                     n_authors=count_table.loc[
-                        count_table["Control Values"] == control_value, "Authors"
+                        count_table["Control Values"] == control_value,
+                        "Authors",
                     ].iloc[0],
                     n_author_devs=count_table.loc[
-                        count_table["Control Values"] == control_value, "Code Contrib. Authors"
+                        count_table["Control Values"] == control_value,
+                        "Code Contrib. Authors",
                     ].iloc[0],
                     n_non_author_devs=count_table.loc[
-                        count_table["Control Values"] == control_value, "Non-Author Code Contribs."
+                        count_table["Control Values"] == control_value,
+                        "Non-Author Code Contribs.",
                     ].iloc[0],
                 )
             )
@@ -1148,13 +1152,16 @@ team_comp_no_push_after_pub_for_duration = team_comp_no_push_after_pub.copy()
 
 # Calculate ratio
 team_comp_no_push_after_pub_for_duration["non_author_to_author_devs_ratio"] = (
-    team_comp_no_push_after_pub_for_duration["n_non_author_devs"] / team_comp_no_push_after_pub_for_duration["n_author_devs"]
+    team_comp_no_push_after_pub_for_duration["n_non_author_devs"]
+    / team_comp_no_push_after_pub_for_duration["n_author_devs"]
 )
 
 # Drop inf and nan
-team_comp_no_push_after_pub_for_duration = team_comp_no_push_after_pub_for_duration.replace(
-    [float("inf"), -float("inf")], float("nan")
-).dropna()
+team_comp_no_push_after_pub_for_duration = (
+    team_comp_no_push_after_pub_for_duration.replace(
+        [float("inf"), -float("inf")], float("nan")
+    ).dropna()
+)
 
 # Remove negative "repo_commit_duration" repos
 team_comp_no_push_after_pub_for_duration = team_comp_no_push_after_pub_for_duration[
