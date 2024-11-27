@@ -75,6 +75,8 @@ dev = [
 modeling = [
   "matplotlib==3.8.4",  # pinned for compatibility with colormaps
   "opinionated>=0.0.3,<0.0.4",
+  "scikit-posthocs>=0.10,<0.11",
+  "scipy>=1,<2",
   "statsmodels>=0.14,<0.15",
 ]
 

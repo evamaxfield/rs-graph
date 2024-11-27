@@ -69,7 +69,8 @@ import pandas as pd
 import seaborn as sns
 import statsmodels.api as sm
 from sci_soft_models.dev_author_em.data import load_annotated_dev_author_em_dataset
-from scipy.stats import pearsonr
+import scikit_posthocs as sp
+from scipy.stats import pearsonr, f_oneway
 from sqlalchemy import text
 from sqlmodel import create_engine
 
@@ -85,7 +86,7 @@ sns.set_palette(
     cmaps.bold[2:]._colors.tolist(),
 )
 
-USE_SAMPLE = True
+USE_SAMPLE = False
 ```
 
 - Contemporary scientific research has become increasingly dependent on specialized software tools and computational methods.
@@ -710,7 +711,7 @@ for _, row in docs_w_1_citation.iterrows():
     # Get the set of researcher_dev_links for the authors
     author_dev_links = researcher_dev_links.loc[
         researcher_dev_links["researcher_id"].isin(author_ids)
-    ]
+    ].sort_values("predictive_model_confidence", ascending=False)
 
     # Drop duplicates by developer_account_id (keeping first)
     # as we may have accidently matched the same dev to the multiple authors
@@ -803,7 +804,12 @@ team_composition["days_from_publication_to_last_push"] = (
 # Must have a push within 90 days of publication
 team_comp_no_push_after_pub = team_composition.loc[
     team_composition["days_from_publication_to_last_push"] <= 90
-]
+].copy()
+
+# Create a "publication_year" column
+team_comp_no_push_after_pub["publication_year"] = team_comp_no_push_after_pub[
+    "publication_date"
+].dt.year
 
 # Drop columns that would conflict with conversion to float
 team_comp_no_push_after_pub = team_comp_no_push_after_pub.drop(
@@ -823,6 +829,56 @@ team_comp_no_push_after_pub_dummies = pd.get_dummies(
 
 # Cast all to float
 team_comp_no_push_after_pub_dummies = team_comp_no_push_after_pub_dummies.astype(float)
+```
+
+```{python}
+# Reuse the "team_composition" dataframe and
+# plot the distribution of the
+# number of authors, author devs, and non-author devs, and total devs
+# Split by domain, article type, and open access status
+
+# Melt the data to convert to long form
+team_comp_no_push_after_pub_long = team_comp_no_push_after_pub.melt(
+    id_vars=[
+        "document_id",
+        "publication_year",
+        "domain",
+        "article_type",
+        "is_open_access",
+    ],
+    value_vars=[
+        "n_authors",
+        "n_author_devs",
+        "n_non_author_devs",
+        "n_devs",
+    ],
+    var_name="Contributor Type",
+    value_name="count",
+)
+
+# Replace "team_member_type" values
+team_comp_no_push_after_pub_long["Contributor Type"] = (
+    team_comp_no_push_after_pub_long["Contributor Type"].replace(
+        {
+            "n_authors": "Authors",
+            "n_author_devs": "Code Contrib. Authors",
+            "n_non_author_devs": "Non-Author Code Contribs.",
+            "n_devs": "Total Code Contribs.",
+        }
+    )
+)
+
+# Plot
+sns.catplot(
+    data=team_comp_no_push_after_pub_long,
+    x="Contributor Type",
+    y="count",
+    hue="Contributor Type",
+    kind="box",
+    showfliers=False,
+)
+
+_ = plt.xticks(rotation=45, ha="right")
 ```
 
 ```{python}
@@ -1070,6 +1126,28 @@ article_cited_by_count_models = compute_article_level_models(
 )
 ```
 
+```{python}
+# Get value count of publication year
+year_counts = team_comp_no_push_after_pub["publication_year"].value_counts()
+
+# Drop years with less than 100 publications
+team_comp_no_push_after_pub_long = team_comp_no_push_after_pub_long.loc[
+    team_comp_no_push_after_pub_long["publication_year"].isin(
+        year_counts.loc[lambda x: x >= 100].index
+    )
+]
+
+# Look at mean of all counts of team member types over time
+sns.relplot(
+    data=team_comp_no_push_after_pub_long,
+    x="publication_year",
+    y="count",
+    hue="Contributor Type",
+    kind="line",
+    estimator="mean",
+)
+```
+
 ### Modeling Citations
 
 - We model an article's total citations by the coding contributorship of the research team and controlled by a number of different factors.
@@ -1143,7 +1221,7 @@ article_cited_by_count_models["article_type"].summary()
     - n_author_devs is not significant
     - n_non_author_devs is not significant
 
-### Project Duration
+### Team Composition and Project Duration
 
 - We next investigate the relationship between the duration of a project and the coding contributorship of the research team.
 
@@ -1200,6 +1278,410 @@ pearsonr(
 	- subplot + stats tests for differences by each domain
 	- results in summary
 
+### Author Positions of Code Contributing Authors
+
+```{python}
+# create a dataframe of per-document coding status by position
+# and corresponding
+
+# i.e. "on a single paper, how many first authors coded",
+# "on a single paper, how many middle authors coded",
+# "on a single paper, how many last authors coded",
+# "on a single paper, how many corresponding authors coded"
+
+# Create subset documents
+docs_for_per_repo_stats = documents[[
+    "id",
+    "publication_date",
+    "is_open_access",
+]].copy()
+
+# Take sample?
+if USE_SAMPLE:
+    docs_for_per_repo_stats = docs_for_per_repo_stats.sample(frac=0.1, random_state=12)
+
+# Rename id to document_id
+docs_for_per_repo_stats = docs_for_per_repo_stats.rename(columns={"id": "document_id"})
+
+# Merge repository id in
+docs_for_per_repo_stats = docs_for_per_repo_stats.merge(
+    doc_repo_links[
+        [
+            "document_id",
+            "repository_id",
+        ]
+    ],
+    left_on="document_id",
+    right_on="document_id",
+)
+
+# Merge in document details (domain, document type)
+docs_for_per_repo_stats = (
+    docs_for_per_repo_stats.merge(
+        document_topics[["document_id", "topic_id"]],
+        left_on="document_id",
+        right_on="document_id",
+    )
+    .merge(
+        repositories[["id", "last_pushed_datetime"]],
+        left_on="repository_id",
+        right_on="id",
+    )
+    .drop(
+        columns=["id"],
+    )
+    .merge(
+        topics[["id", "domain_name"]],
+        left_on="topic_id",
+        right_on="id",
+    )
+    .drop(
+        columns=["id", "topic_id"],
+    )
+    .merge(
+        reduced_doc_types,
+        left_on="document_id",
+        right_on="document_id",
+    )
+    .rename(
+        columns={
+            "domain_name": "domain",
+            "reduced_doc_type": "article_type",
+        }
+    )
+)
+
+# Drop any documents that have more than one repository (and vice versa)
+docs_for_per_repo_stats = docs_for_per_repo_stats.drop_duplicates(
+    subset=["document_id"], keep=False
+)
+docs_for_per_repo_stats = docs_for_per_repo_stats.drop_duplicates(
+    subset=["repository_id"], keep=False
+)
+
+# Convert datetimes to datetimes
+docs_for_per_repo_stats["publication_date"] = pd.to_datetime(
+    docs_for_per_repo_stats["publication_date"],
+    utc=True,
+)
+docs_for_per_repo_stats["last_pushed_datetime"] = pd.to_datetime(
+    docs_for_per_repo_stats["last_pushed_datetime"],
+    utc=True,
+)
+
+# Remove any documents that have pushes after 90 days
+# past publication
+docs_for_per_repo_stats = docs_for_per_repo_stats.loc[
+    (docs_for_per_repo_stats["last_pushed_datetime"] - docs_for_per_repo_stats["publication_date"]).dt.days <= 90
+]
+
+# Drop publication date and last pushed datetime
+docs_for_per_repo_stats = docs_for_per_repo_stats.drop(
+    columns=[
+        "publication_date",
+        "last_pushed_datetime",
+    ]
+)
+
+# Iter over articles and get the team composition info
+dev_composition_rows = []
+for _, row in docs_for_per_repo_stats.iterrows():
+    # Get authors
+    this_doc_authors = document_contributors.loc[
+        document_contributors["document_id"] == row["document_id"]
+    ]
+
+    # Get devs
+    this_repo_devs = repository_contributors.loc[
+        repository_contributors["repository_id"] == row["repository_id"]
+    ]
+
+    # Get the set of researcher_dev_links for the authors
+    author_dev_links = researcher_dev_links.loc[
+        researcher_dev_links["researcher_id"].isin(this_doc_authors.researcher_id.unique())
+    ].sort_values("predictive_model_confidence", ascending=False)
+
+    # Drop duplicates by developer_account_id (keeping first)
+    # as we may have accidently matched the same dev to the multiple authors
+    author_dev_links = author_dev_links.drop_duplicates(
+        subset=["developer_account_id"],
+        keep="first",
+    )
+
+    # Get the number of authors who were devs on this paper
+    n_first_author_devs = 0
+    n_middle_author_devs = 0
+    n_last_author_devs = 0
+    n_corresponding_author_devs = 0
+    n_non_corresponding_author_devs = 0
+    for _, author in this_doc_authors.iterrows():
+        author_dev_ids = author_dev_links.loc[
+            author_dev_links["researcher_id"] == author.researcher_id
+        ]["developer_account_id"].unique()
+
+        # Fast exit
+        if len(author_dev_ids) == 0:
+            continue
+
+        # Something likely went wrong in matching
+        if len(author_dev_ids) > 3:
+            continue
+
+        if any(author_dev_id in this_repo_devs.developer_account_id.unique() for author_dev_id in author_dev_ids):
+            if author.position == "first":
+                n_first_author_devs += 1
+            elif author.position == "middle":
+                n_middle_author_devs += 1
+            elif author.position == "last":
+                n_last_author_devs += 1
+
+            # Separate
+            if author.is_corresponding:
+                n_corresponding_author_devs += 1
+            else:
+                n_non_corresponding_author_devs += 1
+
+    # Append
+    dev_composition_rows.append(
+        {
+            "document_id": row["document_id"],
+            "repository_id": row["repository_id"],
+            "n_first_author_devs": n_first_author_devs,
+            "n_middle_author_devs": n_middle_author_devs,
+            "n_last_author_devs": n_last_author_devs,
+            "n_corresponding_author_devs": n_corresponding_author_devs,
+            "n_non_corresponding_author_devs": n_non_corresponding_author_devs,
+        }
+    )
+
+# Create dataframe
+dev_composition = pd.DataFrame(dev_composition_rows)
+
+# Merge with docs_w_1_citation
+dev_composition = dev_composition.merge(
+    docs_for_per_repo_stats,
+    left_on=["document_id", "repository_id"],
+    right_on=["document_id", "repository_id"],
+)
+```
+
+```{python}
+# Melt frame to long form
+dev_composition_long_author_position = dev_composition.melt(
+    id_vars=[
+        "document_id",
+        "repository_id",
+        "domain",
+        "article_type",
+        "is_open_access",
+    ],
+    value_vars=[
+        "n_first_author_devs",
+        "n_middle_author_devs",
+        "n_last_author_devs",
+    ],
+    var_name="author_position",
+    value_name="count",
+)
+
+# Split by article type
+g = sns.catplot(
+    data=dev_composition_long_author_position,
+    kind="box",
+    col="article_type",
+    x="author_position",
+    y="count",
+    hue="author_position",
+    showfliers=False,
+)
+
+# Rotate x-axis labels with ha "right"
+for ax in g.axes.flat:
+    for label in ax.get_xticklabels():
+        label.set_rotation(45)
+        label.set_ha("right")
+```
+
+#### Domain
+
+```{python}
+for domain in dev_composition["domain"].unique():
+    print(domain)
+    print(
+        f_oneway(
+            dev_composition.loc[dev_composition["domain"] == domain, "n_first_author_devs"],
+            dev_composition.loc[dev_composition["domain"] == domain, "n_middle_author_devs"],
+            dev_composition.loc[dev_composition["domain"] == domain, "n_last_author_devs"],
+        )
+    )
+
+    print(
+        sp.posthoc_ttest(
+            dev_composition_long_author_position.loc[dev_composition_long_author_position["domain"] == domain],
+            val_col="count",
+            group_col="author_position",
+            p_adjust="holm",
+        )
+    )
+```
+
+#### Article Type
+
+```{python}
+for article_type in dev_composition["article_type"].unique():
+    print(article_type)
+    print(
+        f_oneway(
+            dev_composition.loc[dev_composition["article_type"] == article_type, "n_first_author_devs"],
+            dev_composition.loc[dev_composition["article_type"] == article_type, "n_middle_author_devs"],
+            dev_composition.loc[dev_composition["article_type"] == article_type, "n_last_author_devs"],
+        )
+    )
+
+    print(
+        sp.posthoc_ttest(
+            dev_composition_long_author_position.loc[dev_composition_long_author_position["article_type"] == article_type],
+            val_col="count",
+            group_col="author_position",
+            p_adjust="holm",
+        )
+    )
+```
+
+#### Open Access Status
+
+```{python}
+for oa_status in dev_composition["is_open_access"].unique():
+    print(oa_status)
+    print(
+        f_oneway(
+            dev_composition.loc[dev_composition["is_open_access"] == oa_status, "n_first_author_devs"],
+            dev_composition.loc[dev_composition["is_open_access"] == oa_status, "n_middle_author_devs"],
+            dev_composition.loc[dev_composition["is_open_access"] == oa_status, "n_last_author_devs"],
+        )
+    )
+
+    print(
+        sp.posthoc_ttest(
+            dev_composition_long_author_position.loc[dev_composition_long_author_position["is_open_access"] == oa_status],
+            val_col="count",
+            group_col="author_position",
+            p_adjust="holm",
+        )
+    )
+```
+
+### Corresponding Status of Code Contributing Authors
+
+```{python}
+# Melt frame to long form
+dev_composition_long_corresponding = dev_composition.melt(
+    id_vars=[
+        "document_id",
+        "repository_id",
+        "domain",
+        "article_type",
+        "is_open_access",
+    ],
+    value_vars=[
+        "n_corresponding_author_devs",
+        "n_non_corresponding_author_devs",
+    ],
+    var_name="corresponding_status",
+    value_name="count",
+)
+
+# Split by article type
+g = sns.catplot(
+    data=dev_composition_long_corresponding,
+    kind="box",
+    col="article_type",
+    x="corresponding_status",
+    y="count",
+    hue="corresponding_status",
+    showfliers=False,
+)
+
+# Rotate x-axis labels with ha "right"
+for ax in g.axes.flat:
+    for label in ax.get_xticklabels():
+        label.set_rotation(45)
+        label.set_ha("right")
+```
+
+#### Domain
+
+```{python}
+for domain in dev_composition["domain"].unique():
+    print(domain)
+    print(
+        f_oneway(
+            dev_composition.loc[dev_composition["domain"] == domain, "n_corresponding_author_devs"],
+            dev_composition.loc[dev_composition["domain"] == domain, "n_non_corresponding_author_devs"],
+        )
+    )
+
+    print(
+        sp.posthoc_ttest(
+            dev_composition_long_corresponding.loc[dev_composition_long_corresponding["domain"] == domain],
+            val_col="count",
+            group_col="corresponding_status",
+            p_adjust="holm",
+        )
+    )
+```
+
+#### Article Type
+
+```{python}
+for article_type in dev_composition["article_type"].unique():
+    print(article_type)
+    print(
+        f_oneway(
+            dev_composition.loc[dev_composition["article_type"] == article_type, "n_corresponding_author_devs"],
+            dev_composition.loc[dev_composition["article_type"] == article_type, "n_non_corresponding_author_devs"],
+        )
+    )
+
+    print(
+        sp.posthoc_ttest(
+            dev_composition_long_corresponding.loc[dev_composition_long_corresponding["article_type"] == article_type],
+            val_col="count",
+            group_col="corresponding_status",
+            p_adjust="holm",
+        )
+    )
+```
+
+#### Open Access Status
+
+```{python}
+for oa_status in dev_composition["is_open_access"].unique():
+    print(oa_status)
+    print(
+        f_oneway(
+            dev_composition.loc[dev_composition["is_open_access"] == oa_status, "n_corresponding_author_devs"],
+            dev_composition.loc[dev_composition["is_open_access"] == oa_status, "n_non_corresponding_author_devs"],
+        )
+    )
+
+    print(
+        sp.posthoc_ttest(
+            dev_composition_long_corresponding.loc[dev_composition_long_corresponding["is_open_access"] == oa_status],
+            val_col="count",
+            group_col="corresponding_status",
+            p_adjust="holm",
+        )
+    )
+```
+
+### Modeling Citations
+
+- We model an authors total citations by their coding status and controlled by a number of different factors.
+- Each control variable is modeled separately and the results are presented in the tables below:
+  - Controlling for an authors most frequent author position: @{tbl-researcher-coding-status-author-position}
+  - Controlling for an authors most frequent domain: @{tbl-researcher-coding-status-domain}
+  - Controlling for an authors most frequent article type: @{tbl-researcher-coding-status-article-type}
 
 ```{python}
 # First, get the set of researchers who have at least 3 documents
@@ -1656,13 +2138,6 @@ author_cited_by_count_models = compute_researcher_level_models(
 )
 ```
 
-### Modeling Citations
-
-- We model an authors total citations by their coding status and controlled by a number of different factors.
-- Each control variable is modeled separately and the results are presented in the tables below:
-  - Controlling for an authors most frequent author position: @{tbl-researcher-coding-status-author-position}
-  - Controlling for an authors most frequent domain: @{tbl-researcher-coding-status-domain}
-  - Controlling for an authors most frequent article type: @{tbl-researcher-coding-status-article-type}
 
 #### Author Position
 
