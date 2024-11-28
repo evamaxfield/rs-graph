@@ -850,7 +850,6 @@ team_comp_no_push_after_pub_long = team_comp_no_push_after_pub.melt(
         "n_authors",
         "n_author_devs",
         "n_non_author_devs",
-        "n_devs",
     ],
     var_name="Contributor Type",
     value_name="count",
@@ -863,7 +862,6 @@ team_comp_no_push_after_pub_long["Contributor Type"] = (
             "n_authors": "Authors",
             "n_author_devs": "Code Contrib. Authors",
             "n_non_author_devs": "Non-Author Code Contribs.",
-            "n_devs": "Total Code Contribs.",
         }
     )
 )
@@ -880,6 +878,11 @@ sns.catplot(
 
 _ = plt.xticks(rotation=45, ha="right")
 ```
+
+```{python}
+team_comp_no_push_after_pub_long.groupby("Contributor Type")["count"].describe()
+```
+
 
 ```{python}
 #| label: tbl-team-composition-counts
@@ -1675,7 +1678,7 @@ for oa_status in dev_composition["is_open_access"].unique():
     )
 ```
 
-### Modeling Citations
+### Modeling H-Index
 
 - We model an authors total citations by their coding status and controlled by a number of different factors.
 - Each control variable is modeled separately and the results are presented in the tables below:
@@ -1871,16 +1874,23 @@ researchers_w_3_docs_and_coded_agg = researchers_w_3_docs_and_coded_agg.join(
 # "any" coding status
 # "majority" coding status
 # "always" coding status
+# determine type by taking the percentage of documents coded on
+# and determining if it is greater than 0, greater than 0.5, or 1
+researchers_w_3_docs_and_coded_agg["coding_pct"] = (
+    researchers_w_3_docs_and_coded_agg["n_coded"]
+    / researchers_w_3_docs_and_coded_agg["n_documents"]
+)
+
 researchers_w_3_docs_and_coded_agg["any_coding"] = (
-    researchers_w_3_docs_and_coded_agg["n_coded"] > 0
+    (researchers_w_3_docs_and_coded_agg["coding_pct"] > 0)
+    & (researchers_w_3_docs_and_coded_agg["coding_pct"] <= 0.5)
 ).astype(int)
 researchers_w_3_docs_and_coded_agg["majority_coding"] = (
-    researchers_w_3_docs_and_coded_agg["n_coded"]
-    >= researchers_w_3_docs_and_coded_agg["n_documents"] / 2
+    (researchers_w_3_docs_and_coded_agg["coding_pct"] > 0.5)
+    & (researchers_w_3_docs_and_coded_agg["coding_pct"] < 1)
 ).astype(int)
 researchers_w_3_docs_and_coded_agg["always_coding"] = (
-    researchers_w_3_docs_and_coded_agg["n_coded"]
-    == researchers_w_3_docs_and_coded_agg["n_documents"]
+    researchers_w_3_docs_and_coded_agg["coding_pct"] == 1
 ).astype(int)
 
 # Drop n_documents, n_coded and
@@ -2130,11 +2140,11 @@ IPython.display.HTML(count_table_html)
 ```
 
 ```{python}
-# Create models for cited_by_count
-author_cited_by_count_models = compute_researcher_level_models(
-    "cited_by_count",
+# Create models for h_index
+author_h_index_models = compute_researcher_level_models(
+    "h_index",
     researchers_w_3_docs_and_coded_agg_dummies,
-    glm_family=sm.families.NegativeBinomial(),
+    glm_family=sm.families.Gaussian(sm.families.links.Log()),
 )
 ```
 
@@ -2143,9 +2153,9 @@ author_cited_by_count_models = compute_researcher_level_models(
 
 ```{python}
 #| label: tbl-researcher-coding-status-author-position
-#| tbl-cap: "Researcher Total Citations by Coding Status Controlled by Most Freq. Author Position"
+#| tbl-cap: "Researcher H-Index by Coding Status Controlled by Most Freq. Author Position"
 
-author_cited_by_count_models["common_author_position"].summary()
+author_h_index_models["common_author_position"].summary()
 ```
 
 - first authors
@@ -2172,9 +2182,9 @@ in general, coding is associated with about a ~10 - 30% decrease in citations fo
 
 ```{python}
 #| label: tbl-researcher-coding-status-domain
-#| tbl-cap: "Researcher Total Citations by Coding Status Controlled by Most Freq. Domain"
+#| tbl-cap: "Researcher H-Index by Coding Status Controlled by Most Freq. Domain"
 
-author_cited_by_count_models["common_domain"].summary()
+author_h_index_models["common_domain"].summary()
 ```
 
 - health sciences
@@ -2206,9 +2216,9 @@ Physical sciences being entirely non-significant is interesting because a majori
 
 ```{python}
 #| label: tbl-researcher-coding-status-article-type
-#| tbl-cap: "Researcher Total Citations by Coding Status Controlled by Most Freq. Article Type"
+#| tbl-cap: "Researcher H-Index by Coding Status Controlled by Most Freq. Article Type"
 
-author_cited_by_count_models["common_article_type"].summary()
+author_h_index_models["common_article_type"].summary()
 ```
 
 - preprint
