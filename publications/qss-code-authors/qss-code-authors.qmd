@@ -69,8 +69,12 @@ import pandas as pd
 import seaborn as sns
 import statsmodels.api as sm
 from sci_soft_models.dev_author_em.data import load_annotated_dev_author_em_dataset
-import scikit_posthocs as sp
-from scipy.stats import pearsonr, f_oneway
+from scipy.stats import (
+    binomtest,
+    chi2_contingency,
+    false_discovery_control,
+    pearsonr,
+)
 from sqlalchemy import text
 from sqlmodel import create_engine
 
@@ -1284,14 +1288,6 @@ pearsonr(
 ### Author Positions of Code Contributing Authors
 
 ```{python}
-# create a dataframe of per-document coding status by position
-# and corresponding
-
-# i.e. "on a single paper, how many first authors coded",
-# "on a single paper, how many middle authors coded",
-# "on a single paper, how many last authors coded",
-# "on a single paper, how many corresponding authors coded"
-
 # Create subset documents
 docs_for_per_repo_stats = documents[[
     "id",
@@ -1386,14 +1382,21 @@ docs_for_per_repo_stats = docs_for_per_repo_stats.drop(
     ]
 )
 
-# Iter over articles and get the team composition info
-dev_composition_rows = []
-for _, row in docs_for_per_repo_stats.iterrows():
-    # Get authors
-    this_doc_authors = document_contributors.loc[
-        document_contributors["document_id"] == row["document_id"]
-    ]
+# Get document contributors
+doc_contribs_for_code_char = document_contributors.loc[
+    document_contributors["document_id"].isin(docs_for_per_repo_stats["document_id"])
+]
 
+# Merge with docs_for_per_repo_stats
+doc_contribs_for_code_char = doc_contribs_for_code_char.merge(
+    docs_for_per_repo_stats,
+    left_on="document_id",
+    right_on="document_id",
+).drop(columns=["id"])
+
+# Iter over rows and check if the author is a dev on the same article-repo pair
+doc_contribs_for_code_char_rows = []
+for i, row in doc_contribs_for_code_char.iterrows():
     # Get devs
     this_repo_devs = repository_contributors.loc[
         repository_contributors["repository_id"] == row["repository_id"]
@@ -1401,7 +1404,7 @@ for _, row in docs_for_per_repo_stats.iterrows():
 
     # Get the set of researcher_dev_links for the authors
     author_dev_links = researcher_dev_links.loc[
-        researcher_dev_links["researcher_id"].isin(this_doc_authors.researcher_id.unique())
+        researcher_dev_links["researcher_id"] == row.researcher_id
     ].sort_values("predictive_model_confidence", ascending=False)
 
     # Drop duplicates by developer_account_id (keeping first)
@@ -1411,271 +1414,224 @@ for _, row in docs_for_per_repo_stats.iterrows():
         keep="first",
     )
 
-    # Get the number of authors who were devs on this paper
-    n_first_author_devs = 0
-    n_middle_author_devs = 0
-    n_last_author_devs = 0
-    n_corresponding_author_devs = 0
-    n_non_corresponding_author_devs = 0
-    for _, author in this_doc_authors.iterrows():
-        author_dev_ids = author_dev_links.loc[
-            author_dev_links["researcher_id"] == author.researcher_id
-        ]["developer_account_id"].unique()
-
-        # Fast exit
-        if len(author_dev_ids) == 0:
-            continue
-
-        # Something likely went wrong in matching
-        if len(author_dev_ids) > 3:
-            continue
-
-        if any(author_dev_id in this_repo_devs.developer_account_id.unique() for author_dev_id in author_dev_ids):
-            if author.position == "first":
-                n_first_author_devs += 1
-            elif author.position == "middle":
-                n_middle_author_devs += 1
-            elif author.position == "last":
-                n_last_author_devs += 1
-
-            # Separate
-            if author.is_corresponding:
-                n_corresponding_author_devs += 1
-            else:
-                n_non_corresponding_author_devs += 1
-
-    # Append
-    dev_composition_rows.append(
-        {
-            "document_id": row["document_id"],
-            "repository_id": row["repository_id"],
-            "n_first_author_devs": n_first_author_devs,
-            "n_middle_author_devs": n_middle_author_devs,
-            "n_last_author_devs": n_last_author_devs,
-            "n_corresponding_author_devs": n_corresponding_author_devs,
-            "n_non_corresponding_author_devs": n_non_corresponding_author_devs,
-        }
-    )
+    # If no author dev links return same rows and "is_code_contributor" as False
+    if len(author_dev_links) == 0:
+        doc_contribs_for_code_char_rows.append(
+            {
+                **row.to_dict(),
+                "is_code_contributor": False,
+            }
+        )
+    
+    else:
+        # Add same rows and add "is_code_contributor" based on if developer_account_id is in this_repo_devs
+        doc_contribs_for_code_char_rows.append(
+            {
+                **row.to_dict(),
+                "is_code_contributor": any(
+                    author_dev_link["developer_account_id"]
+                    in this_repo_devs["developer_account_id"].unique()
+                    for _, author_dev_link in author_dev_links.iterrows()
+                ),
+            }
+        )
 
 # Create dataframe
-dev_composition = pd.DataFrame(dev_composition_rows)
+doc_contribs_for_code_char = pd.DataFrame(doc_contribs_for_code_char_rows)
 
-# Merge with docs_w_1_citation
-dev_composition = dev_composition.merge(
-    docs_for_per_repo_stats,
-    left_on=["document_id", "repository_id"],
-    right_on=["document_id", "repository_id"],
+# Replace binary values in "is_open_access" to "Open Access" and "Closed Access"
+doc_contribs_for_code_char["is_open_access"] = (
+    doc_contribs_for_code_char.apply(
+        lambda x: "Open Access" if x["is_open_access"] == 1 else "Closed Access",
+        axis=1,
+    )
+)
+
+# Replace binary values in "is_corresponding" to "Corresponding" and "Not Corresponding"
+doc_contribs_for_code_char["is_corresponding"] = (
+    doc_contribs_for_code_char.apply(
+        lambda x: "Corresponding" if x["is_corresponding"] == 1 else "Not Corresponding",
+        axis=1,
+    )
 )
 ```
 
 ```{python}
-# Melt frame to long form
-dev_composition_long_author_position = dev_composition.melt(
-    id_vars=[
-        "document_id",
-        "repository_id",
-        "domain",
-        "article_type",
-        "is_open_access",
-    ],
-    value_vars=[
-        "n_first_author_devs",
-        "n_middle_author_devs",
-        "n_last_author_devs",
-    ],
-    var_name="author_position",
-    value_name="count",
-)
+def _run_posthocs(
+    data: pd.DataFrame,
+    split_var: str,
+) -> None:            
+    # Conduct pairwise posthocs
+    binom_results = []
+    for split_val in data[split_var].unique():
+        split_val_subset = data.loc[
+            data[split_var] == split_val
+        ]
 
-# Split by article type
-g = sns.catplot(
-    data=dev_composition_long_author_position,
-    kind="box",
-    col="article_type",
-    x="author_position",
-    y="count",
-    hue="author_position",
-    showfliers=False,
-)
+        # Run test
+        results = binomtest(
+            sum(split_val_subset["is_code_contributor"]),
+            len(split_val_subset),
+            0.5,
+        )
+        
+        # Conduct binomial test
+        binom_results.append(
+            {
+                split_var: split_val,
+                "p": results.pvalue,
+                "statistic": results.statistic,
+                "n": len(split_val_subset),
+                "n_code_contributors": sum(split_val_subset["is_code_contributor"]),
+            }
+        )
 
-# Rotate x-axis labels with ha "right"
-for ax in g.axes.flat:
-    for label in ax.get_xticklabels():
-        label.set_rotation(45)
-        label.set_ha("right")
+        # P adjust
+        p_values = false_discovery_control(
+            [result["p"] for result in binom_results],
+            method="bh",
+        )
+
+        # Replace p values
+        for i, result in enumerate(binom_results):
+            result["p"] = p_values[i]
+        
+    # Print results
+    for result in binom_results:
+        print(
+            f"{split_var}: {result[split_var]}, "
+            f"p: {result['p']}, statistic: {result['statistic']}, n: {result['n']}"
+        )
+
+
+def _run_chi2_and_posthocs(
+    data: pd.DataFrame,
+    control_var: str | None,
+    split_var: str,
+) -> None:
+    if control_var is None:
+        print("Overall")
+        xtabs = pd.crosstab(
+            data[split_var],
+            data["is_code_contributor"],
+        )
+        print(xtabs)
+        chi2, p, _, _ = chi2_contingency(xtabs)
+        if p < 0.05:
+            print(f"Chi2: {chi2}, p: {p}, n: {len(data)}")
+            _run_posthocs(
+                data,
+                split_var=split_var,
+            )
+
+        else:
+            print(f"Coding by {split_var} not significant")
+
+    else:
+        for control_val in data[control_var].unique():
+            print(control_val)
+            # Get data with control_val subset
+            control_val_subset = data.loc[
+                data[control_var] == control_val
+            ]
+            xtabs = pd.crosstab(
+                control_val_subset[split_var],
+                control_val_subset["is_code_contributor"],
+            )
+            print(xtabs)
+            chi2, p, _, _ = chi2_contingency(xtabs)
+            if p < 0.05:
+                print(f"Chi2: {chi2}, p: {p}, n: {len(control_val_subset)}")
+                _run_posthocs(
+                    control_val_subset,
+                    split_var=split_var,
+                )
+
+            else:
+                print(f"Coding by {split_var} not significant")
+
+        print()
+        print()
+```
+
+```{python}
+# Run chi2 and posthocs for overall author position
+_run_chi2_and_posthocs(
+    doc_contribs_for_code_char,
+    control_var=None,
+    split_var="position",
+)
 ```
 
 #### Domain
 
 ```{python}
-for domain in dev_composition["domain"].unique():
-    print(domain)
-    print(
-        f_oneway(
-            dev_composition.loc[dev_composition["domain"] == domain, "n_first_author_devs"],
-            dev_composition.loc[dev_composition["domain"] == domain, "n_middle_author_devs"],
-            dev_composition.loc[dev_composition["domain"] == domain, "n_last_author_devs"],
-        )
-    )
-
-    print(
-        sp.posthoc_ttest(
-            dev_composition_long_author_position.loc[dev_composition_long_author_position["domain"] == domain],
-            val_col="count",
-            group_col="author_position",
-            p_adjust="holm",
-        )
-    )
+_run_chi2_and_posthocs(
+    doc_contribs_for_code_char,
+    control_var="domain",
+    split_var="position",
+)
 ```
 
 #### Article Type
 
 ```{python}
-for article_type in dev_composition["article_type"].unique():
-    print(article_type)
-    print(
-        f_oneway(
-            dev_composition.loc[dev_composition["article_type"] == article_type, "n_first_author_devs"],
-            dev_composition.loc[dev_composition["article_type"] == article_type, "n_middle_author_devs"],
-            dev_composition.loc[dev_composition["article_type"] == article_type, "n_last_author_devs"],
-        )
-    )
-
-    print(
-        sp.posthoc_ttest(
-            dev_composition_long_author_position.loc[dev_composition_long_author_position["article_type"] == article_type],
-            val_col="count",
-            group_col="author_position",
-            p_adjust="holm",
-        )
-    )
+_run_chi2_and_posthocs(
+    doc_contribs_for_code_char,
+    control_var="article_type",
+    split_var="position",
+)
 ```
 
 #### Open Access Status
 
 ```{python}
-for oa_status in dev_composition["is_open_access"].unique():
-    print(oa_status)
-    print(
-        f_oneway(
-            dev_composition.loc[dev_composition["is_open_access"] == oa_status, "n_first_author_devs"],
-            dev_composition.loc[dev_composition["is_open_access"] == oa_status, "n_middle_author_devs"],
-            dev_composition.loc[dev_composition["is_open_access"] == oa_status, "n_last_author_devs"],
-        )
-    )
-
-    print(
-        sp.posthoc_ttest(
-            dev_composition_long_author_position.loc[dev_composition_long_author_position["is_open_access"] == oa_status],
-            val_col="count",
-            group_col="author_position",
-            p_adjust="holm",
-        )
-    )
+_run_chi2_and_posthocs(
+    doc_contribs_for_code_char,
+    control_var="is_open_access",
+    split_var="position",
+)
 ```
 
 ### Corresponding Status of Code Contributing Authors
 
 ```{python}
-# Melt frame to long form
-dev_composition_long_corresponding = dev_composition.melt(
-    id_vars=[
-        "document_id",
-        "repository_id",
-        "domain",
-        "article_type",
-        "is_open_access",
-    ],
-    value_vars=[
-        "n_corresponding_author_devs",
-        "n_non_corresponding_author_devs",
-    ],
-    var_name="corresponding_status",
-    value_name="count",
+# Run chi2 and posthocs for overall corresponding status
+_run_chi2_and_posthocs(
+    doc_contribs_for_code_char,
+    control_var=None,
+    split_var="is_corresponding",
 )
-
-# Split by article type
-g = sns.catplot(
-    data=dev_composition_long_corresponding,
-    kind="box",
-    col="article_type",
-    x="corresponding_status",
-    y="count",
-    hue="corresponding_status",
-    showfliers=False,
-)
-
-# Rotate x-axis labels with ha "right"
-for ax in g.axes.flat:
-    for label in ax.get_xticklabels():
-        label.set_rotation(45)
-        label.set_ha("right")
 ```
 
 #### Domain
 
 ```{python}
-for domain in dev_composition["domain"].unique():
-    print(domain)
-    print(
-        f_oneway(
-            dev_composition.loc[dev_composition["domain"] == domain, "n_corresponding_author_devs"],
-            dev_composition.loc[dev_composition["domain"] == domain, "n_non_corresponding_author_devs"],
-        )
-    )
-
-    print(
-        sp.posthoc_ttest(
-            dev_composition_long_corresponding.loc[dev_composition_long_corresponding["domain"] == domain],
-            val_col="count",
-            group_col="corresponding_status",
-            p_adjust="holm",
-        )
-    )
+_run_chi2_and_posthocs(
+    doc_contribs_for_code_char,
+    control_var="domain",
+    split_var="is_corresponding",
+)
 ```
 
 #### Article Type
 
 ```{python}
-for article_type in dev_composition["article_type"].unique():
-    print(article_type)
-    print(
-        f_oneway(
-            dev_composition.loc[dev_composition["article_type"] == article_type, "n_corresponding_author_devs"],
-            dev_composition.loc[dev_composition["article_type"] == article_type, "n_non_corresponding_author_devs"],
-        )
-    )
-
-    print(
-        sp.posthoc_ttest(
-            dev_composition_long_corresponding.loc[dev_composition_long_corresponding["article_type"] == article_type],
-            val_col="count",
-            group_col="corresponding_status",
-            p_adjust="holm",
-        )
-    )
+_run_chi2_and_posthocs(
+    doc_contribs_for_code_char,
+    control_var="article_type",
+    split_var="is_corresponding",
+)
 ```
 
 #### Open Access Status
 
 ```{python}
-for oa_status in dev_composition["is_open_access"].unique():
-    print(oa_status)
-    print(
-        f_oneway(
-            dev_composition.loc[dev_composition["is_open_access"] == oa_status, "n_corresponding_author_devs"],
-            dev_composition.loc[dev_composition["is_open_access"] == oa_status, "n_non_corresponding_author_devs"],
-        )
-    )
-
-    print(
-        sp.posthoc_ttest(
-            dev_composition_long_corresponding.loc[dev_composition_long_corresponding["is_open_access"] == oa_status],
-            val_col="count",
-            group_col="corresponding_status",
-            p_adjust="holm",
-        )
-    )
+_run_chi2_and_posthocs(
+    doc_contribs_for_code_char,
+    control_var="is_open_access",
+    split_var="is_corresponding",
+)
 ```
 
 ### Modeling H-Index
