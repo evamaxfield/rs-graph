@@ -90,45 +90,81 @@ sns.set_palette(
     cmaps.bold[2:]._colors.tolist(),
 )
 
-USE_SAMPLE = False
+USE_SAMPLE = True
 ```
 
-- Contemporary scientific research has become increasingly dependent on specialized software tools and computational methods.
-  - define scientific software (scripts, tools, infrastructure)
-  - importance in enabling large scale experiments and acting as a direct log of processing and analysis
-  - scientific code sharing is on the rise
+- Contemporary scientific research fundamentally depends on specialized software tools and computational methods.
+    - define scientific software (analysis scripts, research tools, computational infrastructure)
+    - software enables reproducible research and large-scale experiments
+    - code serves as a detailed log of research methodology
+    - due to all of the above, code is increasingly being shared alongside research articles
 
-- Despite increased reliance on computational methodologies, the developers of scientific software have historically not been given traditional academic credit for their work: authorship on research articles.
-  - qualitative research which talks about acknowledgements sections instead of authorship
-  - lack of authorship can affect career prospects
+- The development and maintenance of scientific software requires substantial contribution, yet faces persistent challenges in receiving academic recognition.
+    - software contributions often receive only acknowledgments rather than authorship
+    - lack of formal credit affects career advancement in academia
+    - other general discussion of software citations and credit systems
 
-- While new credit systems aim to be more inclusive towards more contribution types, they still suffer from two key problems.
-	- Contributor Roles Taxonomy (CRediT) allows for specific “software” contribution
-  - Others have used CREDIT to understand distribution of labor…
-	- they are still based around an author list (it’s hard to change existing human practices, especially biased ones)
-	- they aren’t verifiable, they are self-reported
+- Recent initiatives to expand academic credit systems, while promising, have not fully addressed the challenges of recognizing software contributions.
+    - describe the Contributor Roles Taxonomy (CRediT)
+    - previous research using CRediT to understand research labor distribution
+    - CRediT research is still centered on traditional author lists
+    - problem of self-reporting without verification
 
-- To address these problems, we create a novel predictive model that enables matching scientific article authors and source code developer accounts.
-	- a predictive model is the best choice for entity matching because while authors have ORCIDs, developer accounts do not***
-	- further, developer account information may be slightly different from publication information (preferred name / legal name), username’s, etc
-	- a fine-tuned transformer model enables us to connect accounts which have similar enough information, hopefully providing us with many more author-code-contributor matches than would be possible on exact name or email address matching alone
+- Our novel predictive model addresses these challenges by enabling systematic matching between scientific article authors and source code developer accounts.
+    - we use predictive modeling due to the lack of standardized identifiers (i.e. ORCID) for developers
+    - further, lack consistency in naming and email overlap
+    - semantic models handle subtle variations in identity information (general entity matching has moved to transformers and semantic embeddings)
 
-- Our predictive model serves two primary purposes: identifying authors who directly contribute to an article’s associated codebase, and, revealing developers who were not included on the article’s authorship list.
-	- while predictive, it is grounded in the commit logs of source code repositories, no longer self reported
-	- individuals who have been left off can at least for now be identified by their developer account
+- By applying our model across a corpus of XYZ paired research articles and repositories, we provide unique insight into the dynamics of code contribution within research teams, the impact of code contribution on research outcomes, and an understanding of the authors who are and who aren’t code contributors.
+    - move from self-reporting to verifiable source code repository commit histories
+    - provide preliminary quantitative evidence of exclusion of code contributors from academic authorship
+    - model article level impact metrics as a function of software development dynamics to show the benefit code contributors have on research
+    - find that first authors are more likely to be code contributors than not
+    - find that code-contributing authors have reduced individual level impact metrics compared to their non-coding counterparts
 
-- Further, by applying our model across a large corpora of paired research articles and source code repositories, we enable objective insight into the software development dynamics of research teams.
-	- much like studies of CRediT, we can investigate both how many article authors contribute code
-	- similarly, we can investigate who contributes code (by author position and external characteristics
-	- again, this is via commit logs and contribution histories, rather than self-reported data
+- These findings not only illuminate the relationship between code contribution and scientific impact but also provide an empirical foundation for reforming academic credit systems to better recognize software development contributions in research.
 
-- To summarize, this paper makes the following contributions:
-	- we train, evaluate, and make publicly available a predictive model to match article authors with developer accounts together
-	- we create a large dataset of linked articles and source code repositories with accompanying bibliometric and repository information, and, further match article authors with repository developers
-	- demonstration of the value of our predictive model through preliminary analysis of research team software development dynamics and code contributor characteristics
+# Background
 
-- The rest of this paper is organized as follows:
-	- …
+- The relationship between scientific software development and academic credit systems represents a complex intersection of traditional academic practices and modern research requirements.
+    - academic credit traditionally focuses on analytical, theoretical, and experimental contributions
+    - software development historically viewed as technical rather than scholarly work
+    - growing recognition that research software development requires deep domain expertise
+    - increased emphasis on large scale (big data) projects has resulted in larger need for software development to manage computation and data
+    - understanding this relationship requires examining both team-level dynamics and individual contributions
+
+- (H1) Modern research increasingly depends on collaborative software development, yet we lack systematic evidence of how code contribution patterns affect research outcomes.
+    - existing research focuses primarily on general team size and diversity
+    - software engineering literature shows correlation between team size and code quality (many eyes make all bugs shallow)
+    - limited understanding of how code contribution is associated to research impact
+    - need to understand relationship between code contributors and citation metrics to understand the value of these technical, potentially uncredited, contributions
+    - in our case, we believe that more code contributors may signal a more technical research project and that technical complexity may be rewarded with more citations, as such, more code contributors should be associated with more article citations
+
+- (H2) The evolution of research projects from fixed-duration studies to ongoing software-driven endeavors challenges traditional models of academic credit attribution.
+    - research projects traditionally viewed as fixed-duration endeavors (which we know isn't always the case)
+    - using this viewpoint, we seek to understand the relationship between the authorship status of all code contributors and project duration
+    - we believe that longer projects will have more author code contributors than non-author code contributors as long term software commitments are more likely to be recognized as substantial contributions and therefore warrant authorship
+
+- (H3 and H4) Academic authorship conventions signal both intellectual contribution and project responsibilities, yet their relationship to software development remains poorly understood.
+    - first authors traditionally responsible for primary intellectual and experimental contributions
+    - corresponding authors serve as primary points of contact and often maintain research artifacts
+    - varying expectations across academic disciplines regarding technical contributions
+    - limited research examining how these authorship roles relate to code contributions
+    - potential insights into how software development responsibilities are distributed within research teams
+    - we believe that first authors and corresponding authors will have higher proportions of code contribution than not. Other author positions and non-corresponding authors will have lower proportions of code contribution than not.
+
+- (H5) Academic career advancement has historically depended on traditional impact metrics, creating potential tension for researchers who dedicate significant time to software development.
+    - existing metrics primarily capture publication and citation counts
+    - time invested in code development may reduce traditional scholarly output
+    - potential career implications for researchers who prioritize coding
+    - need to understand relationship between code contributions and academic impact
+    - we believe that code contributing researchers will have lower individual level impact metrics than non-coding researchers, likely due to a combination of lack of recognition and authorship credit as well as reduced time for traditional scholarly output
+
+- Understanding these relationships is crucial for developing equitable academic credit systems that recognize the full spectrum of research contributions.
+    - findings will inform policy making around academic credit
+    - importance of large-scale quantitative evidence for understanding the current state of academic credit systems
+    - implications for academic hiring and promotion decisions
+    - potential to develop new impact metrics that capture software (and other) contributions
 
 # Data and Methods
 
@@ -576,7 +612,7 @@ annotated_dataset = load_annotated_dev_author_em_dataset()
 annotated_dataset
 ```
 
-# A Predictive Model for Matching Article Authors and Source Code Contributors
+## A Predictive Model for Matching Article Authors and Source Code Contributors
 
 - To optimize our predictive model for author-contributor matching, we evaluate a variety of Transformer-based architectures and input features.
 	- multiple transformer base models available and there isn’t clear information as to which is “best” for entity matching
@@ -622,7 +658,7 @@ docs_w_1_citation = documents.loc[documents["cited_by_count"] >= 1].copy()
 
 # Take sample?
 if USE_SAMPLE:
-    docs_w_1_citation = docs_w_1_citation.sample(frac=0.1, random_state=12)
+    docs_w_1_citation = docs_w_1_citation.sample(frac=0.02, random_state=12)
 
 # Subset to only certain columns
 docs_w_1_citation = docs_w_1_citation[
@@ -1297,7 +1333,7 @@ docs_for_per_repo_stats = documents[[
 
 # Take sample?
 if USE_SAMPLE:
-    docs_for_per_repo_stats = docs_for_per_repo_stats.sample(frac=0.1, random_state=12)
+    docs_for_per_repo_stats = docs_for_per_repo_stats.sample(frac=0.02, random_state=12)
 
 # Rename id to document_id
 docs_for_per_repo_stats = docs_for_per_repo_stats.rename(columns={"id": "document_id"})
@@ -1655,7 +1691,7 @@ researchers_w_3_docs = researchers.loc[
 
 # Use sample?
 if USE_SAMPLE:
-    researchers_w_3_docs = researchers_w_3_docs.sample(frac=0.1, random_state=12)
+    researchers_w_3_docs = researchers_w_3_docs.sample(frac=0.02, random_state=12)
 
 # Next, for each researcher, get the set of documents they have contributed to
 researchers_w_3_docs = document_contributors.loc[
