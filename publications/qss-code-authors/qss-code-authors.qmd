@@ -130,7 +130,7 @@ USE_SAMPLE = True
     - academic credit traditionally focuses on analytical, theoretical, and experimental contributions
     - software development historically viewed as technical rather than scholarly work
     - growing recognition that research software development requires deep domain expertise
-    - increased emphasis on large scale (big data) projects has resulted in larger need for software development to manage computation and data
+    - increased emphasis on large scale (big data) projects has resulted in larger need for software development
     - understanding this relationship requires examining both team-level dynamics and individual contributions
 
 - (H1) Modern research increasingly depends on collaborative software development, yet we lack systematic evidence of how code contribution patterns affect research outcomes.
@@ -138,12 +138,14 @@ USE_SAMPLE = True
     - software engineering literature shows correlation between team size and code quality (many eyes make all bugs shallow)
     - limited understanding of how code contribution is associated to research impact
     - need to understand relationship between code contributors and citation metrics to understand the value of these technical, potentially uncredited, contributions
-    - in our case, we believe that more code contributors may signal a more technical research project and that technical complexity may be rewarded with more citations, as such, more code contributors should be associated with more article citations
+    - we believe that more code contributors may signal a more technical research project and that technical complexity may be rewarded with more citations
 
-- (H2) The evolution of research projects from fixed-duration studies to ongoing software-driven endeavors challenges traditional models of academic credit attribution.
-    - research projects traditionally viewed as fixed-duration endeavors (which we know isn't always the case)
-    - using this viewpoint, we seek to understand the relationship between the authorship status of all code contributors and project duration
-    - we believe that longer projects will have more author code contributors than non-author code contributors as long term software commitments are more likely to be recognized as substantial contributions and therefore warrant authorship
+- (H2) Despite formal taxonomies like CRediT attempting to standardize contribution recognition, the criteria for granting authorship to technical contributors remain inconsistent and poorly understood across research communities.
+    - existing contribution frameworks provide definitions for software development roles
+    - however, these frameworks may not capture the full spectrum of technical contributions
+    - repository histories allow us to examine how sustained technical engagement relates to authorship status
+    - we believe that longer project involvement increases likelihood of authorship recognition
+    - specifically, we hypothesize that projects with longer durations will show higher proportions of author-developers compared to non-author developers
 
 - (H3 and H4) Academic authorship conventions signal both intellectual contribution and project responsibilities, yet their relationship to software development remains poorly understood.
     - first authors traditionally responsible for primary intellectual and experimental contributions
@@ -151,10 +153,10 @@ USE_SAMPLE = True
     - varying expectations across academic disciplines regarding technical contributions
     - limited research examining how these authorship roles relate to code contributions
     - potential insights into how software development responsibilities are distributed within research teams
-    - we believe that first authors and corresponding authors will have higher proportions of code contribution than not. Other author positions and non-corresponding authors will have lower proportions of code contribution than not.
+    - we believe that first authors and corresponding authors will have higher proportions of code contribution than not.
+    - conversely, middle and last authors and non-corresponding authors will have lower proportions of code contribution than not.
 
 - (H5) Academic career advancement has historically depended on traditional impact metrics, creating potential tension for researchers who dedicate significant time to software development.
-    - existing metrics primarily capture publication and citation counts
     - time invested in code development may reduce traditional scholarly output
     - potential career implications for researchers who prioritize coding
     - need to understand relationship between code contributions and academic impact
@@ -162,9 +164,9 @@ USE_SAMPLE = True
 
 - Understanding these relationships is crucial for developing equitable academic credit systems that recognize the full spectrum of research contributions.
     - findings will inform policy making around academic credit
-    - importance of large-scale quantitative evidence for understanding the current state of academic credit systems
+    - importance of large-scale quantitative evidence for understanding current credit systems
     - implications for academic hiring and promotion decisions
-    - potential to develop new impact metrics that capture software (and other) contributions
+    - potential to develop new impact metrics that capture software contributions
 
 # Data and Methods
 
