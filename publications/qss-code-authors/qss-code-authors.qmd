@@ -68,7 +68,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import statsmodels.api as sm
-from sci_soft_models.dev_author_em.data import load_annotated_dev_author_em_dataset
+from sci_soft_models.dev_author_em import data as sci_soft_models_data
 from scipy.stats import (
     binomtest,
     chi2_contingency,
@@ -172,24 +172,6 @@ USE_SAMPLE = True
 
 ## Linking Scientific Articles and Source Code Repositories
 
-- Modern scientific research increasingly requires the public sharing of research code, creating unique opportunities to study the relationship between academic authorship and software development.
-    - many journals and platforms now require or recommend code sharing
-    - this requirement creates traceable links between publications and code
-    - these links enable systematic study of both article-repository and author-developer relationships
-    - need to mention scale/scope of data collection here
-
-- Our data collection process leverages multiple complementary sources of linked scientific articles and code repositories to ensure comprehensive coverage.
-    - PLOS: Traditional research articles with code requirements
-    - JOSS and SoftwareX: Specialized software-focused publications
-    - Papers with Code / ArXiv: Capturing pre-print landscape
-    - need to add details about timeline, number of papers/repos collected
-
-- Through integration of multiple data sources, we extract detailed information about both the academic and software development aspects of each project.
-    - OpenAlex API provides publication metadata and citation metrics
-    - GitHub API provides repository metadata and repository contributor information
-    - need to add details about what specific metrics you collect
-    - need to discuss any data cleaning or filtering steps
-
 ```{python}
 def read_table(table: str) -> pd.DataFrame:
     return pd.read_sql(text(f"SELECT * FROM {table}"), db_conn)
@@ -234,11 +216,6 @@ doc_repo_links.drop(columns=["id"], inplace=True)
 original_doc_repo_links_len = len(doc_repo_links)
 doc_repo_links = doc_repo_links.drop_duplicates(subset=["document_id"], keep=False)
 doc_repo_links = doc_repo_links.drop_duplicates(subset=["repository_id"], keep=False)
-print(
-    "doc-repo-links that point at mult- docs or repos:",
-    original_doc_repo_links_len - len(doc_repo_links),
-)
-print("these are currently ignored / dropped before analysis")
 
 # Reduce other tables to only documents / repositories in the updated doc_repo_links
 documents = documents[documents["id"].isin(doc_repo_links["document_id"])]
@@ -436,9 +413,82 @@ for _, data_source in dataset_sources.iterrows():
 reduced_doc_types = pd.DataFrame(reduced_doc_types_rows)
 ```
 
+- Modern scientific research increasingly requires the public sharing of research code, creating unique opportunities to study the relationship between academic authorship and software development.
+    - many journals and platforms now require or recommend code and data sharing
+    - this requirement creates traceable links between publications and code
+    - these links enable systematic study of both article-repository and author-developer relationships
+
+- Our data collection process leverages multiple complementary sources of linked scientific articles and code repositories to ensure comprehensive coverage.
+    - PLOS: Traditional research articles with code requirements
+    - JOSS and SoftwareX: Specialized software-focused publications
+    - Papers with Code / ArXiv: Capturing pre-print landscape
+    - to reduce the complexity of dataset processing and enrichment, we filter out any article-source-code-repository pairs which store code somewhere other than GitHub
+
+- Through integration of multiple data sources, we extract detailed information about both the academic and software development aspects of each project.
+    - specifically we utilize the Semantic Scholar API for article DOI resolution to ensure that we find the latest version for each article.
+    - this is particularly important for working with preprints as they may have been published in a journal since their inclusion in the Papers with Code dataset
+    - we then utilize the OpenAlex API to gather publication metadata (i.e. open access status, domain, publication date), author details (i.e. name, author position, corresponding author status), and article- and individual-level metrics (i.e. citation count, FWCI, h-index).
+    - the GitHub API provides similar information for source code repositories, including repository metadata (i.e. name, description, languages, creation date), contributor details (i.e. username, name, email), and repository-level metrics (i.e. star count, fork count, issue count).
+
+- while the majority of our data is sourced from Papers with Code, our additional collection from PLOS, JOSS, and SoftwareX as well as the enrichment from GitHub and OpenAlex together form one of the largest collections of linked, metadata enriched, datasets of paired scientific articles and associated source code repositories.
+    - in total, we collect and enrich data for `{python} original_doc_repo_links_len` article-repository pairs
+
 ## A Predictive Model for Matching Article Authors and Source Code Contributors
 
 ### Annotated Dataset Creation
+
+```{python}
+# Load annotated dataset
+annotated_dataset = sci_soft_models_data.load_annotated_dev_author_em_dataset()
+
+# Get counts of positive and negative examples
+n_positive_examples = len(annotated_dataset.loc[annotated_dataset["match"]])
+n_negative_examples = len(annotated_dataset.loc[~annotated_dataset["match"]])
+pct_positive_examples = round(n_positive_examples / len(annotated_dataset), 3) * 100
+pct_negative_examples = round(n_negative_examples / len(annotated_dataset), 3) * 100
+
+# Create function to split row details
+def split_dev_details(dev_details: str) -> dict:
+    details_list = dev_details.split(";\n")
+    details_dict = {}
+    for detail in details_list:
+        try:
+            key, value = detail.split(": ", 1)
+        except Exception:
+            print(detail)
+            raise
+
+        # Only keep username, name, and email
+        if key in ["username", "name", "email"]:
+            # If value is "None" replace with None
+            if value == "None":
+                value = None
+
+            # Store to details dict
+            details_dict[key] = value
+    
+    return details_dict
+
+# Split dev details
+all_dev_details = annotated_dataset["dev_details"].apply(split_dev_details)
+
+# Convert to dataframe
+all_dev_details_df = pd.DataFrame(all_dev_details.tolist())
+
+# Drop duplicates on username
+all_dev_details_df = all_dev_details_df.drop_duplicates(subset=["username"])
+
+# Get counts
+n_devs = len(all_dev_details_df)
+n_devs_with_name = all_dev_details_df["name"].notnull().sum()
+n_devs_with_email = all_dev_details_df["email"].notnull().sum()
+
+pct_devs_with_name = round(n_devs_with_name / n_devs, 3) * 100
+pct_devs_with_email = round(n_devs_with_email / n_devs, 3) * 100
+
+# Get unique authors from original frame from unique semantic scholar id
+n_authors = annotated_dataset["semantic_scholar_id"].nunique()
+```
 
 - The development of an accurate author-developer matching model requires high-quality labeled training data that captures the complexity of real-world identity matching.
     - entity matching between authors and developers is non-trivial
@@ -448,39 +498,106 @@ reduced_doc_types = pd.DataFrame(reduced_doc_types_rows)
 
 - We developed an annotation process to create a robust training dataset while maximizing efficiency and accuracy.
     - focus on JOSS articles to increase positive match density
-    - two independent annotators reviewing 3000 pairs
+    - we create author-developer pairs for annotation by creating all possible combinations of authors and developers within a single JOSS article-repository pair
+    - we take a random sample of 3000 pairs from the full set and have two independent annotators label each
     - structured conflict resolution process
     - need to add details about annotation guidelines/criteria
 
 - The resulting annotated dataset provides a comprehensive foundation for training our predictive model while highlighting common patterns in author-developer identity matching.
-    - distribution of positive/negative matches
-    - analysis of available identity information
-    - need table showing feature availability statistics
-
-```{python}
-# Load annotated dataset
-annotated_dataset = load_annotated_dev_author_em_dataset()
-
-annotated_dataset
-```
+    - after resolution of all annotated pairs, our annotated dataset contains `{python} n_positive_examples` (`{python} pct_positive_examples`%) positive and `{python} n_negative_examples` (`{python} pct_negative_examples`%) negative author-developer-account pairs
+    - there are `{python} n_authors` unique authors and `{python} n_devs` unique developer accounts within this annotated set
+    - however, not all developer accounts contain complete information, in our set `{python} n_devs_with_name` (`{python} pct_devs_with_name`%) have associated names and `{python} n_devs_with_email` (`{python} pct_devs_with_email`%) have associated emails
 
 ### Training and Evaluation
+
+```{python}
+training_split_counts = sci_soft_models_data.load_final_model_training_split_details()
+
+# Take sum on rows
+training_split_counts = training_split_counts.set_index("split").sum(axis=1)
+training_split_pct = ((training_split_counts / training_split_counts.sum()) * 100).round(1)
+```
 
 - To optimize our predictive model for author-contributor matching, we evaluate a variety of Transformer-based base models and input features.
     - multiple transformer base models available
     - various potential feature combinations
 
 - We employed a systematic evaluation to identify optimal combination of base models and input features.
-    - description of testing methodology
-    - explanation of data splitting approach
-    - need specifics on evaluation metrics
+    - first, to ensure that there was no data leakage, we split our dataset into training and test sets
+    - specifically, we created two random sets of 10% of all unique authors and 10% of all unique developers, any pairs containing either the author or developer were placed into the test set
+    - in doing so, we ensured that the model was never trained on any author or developer information later used for evaluation
+    - due to the fact that each author and developer-account can be included in multiple annotated pairs, our final training set contains `{python} training_split_counts["train"]` (`{python} training_split_pct["train"]`%) and our test set contains `{python} training_split_counts["test"]` (`{python} training_split_pct["test"]`%) author-developer-account pairs
+    - we used three different transformer models as our fine-tuning bases and fine-tuned each using all combinations of avaiable developer-account features, from including only the developer account username to including the developer's username, name, and email.
+    - to avoid overfitting and ensure generalizability, we fine-tuned each of the base models for only a single training epoch.
+    - model evaluation was performed using standard classification metrics, including accuracy, precision, recall, and F1 score
 
-- After extensive model comparison we find that [Base Model X] with [Feature Set Y] achieves the best performance for author-developer matching.
-    - performance metrics
-    - analysis of feature importance
-    - need comprehensive results table
+```{python}
+exp_results = sci_soft_models_data.load_experimental_training_results()
 
-- To promote reproducibility and enable future research, we have made our trained model and associated tools publicly available.
+# Remove the "time_pred" and "epoch_val" columns
+exp_results = exp_results.drop(columns=["time_pred", "epoch_val"])
+
+# Round accuracy, precision, recall, and f1 to 3 decimal places
+exp_results = exp_results.round(
+    {
+        "accuracy": 3,
+        "precision": 3,
+        "recall": 3,
+        "f1": 3,
+    }
+)
+
+# Replace "no-optional-data" with "n/a"
+exp_results["fieldset"] = exp_results["fieldset"].replace(
+    "no-optional-data", "n/a"
+)
+
+# Str replace references to "dev_" in "fieldset" column
+exp_results["fieldset"] = exp_results["fieldset"].str.replace("dev_", "")
+
+# Str replace "_" with " " in "fieldset" column
+exp_results["fieldset"] = exp_results["fieldset"].str.replace("_", " ")
+
+# Str split fieldset values on "-" and rejoin with ", "
+exp_results["fieldset"] = exp_results["fieldset"].str.split("-").apply(
+    lambda x: ", ".join(x)
+)
+
+# Rename fieldset column to "Optional Features"
+exp_results = exp_results.rename(columns={"fieldset": "Optional Feats."})
+
+# Capitalize column names
+exp_results.columns = exp_results.columns.str.title()
+
+# Get best model f1 and get the accuracy, precision, recall, and f1 for that model
+best_model_idx = exp_results["F1"].idxmax()
+best_model_acc = exp_results.loc[best_model_idx, "Accuracy"]
+best_model_prec = exp_results.loc[best_model_idx, "Precision"]
+best_model_rec = exp_results.loc[best_model_idx, "Recall"]
+best_model_f1 = exp_results.loc[best_model_idx, "F1"]
+
+# Get best base model
+best_base_model = exp_results.loc[
+    best_model_idx, "Model"
+]
+
+# Get best feature set
+best_feature_set = exp_results.loc[
+    best_model_idx, "Optional Feats."
+]
+
+# Format best feature set
+# Either a single word or "word 1 and word 2"
+if ", " in best_feature_set:
+    best_feature_set = best_feature_set.replace(", ", " and ")
+```
+
+- After extensive model comparison we find that fine-tuning from `{python} best_base_model` and including the developer's `{python} best_feature_set` achieves the best performance for author-developer matching.
+    - our best model achieves a binary F1 score of `{python} best_model_f1`, with an accuracy of `{python} best_model_acc`, precision of `{python} best_model_prec`, and recall of `{python} best_model_rec`.
+    - analysis of feature importance (todo, running overnight)
+    - all model and feature set combination results are available in @tbl-em-model-comparison
+
+- To enable future research, we have made our trained model and supporting application library publicly available.
     - Python library implementation
     - HuggingFace model deployment
 
@@ -635,8 +752,20 @@ stats_table_html = f"""
 """.strip()
 ```
 
-- Our final dataset contains the bibliometric and code repository information for hundreds of thousands of scientific-article-source-code-repository pairs from multiple article types and fields.
-  - Specifically, our dataset contains `{python} total_article_repo_pairs` article-repository pairs, `{python} total_authors` distinct authors, and `{python} total_devs` distinct developer accounts.
+- Our trained entity-matching model enables comprehensive identification of author-developer relationships while accounting for the complex realities of academic software development practices.
+    - model applied to all possible author and developer-account combinations within each article-repository pair
+    - recognition that one-to-one matching may not reflect reality
+    - deliberate choice to allow many-to-many relationships in matching
+
+- The presence of multiple developer accounts per individual reflects common practices in academic software development that must be accommodated in our analysis.
+    - developers often maintain separate accounts for different projects or institutions
+    - account transitions are common as researchers move between roles
+    - CHAOSS project provides precedent for this type of identity resolution
+    - we include appropriate filtering during analysis to ensure that we do not include author-developer pairs which are unlikely to be the same individual
+
+- Our final dataset provides unprecedented scale and scope for analyzing the relationship between academic authorship and software development contributions.
+    - Specifically, our dataset contains `{python} total_article_repo_pairs` article-repository pairs, `{python} total_authors` distinct authors, and `{python} total_devs` distinct developer accounts.
+    - a detailed breakdown of these counts by data source, domain, document type, and open access status is available in @tbl-rs-graph-overall-counts  
 
 ```{python}
 #| label: tbl-rs-graph-overall-counts
@@ -647,6 +776,9 @@ IPython.display.HTML(stats_table_html)
 ```
 
 ```{python}
+#| label: fig-docs-per-year
+#| fig-cap: Number of articles by publication year. Only publication years with 100 or more articles are included.
+
 # Create a subset of the documents table with only document_id and publication_date
 documents_pub_year = documents[["id", "publication_date"]].copy()
 documents_pub_year["publication_year"] = pd.to_datetime(
@@ -2269,3 +2401,14 @@ author_h_index_models["common_article_type"].summary()
    - always coding has a positive association with citations (`{python} np.exp(+0.384)`)
 
 Preprints (from arXiv) have a negative association with coding generally. Research articles have a very slim positive association with coding. Software articles have a strongly positive association with coding (unsuprising).
+
+# Appendix
+
+## Full Comparison of Models and Optional Features for Author-Developer-Account Matching 
+
+```{python}
+#| label: tbl-em-model-comparison
+#| tbl-cap: "Comparison of Models for Author-Developer-Account Matching"
+
+exp_results
+```
