@@ -76,13 +76,12 @@ from scipy.stats import (
     pearsonr,
 )
 from sqlalchemy import text
-from sqlmodel import create_engine
 
 from rs_graph.db import models as db_models
+from rs_graph.db import utils as db_utils
 
 # Get db engine for production database
-db_path = Path("rs-graph-temp.db").resolve().absolute()
-db_conn = create_engine(f"sqlite:///{db_path}")
+db_conn = db_utils.get_engine(use_prod=True)
 
 # Set seaborn style
 plt.style.use("opinionated_rc")
