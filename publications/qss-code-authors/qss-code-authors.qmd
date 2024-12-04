@@ -575,27 +575,22 @@ best_model_acc = exp_results.loc[best_model_idx, "Accuracy"]
 best_model_prec = exp_results.loc[best_model_idx, "Precision"]
 best_model_rec = exp_results.loc[best_model_idx, "Recall"]
 best_model_f1 = exp_results.loc[best_model_idx, "F1"]
-
-# Get best base model
-best_base_model = exp_results.loc[
-    best_model_idx, "Model"
-]
-
-# Get best feature set
-best_feature_set = exp_results.loc[
-    best_model_idx, "Optional Feats."
-]
-
-# Format best feature set
-# Either a single word or "word 1 and word 2"
-if ", " in best_feature_set:
-    best_feature_set = best_feature_set.replace(", ", " and ")
 ```
 
-- After extensive model comparison we find that fine-tuning from `{python} best_base_model` and including the developer's `{python} best_feature_set` achieves the best performance for author-developer matching.
-    - our best model achieves a binary F1 score of `{python} best_model_f1`, with an accuracy of `{python} best_model_acc`, precision of `{python} best_model_prec`, and recall of `{python} best_model_rec`.
-    - analysis of feature importance (todo, running overnight)
+- After extensive model comparison we find that fine-tuning from [Microsoft's deberta-v3-base](https://huggingface.co/microsoft/deberta-v3-base) and including only the developer's username and name achieves the best performance for author-developer matching.
+    - our best model achieves a binary F1 score of `{python} best_model_f1`, with an accuracy of `{python} best_model_acc`, precision of `{python} best_model_prec`, and recall of `{python} best_model_rec` (see @fig-em-model-confusion-matrix for a confusion matrix of model predictions on the test set).
+    - analysis of feature importance
+        - note that the addition of developer's name has a "larger effect" on model performance but that could simply be because of how many more developers have a name available than an email
+        - also note that there is a model that performs just as well as this one using bert-multilingual and includes the developers email however we choose to use the deberta and name only version for its simplicity as well as the fact that deberta is a much more recently developed and released model which was pre-trained on a much larger dataset (including multilingual data).
+        - considering that in most cases, deberta out-performs bert-multilingual, we believe that while the overall evaluation metrics between the top two performing models are the same, the deberta based model will generalize to other unseen data better than the bert-multilingual model
     - all model and feature set combination results are available in @tbl-em-model-comparison
+
+```{python}
+#| label: fig-em-model-confusion-matrix
+#| fig-cap: "Confusion Matrix Produced From Evaluation of Best Performing Model (deberta-v3 with developer username, developer name, and author name)."
+
+IPython.display.Image(sci_soft_models_data.FINAL_MODEL_TRAINING_DATA_DIR / "dev-author-em-confusion-matrix.png")
+```
 
 - To enable future research, we have made our trained model and supporting application library publicly available.
     - Python library implementation
@@ -761,11 +756,17 @@ stats_table_html = f"""
     - developers often maintain separate accounts for different projects or institutions
     - account transitions are common as researchers move between roles
     - CHAOSS project provides precedent for this type of identity resolution
+
+- Further, while our model performs well overall, we note that there are some limitations to our approach.
+    - in most cases predictions are trivial due to minor differences in text (spelling of author name to username)
+    - however we do observe a few cases in which our model may not perform as well
+    - namely, shorter names, articles and repositories which have contributors with the same last name (i.e. siblings or other relationship), and "organization" accounts (i.e. research lab GitHub accounts used for management, administration, and documentation or a project)
+    - TODO: should we take a sample and estimate how widespread these problems are?
     - we include appropriate filtering during analysis to ensure that we do not include author-developer pairs which are unlikely to be the same individual
 
 - Our final dataset provides unprecedented scale and scope for analyzing the relationship between academic authorship and software development contributions.
     - Specifically, our dataset contains `{python} total_article_repo_pairs` article-repository pairs, `{python} total_authors` distinct authors, and `{python} total_devs` distinct developer accounts.
-    - a detailed breakdown of these counts by data source, domain, document type, and open access status is available in @tbl-rs-graph-overall-counts  
+    - a detailed breakdown of these counts by data source, domain, document type, and open access status is available in @tbl-rs-graph-overall-counts
 
 ```{python}
 #| label: tbl-rs-graph-overall-counts
@@ -777,7 +778,7 @@ IPython.display.HTML(stats_table_html)
 
 ```{python}
 #| label: fig-docs-per-year
-#| fig-cap: Number of articles by publication year. Only publication years with 100 or more articles are included.
+#| fig-cap: "Number of articles by publication year. Only publication years with 100 or more articles are included."
 
 # Create a subset of the documents table with only document_id and publication_date
 documents_pub_year = documents[["id", "publication_date"]].copy()
@@ -931,6 +932,11 @@ for _, row in docs_w_1_citation.iterrows():
         subset=["developer_account_id"],
         keep="first",
     )
+
+    # Drop any author dev links that have less than 90% confidence
+    author_dev_links = author_dev_links.loc[
+        author_dev_links["predictive_model_confidence"] >= 0.9
+    ]
 
     # Get the number of authors who were devs on this paper
     n_author_devs = 0
@@ -1621,6 +1627,11 @@ for i, row in doc_contribs_for_code_char.iterrows():
         subset=["developer_account_id"],
         keep="first",
     )
+
+    # Drop any author dev links that have less than 90% confidence
+    author_dev_links = author_dev_links.loc[
+        author_dev_links["predictive_model_confidence"] >= 0.9
+    ]
 
     # If no author dev links return same rows and "is_code_contributor" as False
     if len(author_dev_links) == 0:
@@ -2404,11 +2415,11 @@ Preprints (from arXiv) have a negative association with coding generally. Resear
 
 # Appendix
 
-## Full Comparison of Models and Optional Features for Author-Developer-Account Matching 
+## Full Comparison of Models and Optional Features for Author-Developer-Account Matching
 
 ```{python}
 #| label: tbl-em-model-comparison
 #| tbl-cap: "Comparison of Models for Author-Developer-Account Matching"
 
-exp_results
+IPython.display.display(exp_results.to_html(index=False))
 ```
