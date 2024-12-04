@@ -66,3 +66,29 @@ we simply need them to increase the rate limit for the API.
 In general, you should never be rate limited as the 
 pipeline scales the number of workers based on 
 the number of tokens you provide.
+
+## Publications
+
+### Code Contribution and Scientific Authorship
+
+From start to finish, to serve the web version of the
+manuscript and enable hot-reloading, run:
+
+The manuscript is located at: [./publications/qss-code-authors/qss-code-authors.qmd](./publications/qss-code-authors/qss-code-authors.qmd)
+
+```bash
+micromamba create --name rs-graph python=3.12 -y
+micromamba activate rs-graph
+micromamba install -c conda-forge just -y
+micromamba install -c conda-forge quarto -y
+just install
+rs-graph-data download
+just quarto-serve
+```
+
+Notes:
+- We use `micromamba` for environment management, feel free to use whichever environment manage you prefer, however you will still need to install `just` and `quarto` via Homebrew / Conda / from source.
+- The `rs-graph-data download` data pulls down the latest version of the production database. This is a ~1.5GB SQLite file, so it may take a while to download.
+- The `just quarto-serve` command will start a local server and open the manuscript in your default browser. You can make changes to the manuscript and see them reflected in real-time in your browser.
+  - If the hot-reload fails to render after a while, kill the process and try again.
+- **Important:** by default, the manuscript will be rendered using a very small sample (2%) of the data to speed up the rendering process and iterative writing. If you want to render the full dataset, change the `USE_SAMPLE` flag in the manuscript file to `False`.

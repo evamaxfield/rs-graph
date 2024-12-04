@@ -139,5 +139,5 @@ docker-run:
 # Publications management
 
 # hot-reload quarto doc
-serve-quarto project="qss-code-authors":
+quarto-serve project="qss-code-authors":
 	-quarto preview {{justfile_directory()}}/publications/{{project}}/
