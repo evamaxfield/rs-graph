@@ -170,20 +170,25 @@ USE_SAMPLE = True
 
 # Data and Methods
 
-## Linking Scientific Articles and Associated Source Code Repositories
+## Linking Scientific Articles and Source Code Repositories
 
-- Our trained predictive model and our preliminary analyses are based on datasets of linked bibliographic and source code repository information from multiple journals and publication platforms.
-	- Each data source (the journals and publication platforms) either requires or recommends the sharing of code repositories related to a piece of work at the time of publication.
-	- In turn, this allows us to mine article information for their either required, or recommended “data or code availability” links.
-	- our data sources are:
-    - PLOS: research articles
-    - JOSS: software articles
-    - SoftwareX: software articles
-    - Papers with Code / ArXiv: pre-prints
+- Modern scientific research increasingly requires the public sharing of research code, creating unique opportunities to study the relationship between academic authorship and software development.
+    - many journals and platforms now require or recommend code sharing
+    - this requirement creates traceable links between publications and code
+    - these links enable systematic study of both article-repository and author-developer relationships
+    - need to mention scale/scope of data collection here
 
-- Using each data source, we process the pairs of scientific articles and associated source code repositories, in order to extract the authorship and source code repository contributor lists as well as other bibliometric and repository information.
-	- we use open alex to extract bibliometric information
-	- we use the github API to extract repository information
+- Our data collection process leverages multiple complementary sources of linked scientific articles and code repositories to ensure comprehensive coverage.
+    - PLOS: Traditional research articles with code requirements
+    - JOSS and SoftwareX: Specialized software-focused publications
+    - Papers with Code / ArXiv: Capturing pre-print landscape
+    - need to add details about timeline, number of papers/repos collected
+
+- Through integration of multiple data sources, we extract detailed information about both the academic and software development aspects of each project.
+    - OpenAlex API provides publication metadata and citation metrics
+    - GitHub API provides repository metadata and repository contributor information
+    - need to add details about what specific metrics you collect
+    - need to discuss any data cleaning or filtering steps
 
 ```{python}
 def read_table(table: str) -> pd.DataFrame:
@@ -429,8 +434,60 @@ for _, data_source in dataset_sources.iterrows():
 
 # Create reduced_doc_types dataframe
 reduced_doc_types = pd.DataFrame(reduced_doc_types_rows)
+```
 
-# Now compute stats
+## A Predictive Model for Matching Article Authors and Source Code Contributors
+
+### Annotated Dataset Creation
+
+- The development of an accurate author-developer matching model requires high-quality labeled training data that captures the complexity of real-world identity matching.
+    - entity matching between authors and developers is non-trivial
+    - multiple forms of name variation and incomplete information
+    - need to expand on specific matching challenges
+    - add figure showing example matches/non-matches
+
+- We developed an annotation process to create a robust training dataset while maximizing efficiency and accuracy.
+    - focus on JOSS articles to increase positive match density
+    - two independent annotators reviewing 3000 pairs
+    - structured conflict resolution process
+    - need to add details about annotation guidelines/criteria
+
+- The resulting annotated dataset provides a comprehensive foundation for training our predictive model while highlighting common patterns in author-developer identity matching.
+    - distribution of positive/negative matches
+    - analysis of available identity information
+    - need table showing feature availability statistics
+
+```{python}
+# Load annotated dataset
+annotated_dataset = load_annotated_dev_author_em_dataset()
+
+annotated_dataset
+```
+
+### Training and Evaluation
+
+- To optimize our predictive model for author-contributor matching, we evaluate a variety of Transformer-based base models and input features.
+    - multiple transformer base models available
+    - various potential feature combinations
+
+- We employed a systematic evaluation to identify optimal combination of base models and input features.
+    - description of testing methodology
+    - explanation of data splitting approach
+    - need specifics on evaluation metrics
+
+- After extensive model comparison we find that [Base Model X] with [Feature Set Y] achieves the best performance for author-developer matching.
+    - performance metrics
+    - analysis of feature importance
+    - need comprehensive results table
+
+- To promote reproducibility and enable future research, we have made our trained model and associated tools publicly available.
+    - Python library implementation
+    - HuggingFace model deployment
+
+## Linking Authors and GitHub Developer Accounts
+
+```{python}
+# Compute stats
 doc_type_stats = reduced_doc_types.groupby("reduced_doc_type").apply(
     lambda x: {
         "doc_type": x.name,
@@ -589,50 +646,31 @@ stats_table_html = f"""
 IPython.display.HTML(stats_table_html)
 ```
 
-## Manual Matching of Article Authors and Source Code Repository Contributors
-
-- Before we can train and validate a predictive entity matching model, we must first create a large annotated dataset of article authors and source code repository contributor pairs.
-	- describe the task (we have info about an author identity and a developer identity, are they the same identity)
-	- add figure for more detail
-
-- We had two annotators each label 3000 pairs of article author and source code repository contributor information.
-	- we use the subset of our dataset of joss authors and contributors.
-	- we use JOSS as we believe a software article sample will provide us with the highest rate of positive identity matches for training (or a somewhat balanced dataset)
-	- we create author-developer-account annotation pairs using data from individual single paper-repository pairs.
-	- that is, developers and authors were only paired for annotation if they were paired together meaning that we would never annotate a author-developer-account pair that had developer information with an author from an unrelated paper
-	- After each annotator completed labeling all 3000 author-code-contributor pairs, annotators then resolved any differences between their labels.
-
-- Our final annotated dataset used for model training consists of the author names and source code repository contributor information from the 3000 labeled author-code-contributor pairs.
-	- basic numbers, number of “positive” and “negative” matches
-	- note however that some developer accounts do not have a complete set of information available
-	- table of number of developer accounts with each feature and by their match
-
 ```{python}
-# Load annotated dataset
-annotated_dataset = load_annotated_dev_author_em_dataset()
+# Create a subset of the documents table with only document_id and publication_date
+documents_pub_year = documents[["id", "publication_date"]].copy()
+documents_pub_year["publication_year"] = pd.to_datetime(
+    documents_pub_year["publication_date"],
+    utc=True,
+).dt.year
 
-annotated_dataset
+# Remove any documents with pub years that have less than 100 documents
+year_counts = documents_pub_year["publication_year"].value_counts()
+documents_pub_year = documents_pub_year[
+    documents_pub_year["publication_year"].isin(
+        year_counts[year_counts >= 100].index
+    )
+]
+
+# Plot
+ax = sns.countplot(
+    data=documents_pub_year,
+    x="publication_year",
+)
+
+# Rotate x-labels
+_ = plt.xticks(rotation=45, ha="right")
 ```
-
-## A Predictive Model for Matching Article Authors and Source Code Contributors
-
-- To optimize our predictive model for author-contributor matching, we evaluate a variety of Transformer-based architectures and input features.
-	- multiple transformer base models available and there isn’t clear information as to which is “best” for entity matching
-	- we have minimal info for authors, just their name, but we have a few features for developer accounts and it isn’t clear which are most important or useful
-	- explain potential problems and benefits of certain features
-
-- To ensure that our trained model is as accurate as possible, we trained and evaluated multiple combinations of pre-trained Transformer base models and different developer account information feature sets.
-	- explain the feature sets a bit more (username only, username + name, etc.)
-	- explain the testing strategy (10% of unique authors and developers are used for testing)
-
-- After testing all base-model and feature set combinations, we find that our best performing model is fine-tuned from: Y and uses Z features.
-	- specifics of best model
-	- table of model configurations and results
-	- minor observations about feature sets that perform poorly
-
-- Finally, we additionally make our best performing model publicly available for reuse.
-	- We provide a structured python library for interaction with the model at link
-	- Direct access to the model files can be found on huggingface.
 
 # Preliminary Analysis Code Contributor Authorship and Development Dynamics of Research Teams
 
