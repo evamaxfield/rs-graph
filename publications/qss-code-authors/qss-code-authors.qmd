@@ -1189,29 +1189,32 @@ _ = plt.xticks(rotation=45, ha="right")
 ```
 
 ```{python}
-team_comp_no_push_after_pub_long.groupby("Contributor Type")["count"].describe()
+team_comp_no_push_after_pub_long.groupby("Contributor Type")["count"].describe().drop(
+    columns=["count"],
+).round(1).astype({
+    "min": int,
+    "25%": int,
+    "50%": int,
+    "75%": int,
+    "max": int,
+})
 ```
 
-
 ```{python}
-#| label: tbl-team-composition-counts
-#| tbl-cap: "Team Composition and Coding Status Counts Used in H1"
-#| echo: false
-
 # Create a copy of the team_comp_no_push_after_pub dataframe
 team_comp_no_push_after_pub_counts = team_comp_no_push_after_pub.copy()
 
 # Replace binary values in "is_open_access" to "Open Access" and "Closed Access"
 team_comp_no_push_after_pub_counts["is_open_access"] = (
     team_comp_no_push_after_pub_counts.apply(
-        lambda x: "Open Access" if x["is_open_access"] == 1 else "Closed Access",
+        lambda x: "Open" if x["is_open_access"] == 1 else "Closed",
         axis=1,
     )
 )
 
 # Count team composition values and always for each control variable
 control_vars = {
-    "is_open_access": "Open Access Status",
+    "is_open_access": "OA Status",
     "domain": "Domain",
     "article_type": "Article Type",
 }
@@ -1250,30 +1253,35 @@ for control_var, control_display_name in control_vars.items():
     # Create dataframe
     count_table = pd.DataFrame(count_table_rows)
 
-    # Change name of the control_var column to "Control Values"
-    count_table = count_table.rename(columns={control_var: "Control Values"})
+    # Change name of the control_var column to "Subset"
+    count_table = count_table.rename(columns={control_var: "Subset"})
 
     # Order columns
     count_table = count_table[
-        ["Control Values", "n_authors", "n_author_devs", "n_non_author_devs"]
+        ["Subset", "n_authors", "n_author_devs", "n_non_author_devs"]
     ]
     
     # Rename columns
     count_table = count_table.rename(
         columns={
             "n_authors": "Authors",
-            "n_author_devs": "Code Contrib. Authors",
-            "n_non_author_devs": "Non-Author Code Contribs.",
+            "n_author_devs": "Code Cntrb. Auth.",
+            "n_non_author_devs": "Non-Auth. Code Cntrb.",
         }
     )
 
     # Order alphabetically
-    count_table = count_table.sort_values("Control Values")
+    count_table = count_table.sort_values("Subset")
     
     # Append
     control_var_tables[control_display_name] = count_table
+```
 
-# Constuct HTML Table
+::: {.content-visible when-format="html"}
+
+```{python}
+#| label: tbl-team-composition-counts
+#| tbl-cap: "Team Composition and Coding Status Counts Used in H1"
 
 # Construct multi-row span HTML table
 # Columns should be: "Authors", "Code Contributing Authors", "Non-Author Code Contributors"
@@ -1304,7 +1312,7 @@ count_piece_subsequent_row_template = """
 count_portions_html = []
 for key, count_table in control_var_tables.items():
     count_portion_html = []
-    for i, control_value in enumerate(count_table["Control Values"].unique()):
+    for i, control_value in enumerate(count_table["Subset"].unique()):
         if i == 0:
             count_portion_html.append(
                 count_piece_inital_row_template.format(
@@ -1312,16 +1320,16 @@ for key, count_table in control_var_tables.items():
                     row_name=key,
                     value_name=control_value,
                     n_authors=count_table.loc[
-                        count_table["Control Values"] == control_value,
+                        count_table["Subset"] == control_value,
                         "Authors",
                     ].iloc[0],
                     n_author_devs=count_table.loc[
-                        count_table["Control Values"] == control_value,
-                        "Code Contrib. Authors",
+                        count_table["Subset"] == control_value,
+                        "Code Cntrb. Auth.",
                     ].iloc[0],
                     n_non_author_devs=count_table.loc[
-                        count_table["Control Values"] == control_value,
-                        "Non-Author Code Contribs.",
+                        count_table["Subset"] == control_value,
+                        "Non-Auth. Code Cntrb.",
                     ].iloc[0],
                 )
             )
@@ -1330,16 +1338,16 @@ for key, count_table in control_var_tables.items():
                 count_piece_subsequent_row_template.format(
                     value_name=control_value,
                     n_authors=count_table.loc[
-                        count_table["Control Values"] == control_value,
+                        count_table["Subset"] == control_value,
                         "Authors",
                     ].iloc[0],
                     n_author_devs=count_table.loc[
-                        count_table["Control Values"] == control_value,
-                        "Code Contrib. Authors",
+                        count_table["Subset"] == control_value,
+                        "Code Cntrb. Auth.",
                     ].iloc[0],
                     n_non_author_devs=count_table.loc[
-                        count_table["Control Values"] == control_value,
-                        "Non-Author Code Contribs.",
+                        count_table["Subset"] == control_value,
+                        "Non-Auth. Code Cntrb.",
                     ].iloc[0],
                 )
             )
@@ -1350,11 +1358,11 @@ for key, count_table in control_var_tables.items():
 count_table_html = f"""
 <table>
   <tr>
-    <th><b>Control Variable</b></th>
-    <th><b>Control Values</b></th>
+    <th><b>Control</b></th>
+    <th><b>Subset</b></th>
     <th><b>Authors</b></th>
-    <th><b>Code Contrib. Authors</b></th>
-    <th><b>Non-Author Code Contribs.</b></th>
+    <th><b>Code Cntrb. Auth.</b></th>
+    <th><b>Non-Auth. Code Cntrb.</b></th>
   </tr>
   {" ".join(count_portions_html)}
 </table>
@@ -1362,6 +1370,98 @@ count_table_html = f"""
 
 IPython.display.HTML(count_table_html)
 ```
+
+:::
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+# LaTeX templates
+count_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\cellcolor{{gray!10}}{value_name} & \\cellcolor{{gray!10}}{n_authors} & \\cellcolor{{gray!10}}{n_author_devs} & \\cellcolor{{gray!10}}{n_non_author_devs} \\\\"""
+
+count_piece_subsequent_row_template = """    & {color_cmd}{value_name} & {color_cmd}{n_authors} & {color_cmd}{n_author_devs} & {color_cmd}{n_non_author_devs} \\\\"""
+
+# Table header and footer templates
+table_header = """\\begin{table}
+\\centering
+\\small
+\\caption{Team Composition and Coding Status Counts Used in H1}
+\\label{tbl-team-composition-counts}
+\\begin{tabular}{llrrr}
+\\toprule
+\\textbf{Control} & \\textbf{Subset} & \\textbf{Authors} & \\textbf{Code Cntrb.\\ Auth.} & \\textbf{Non-Auth.\\ Code Cntrb.} \\\\
+\\midrule"""
+
+table_footer = """\\bottomrule
+\\end{tabular}
+\\end{table}"""
+
+# Generate table content
+count_portions_latex = []
+for key, count_table in control_var_tables.items():
+    count_portion_latex = []
+    
+    # Get unique control values
+    control_values = count_table["Subset"].unique()
+    
+    # First row with category label
+    first_value = control_values[0]
+    count_portion_latex.append(
+        count_piece_initial_row_template.format(
+            n_rows=len(control_values),
+            row_name=key,
+            value_name=first_value,
+            n_authors=count_table.loc[
+                count_table["Subset"] == first_value,
+                "Authors",
+            ].iloc[0],
+            n_author_devs=count_table.loc[
+                count_table["Subset"] == first_value,
+                "Code Cntrb. Auth.",
+            ].iloc[0],
+            n_non_author_devs=count_table.loc[
+                count_table["Subset"] == first_value,
+                "Non-Auth. Code Cntrb.",
+            ].iloc[0],
+        ).rstrip()
+    )
+    
+    # Subsequent rows with alternating colors
+    for i, control_value in enumerate(control_values[1:], 1):
+        color_cmd = "\\cellcolor{gray!10}" if i % 2 == 1 else ""
+        count_portion_latex.append(
+            count_piece_subsequent_row_template.format(
+                color_cmd=color_cmd,
+                value_name=control_value,
+                n_authors=count_table.loc[
+                    count_table["Subset"] == control_value,
+                    "Authors",
+                ].iloc[0],
+                n_author_devs=count_table.loc[
+                    count_table["Subset"] == control_value,
+                    "Code Cntrb. Auth.",
+                ].iloc[0],
+                n_non_author_devs=count_table.loc[
+                    count_table["Subset"] == control_value,
+                    "Non-Auth. Code Cntrb.",
+                ].iloc[0],
+            ).rstrip()
+        )
+
+    section_latex = "\n".join(count_portion_latex)
+    if key != list(control_var_tables.keys())[-1]:  # Don't add midrule after last section
+        section_latex += "\\midrule"
+    count_portions_latex.append(section_latex)
+
+# Combine all parts
+count_table_latex = f"""{table_header}
+{"\n".join(count_portions_latex)}
+{table_footer}"""
+
+IPython.display.Latex(count_table_latex)
+```
+
+:::
 
 ```{python}
 def compute_article_level_models(
