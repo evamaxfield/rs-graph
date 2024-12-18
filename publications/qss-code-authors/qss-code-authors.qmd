@@ -782,22 +782,19 @@ IPython.display.HTML(stats_table_html)
 ::: {.content-visible when-format="pdf"}
 
 ```{python}
-#| output: asis
-
 # LaTeX templates
-stats_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{{row_name}}} & {value_name} & {article_repo_pairs} & {authors} & {devs} \\\\"""
+stats_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & {value_name} & {article_repo_pairs} & {authors} & {devs} \\\\"""
 
 stats_piece_subsequent_row_template = """    & {value_name} & {article_repo_pairs} & {authors} & {devs} \\\\"""
 
 # Table header and footer templates
-table_header = """\\begin{table}[htbp]
+table_header = """\\begin{table}
 \\centering
 \\caption{Counts of Article-Repository Pairs, Authors, and Developers broken out by Data Sources, Domains, Document Types, and Access Status.}
-\\label{tab:tbl-rs-graph-overall-counts}
-\\rowcolors{2}{gray!10}{white}
+\\label{tbl-rs-graph-overall-counts}
 \\begin{tabular}{llrrr}
 \\toprule
-Category & Subset & Article-Repository Pairs & Authors & Developers \\\\
+\\textbf{Category} & \\textbf{Subset} & \\textbf{Article-Repository Pairs} & \\textbf{Authors} & \\textbf{Developers} \\\\
 \\midrule"""
 
 table_footer = """\\bottomrule
@@ -830,31 +827,38 @@ for stats_portion, stats_name, value_key in [
     )
 
     stats_portion_latex = []
-    for i, stats_piece in enumerate(stats_portion):
-        if i == 0:
-            stats_portion_latex.append(
-                stats_piece_initial_row_template.format(
-                    n_rows=len(stats_portion),
-                    row_name=stats_name,
-                    value_name=stats_piece[value_key],
-                    article_repo_pairs=stats_piece["n_article_repo_pairs"],
-                    authors=stats_piece["n_authors"],
-                    devs=stats_piece["n_devs"],
-                )
-            )
-        else:
+    if stats_name == "Total":
+        stats_portion_latex.append(
+            f"    \\textbf{{Total}} & & \\textbf{{{stats_portion[0]['n_article_repo_pairs']}}} & \\textbf{{{stats_portion[0]['n_authors']}}} & \\textbf{{{stats_portion[0]['n_devs']}}} \\\\"
+        )
+    else:
+        # Add the first row with the category label
+        first_piece = stats_portion[0]
+        stats_portion_latex.append(
+            stats_piece_initial_row_template.format(
+                n_rows=len(stats_portion),
+                row_name=stats_name,
+                value_name=first_piece[value_key],
+                article_repo_pairs=first_piece["n_article_repo_pairs"],
+                authors=first_piece["n_authors"],
+                devs=first_piece["n_devs"],
+            ).rstrip()
+        )
+        
+        # Add subsequent rows
+        for stats_piece in stats_portion[1:]:
             stats_portion_latex.append(
                 stats_piece_subsequent_row_template.format(
                     value_name=stats_piece[value_key],
                     article_repo_pairs=stats_piece["n_article_repo_pairs"],
                     authors=stats_piece["n_authors"],
                     devs=stats_piece["n_devs"],
-                )
+                ).rstrip()
             )
 
     section_latex = "\n".join(stats_portion_latex)
-    if stats_name != "Total":  # Don't add midrule after the Total row
-        section_latex += "\n    \\midrule"
+    if stats_name != "Total":
+        section_latex += "\\midrule"
     stats_portions_latex.append(section_latex)
 
 # Combine all parts
