@@ -783,7 +783,7 @@ IPython.display.HTML(stats_table_html)
 
 ```{python}
 # LaTeX templates
-stats_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & {value_name} & {article_repo_pairs} & {authors} & {devs} \\\\"""
+stats_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\cellcolor{{gray!10}}{value_name} & \\cellcolor{{gray!10}}{article_repo_pairs} & \\cellcolor{{gray!10}}{authors} & \\cellcolor{{gray!10}}{devs} \\\\"""
 
 stats_piece_subsequent_row_template = """    & {value_name} & {article_repo_pairs} & {authors} & {devs} \\\\"""
 
@@ -832,7 +832,7 @@ for stats_portion, stats_name, value_key in [
             f"    \\textbf{{Total}} & & \\textbf{{{stats_portion[0]['n_article_repo_pairs']}}} & \\textbf{{{stats_portion[0]['n_authors']}}} & \\textbf{{{stats_portion[0]['n_devs']}}} \\\\"
         )
     else:
-        # Add the first row with the category label
+        # Add the first row with the category label and colored cells
         first_piece = stats_portion[0]
         stats_portion_latex.append(
             stats_piece_initial_row_template.format(
@@ -845,15 +845,11 @@ for stats_portion, stats_name, value_key in [
             ).rstrip()
         )
         
-        # Add subsequent rows
-        for stats_piece in stats_portion[1:]:
+        # Add subsequent rows with alternating colors
+        for i, stats_piece in enumerate(stats_portion[1:]):
+            color_cmd = "\\cellcolor{gray!10}" if i % 2 == 1 else ""
             stats_portion_latex.append(
-                stats_piece_subsequent_row_template.format(
-                    value_name=stats_piece[value_key],
-                    article_repo_pairs=stats_piece["n_article_repo_pairs"],
-                    authors=stats_piece["n_authors"],
-                    devs=stats_piece["n_devs"],
-                ).rstrip()
+                f"    & {color_cmd}{stats_piece[value_key]} & {color_cmd}{stats_piece['n_article_repo_pairs']} & {color_cmd}{stats_piece['n_authors']} & {color_cmd}{stats_piece['n_devs']} \\\\"
             )
 
     section_latex = "\n".join(stats_portion_latex)
