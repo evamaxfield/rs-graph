@@ -49,9 +49,13 @@ format:
     toc: false
     execute:
       echo: false
+    keep-tex: true
     include-in-header:  
       - text: |
-          \usepackage{multirow}
+          \usepackage{booktabs}    % For professional-looking tables
+          \usepackage{multirow}    % For merged cells
+          \usepackage{siunitx}     % For number alignment
+          \usepackage[table]{xcolor}  % The 'table' option is crucial for \rowcolors to work
 
 ---
 
@@ -652,9 +656,34 @@ total_authors = merged_document_contributor_doc_repo_links["researcher_id"].nuni
 total_devs = merged_repository_contributor_doc_repo_links[
     "developer_account_id"
 ].nunique()
+```
 
-###############################################################################
-# Constuct HTML Table
+- Our trained entity-matching model enables comprehensive identification of author-developer relationships while accounting for the complex realities of academic software development practices.
+    - model applied to all possible author and developer-account combinations within each article-repository pair
+    - recognition that one-to-one matching may not reflect reality
+    - deliberate choice to allow many-to-many relationships in matching
+
+- The presence of multiple developer accounts per individual reflects common practices in academic software development that must be accommodated in our analysis.
+    - developers often maintain separate accounts for different projects or institutions
+    - account transitions are common as researchers move between roles
+    - CHAOSS project provides precedent for this type of identity resolution
+
+- Further, while our model performs well overall, we note that there are some limitations to our approach.
+    - in most cases predictions are trivial due to minor differences in text (spelling of author name to username)
+    - however we do observe a few cases in which our model may not perform as well
+    - namely, shorter names, articles and repositories which have contributors with the same last name (i.e. siblings or other relationship), and "organization" accounts (i.e. research lab GitHub accounts used for management, administration, and documentation or a project)
+    - TODO: should we take a sample and estimate how widespread these problems are?
+    - we include appropriate filtering during analysis to ensure that we do not include author-developer pairs which are unlikely to be the same individual
+
+- Our final dataset provides unprecedented scale and scope for analyzing the relationship between academic authorship and software development contributions.
+    - Specifically, our dataset contains `{python} total_article_repo_pairs` article-repository pairs, `{python} total_authors` distinct authors, and `{python} total_devs` distinct developer accounts.
+    - a detailed breakdown of these counts by data source, domain, document type, and open access status is available in @tbl-rs-graph-overall-counts
+
+::: {.content-visible when-format="html"}
+
+```{python}
+#| label: tbl-rs-graph-overall-counts
+#| tbl-cap: "Counts of Article-Repository Pairs, Authors, and Developers broken out by Data Sources, Domains, Document Types, and Access Status."
 
 # Construct multi-row span HTML table
 # Columns should be: "n_article_repo_pairs", "n_authors", "n_devs"
@@ -744,36 +773,99 @@ stats_table_html = f"""
   {" ".join(stats_portions_html)}
 </table>
 """.strip()
-```
-
-- Our trained entity-matching model enables comprehensive identification of author-developer relationships while accounting for the complex realities of academic software development practices.
-    - model applied to all possible author and developer-account combinations within each article-repository pair
-    - recognition that one-to-one matching may not reflect reality
-    - deliberate choice to allow many-to-many relationships in matching
-
-- The presence of multiple developer accounts per individual reflects common practices in academic software development that must be accommodated in our analysis.
-    - developers often maintain separate accounts for different projects or institutions
-    - account transitions are common as researchers move between roles
-    - CHAOSS project provides precedent for this type of identity resolution
-
-- Further, while our model performs well overall, we note that there are some limitations to our approach.
-    - in most cases predictions are trivial due to minor differences in text (spelling of author name to username)
-    - however we do observe a few cases in which our model may not perform as well
-    - namely, shorter names, articles and repositories which have contributors with the same last name (i.e. siblings or other relationship), and "organization" accounts (i.e. research lab GitHub accounts used for management, administration, and documentation or a project)
-    - TODO: should we take a sample and estimate how widespread these problems are?
-    - we include appropriate filtering during analysis to ensure that we do not include author-developer pairs which are unlikely to be the same individual
-
-- Our final dataset provides unprecedented scale and scope for analyzing the relationship between academic authorship and software development contributions.
-    - Specifically, our dataset contains `{python} total_article_repo_pairs` article-repository pairs, `{python} total_authors` distinct authors, and `{python} total_devs` distinct developer accounts.
-    - a detailed breakdown of these counts by data source, domain, document type, and open access status is available in @tbl-rs-graph-overall-counts
-
-```{python}
-#| label: tbl-rs-graph-overall-counts
-#| tbl-cap: "Counts of Article-Repository Pairs, Authors, and Developers broken out by Data Sources, Domains, Document Types, and Access Status."
-#| echo: false
 
 IPython.display.HTML(stats_table_html)
 ```
+
+:::
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+#| output: asis
+
+# LaTeX templates
+stats_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{{row_name}}} & {value_name} & {article_repo_pairs} & {authors} & {devs} \\\\"""
+
+stats_piece_subsequent_row_template = """    & {value_name} & {article_repo_pairs} & {authors} & {devs} \\\\"""
+
+# Table header and footer templates
+table_header = """\\begin{table}[htbp]
+\\centering
+\\caption{Counts of Article-Repository Pairs, Authors, and Developers broken out by Data Sources, Domains, Document Types, and Access Status.}
+\\label{tab:tbl-rs-graph-overall-counts}
+\\rowcolors{2}{gray!10}{white}
+\\begin{tabular}{llrrr}
+\\toprule
+Category & Subset & Article-Repository Pairs & Authors & Developers \\\\
+\\midrule"""
+
+table_footer = """\\bottomrule
+\\end{tabular}
+\\end{table}"""
+
+# Generate table content
+stats_portions_latex = []
+for stats_portion, stats_name, value_key in [
+    (domain_stats, "By Domain", "domain"),
+    (doc_type_stats, "By Document Type", "doc_type"),
+    (access_stats, "By Access Status", "access_status"),
+    (data_source_stats, "By Data Source", "data_source"),
+    (
+        [
+            {
+                "empty": "",
+                "n_article_repo_pairs": total_article_repo_pairs,
+                "n_authors": total_authors,
+                "n_devs": total_devs,
+            }
+        ],
+        "Total",
+        "empty",
+    ),
+]:
+    # Order by article-repo pairs
+    stats_portion = sorted(
+        stats_portion, key=lambda x: x["n_article_repo_pairs"], reverse=True
+    )
+
+    stats_portion_latex = []
+    for i, stats_piece in enumerate(stats_portion):
+        if i == 0:
+            stats_portion_latex.append(
+                stats_piece_initial_row_template.format(
+                    n_rows=len(stats_portion),
+                    row_name=stats_name,
+                    value_name=stats_piece[value_key],
+                    article_repo_pairs=stats_piece["n_article_repo_pairs"],
+                    authors=stats_piece["n_authors"],
+                    devs=stats_piece["n_devs"],
+                )
+            )
+        else:
+            stats_portion_latex.append(
+                stats_piece_subsequent_row_template.format(
+                    value_name=stats_piece[value_key],
+                    article_repo_pairs=stats_piece["n_article_repo_pairs"],
+                    authors=stats_piece["n_authors"],
+                    devs=stats_piece["n_devs"],
+                )
+            )
+
+    section_latex = "\n".join(stats_portion_latex)
+    if stats_name != "Total":  # Don't add midrule after the Total row
+        section_latex += "\n    \\midrule"
+    stats_portions_latex.append(section_latex)
+
+# Combine all parts
+stats_table_latex = f"""{table_header}
+{"\n".join(stats_portions_latex)}
+{table_footer}"""
+
+IPython.display.Latex(stats_table_latex)
+```
+
+:::
 
 ```{python}
 #| label: fig-docs-per-year
@@ -2420,5 +2512,5 @@ Preprints (from arXiv) have a negative association with coding generally. Resear
 #| label: tbl-em-model-comparison
 #| tbl-cap: "Comparison of Models for Author-Developer-Account Matching"
 
-IPython.display.display(exp_results.to_html(index=False))
+# IPython.display.display(exp_results.to_html(index=False))
 ```
