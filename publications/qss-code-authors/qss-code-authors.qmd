@@ -63,6 +63,7 @@ format:
 
 ```{python}
 from datetime import datetime
+from io import StringIO
 from pathlib import Path
 
 import colormaps as cmaps
@@ -790,6 +791,7 @@ stats_piece_subsequent_row_template = """    & {value_name} & {article_repo_pair
 # Table header and footer templates
 table_header = """\\begin{table}
 \\centering
+\\small
 \\caption{Counts of Article-Repository Pairs, Authors, and Developers broken out by Data Sources, Domains, Document Types, and Access Status.}
 \\label{tbl-rs-graph-overall-counts}
 \\begin{tabular}{llrrr}
@@ -1583,39 +1585,32 @@ article_cited_by_count_models["is_open_access"].summary()
 
 ```{python}
 # LaTeX templates
-model_results_row_template = """    {bold_start}{var_name} & \\cellcolor{{{color}}}{exp_coef:.6f} & \\cellcolor{{{color}}}{coef:.4f} & \\cellcolor{{{color}}}{z:.3f} & \\cellcolor{{{color}}}{p:.3f} & \\cellcolor{{{color}}}{ci_low:.3f} & \\cellcolor{{{color}}}{ci_high:.3f}{stars}{bold_end} \\\\"""
+model_results_row_template = """    {bold_str}\\cellcolor{{{color}}}{var_name}{stars} & {bold_str}\\cellcolor{{{color}}}{coef:.2f} & {bold_str}\\cellcolor{{{color}}}{p:.2f} & {bold_str}\\cellcolor{{{color}}}{ci_low:.2f} & {bold_str}\\cellcolor{{{color}}}{ci_high:.2f} \\\\"""
 
 # Table header and footer templates
-model_results_table_header = """
-\\label{tbl-reg-results}
-\\begin{tabular}{l*{6}{r}}
+model_results_table_header = """\\begin{tabular}{l*{6}{r}}
 \\toprule
-\\textbf{Variable} & \\textbf{exp(coef)} & \\textbf{coef} & \\textbf{z} & \\textbf{P>|z|} & \\multicolumn{2}{c}{\\textbf{[0.025 0.975]}} \\\\
+\\textbf{Variable} & \\textbf{coef} & \\textbf{P>|z|} & \\multicolumn{2}{c}{\\textbf{[0.025 0.975]}} \\\\
 \\midrule"""
 
 model_results_table_footer = """\\bottomrule
-\\end{tabular}
-\\end{table}"""
+\\end{tabular}"""
 
-# Function to convert model to printable latex
-def convert_model_results_to_printable_pdf_ready(model: sm.GLM, tbl_cap: str) -> str:
+def convert_model_results_to_printable_pdf_ready(
+    model: sm.GLM,
+    tbl_cap: str,
+    tbl_label: str,
+) -> tuple[str, pd.DataFrame]:
     # Get only the dataframe
     summary_simple_tab = model.summary().tables[1]
-    model_results_df = pd.read_html(summary_simple_tab.as_html(), header=0, index_col=0)[0]
+    model_results_df = pd.read_html(StringIO(summary_simple_tab.as_html()), header=0, index_col=0)[0]
 
     # Add exponentiated coef
     model_results_df["exp(coef)"] = np.exp(model_results_df["coef"])
 
-    # Keep only the "coef", "z", "P>|z|", and "[0.025', '0.975]" columns
+    # Keep only the specified columns
     model_results_df = model_results_df[
-        [
-            "exp(coef)",
-            "coef",   
-            "z",
-            "P>|z|",
-            "[0.025",
-            "0.975]",
-        ]
+        ["exp(coef)", "coef", "z", "P>|z|", "[0.025", "0.975]"]
     ]
 
     # Set index name to "variable"
@@ -1626,17 +1621,13 @@ def convert_model_results_to_printable_pdf_ready(model: sm.GLM, tbl_cap: str) ->
     for i, result_row in model_results_df.iterrows():
         # Determine if row should be bold and if stars should be added
         is_significant = result_row["P>|z|"] < 0.05
-        stars = "~$^{*}$" if is_significant else ""
+        stars = "~$^{***}$" if is_significant else ""
         
-        # Handle significant bolding
+        # Handle bolding - only for significant rows
         if is_significant:
-            bold_start = "\\bfseries "
-            bold_mid = ""
-            bold_end = ""
+            bold_str = "\\bfseries"
         else:
-            bold_start = "\\textbf{" if i == 0 else ""
-            bold_mid = "}" if i == 0 else ""
-            bold_end = ""
+            bold_str = ""
         
         # Set background color for alternating rows
         color = "gray!10" if i % 2 == 1 else "white"
@@ -1644,12 +1635,11 @@ def convert_model_results_to_printable_pdf_ready(model: sm.GLM, tbl_cap: str) ->
         # Format the row
         rows_latex.append(
             model_results_row_template.format(
-                bold_start=bold_start,
-                bold_end=bold_end,
-                var_name=result_row["variable"],
-                exp_coef=result_row["exp(coef)"],
+                bold_str=bold_str,
+                var_name=result_row["variable"].replace("_", " "),
+                # exp_coef=result_row["exp(coef)"],
                 coef=result_row["coef"],
-                z=result_row["z"],
+                # z=result_row["z"],
                 p=result_row["P>|z|"],
                 ci_low=result_row["[0.025"],
                 ci_high=result_row["0.975]"],
@@ -1658,40 +1648,33 @@ def convert_model_results_to_printable_pdf_ready(model: sm.GLM, tbl_cap: str) ->
             )
         )
 
-    tbl_cap_latex = "\\caption{" + tbl_cap + "}"
-
     # Combine all parts
-    regression_table_latex = f"""
-    \\centering
-    {tbl_cap_latex}
-    {model_results_table_header}
-    {chr(10).join(rows_latex)}
-    {model_results_table_footer}
-    """.strip()
+    regression_table_latex = f"""\\begin{{table}}
+\\centering
+\\caption{{{tbl_cap}}}
+\\label{{{tbl_label}}}
+\\label{{tbl-reg-results}}
+{model_results_table_header}
+{chr(10).join(rows_latex)}
+{model_results_table_footer}
+\\end{{table}}"""
 
-    regression_table_latex = "\\begin{table}\n" + regression_table_latex
-
-    with open("output.tex", "w") as f:
-        f.write(regression_table_latex)
-
-    print(regression_table_latex)
-
-    return regression_table_latex
+    return regression_table_latex, model_results_df
 ```
 
 ::: {.content-visible when-format="pdf"}
 
 ```{python}
-IPython.display.Latex(
-    convert_model_results_to_printable_pdf_ready(
-        article_cited_by_count_models["is_open_access"],
-        tbl_cap=(
-            "Article Citations by Code Contributorship of "
-            "Research Team Controlled by Open Access Status"
-        ),
-    )
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    article_cited_by_count_models["is_open_access"],
+    tbl_cap=(
+        "Article Citations by Code Contributorship of "
+        "Research Team Controlled by Open Access Status"
+    ),
+    tbl_label="tbl-article-composition-oa-status",
 )
 
+IPython.display.Latex(model_results_latex)
 ```
 
 :::
@@ -1706,6 +1689,8 @@ IPython.display.Latex(
 
 #### Domain
 
+::: {.content-visible when-format="html"}
+
 ```{python}
 #| label: tbl-article-composition-domain
 #| tbl-cap: "Article Citations by Code Contributorship of Research Team Controlled by Domain"
@@ -1713,6 +1698,24 @@ IPython.display.Latex(
 article_cited_by_count_models["domain"].summary()
 ```
 
+:::
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    article_cited_by_count_models["domain"],
+    tbl_cap=(
+        "Article Citations by Code Contributorship of "
+        "Research Team Controlled by Domain"
+    ),
+    tbl_label="tbl-article-composition-domain",
+)
+
+IPython.display.Latex(model_results_latex)
+```
+
+:::
 
 - health sciences
     - gain `{python} np.exp(0.0944)` more citations per author code contributor compared to no author code contributor health science papers
@@ -1732,12 +1735,33 @@ article_cited_by_count_models["domain"].summary()
 
 #### Article Type
 
+::: {.content-visible when-format="html"}
+
 ```{python}
 #| label: tbl-article-composition-type
 #| tbl-cap: "Article Citations by Code Contributorship of Research Team Controlled by Article Type"
 
 article_cited_by_count_models["article_type"].summary()
 ```
+
+:::
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    article_cited_by_count_models["article_type"],
+    tbl_cap=(
+        "Article Citations by Code Contributorship of "
+        "Research Team Controlled by Article Type"
+    ),
+    tbl_label="tbl-article-composition-type",
+)
+
+IPython.display.Latex(model_results_latex)
+```
+
+:::
 
 - preprint
     - n_author_devs is not significant
@@ -2471,6 +2495,8 @@ def compute_researcher_level_models(
     return models
 ```
 
+::: {.content-visible when-format="html"}
+
 ```{python}
 #| label: tbl-researcher-coding-status-counts
 #| tbl-cap: "Counts of Researcher Coding Status Used in H5"
@@ -2478,9 +2504,9 @@ def compute_researcher_level_models(
 
 # Count number of people who code any, majority, and always for each control variable
 control_vars = {
-    "common_author_position": "Most Freq. Author Position",
-    "common_domain": "Most Freq. Domain",
-    "common_article_type": "Most Freq. Article Type",
+    "common_author_position": "Freq. Author Pos.",
+    "common_domain": "Freq. Domain",
+    "common_article_type": "Freq. Article Type",
 }
 control_var_tables = {}
 for control_var, control_display_name in control_vars.items():
@@ -2507,25 +2533,25 @@ for control_var, control_display_name in control_vars.items():
     count_table["total"] = count_table["total"].astype(int)
 
     # Change name of the control_var column to "Control Values"
-    count_table = count_table.rename(columns={control_var: "Control Values"})
+    count_table = count_table.rename(columns={control_var: "Subset"})
 
     # Order columns
     count_table = count_table[
-        ["Control Values", "any_coding", "majority_coding", "always_coding", "total"]
+        ["Subset", "any_coding", "majority_coding", "always_coding", "total"]
     ]
     
     # Rename columns
     count_table = count_table.rename(
         columns={
-            "any_coding": "Coded Any",
-            "majority_coding": "Coded Majority",
-            "always_coding": "Coded Always",
+            "any_coding": "Any Coding",
+            "majority_coding": "Majority Coding",
+            "always_coding": "Always Coding",
             "total": "Total",
         }
     )
 
     # Order alphabetically
-    count_table = count_table.sort_values("Control Values")
+    count_table = count_table.sort_values("Subset")
     
     # Append
     control_var_tables[control_display_name] = count_table
@@ -2563,7 +2589,7 @@ count_piece_subsequent_row_template = """
 count_portions_html = []
 for key, count_table in control_var_tables.items():
     count_portion_html = []
-    for i, control_value in enumerate(count_table["Control Values"].unique()):
+    for i, control_value in enumerate(count_table["Subset"].unique()):
         if i == 0:
             count_portion_html.append(
                 count_piece_inital_row_template.format(
@@ -2571,16 +2597,16 @@ for key, count_table in control_var_tables.items():
                     row_name=key,
                     value_name=control_value,
                     any_coding=count_table.loc[
-                        count_table["Control Values"] == control_value, "Coded Any"
+                        count_table["Subset"] == control_value, "Any Coding"
                     ].iloc[0],
                     majority_coding=count_table.loc[
-                        count_table["Control Values"] == control_value, "Coded Majority"
+                        count_table["Subset"] == control_value, "Majority Coding"
                     ].iloc[0],
                     always_coding=count_table.loc[
-                        count_table["Control Values"] == control_value, "Coded Always"
+                        count_table["Subset"] == control_value, "Always Coding"
                     ].iloc[0],
                     total=count_table.loc[
-                        count_table["Control Values"] == control_value, "Total"
+                        count_table["Subset"] == control_value, "Total"
                     ].iloc[0],
                 )
             )
@@ -2589,16 +2615,16 @@ for key, count_table in control_var_tables.items():
                 count_piece_subsequent_row_template.format(
                     value_name=control_value,
                     any_coding=count_table.loc[
-                        count_table["Control Values"] == control_value, "Coded Any"
+                        count_table["Subset"] == control_value, "Any Coding"
                     ].iloc[0],
                     majority_coding=count_table.loc[
-                        count_table["Control Values"] == control_value, "Coded Majority"
+                        count_table["Subset"] == control_value, "Majority Coding"
                     ].iloc[0],
                     always_coding=count_table.loc[
-                        count_table["Control Values"] == control_value, "Coded Always"
+                        count_table["Subset"] == control_value, "Always Coding"
                     ].iloc[0],
                     total=count_table.loc[
-                        count_table["Control Values"] == control_value, "Total"
+                        count_table["Subset"] == control_value, "Total"
                     ].iloc[0],
                 )
             )
@@ -2609,11 +2635,11 @@ for key, count_table in control_var_tables.items():
 count_table_html = f"""
 <table>
   <tr>
-    <th><b>Control Variable</b></th>
-    <th><b>Control Values</b></th>
-    <th><b>Coded Any</b></th>
-    <th><b>Coded Majority</b></th>
-    <th><b>Coded Always</b></th>
+    <th><b>Control</b></th>
+    <th><b>Subset</b></th>
+    <th><b>Any Coding</b></th>
+    <th><b>Majority Coding</b></th>
+    <th><b>Always Coding</b></th>
     <th><b>Total</b></th>
   </tr>
   {" ".join(count_portions_html)}
@@ -2622,6 +2648,99 @@ count_table_html = f"""
 
 IPython.display.HTML(count_table_html)
 ```
+
+:::
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+# LaTeX templates
+count_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\cellcolor{{{color}}}{value_name} & \\cellcolor{{{color}}}{any_coding} & \\cellcolor{{{color}}}{majority_coding} & \\cellcolor{{{color}}}{always_coding} & \\cellcolor{{{color}}}{total} \\\\"""
+
+count_piece_subsequent_row_template = """    & \\cellcolor{{{color}}}{value_name} & \\cellcolor{{{color}}}{any_coding} & \\cellcolor{{{color}}}{majority_coding} & \\cellcolor{{{color}}}{always_coding} & \\cellcolor{{{color}}}{total} \\\\"""
+
+# Table header and footer templates
+table_header = """\\begin{table}
+\\centering
+\\small
+\\caption{Counts of Researcher Coding Status Used in H5}
+\\label{tbl-researcher-coding-status-counts}
+\\begin{tabular}{llrrrr}
+\\toprule
+\\textbf{Control} & \\textbf{Subset} & \\textbf{Any Coding} & \\textbf{Majority Coding} & \\textbf{Always Coding} & \\textbf{Total} \\\\
+\\midrule"""
+
+table_footer = """\\bottomrule
+\\end{tabular}
+\\end{table}"""
+
+# Generate table content
+count_portions_latex = []
+for key, count_table in control_var_tables.items():
+    count_portion_latex = []
+    
+    # Get control values
+    control_values = count_table["Subset"].unique()
+    
+    # First row with category label
+    first_value = control_values[0]
+    count_portion_latex.append(
+        count_piece_initial_row_template.format(
+            n_rows=len(control_values),
+            row_name=key,
+            value_name=first_value,
+            color="white",
+            any_coding=count_table.loc[
+                count_table["Subset"] == first_value, "Any Coding"
+            ].iloc[0],
+            majority_coding=count_table.loc[
+                count_table["Subset"] == first_value, "Majority Coding"
+            ].iloc[0],
+            always_coding=count_table.loc[
+                count_table["Subset"] == first_value, "Always Coding"
+            ].iloc[0],
+            total=count_table.loc[
+                count_table["Subset"] == first_value, "Total"
+            ].iloc[0]
+        )
+    )
+    
+    # Subsequent rows with alternating colors
+    for i, control_value in enumerate(control_values[1:], 1):
+        color = "gray!10" if i % 2 == 1 else "white"
+        count_portion_latex.append(
+            count_piece_subsequent_row_template.format(
+                value_name=control_value,
+                color=color,
+                any_coding=count_table.loc[
+                    count_table["Subset"] == control_value, "Any Coding"
+                ].iloc[0],
+                majority_coding=count_table.loc[
+                    count_table["Subset"] == control_value, "Majority Coding"
+                ].iloc[0],
+                always_coding=count_table.loc[
+                    count_table["Subset"] == control_value, "Always Coding"
+                ].iloc[0],
+                total=count_table.loc[
+                    count_table["Subset"] == control_value, "Total"
+                ].iloc[0]
+            )
+        )
+
+    section_latex = "\n".join(count_portion_latex)
+    if key != list(control_var_tables.keys())[-1]:  # Don't add midrule after last section
+        section_latex += "\\midrule"
+    count_portions_latex.append(section_latex)
+
+# Combine all parts
+coding_status_table_latex = f"""{table_header}
+{chr(10).join(count_portions_latex)}
+{table_footer}"""
+
+IPython.display.Latex(coding_status_table_latex)
+```
+
+:::
 
 ```{python}
 # Create models for h_index
@@ -2635,12 +2754,32 @@ author_h_index_models = compute_researcher_level_models(
 
 #### Author Position
 
+::: {.content-visible when-format="html"}
+
 ```{python}
 #| label: tbl-researcher-coding-status-author-position
 #| tbl-cap: "Researcher H-Index by Coding Status Controlled by Most Freq. Author Position"
 
 author_h_index_models["common_author_position"].summary()
 ```
+
+:::
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    author_h_index_models["common_author_position"],
+    tbl_cap=(
+        "Researcher H-Index by Coding Status Controlled by Most Freq. Author Position"
+    ),
+    tbl_label="tbl-researcher-coding-status-author-position",
+)
+
+IPython.display.Latex(model_results_latex)
+```
+
+:::
 
 - first authors
    - any coding has a positive association with citations (`{python} np.exp(0.234)`)
@@ -2664,12 +2803,32 @@ in general, coding is associated with about a ~10 - 30% decrease in citations fo
 
 #### Domain
 
+::: {.content-visible when-format="html"}
+
 ```{python}
 #| label: tbl-researcher-coding-status-domain
 #| tbl-cap: "Researcher H-Index by Coding Status Controlled by Most Freq. Domain"
 
 author_h_index_models["common_domain"].summary()
 ```
+
+:::
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    author_h_index_models["common_domain"],
+    tbl_cap=(
+        "Researcher H-Index by Coding Status Controlled by Most Freq. Domain"
+    ),
+    tbl_label="tbl-researcher-coding-status-domain",
+)
+
+IPython.display.Latex(model_results_latex)
+```
+
+:::
 
 - health sciences
    - any coding is not significant
@@ -2698,12 +2857,32 @@ Physical sciences being entirely non-significant is interesting because a majori
 
 #### Article Type
 
+::: {.content-visible when-format="html"}
+
 ```{python}
 #| label: tbl-researcher-coding-status-article-type
 #| tbl-cap: "Researcher H-Index by Coding Status Controlled by Most Freq. Article Type"
 
 author_h_index_models["common_article_type"].summary()
 ```
+
+:::
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    author_h_index_models["common_article_type"],
+    tbl_cap=(
+        "Researcher H-Index by Coding Status Controlled by Most Freq. Article Type"
+    ),
+    tbl_label="tbl-researcher-coding-status-article-type",
+)
+
+IPython.display.Latex(model_results_latex)
+```
+
+:::
 
 - preprint
    - any coding is not significant
