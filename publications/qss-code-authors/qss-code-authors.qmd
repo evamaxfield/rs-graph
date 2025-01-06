@@ -2905,9 +2905,92 @@ Preprints (from arXiv) have a negative association with coding generally. Resear
 
 ## Full Comparison of Models and Optional Features for Author-Developer-Account Matching
 
+::: {.content-visible when-format="html"}
+
 ```{python}
 #| label: tbl-em-model-comparison
 #| tbl-cap: "Comparison of Models for Author-Developer-Account Matching"
 
-# IPython.display.display(exp_results.to_html(index=False))
+exp_results
 ```
+
+:::
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+def df_to_latex_table(
+    df: pd.DataFrame,
+    caption: str,
+    label: str,
+    alignment: str = None,
+    float_format: str = ".3f"
+) -> str:
+    # Generate column alignment if not provided
+    if alignment is None:
+        # Use 'l' for string/object columns, 'r' for numeric columns
+        alignment = "".join(
+            ["l" if dtype.kind in "OUS" else "r" for dtype in df.dtypes]
+        )
+    else:
+        # Ensure provided alignment matches number of columns
+        if len(alignment) != len(df.columns):
+            raise ValueError(f"Alignment string length ({len(alignment)}) must match number of columns ({len(df.columns)})")
+    
+    # Create header row
+    header_row = " & ".join([f"\\textbf{{{col}}}" for col in df.columns]) + " \\\\"
+    
+    # Create data rows with alternating colors
+    data_rows = []
+    for i, row in enumerate(df.itertuples(index=False)):
+        color = "gray!10" if i % 2 == 1 else "white"
+        
+        # Format each cell value
+        cells = []
+        for val, dtype in zip(row, df.dtypes):
+            if pd.isna(val):
+                cells.append("")
+            elif dtype.kind in "fc":  # Float or complex
+                try:
+                    cells.append(f"{float(val):{float_format}}")
+                except (ValueError, TypeError):
+                    cells.append(str(val))
+            else:
+                cells.append(str(val))
+        
+        # Create the row with consistent cell coloring
+        colored_cells = [f"\\cellcolor{{{color}}}{cell}" for cell in cells]
+        row_str = " & ".join(colored_cells) + " \\\\"
+        data_rows.append(f"    {row_str}")
+    
+    # Combine into final table
+    table_template = f"""\\begin{{table}}
+\\centering
+\\caption{{{caption}}}
+\\label{{tbl-{label}}}
+\\begin{{tabular}}{{{alignment}}}
+\\toprule
+{header_row}
+\\midrule
+{chr(10).join(data_rows)}
+\\bottomrule
+\\end{{tabular}}
+\\end{{table}}"""
+
+    return table_template
+
+```
+
+```{python}
+# Convert to LaTeX table
+model_comparison_latex = df_to_latex_table(
+    exp_results,
+    caption="Comparison of Models for Author-Developer-Account Matching",
+    label="tbl-em-model-comparison",
+    alignment="llrrrr",
+)
+
+IPython.display.Latex(model_comparison_latex)
+```
+
+:::
