@@ -1570,6 +1570,8 @@ sns.relplot(
 
 #### Open Access Status
 
+::: {.content-visible when-format="html"}
+
 ```{python}
 #| label: tbl-article-composition-oa-status
 #| tbl-cap: "Article Citations by Code Contributorship of Research Team Controlled by Open Access Status"
@@ -1577,6 +1579,122 @@ sns.relplot(
 article_cited_by_count_models["is_open_access"].summary()
 ```
 
+:::
+
+```{python}
+# LaTeX templates
+model_results_row_template = """    {bold_start}{var_name} & \\cellcolor{{{color}}}{exp_coef:.6f} & \\cellcolor{{{color}}}{coef:.4f} & \\cellcolor{{{color}}}{z:.3f} & \\cellcolor{{{color}}}{p:.3f} & \\cellcolor{{{color}}}{ci_low:.3f} & \\cellcolor{{{color}}}{ci_high:.3f}{stars}{bold_end} \\\\"""
+
+# Table header and footer templates
+model_results_table_header = """
+\\label{tbl-reg-results}
+\\begin{tabular}{l*{6}{r}}
+\\toprule
+\\textbf{Variable} & \\textbf{exp(coef)} & \\textbf{coef} & \\textbf{z} & \\textbf{P>|z|} & \\multicolumn{2}{c}{\\textbf{[0.025 0.975]}} \\\\
+\\midrule"""
+
+model_results_table_footer = """\\bottomrule
+\\end{tabular}
+\\end{table}"""
+
+# Function to convert model to printable latex
+def convert_model_results_to_printable_pdf_ready(model: sm.GLM, tbl_cap: str) -> str:
+    # Get only the dataframe
+    summary_simple_tab = model.summary().tables[1]
+    model_results_df = pd.read_html(summary_simple_tab.as_html(), header=0, index_col=0)[0]
+
+    # Add exponentiated coef
+    model_results_df["exp(coef)"] = np.exp(model_results_df["coef"])
+
+    # Keep only the "coef", "z", "P>|z|", and "[0.025', '0.975]" columns
+    model_results_df = model_results_df[
+        [
+            "exp(coef)",
+            "coef",   
+            "z",
+            "P>|z|",
+            "[0.025",
+            "0.975]",
+        ]
+    ]
+
+    # Set index name to "variable"
+    model_results_df.index.name = "variable"
+    model_results_df = model_results_df.reset_index()
+
+    rows_latex = []
+    for i, result_row in model_results_df.iterrows():
+        # Determine if row should be bold and if stars should be added
+        is_significant = result_row["P>|z|"] < 0.05
+        stars = "~$^{*}$" if is_significant else ""
+        
+        # Handle significant bolding
+        if is_significant:
+            bold_start = "\\bfseries "
+            bold_mid = ""
+            bold_end = ""
+        else:
+            bold_start = "\\textbf{" if i == 0 else ""
+            bold_mid = "}" if i == 0 else ""
+            bold_end = ""
+        
+        # Set background color for alternating rows
+        color = "gray!10" if i % 2 == 1 else "white"
+        
+        # Format the row
+        rows_latex.append(
+            model_results_row_template.format(
+                bold_start=bold_start,
+                bold_end=bold_end,
+                var_name=result_row["variable"],
+                exp_coef=result_row["exp(coef)"],
+                coef=result_row["coef"],
+                z=result_row["z"],
+                p=result_row["P>|z|"],
+                ci_low=result_row["[0.025"],
+                ci_high=result_row["0.975]"],
+                stars=stars,
+                color=color
+            )
+        )
+
+    tbl_cap_latex = "\\caption{" + tbl_cap + "}"
+
+    # Combine all parts
+    regression_table_latex = f"""
+    \\centering
+    {tbl_cap_latex}
+    {model_results_table_header}
+    {chr(10).join(rows_latex)}
+    {model_results_table_footer}
+    """.strip()
+
+    regression_table_latex = "\\begin{table}\n" + regression_table_latex
+
+    with open("output.tex", "w") as f:
+        f.write(regression_table_latex)
+
+    print(regression_table_latex)
+
+    return regression_table_latex
+```
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+IPython.display.Latex(
+    convert_model_results_to_printable_pdf_ready(
+        article_cited_by_count_models["is_open_access"],
+        tbl_cap=(
+            "Article Citations by Code Contributorship of "
+            "Research Team Controlled by Open Access Status"
+        ),
+    )
+)
+
+```
+
+:::
 
 - open access articles
     - n_author_devs is not significant
