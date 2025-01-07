@@ -45,4 +45,4 @@ jobs:
         path: publications/qss-code-authors/
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        QSS_CODE_AUTHORSHIP_USE_SAMPLE: 1
+        QSS_CODE_AUTHORSHIP_USE_SAMPLE: 0
