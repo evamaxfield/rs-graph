@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Checkout
+    - uses: actions/checkout@v4
+
+    # Dependencies
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.12"
+    - name: Set up Just
+      uses: extractions/setup-just@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Set up Quarto
+      uses: quarto-dev/quarto-actions/setup@v2
+    - name: Install Dependencies
+      run: |
+        just install
+
+    # Setup
+    - name: Download data
+      run: |
+        rs-graph-data download
+
+    # Render
+    - name: Render publications
+      run: |
+        just quarto-render
+      env:
+        QSS_CODE_AUTHORSHIP_USE_SAMPLE: 1
+    
+    # Publish
+    - name: Render and Publish
+      uses: quarto-dev/quarto-actions/publish@v2
+      with:
+        target: gh-pages
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

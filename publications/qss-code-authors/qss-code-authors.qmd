@@ -49,7 +49,6 @@ format:
     toc: false
     execute:
       echo: false
-    keep-tex: true
     include-in-header:  
       - text: |
           \usepackage{booktabs}    % For professional-looking tables
@@ -64,6 +63,7 @@ format:
 ```{python}
 from datetime import datetime
 from io import StringIO
+import os
 from pathlib import Path
 
 import colormaps as cmaps
@@ -94,7 +94,11 @@ sns.set_palette(
     cmaps.bold[2:]._colors.tolist(),
 )
 
-USE_SAMPLE = True
+# Get or set USE_SAMPLE
+if "QSS_CODE_AUTHORSHIP_USE_SAMPLE" in os.environ:
+    USE_SAMPLE = bool(int(os.environ["QSS_CODE_AUTHORSHIP_USE_SAMPLE"]))
+else:
+    USE_SAMPLE = True
 ```
 
 - Contemporary scientific research fundamentally depends on specialized software tools and computational methods.
