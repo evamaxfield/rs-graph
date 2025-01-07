@@ -105,85 +105,6 @@ else:
     USE_SAMPLE = True
 ```
 
-- Contemporary scientific research fundamentally depends on specialized software tools and computational methods.
-    - define scientific software (analysis scripts, research tools, computational infrastructure)
-    - software enables reproducible research and large-scale experiments
-    - code serves as a detailed log of research methodology
-    - due to all of the above, code is increasingly being shared alongside research articles
-
-- The development and maintenance of scientific software requires substantial contribution, yet faces persistent challenges in receiving academic recognition.
-    - software contributions often receive only acknowledgments rather than authorship
-    - lack of formal credit affects career advancement in academia
-    - other general discussion of software citations and credit systems
-
-- Recent initiatives to expand academic credit systems, while promising, have not fully addressed the challenges of recognizing software contributions.
-    - describe the Contributor Roles Taxonomy (CRediT)
-    - previous research using CRediT to understand research labor distribution
-    - CRediT research is still centered on traditional author lists
-    - problem of self-reporting without verification
-
-- Our novel predictive model addresses these challenges by enabling systematic matching between scientific article authors and source code developer accounts.
-    - we use predictive modeling due to the lack of standardized identifiers (i.e. ORCID) for developers
-    - further, lack consistency in naming and email overlap
-    - semantic models handle subtle variations in identity information (general entity matching has moved to transformers and semantic embeddings)
-
-- By applying our model across a corpus of XYZ paired research articles and repositories, we provide unique insight into the dynamics of code contribution within research teams, the impact of code contribution on research outcomes, and an understanding of the authors who are and who aren’t code contributors.
-    - move from self-reporting to verifiable source code repository commit histories
-    - provide preliminary quantitative evidence of exclusion of code contributors from academic authorship
-    - model article level impact metrics as a function of software development dynamics to show the benefit code contributors have on research
-    - find that first authors are more likely to be code contributors than not
-    - find that code-contributing authors have reduced individual level impact metrics compared to their non-coding counterparts
-
-- These findings not only illuminate the relationship between code contribution and scientific impact but also provide an empirical foundation for reforming academic credit systems to better recognize software development contributions in research.
-
-# Background
-
-- The relationship between scientific software development and academic credit systems represents a complex intersection of traditional academic practices and modern research requirements.
-    - academic credit traditionally focuses on analytical, theoretical, and experimental contributions
-    - software development historically viewed as technical rather than scholarly work
-    - growing recognition that research software development requires deep domain expertise
-    - increased emphasis on large scale (big data) projects has resulted in larger need for software development
-    - understanding this relationship requires examining both team-level dynamics and individual contributions
-
-- (H1) Modern research increasingly depends on collaborative software development, yet we lack systematic evidence of how code contribution patterns affect research outcomes.
-    - existing research focuses primarily on general team size and diversity
-    - software engineering literature shows correlation between team size and code quality (many eyes make all bugs shallow)
-    - limited understanding of how code contribution is associated to research impact
-    - need to understand relationship between code contributors and citation metrics to understand the value of these technical, potentially uncredited, contributions
-    - we believe that more code contributors may signal a more technical research project and that technical complexity may be rewarded with more citations
-
-- (H2) Despite formal taxonomies like CRediT attempting to standardize contribution recognition, the criteria for granting authorship to technical contributors remain inconsistent and poorly understood across research communities.
-    - existing contribution frameworks provide definitions for software development roles
-    - however, these frameworks may not capture the full spectrum of technical contributions
-    - repository histories allow us to examine how sustained technical engagement relates to authorship status
-    - we believe that longer project involvement increases likelihood of authorship recognition
-    - specifically, we hypothesize that projects with longer durations will show higher proportions of author-developers compared to non-author developers
-
-- (H3 and H4) Academic authorship conventions signal both intellectual contribution and project responsibilities, yet their relationship to software development remains poorly understood.
-    - first authors traditionally responsible for primary intellectual and experimental contributions
-    - corresponding authors serve as primary points of contact and often maintain research artifacts
-    - varying expectations across academic disciplines regarding technical contributions
-    - limited research examining how these authorship roles relate to code contributions
-    - potential insights into how software development responsibilities are distributed within research teams
-    - we believe that first authors and corresponding authors will have higher proportions of code contribution than not.
-    - conversely, middle and last authors and non-corresponding authors will have lower proportions of code contribution than not.
-
-- (H5) Academic career advancement has historically depended on traditional impact metrics, creating potential tension for researchers who dedicate significant time to software development.
-    - time invested in code development may reduce traditional scholarly output
-    - potential career implications for researchers who prioritize coding
-    - need to understand relationship between code contributions and academic impact
-    - we believe that code contributing researchers will have lower individual level impact metrics than non-coding researchers, likely due to a combination of lack of recognition and authorship credit as well as reduced time for traditional scholarly output
-
-- Understanding these relationships is crucial for developing equitable academic credit systems that recognize the full spectrum of research contributions.
-    - findings will inform policy making around academic credit
-    - importance of large-scale quantitative evidence for understanding current credit systems
-    - implications for academic hiring and promotion decisions
-    - potential to develop new impact metrics that capture software contributions
-
-# Data and Methods
-
-## Linking Scientific Articles and Source Code Repositories
-
 ```{python}
 def read_table(table: str) -> pd.DataFrame:
     return pd.read_sql(text(f"SELECT * FROM {table}"), db_conn)
@@ -424,6 +345,84 @@ for _, data_source in dataset_sources.iterrows():
 # Create reduced_doc_types dataframe
 reduced_doc_types = pd.DataFrame(reduced_doc_types_rows)
 ```
+
+- Contemporary scientific research fundamentally depends on specialized software tools and computational methods [@edwards2013knowledge; @mayernik2017assessing; @howison2015currentandfuturemeasures].
+    - define scientific software (analysis scripts, research tools, computational infrastructure) [@hasselbring2024researchsoftwarecategories]
+    - software enables reproducible research and large-scale experiments [@krafczyk2019scientificreproducbility; @Trisovic2021ALS]
+    - code serves as a detailed log of research methodology [@ram2013git]
+    - due to all of the above, code is increasingly being shared alongside research articles [@Cao2023TheRO; @trujillo2022penumbra]
+
+- The development and maintenance of scientific software requires substantial contribution, yet faces persistent challenges in receiving academic recognition [@muna2016astropyproblem].
+    - software contributions often receive only acknowledgments rather than authorship [@olivier_philippe_2019_2585783]
+    - lack of formal credit affects career advancement in academia [@Carver2022ASO; @biagioli2014scientific]
+    - other general discussion of software citations and credit systems [@Merow2023BetterIA; @Westner2024CyclingOT; @Katz2020RecognizingTV]
+
+- Recent initiatives to expand academic credit systems, while promising, have not fully addressed the challenges of recognizing software contributions.
+    - describe the Contributor Roles Taxonomy (CRediT) [@brand2015beyond]
+    - previous research using CRediT (and prior systems) to understand research labor distribution [@Larivire2020InvestigatingTD; @lariviere2016contributorship]
+    - CRediT research is still centered on traditional author lists (historic and systematic bias, self-reporting without verification, etc.) [@HAEUSSLER2013688; @gotzsche2007ghost; @chaoqun2021gendered]
+
+- Our novel predictive model addresses these challenges by enabling systematic matching between scientific article authors and source code developer accounts.
+    - we use predictive modeling due to the lack of standardized identifiers (i.e. ORCID) for developers [@haak2012orcid]
+    - further, lack consistency in naming and email overlap [GET CITATION FOR SORTING HAT FROM GOGGINS??]
+    - semantic models handle subtle variations in identity information (general entity matching has moved to transformers and semantic embeddings) [@Li2020DeepEM; @Brunner2020EntityMW]
+
+- By applying our model across a corpus of `{python} len(doc_repo_links)` paired research articles and repositories, we provide unique insight into the dynamics of code contribution within research teams, the impact of code contribution on research outcomes, and an understanding of the authors who are and who aren’t code contributors.
+    - move from self-reporting to verifiable source code repository commit histories
+    - provide preliminary quantitative evidence of exclusion of code contributors from academic authorship
+    - model article level impact metrics as a function of software development dynamics to show the benefit code contributors have on research
+    - find that first authors are more likely to be code contributors than not
+    - find that code-contributing authors have reduced individual level impact metrics compared to their non-coding counterparts
+
+- These findings not only illuminate the relationship between code contribution and scientific impact but also provide an empirical foundation for reforming academic credit systems to better recognize software development contributions in research.
+
+# Background
+
+- The relationship between scientific software development and academic credit systems represents a complex intersection of traditional academic practices and modern research requirements.
+    - academic credit traditionally focuses on analytical, theoretical, and experimental contributions
+    - software development historically viewed as technical rather than scholarly work
+    - growing recognition that research software development requires deep domain expertise
+    - increased emphasis on large scale (big data) projects has resulted in larger need for software development
+    - understanding this relationship requires examining both team-level dynamics and individual contributions
+
+- (H1) Modern research increasingly depends on collaborative software development, yet we lack systematic evidence of how code contribution patterns affect research outcomes.
+    - existing research focuses primarily on general team size and diversity
+    - software engineering literature shows correlation between team size and code quality (many eyes make all bugs shallow)
+    - limited understanding of how code contribution is associated to research impact
+    - need to understand relationship between code contributors and citation metrics to understand the value of these technical, potentially uncredited, contributions
+    - we believe that more code contributors may signal a more technical research project and that technical complexity may be rewarded with more citations
+
+- (H2) Despite formal taxonomies like CRediT attempting to standardize contribution recognition, the criteria for granting authorship to technical contributors remain inconsistent and poorly understood across research communities.
+    - existing contribution frameworks provide definitions for software development roles
+    - however, these frameworks may not capture the full spectrum of technical contributions
+    - repository histories allow us to examine how sustained technical engagement relates to authorship status
+    - we believe that longer project involvement increases likelihood of authorship recognition
+    - specifically, we hypothesize that projects with longer durations will show higher proportions of author-developers compared to non-author developers
+
+- (H3 and H4) Academic authorship conventions signal both intellectual contribution and project responsibilities, yet their relationship to software development remains poorly understood.
+    - first authors traditionally responsible for primary intellectual and experimental contributions
+    - corresponding authors serve as primary points of contact and often maintain research artifacts
+    - varying expectations across academic disciplines regarding technical contributions
+    - limited research examining how these authorship roles relate to code contributions
+    - potential insights into how software development responsibilities are distributed within research teams
+    - we believe that first authors and corresponding authors will have higher proportions of code contribution than not.
+    - conversely, middle and last authors and non-corresponding authors will have lower proportions of code contribution than not.
+
+- (H5) Academic career advancement has historically depended on traditional impact metrics, creating potential tension for researchers who dedicate significant time to software development.
+    - time invested in code development may reduce traditional scholarly output
+    - potential career implications for researchers who prioritize coding
+    - need to understand relationship between code contributions and academic impact
+    - we believe that code contributing researchers will have lower individual level impact metrics than non-coding researchers, likely due to a combination of lack of recognition and authorship credit as well as reduced time for traditional scholarly output
+
+- Understanding these relationships is crucial for developing equitable academic credit systems that recognize the full spectrum of research contributions.
+    - findings will inform policy making around academic credit
+    - importance of large-scale quantitative evidence for understanding current credit systems
+    - implications for academic hiring and promotion decisions
+    - potential to develop new impact metrics that capture software contributions
+
+# Data and Methods
+
+## Linking Scientific Articles and Source Code Repositories
 
 - Modern scientific research increasingly requires the public sharing of research code, creating unique opportunities to study the relationship between academic authorship and software development.
     - many journals and platforms now require or recommend code and data sharing
