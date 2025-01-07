@@ -1,4 +1,4 @@
-name: CI
+name: Docs
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  lint:
+  render-and-publish:
     runs-on: ubuntu-latest
 
     steps:
@@ -29,7 +29,7 @@ jobs:
       uses: quarto-dev/quarto-actions/setup@v2
     - name: Install Dependencies
       run: |
-        just install
+        pip install uv && uv pip install --system ".[dev,lint,modeling]"
 
     # Setup
     - name: Download data
