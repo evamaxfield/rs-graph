@@ -2975,7 +2975,7 @@ def df_to_latex_table(
     table_template = f"""\\begin{{table}}
 \\centering
 \\caption{{{caption}}}
-\\label{{tbl-{label}}}
+\\label{{{label}}}
 \\begin{{tabular}}{{{alignment}}}
 \\toprule
 {header_row}
