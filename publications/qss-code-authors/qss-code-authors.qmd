@@ -70,6 +70,7 @@ import colormaps as cmaps
 import IPython.display
 import matplotlib.pyplot as plt
 import numpy as np
+import opinionated  # noqa
 import pandas as pd
 import seaborn as sns
 import statsmodels.api as sm
