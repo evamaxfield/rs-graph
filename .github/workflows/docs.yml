@@ -30,6 +30,7 @@ jobs:
     - name: Install Dependencies
       run: |
         pip install uv && uv pip install --system ".[dev,lint,modeling]"
+        quarto install tinytex
 
     # Setup
     - name: Download data
