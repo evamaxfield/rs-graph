@@ -35,15 +35,8 @@ jobs:
     - name: Download data
       run: |
         rs-graph-data download
-
-    # Render
-    - name: Render publications
-      run: |
-        just quarto-render
-      env:
-        QSS_CODE_AUTHORSHIP_USE_SAMPLE: 1
     
-    # Publish
+    # Render and Publish
     - name: Render and Publish
       uses: quarto-dev/quarto-actions/publish@v2
       with:
@@ -51,3 +44,4 @@ jobs:
         path: publications/qss-code-authors/
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        QSS_CODE_AUTHORSHIP_USE_SAMPLE: 1
