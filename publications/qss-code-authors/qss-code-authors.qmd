@@ -35,15 +35,14 @@ number-sections: true
 ## Specific for target format
 format:
   html:
-    code-tools: true
-    code-fold: true
-    code-summary: "Show the code"
     standalone: true
     embed-resources: true
     toc: true
     toc-location: left
     reference-location: margin
     citation-location: margin
+    execute:
+      echo: false
 
   pdf:
     toc: false
@@ -61,6 +60,8 @@ format:
 # Introduction
 
 ```{python}
+#| output: false
+
 from datetime import datetime
 from io import StringIO
 import os
