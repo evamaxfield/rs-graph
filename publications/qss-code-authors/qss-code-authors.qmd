@@ -404,17 +404,17 @@ reduced_doc_types = pd.DataFrame(reduced_doc_types_rows)
     - specifically, we hypothesize that projects with longer durations will show higher proportions of author-developers compared to non-author developers
 
 - (H3 and H4) Academic authorship conventions signal both intellectual contribution and project responsibilities, yet their relationship to software development remains poorly understood.
-    - first authors traditionally responsible for primary intellectual and experimental contributions [@Jnior2016PatternsOA]
+    - first authors traditionally responsible for primary intellectual and experimental contributions [@lariviere2016contributorship; @Larivire2020InvestigatingTD; @Jnior2016PatternsOA]
     - corresponding authors serve as primary points of contact and often maintain research artifacts
-    - varying expectations across academic disciplines regarding technical contributions
-    - limited research examining how these authorship roles relate to code contributions
+    - varying expectations across academic disciplines regarding technical contributions [@smith2023technical]
+    - limited research examining how these authorship roles relate to direct code contributions
     - potential insights into how software development responsibilities are distributed within research teams
     - we believe that first authors and corresponding authors will have higher proportions of code contribution than not.
     - conversely, middle and last authors and non-corresponding authors will have lower proportions of code contribution than not.
 
 - (H5) Academic career advancement has historically depended on traditional impact metrics, creating potential tension for researchers who dedicate significant time to software development.
-    - time invested in code development may reduce traditional scholarly output
-    - potential career implications for researchers who prioritize coding
+    - time invested in code development may reduce traditional scholarly output as code development is a time consuming activity [@springmeyer1992characterization; @goodman2014ten]
+    - potential career implications for researchers who prioritize coding [@hannay2009scientists; @heroux2022researchsoftware; @smith2019elevating; @cosden2022researchsoftware]
     - need to understand relationship between code contributions and academic impact
     - we believe that code contributing researchers will have lower individual level impact metrics than non-coding researchers, likely due to a combination of lack of recognition and authorship credit as well as reduced time for traditional scholarly output
 
