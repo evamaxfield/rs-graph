@@ -40,7 +40,7 @@ format:
     toc: true
     toc-location: left
     reference-location: margin
-    citation-location: margin
+    citation-location: document
     execute:
       echo: false
       warning: false
