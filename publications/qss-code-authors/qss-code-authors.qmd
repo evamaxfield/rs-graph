@@ -59,6 +59,10 @@ format:
 
 ---
 
+# Random Citations
+
+- may be interesting / useful: [https://doi.org/10.1145/1772690.1772766](https://doi.org/10.1145/1772690.1772766)
+
 # Introduction
 
 ```{python}
@@ -359,7 +363,7 @@ reduced_doc_types = pd.DataFrame(reduced_doc_types_rows)
 
 - Recent initiatives to expand academic credit systems, while promising, have not fully addressed the challenges of recognizing software contributions.
     - describe the Contributor Roles Taxonomy (CRediT) [@brand2015beyond]
-    - previous research using CRediT (and prior systems) to understand research labor distribution [@Larivire2020InvestigatingTD; @lariviere2016contributorship]
+    - previous research using CRediT (and prior systems) to understand research labor distribution [@Larivire2020InvestigatingTD; @lariviere2016contributorship; @sauermann2017authorship; @Li2023AreRC; @Lu2019CocontributorshipNA]
     - CRediT research is still centered on traditional author lists (historic and systematic bias, self-reporting without verification, etc.) [@HAEUSSLER2013688; @gotzsche2007ghost; @chaoqun2021gendered]
 
 - Our novel predictive model addresses these challenges by enabling systematic matching between scientific article authors and source code developer accounts.
@@ -379,28 +383,28 @@ reduced_doc_types = pd.DataFrame(reduced_doc_types_rows)
 # Background
 
 - The relationship between scientific software development and academic credit systems represents a complex intersection of traditional academic practices and modern research requirements.
-    - academic credit traditionally focuses on analytical, theoretical, and experimental contributions
+    - academic credit traditionally focuses on analytical, theoretical, and experimental contributions [@lariviere2016contributorship; @LIU2023101432]
     - software development historically viewed as technical rather than scholarly work
-    - growing recognition that research software development requires deep domain expertise
-    - increased emphasis on large scale (big data) projects has resulted in larger need for software development
+    - growing recognition that research software development requires deep domain expertise [@heroux2022researchsoftware; @Carver2022ASO]
+    - increased emphasis on large scale (big data) projects has resulted in larger need for software development [@jin2015significance; @hampton2013big; @fan2014challenges]
     - understanding this relationship requires examining both team-level dynamics and individual contributions
 
 - (H1) Modern research increasingly depends on collaborative software development, yet we lack systematic evidence of how code contribution patterns affect research outcomes.
-    - existing research focuses primarily on general team size and diversity
-    - software engineering literature shows correlation between team size and code quality (many eyes make all bugs shallow)
+    - existing research focuses primarily on general team size and diversity [@Franceschet2010TheEO; @Larivire2014TeamSM; @alshebli2024china; @yang2024femaleled; @liu2021dominance; @naik2023impact]
+    - software engineering literature shows correlation between team size and code quality (many eyes make all bugs shallow) [@Wyss2023NothingBut; @meirelles2010study]
     - limited understanding of how code contribution is associated to research impact
     - need to understand relationship between code contributors and citation metrics to understand the value of these technical, potentially uncredited, contributions
     - we believe that more code contributors may signal a more technical research project and that technical complexity may be rewarded with more citations
 
 - (H2) Despite formal taxonomies like CRediT attempting to standardize contribution recognition, the criteria for granting authorship to technical contributors remain inconsistent and poorly understood across research communities.
-    - existing contribution frameworks provide definitions for software development roles
+    - existing contribution frameworks provide definitions for software development roles [@Li2023AreRC; @Ding2021ANM]
     - however, these frameworks may not capture the full spectrum of technical contributions
-    - repository histories allow us to examine how sustained technical engagement relates to authorship status
+    - repository histories allow us to examine how sustained technical engagement relates to authorship status [@ram2013git]
     - we believe that longer project involvement increases likelihood of authorship recognition
     - specifically, we hypothesize that projects with longer durations will show higher proportions of author-developers compared to non-author developers
 
 - (H3 and H4) Academic authorship conventions signal both intellectual contribution and project responsibilities, yet their relationship to software development remains poorly understood.
-    - first authors traditionally responsible for primary intellectual and experimental contributions
+    - first authors traditionally responsible for primary intellectual and experimental contributions [@Jnior2016PatternsOA]
     - corresponding authors serve as primary points of contact and often maintain research artifacts
     - varying expectations across academic disciplines regarding technical contributions
     - limited research examining how these authorship roles relate to code contributions
@@ -3001,3 +3005,5 @@ IPython.display.Latex(model_comparison_latex)
 ```
 
 :::
+
+# References
