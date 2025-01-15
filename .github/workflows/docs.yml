@@ -8,19 +8,44 @@ on:
       - "v*"
   workflow_dispatch:
 
+# adding permissions to tackle error: 'Resource not accessible by integration'
+permissions:
+  actions: write
+  contents: write
+  id-token: write
+  issues: write
+  pull-requests: write
+
 jobs:
-  render-and-publish:
+  deploy-runner:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: iterative/setup-cml@v2
+        with:
+          vega: false
+      - name: Deploy Runner
+        env:
+            REPO_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+            GOOGLE_APPLICATION_CREDENTIALS_DATA: ${{ secrets.GOOGLE_CREDENTIALS }}
+        run: |
+          cml runner \
+              --single \
+              --cloud=gcp \
+              --cloud-region=us-central1-a \
+              --cloud-type=c4a-highcpu-4 \
+              --labels=cml-runner
+  
+  render-and-publish:
+    needs: deploy-runner
+    runs-on: [self-hosted, cml-runner]
+    container: python:3.12
+    timeout-minutes: 60 # 1 hour
 
     steps:
     # Checkout
     - uses: actions/checkout@v4
 
-    # Dependencies
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.12"
     - name: Set up Just
       uses: extractions/setup-just@v1
       env:
@@ -29,7 +54,7 @@ jobs:
       uses: quarto-dev/quarto-actions/setup@v2
     - name: Install Dependencies
       run: |
-        pip install uv && uv pip install --system ".[dev,lint,modeling]"
+        pip install uv && uv pip install --system ".[dev,modeling]"
         quarto install tinytex
 
     # Setup
