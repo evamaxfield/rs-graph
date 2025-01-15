@@ -1196,7 +1196,7 @@ total_non_auth_devs = metric_str_fmt.format(
     - within our dataset, we find that papers on average have `{python} total_auths` total authors, `{python} total_auth_non_devs` non-code-contributing authors, `{python} total_auth_devs` code-contributing authors, and `{python} total_non_auth_devs` code-contributing non-authors (see @fig-contributor-type-distribution for a visualization of these distributions).
     - @tbl-team-composition-counts provides a detailed breakdown of these distributions by domain, article type, and open access status.
 	- Our finding of, on average, only a single code-contributing author on a paper, is similar to previous work in understanding distributions of labor in knowledge production from @Larivire2020InvestigatingTD which found that the CRediT tasks of "Data Curation", "Formal Analysis", "Visualization", and "Software" were all predominantly performed by a first author.
-    - However, we also find that, on average, papers have one code-contributing non-author, which may suggest that there are significant amounts of software development work being done by individuals who are not credited as authors on the paper.
+    - However, we do also see that code-contributing non-authors are present in the data, albeit, on average, with less than one code-contributing non-author per article.
 
 ```{python}
 #| label: fig-contributor-type-distribution
@@ -1548,9 +1548,9 @@ IPython.display.Latex(count_table_latex)
 :::
 
 - Next we investigate how these distributions have changed over time and how they change by the total number of authors on a paper.
-	- @fig-contributor-type-over-time shows that while the mean number of code-contributing authors has remained relatively stable over time, the mean number of code-contributing non-authors has increased over time.
-	- @fig-contributor-type-over-team-size shows that the mean number of code-contributing authors remaines relatively stable regardless of the total number of authors on a paper, while the mean number of code-contributing non-authors increases as the total number of authors on a paper increases.
-    - both findings suggest that the number of code-contributing non-authors is increasing over time and that larger authorship articles may still not be crediting all individuals who contribute to the software development process.
+	- @fig-contributor-type-over-time shows thats both, the mean number of code-contributing authors and code-contributing non-authors have remained relatively stable over time.
+	- @fig-contributor-type-over-team-size similarly shows that the mean number of code-contributing authors and code-contributing non-authors remains relatively stable across different team sizes.
+    - these descriptive statistics suggest that code-contributing non-authors are an inconsistent feature of research teams, and that at the very least, their exclusion from authorship is both, not a recent phenomenon and does not appear to be getting worse over time.
 
 ```{python}
 #| label: fig-contributor-type-over-time
