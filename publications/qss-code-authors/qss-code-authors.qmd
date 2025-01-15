@@ -107,6 +107,7 @@ if "QSS_CODE_AUTHORSHIP_USE_SAMPLE" in os.environ:
     USE_SAMPLE = bool(int(os.environ["QSS_CODE_AUTHORSHIP_USE_SAMPLE"]))
 else:
     USE_SAMPLE = True
+# USE_SAMPLE = False
 ```
 
 ```{python}
@@ -429,15 +430,15 @@ reduced_doc_types = pd.DataFrame(reduced_doc_types_rows)
 ## Linking Scientific Articles and Source Code Repositories
 
 - Modern scientific research increasingly requires the public sharing of research code, creating unique opportunities to study the relationship between academic authorship and software development.
-    - many journals and platforms now require or recommend code and data sharing
+    - many journals and platforms now require or recommend code and data sharing [@stodden2013toward; @sharma2024analytical]
     - this requirement creates traceable links between publications and code
-    - these links enable systematic study of both article-repository and author-developer relationships
+    - these links enable systematic study of both article-repository and author-developer relationships [@Hata2021ScienceSoftwareLT; @Kelley2021AFF; @Stankovski2024RepoFromPaperAA; @milewicz2019characterizing]
 
 - Our data collection process leverages multiple complementary sources of linked scientific articles and code repositories to ensure comprehensive coverage.
     - PLOS: Traditional research articles with code requirements
     - JOSS and SoftwareX: Specialized software-focused publications
     - Papers with Code / ArXiv: Capturing pre-print landscape
-    - to reduce the complexity of dataset processing and enrichment, we filter out any article-source-code-repository pairs which store code somewhere other than GitHub
+    - to reduce the complexity of dataset processing and enrichment, we filter out any article-source-code-repository pairs which store code somewhere other than GitHub, note: we do this for simplicity of processing but recognize that there is work elsewhere to understand code outside of GitHub [@trujillo2022penumbra]
 
 - Through integration of multiple data sources, we extract detailed information about both the academic and software development aspects of each project.
     - specifically we utilize the Semantic Scholar API for article DOI resolution to ensure that we find the latest version for each article.
@@ -508,15 +509,13 @@ n_authors = annotated_dataset["semantic_scholar_id"].nunique()
 - The development of an accurate author-developer matching model requires high-quality labeled training data that captures the complexity of real-world identity matching.
     - entity matching between authors and developers is non-trivial
     - multiple forms of name variation and incomplete information
-    - need to expand on specific matching challenges
     - add figure showing example matches/non-matches
 
 - We developed an annotation process to create a robust training dataset while maximizing efficiency and accuracy.
     - focus on JOSS articles to increase positive match density
     - we create author-developer pairs for annotation by creating all possible combinations of authors and developers within a single JOSS article-repository pair
     - we take a random sample of 3000 pairs from the full set and have two independent annotators label each
-    - structured conflict resolution process
-    - need to add details about annotation guidelines/criteria
+    - after all 3000 pairs are annotated, we resolve any disagreements between the two annotators
 
 - The resulting annotated dataset provides a comprehensive foundation for training our predictive model while highlighting common patterns in author-developer identity matching.
     - after resolution of all annotated pairs, our annotated dataset contains `{python} n_positive_examples` (`{python} pct_positive_examples`%) positive and `{python} n_negative_examples` (`{python} pct_negative_examples`%) negative author-developer-account pairs
@@ -534,15 +533,18 @@ training_split_pct = ((training_split_counts / training_split_counts.sum()) * 10
 ```
 
 - To optimize our predictive model for author-contributor matching, we evaluate a variety of Transformer-based base models and input features.
-    - multiple transformer base models available
-    - various potential feature combinations
+    - specifically, we fine-tune from three different base transformer models:
+        - [deberta-v3-base](https://huggingface.co/microsoft/deberta-v3-base) [@he2021debertav3; @he2021deberta]
+        - [bert-base-multilingual-cased](https://huggingface.co/bert-base-multilingual-cased) [@bert2018]
+        - [distilbert-base-uncased](https://huggingface.co/distilbert/distilbert-base-uncased) [@Sanh2019DistilBERTAD]
+    - these three models are all variations or built-upon BERT, and while significant time has passed since BERT was first introduced, BERT-based models remain a strong base for many NLP tasks across a number of domains while being relatively "small" compared to the much larger decoder transformer relatives (GPT, Llama, etc.) [@tran2024deberta; @yu2024semantic; @jeong2022scideberta]
 
 - We employed a systematic evaluation to identify optimal combination of base models and input features.
     - first, to ensure that there was no data leakage, we split our dataset into training and test sets
     - specifically, we created two random sets of 10% of all unique authors and 10% of all unique developers, any pairs containing either the author or developer were placed into the test set
     - in doing so, we ensured that the model was never trained on any author or developer information later used for evaluation
     - due to the fact that each author and developer-account can be included in multiple annotated pairs, our final training set contains `{python} training_split_counts["train"]` (`{python} training_split_pct["train"]`%) and our test set contains `{python} training_split_counts["test"]` (`{python} training_split_pct["test"]`%) author-developer-account pairs
-    - we used three different transformer models as our fine-tuning bases and fine-tuned each using all combinations of avaiable developer-account features, from including only the developer account username to including the developer's username, name, and email.
+    - we fine-tuned each of our three base models using all combinations of available developer-account features, from including only the developer account username to including the developer's username, name, and email.
     - to avoid overfitting and ensure generalizability, we fine-tuned each of the base models for only a single training epoch.
     - model evaluation was performed using standard classification metrics, including accuracy, precision, recall, and F1 score
 
@@ -592,11 +594,11 @@ best_model_rec = exp_results.loc[best_model_idx, "Recall"]
 best_model_f1 = exp_results.loc[best_model_idx, "F1"]
 ```
 
-- After extensive model comparison we find that fine-tuning from [Microsoft's deberta-v3-base](https://huggingface.co/microsoft/deberta-v3-base) and including only the developer's username and name achieves the best performance for author-developer matching.
+- After extensive model comparison we find that fine-tuning from [Microsoft's deberta-v3-base](https://huggingface.co/microsoft/deberta-v3-base) and including the developer's username and name achieves the best performance for author-developer matching.
     - our best model achieves a binary F1 score of `{python} best_model_f1`, with an accuracy of `{python} best_model_acc`, precision of `{python} best_model_prec`, and recall of `{python} best_model_rec` (see @fig-em-model-confusion-matrix for a confusion matrix of model predictions on the test set).
     - analysis of feature importance
         - note that the addition of developer's name has a "larger effect" on model performance but that could simply be because of how many more developers have a name available than an email
-        - also note that there is a model that performs just as well as this one using bert-multilingual and includes the developers email however we choose to use the deberta and name only version for its simplicity as well as the fact that deberta is a much more recently developed and released model which was pre-trained on a much larger dataset (including multilingual data).
+        - also note that there is a model that performs just as well as this one using bert-multilingual and includes the developers email however we choose to use the deberta and name only version for its simplicity as well as the fact that deberta is a much more recently developed and released model which was pre-trained on a much larger dataset.
         - considering that in most cases, deberta out-performs bert-multilingual, we believe that while the overall evaluation metrics between the top two performing models are the same, the deberta based model will generalize to other unseen data better than the bert-multilingual model
     - all model and feature set combination results are available in @tbl-em-model-comparison
 
@@ -608,8 +610,8 @@ IPython.display.Image(sci_soft_models_data.FINAL_MODEL_TRAINING_DATA_DIR / "dev-
 ```
 
 - To enable future research, we have made our trained model and supporting application library publicly available.
-    - Python library implementation
-    - HuggingFace model deployment
+    - Python library implementation: [sci-soft-models](github.com/evamaxfield/sci-soft-models)
+    - HuggingFace model deployment: [dev-author-em-clf](https://huggingface.co/evamxb/dev-author-em-clf)
 
 ## Linking Authors and GitHub Developer Accounts
 
@@ -671,14 +673,10 @@ total_devs = merged_repository_contributor_doc_repo_links[
 ```
 
 - Our trained entity-matching model enables comprehensive identification of author-developer relationships while accounting for the complex realities of academic software development practices.
-    - model applied to all possible author and developer-account combinations within each article-repository pair
-    - recognition that one-to-one matching may not reflect reality
-    - deliberate choice to allow many-to-many relationships in matching
-
-- The presence of multiple developer accounts per individual reflects common practices in academic software development that must be accommodated in our analysis.
+    - in practice, to complete our dataset, we apply our trained model to all possible author and developer-account combinations within each article-repository pair
+    - The presence of multiple developer accounts per individual reflects common practices in academic software development that must be accommodated in our analysis.
     - developers often maintain separate accounts for different projects or institutions
     - account transitions are common as researchers move between roles
-    - CHAOSS project provides precedent for this type of identity resolution
 
 - Further, while our model performs well overall, we note that there are some limitations to our approach.
     - in most cases predictions are trivial due to minor differences in text (spelling of author name to username)
@@ -914,20 +912,10 @@ _ = plt.xticks(rotation=45, ha="right")
 - To enrich our pre-existing dataset, we apply our trained predictive model across pairs of authors and developer accounts.
 	- again, these pairs are all combinations of author and developer account within an individual paper
 	- specifics, how many unique author-developer account pairs are we able to find
-	- table of author-developer account pairs for by data source / by field
+    - we find `{python} len(researcher_dev_links)` unique author-developer account pairs
 	- we next use this enriched dataset to understand software development dynamics within research teams, and characterize the authors who are and who aren’t code contributors.
 
 ## Software Development Dynamics Within Research Teams
-
-- We begin by measuring the distributions of different coding and non-coding contributors across all of the article-code-repository pairs within our dataset.
-	- explain more, what are the different types of contributions? (coding contributor, coding-with-authorship contributor, non-coding-author, etc.)
-	- what are the basics / what do we see across the board? What are the distributions of each of these contributor types
-	- compare against analysis built on CRediT statements?
-
-- Next we investigate if these distributions change over time, or, by “research team size”.
-	- define research team size, in our case this is the total number of author-developers + non-coding authors + non-credited developers
-	- plot the medians of the contributor type distributions over time (by publication year)
-	- results in summary
 
 ```{python}
 # Create subset documents
@@ -1042,25 +1030,46 @@ for _, row in docs_w_1_citation.iterrows():
         author_dev_links["predictive_model_confidence"] >= 0.9
     ]
 
+    # Get the set of dev_researcher_links for the devs
+    dev_researcher_links = researcher_dev_links.loc[
+        researcher_dev_links["developer_account_id"].isin(dev_ids)
+    ].sort_values("predictive_model_confidence", ascending=False)
+
+    # Drop duplicates by dev_id (keeping first)
+    # as we may have accidently matched the same author to the multiple devs
+    dev_researcher_links = dev_researcher_links.drop_duplicates(
+        subset=["researcher_id"],
+        keep="first",
+    )
+
+    # Drop any dev researcher links that have less than 90% confidence
+    dev_researcher_links = dev_researcher_links.loc[
+        dev_researcher_links["predictive_model_confidence"] >= 0.9
+    ]
+
     # Get the number of authors who were devs on this paper
     n_author_devs = 0
-    n_non_author_devs = 0
+    n_author_non_devs = 0
     for author_id in author_ids:
         author_dev_ids = author_dev_links.loc[
             author_dev_links["researcher_id"] == author_id
         ]["developer_account_id"].unique()
 
-        # Fast exit
-        if len(author_dev_ids) == 0:
-            continue
-
-        # Something likely went wrong in matching
-        if len(author_dev_ids) > 3:
-            continue
-
+        # Count
         if any(author_dev_id in dev_ids for author_dev_id in author_dev_ids):
             n_author_devs += 1
         else:
+            n_author_non_devs += 1
+
+    # Get the number of devs who aren't authors
+    n_non_author_devs = 0
+    for dev_id in dev_ids:
+        dev_researcher_ids = dev_researcher_links.loc[
+            dev_researcher_links["developer_account_id"] == dev_id
+        ]["researcher_id"].unique()
+
+        # Count
+        if not any(dev_researcher_id in author_ids for dev_researcher_id in dev_researcher_ids):
             n_non_author_devs += 1
 
     # Append
@@ -1069,6 +1078,7 @@ for _, row in docs_w_1_citation.iterrows():
             "document_id": row["document_id"],
             "repository_id": row["repository_id"],
             "n_authors": n_authors,
+            "n_author_non_devs": n_author_non_devs,
             "n_author_devs": n_author_devs,
             "n_non_author_devs": n_non_author_devs,
             "n_devs": n_devs,
@@ -1142,6 +1152,12 @@ team_comp_no_push_after_pub = team_comp_no_push_after_pub.drop(
     ]
 )
 
+# Remove rows that are greater than 97th percentile for total authors
+team_comp_no_push_after_pub = team_comp_no_push_after_pub.loc[
+    team_comp_no_push_after_pub["n_authors"]
+    <= team_comp_no_push_after_pub["n_authors"].quantile(0.97)
+]
+
 # Add dummies
 team_comp_no_push_after_pub_dummies = pd.get_dummies(
     team_comp_no_push_after_pub,
@@ -1151,9 +1167,41 @@ team_comp_no_push_after_pub_dummies = pd.get_dummies(
 
 # Cast all to float
 team_comp_no_push_after_pub_dummies = team_comp_no_push_after_pub_dummies.astype(float)
+
+# Create metrics for overall
+metric_str_fmt = "{met_mean:.1f} ± {met_std:.1f}"
+total_auths = metric_str_fmt.format(
+    met_mean=team_comp_no_push_after_pub["n_authors"].mean(),
+    met_std=team_comp_no_push_after_pub["n_authors"].std(),
+)
+total_auth_devs = metric_str_fmt.format(
+    met_mean=team_comp_no_push_after_pub["n_author_devs"].mean(),
+    met_std=team_comp_no_push_after_pub["n_author_devs"].std(),
+)
+total_auth_non_devs = metric_str_fmt.format(
+    met_mean=team_comp_no_push_after_pub["n_author_non_devs"].mean(),
+    met_std=team_comp_no_push_after_pub["n_author_non_devs"].std(),
+)
+total_non_auth_devs = metric_str_fmt.format(
+    met_mean=team_comp_no_push_after_pub["n_non_author_devs"].mean(),
+    met_std=team_comp_no_push_after_pub["n_non_author_devs"].std(),
+)
 ```
 
+- We begin by measuring the distributions of different coding and non-coding contributors across all of the article-code-repository pairs within our dataset.
+    - individuals in our dataset can fall into three categories:
+        - code-contributing authors (Code Contrib. Authors): authors for which our model predicted a match with at least one developer account which contributed code to the associated repository
+        - non-code-contributing authors (Non-Code Contrib. Authors): authors for which our model did not predict any matches with developer accouts which contributed code to the associated repository
+        - code-contributing non-authors (Code Contrib. Non-Authors): developer accounts which contributed code to the associated repository but were not predicted to be a match with any author
+    - within our dataset, we find that papers on average have `{python} total_auths` total authors, `{python} total_auth_non_devs` non-code-contributing authors, `{python} total_auth_devs` code-contributing authors, and `{python} total_non_auth_devs` code-contributing non-authors (see @fig-contributor-type-distribution for a visualization of these distributions).
+    - @tbl-team-composition-counts provides a detailed breakdown of these distributions by domain, article type, and open access status.
+	- Our finding of, on average, only a single code-contributing author on a paper, is similar to previous work in understanding distributions of labor in knowledge production from @Larivire2020InvestigatingTD which found that the CRediT tasks of "Data Curation", "Formal Analysis", "Visualization", and "Software" were all predominantly performed by a first author.
+    - However, we also find that, on average, papers have one code-contributing non-author, which may suggest that there are significant amounts of software development work being done by individuals who are not credited as authors on the paper.
+
 ```{python}
+#| label: fig-contributor-type-distribution
+#| fig-cap: "Distribution of the number of total authors, code-contributing authors, non-code-contributing authors, and code-contributing non-authors across all article-repository pairs. Only includes article-repository pairs with a most recent commit no later than 90 days after publication."
+
 # Reuse the "team_composition" dataframe and
 # plot the distribution of the
 # number of authors, author devs, and non-author devs, and total devs
@@ -1171,6 +1219,7 @@ team_comp_no_push_after_pub_long = team_comp_no_push_after_pub.melt(
     value_vars=[
         "n_authors",
         "n_author_devs",
+        "n_author_non_devs",
         "n_non_author_devs",
     ],
     var_name="Contributor Type",
@@ -1181,9 +1230,10 @@ team_comp_no_push_after_pub_long = team_comp_no_push_after_pub.melt(
 team_comp_no_push_after_pub_long["Contributor Type"] = (
     team_comp_no_push_after_pub_long["Contributor Type"].replace(
         {
-            "n_authors": "Authors",
+            "n_authors": "Total Authors",
+            "n_author_non_devs": "Non-Code Contrib. Authors",
             "n_author_devs": "Code Contrib. Authors",
-            "n_non_author_devs": "Non-Author Code Contribs.",
+            "n_non_author_devs": "Code Contrib. Non-Authors",
         }
     )
 )
@@ -1195,22 +1245,22 @@ sns.catplot(
     y="count",
     hue="Contributor Type",
     kind="box",
+    order=[
+        "Total Authors",
+        "Non-Code Contrib. Authors",
+        "Code Contrib. Authors",
+        "Code Contrib. Non-Authors",
+    ],
+    hue_order=[
+        "Total Authors",
+        "Non-Code Contrib. Authors",
+        "Code Contrib. Authors",
+        "Code Contrib. Non-Authors",
+    ],
     showfliers=False,
 )
 
 _ = plt.xticks(rotation=45, ha="right")
-```
-
-```{python}
-team_comp_no_push_after_pub_long.groupby("Contributor Type")["count"].describe().drop(
-    columns=["count"],
-).round(1).astype({
-    "min": int,
-    "25%": int,
-    "50%": int,
-    "75%": int,
-    "max": int,
-})
 ```
 
 ```{python}
@@ -1237,14 +1287,14 @@ for control_var, control_display_name in control_vars.items():
     # "mean ± std"
     mean_table = (
         team_comp_no_push_after_pub_counts.groupby(control_var)[
-            ["n_authors", "n_author_devs", "n_non_author_devs"]
+            ["n_authors", "n_author_non_devs", "n_author_devs", "n_non_author_devs"]
         ]
         .mean()
         .reset_index()
     )
     std_table = (
         team_comp_no_push_after_pub_counts.groupby(control_var)[
-            ["n_authors", "n_author_devs", "n_non_author_devs"]
+            ["n_authors", "n_author_non_devs", "n_author_devs", "n_non_author_devs"]
         ]
         .std()
         .reset_index()
@@ -1258,6 +1308,7 @@ for control_var, control_display_name in control_vars.items():
             {
                 control_var: row[control_var],
                 "n_authors": f"{row['n_authors']:.1f} ± {std_row['n_authors'].iloc[0]:.1f}",
+                "n_author_non_devs": f"{row['n_author_non_devs']:.1f} ± {std_row['n_author_non_devs'].iloc[0]:.1f}",
                 "n_author_devs": f"{row['n_author_devs']:.1f} ± {std_row['n_author_devs'].iloc[0]:.1f}",
                 "n_non_author_devs": f"{row['n_non_author_devs']:.1f} ± {std_row['n_non_author_devs'].iloc[0]:.1f}",
             }
@@ -1271,15 +1322,16 @@ for control_var, control_display_name in control_vars.items():
 
     # Order columns
     count_table = count_table[
-        ["Subset", "n_authors", "n_author_devs", "n_non_author_devs"]
+        ["Subset", "n_authors", "n_author_non_devs", "n_author_devs", "n_non_author_devs"]
     ]
     
     # Rename columns
     count_table = count_table.rename(
         columns={
             "n_authors": "Authors",
+            "n_author_non_devs": "Non-Code Cntrb. Auth.",
             "n_author_devs": "Code Cntrb. Auth.",
-            "n_non_author_devs": "Non-Auth. Code Cntrb.",
+            "n_non_author_devs": "Code Cntrb. Non-Auth.",
         }
     )
 
@@ -1307,6 +1359,7 @@ count_piece_inital_row_template = """
   <td rowspan="{n_rows}">{row_name}</td>
   <td>{value_name}</td>
   <td>{n_authors}</td>
+  <td>{n_author_non_devs}</td>
   <td>{n_author_devs}</td>
   <td>{n_non_author_devs}</td>
 </tr>
@@ -1316,6 +1369,7 @@ count_piece_subsequent_row_template = """
 <tr>
   <td>{value_name}</td>
   <td>{n_authors}</td>
+  <td>{n_author_non_devs}</td>
   <td>{n_author_devs}</td>
   <td>{n_non_author_devs}</td>
 </tr>
@@ -1336,13 +1390,17 @@ for key, count_table in control_var_tables.items():
                         count_table["Subset"] == control_value,
                         "Authors",
                     ].iloc[0],
+                    n_author_non_devs=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "Non-Code Cntrb. Auth.",
+                    ].iloc[0],
                     n_author_devs=count_table.loc[
                         count_table["Subset"] == control_value,
                         "Code Cntrb. Auth.",
                     ].iloc[0],
                     n_non_author_devs=count_table.loc[
                         count_table["Subset"] == control_value,
-                        "Non-Auth. Code Cntrb.",
+                        "Code Cntrb. Non-Auth.",
                     ].iloc[0],
                 )
             )
@@ -1354,13 +1412,17 @@ for key, count_table in control_var_tables.items():
                         count_table["Subset"] == control_value,
                         "Authors",
                     ].iloc[0],
+                    n_author_non_devs=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "Non-Code Cntrb. Auth.",
+                    ].iloc[0],
                     n_author_devs=count_table.loc[
                         count_table["Subset"] == control_value,
                         "Code Cntrb. Auth.",
                     ].iloc[0],
                     n_non_author_devs=count_table.loc[
                         count_table["Subset"] == control_value,
-                        "Non-Auth. Code Cntrb.",
+                        "Code Cntrb. Non-Auth.",
                     ].iloc[0],
                 )
             )
@@ -1373,9 +1435,10 @@ count_table_html = f"""
   <tr>
     <th><b>Control</b></th>
     <th><b>Subset</b></th>
-    <th><b>Authors</b></th>
+    <th><b>Total Authors</b></th>
+    <th><b>Non-Code Cntrb. Auth.</b></th>
     <th><b>Code Cntrb. Auth.</b></th>
-    <th><b>Non-Auth. Code Cntrb.</b></th>
+    <th><b>Code Cntrb. Non-Auth.</b></th>
   </tr>
   {" ".join(count_portions_html)}
 </table>
@@ -1390,9 +1453,9 @@ IPython.display.HTML(count_table_html)
 
 ```{python}
 # LaTeX templates
-count_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\cellcolor{{gray!10}}{value_name} & \\cellcolor{{gray!10}}{n_authors} & \\cellcolor{{gray!10}}{n_author_devs} & \\cellcolor{{gray!10}}{n_non_author_devs} \\\\"""
+count_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\cellcolor{{gray!10}}{value_name} & \\cellcolor{{gray!10}}{n_authors} & \\cellcolor{{gray!10}}{n_author_non_devs} & \\cellcolor{{gray!10}}{n_author_devs} & \\cellcolor{{gray!10}}{n_non_author_devs} \\\\"""
 
-count_piece_subsequent_row_template = """    & {color_cmd}{value_name} & {color_cmd}{n_authors} & {color_cmd}{n_author_devs} & {color_cmd}{n_non_author_devs} \\\\"""
+count_piece_subsequent_row_template = """    & {color_cmd}{value_name} & {color_cmd}{n_authors} & {color_cmd}{n_author_non_devs} & {color_cmd}{n_author_devs} & {color_cmd}{n_non_author_devs} \\\\"""
 
 # Table header and footer templates
 table_header = """\\begin{table}
@@ -1402,7 +1465,7 @@ table_header = """\\begin{table}
 \\label{tbl-team-composition-counts}
 \\begin{tabular}{llrrr}
 \\toprule
-\\textbf{Control} & \\textbf{Subset} & \\textbf{Authors} & \\textbf{Code Cntrb.\\ Auth.} & \\textbf{Non-Auth.\\ Code Cntrb.} \\\\
+\\textbf{Control} & \\textbf{Subset} & \\textbf{Total Authors} & \\textbf{Non-Code Cntrb. Auth.} & \\textbf{Code Cntrb.\\ Auth.} & \\textbf{Code Cntrb. Non-Auth.} \\\\
 \\midrule"""
 
 table_footer = """\\bottomrule
@@ -1428,13 +1491,17 @@ for key, count_table in control_var_tables.items():
                 count_table["Subset"] == first_value,
                 "Authors",
             ].iloc[0],
+            n_author_non_devs=count_table.loc[
+                count_table["Subset"] == first_value,
+                "Non-Code Cntrb. Auth.",
+            ].iloc[0],
             n_author_devs=count_table.loc[
                 count_table["Subset"] == first_value,
                 "Code Cntrb. Auth.",
             ].iloc[0],
             n_non_author_devs=count_table.loc[
                 count_table["Subset"] == first_value,
-                "Non-Auth. Code Cntrb.",
+                "Code Cntrb. Non-Auth.",
             ].iloc[0],
         ).rstrip()
     )
@@ -1450,13 +1517,17 @@ for key, count_table in control_var_tables.items():
                     count_table["Subset"] == control_value,
                     "Authors",
                 ].iloc[0],
+                n_author_non_devs=count_table.loc[
+                    count_table["Subset"] == control_value,
+                    "Non-Code Cntrb. Auth.",
+                ].iloc[0],
                 n_author_devs=count_table.loc[
                     count_table["Subset"] == control_value,
                     "Code Cntrb. Auth.",
                 ].iloc[0],
                 n_non_author_devs=count_table.loc[
                     count_table["Subset"] == control_value,
-                    "Non-Auth. Code Cntrb.",
+                    "Code Cntrb. Non-Auth.",
                 ].iloc[0],
             ).rstrip()
         )
@@ -1475,6 +1546,97 @@ IPython.display.Latex(count_table_latex)
 ```
 
 :::
+
+- Next we investigate how these distributions have changed over time and how they change by the total number of authors on a paper.
+	- @fig-contributor-type-over-time shows that while the mean number of code-contributing authors has remained relatively stable over time, the mean number of code-contributing non-authors has increased over time.
+	- @fig-contributor-type-over-team-size shows that the mean number of code-contributing authors remaines relatively stable regardless of the total number of authors on a paper, while the mean number of code-contributing non-authors increases as the total number of authors on a paper increases.
+    - both findings suggest that the number of code-contributing non-authors is increasing over time and that larger authorship articles may still not be crediting all individuals who contribute to the software development process.
+
+```{python}
+#| label: fig-contributor-type-over-time
+#| fig-cap: "Mean number of non-code-contributing authors, code-contributing authors, and code-contributing non-authors over time. Only includes article-repository pairs with a most recent commit no later than 90 days after publication and only includes publication years with 50 or more articles."
+
+# Get value count of publication year
+year_counts = team_comp_no_push_after_pub["publication_year"].value_counts()
+
+# Drop years with less than 50 publications
+team_comp_no_push_after_pub_long = team_comp_no_push_after_pub_long.loc[
+    team_comp_no_push_after_pub_long["publication_year"].isin(
+        year_counts.loc[lambda x: x >= 50].index
+    )
+]
+
+# Look at mean of all counts of team member types over time
+sns.relplot(
+    data=team_comp_no_push_after_pub_long,
+    x="publication_year",
+    y="count",
+    hue="Contributor Type",
+    hue_order=[
+        "Non-Code Contrib. Authors",
+        "Code Contrib. Authors",
+        "Code Contrib. Non-Authors",
+    ],
+    kind="line",
+    estimator="mean",
+)
+```
+
+```{python}
+#| label: fig-contributor-type-over-team-size
+#| fig-cap: "Mean number of non-code-contributing authors, code-contributing authors, and code-contributing non-authors by the total number of authors on a paper. Only includes article-repository pairs with a most recent commit no later than 90 days after publication."
+
+# Make a copy for team size comparison
+team_comp_for_team_size = team_comp_no_push_after_pub.copy()
+
+# Rename columns
+team_comp_for_team_size = team_comp_for_team_size.rename(
+    columns={
+        "n_authors": "Total Authors",
+        "n_author_devs": "Code Contrib. Authors",
+        "n_author_non_devs": "Non-Code Contrib. Authors",
+        "n_non_author_devs": "Code Contrib. Non-Authors",
+    }
+)
+
+# Melt again but separate out "n_authors" from the rest
+team_comp_for_team_size_melted = team_comp_for_team_size.melt(
+    id_vars=[
+        "document_id",
+        "Total Authors",
+    ],
+    value_vars=[
+        "Code Contrib. Authors",
+        "Non-Code Contrib. Authors",
+        "Code Contrib. Non-Authors",
+    ],
+    var_name="Contributor Type",
+    value_name="count",
+)
+
+# Plot
+sns.relplot(
+    data=team_comp_for_team_size_melted,
+    x="Total Authors",
+    y="count",
+    hue="Contributor Type",
+    hue_order=[
+        "Non-Code Contrib. Authors",
+        "Code Contrib. Authors",
+        "Code Contrib. Non-Authors",
+    ],
+    kind="line",
+    estimator="mean",
+)
+```
+
+### Modeling Citations
+
+- We model an article's total citations by the coding contributorship of the research team and controlled by a number of different factors.
+- Each control variable is modeled separately and the results are presented in the tables below:
+  - Controlling for article open access status: @{tbl-article-composition-oa-status}
+  - Controlling for article domain: @{tbl-article-composition-domain}
+  - Controlling for article type: @{tbl-article-composition-type}
 
 ```{python}
 def compute_article_level_models(
@@ -1550,36 +1712,6 @@ article_cited_by_count_models = compute_article_level_models(
     glm_family=sm.families.NegativeBinomial(),
 )
 ```
-
-```{python}
-# Get value count of publication year
-year_counts = team_comp_no_push_after_pub["publication_year"].value_counts()
-
-# Drop years with less than 100 publications
-team_comp_no_push_after_pub_long = team_comp_no_push_after_pub_long.loc[
-    team_comp_no_push_after_pub_long["publication_year"].isin(
-        year_counts.loc[lambda x: x >= 100].index
-    )
-]
-
-# Look at mean of all counts of team member types over time
-sns.relplot(
-    data=team_comp_no_push_after_pub_long,
-    x="publication_year",
-    y="count",
-    hue="Contributor Type",
-    kind="line",
-    estimator="mean",
-)
-```
-
-### Modeling Citations
-
-- We model an article's total citations by the coding contributorship of the research team and controlled by a number of different factors.
-- Each control variable is modeled separately and the results are presented in the tables below:
-  - Controlling for article open access status: @{tbl-article-composition-oa-status}
-  - Controlling for article domain: @{tbl-article-composition-domain}
-  - Controlling for article type: @{tbl-article-composition-type}
 
 #### Open Access Status
 
