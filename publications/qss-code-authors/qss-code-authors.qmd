@@ -693,7 +693,7 @@ total_devs = merged_repository_contributor_doc_repo_links[
 
 ```{python}
 #| label: tbl-rs-graph-overall-counts
-#| tbl-cap: "Counts of Article-Repository Pairs, Authors, and Developers broken out by Data Sources, Domains, Document Types, and Access Status."
+#| tbl-cap: "Counts of Article-Repository Pairs, Authors, and Developers by Data Sources, Domains, Document Types, and Access Status."
 
 # Construct multi-row span HTML table
 # Columns should be: "n_article_repo_pairs", "n_authors", "n_devs"
@@ -801,7 +801,7 @@ stats_piece_subsequent_row_template = """    & {value_name} & {article_repo_pair
 table_header = """\\begin{table}
 \\centering
 \\small
-\\caption{Counts of Article-Repository Pairs, Authors, and Developers broken out by Data Sources, Domains, Document Types, and Access Status.}
+\\caption{Counts of Article-Repository Pairs, Authors, and Developers by Data Sources, Domains, Document Types, and Access Status.}
 \\label{tbl-rs-graph-overall-counts}
 \\begin{tabular}{llrrr}
 \\toprule
@@ -1190,9 +1190,9 @@ total_non_auth_devs = metric_str_fmt.format(
 
 - We begin by measuring the distributions of different coding and non-coding contributors across all of the article-code-repository pairs within our dataset.
     - individuals in our dataset can fall into three categories:
-        - code-contributing authors (Code Contrib. Authors): authors for which our model predicted a match with at least one developer account which contributed code to the associated repository
-        - non-code-contributing authors (Non-Code Contrib. Authors): authors for which our model did not predict any matches with developer accouts which contributed code to the associated repository
-        - code-contributing non-authors (Code Contrib. Non-Authors): developer accounts which contributed code to the associated repository but were not predicted to be a match with any author
+        - Code-Contributing Authors (CC-A): authors for which our model predicted a match with at least one developer account which contributed code to the associated repository
+        - Non-Code-Contributing Authors (NCC-A): authors for which our model did not predict any matches with developer accouts which contributed code to the associated repository
+        - Code-Contributing Non-Authors (CC-NA): developer accounts which contributed code to the associated repository but were not predicted to be a match with any author
     - within our dataset, we find that papers on average have `{python} total_auths` total authors, `{python} total_auth_non_devs` non-code-contributing authors, `{python} total_auth_devs` code-contributing authors, and `{python} total_non_auth_devs` code-contributing non-authors (see @fig-contributor-type-distribution for a visualization of these distributions).
     - @tbl-team-composition-counts provides a detailed breakdown of these distributions by domain, article type, and open access status.
 	- Our finding of, on average, only a single code-contributing author on a paper, is similar to previous work in understanding distributions of labor in knowledge production from @Larivire2020InvestigatingTD which found that the CRediT tasks of "Data Curation", "Formal Analysis", "Visualization", and "Software" were all predominantly performed by a first author.
@@ -1200,7 +1200,7 @@ total_non_auth_devs = metric_str_fmt.format(
 
 ```{python}
 #| label: fig-contributor-type-distribution
-#| fig-cap: "Distribution of the number of total authors, code-contributing authors, non-code-contributing authors, and code-contributing non-authors across all article-repository pairs. Only includes article-repository pairs with a most recent commit no later than 90 days after publication."
+#| fig-cap: "Distribution of the number of Total Authors, Non-Code-Contributing Authors, Code-Contributing Authors, and Code-Contributing Non-Authors across all article-repository pairs. Only includes article-repository pairs with a most recent commit no later than 90 days after publication."
 
 # Reuse the "team_composition" dataframe and
 # plot the distribution of the
@@ -1231,9 +1231,9 @@ team_comp_no_push_after_pub_long["Contributor Type"] = (
     team_comp_no_push_after_pub_long["Contributor Type"].replace(
         {
             "n_authors": "Total Authors",
-            "n_author_non_devs": "Non-Code Contrib. Authors",
-            "n_author_devs": "Code Contrib. Authors",
-            "n_non_author_devs": "Code Contrib. Non-Authors",
+            "n_author_non_devs": "Non-Code-Contrib. Authors",
+            "n_author_devs": "Code-Contrib. Authors",
+            "n_non_author_devs": "Code-Contrib. Non-Authors",
         }
     )
 )
@@ -1247,15 +1247,15 @@ sns.catplot(
     kind="box",
     order=[
         "Total Authors",
-        "Non-Code Contrib. Authors",
-        "Code Contrib. Authors",
-        "Code Contrib. Non-Authors",
+        "Non-Code-Contrib. Authors",
+        "Code-Contrib. Authors",
+        "Code-Contrib. Non-Authors",
     ],
     hue_order=[
         "Total Authors",
-        "Non-Code Contrib. Authors",
-        "Code Contrib. Authors",
-        "Code Contrib. Non-Authors",
+        "Non-Code-Contrib. Authors",
+        "Code-Contrib. Authors",
+        "Code-Contrib. Non-Authors",
     ],
     showfliers=False,
 )
@@ -1328,10 +1328,10 @@ for control_var, control_display_name in control_vars.items():
     # Rename columns
     count_table = count_table.rename(
         columns={
-            "n_authors": "Authors",
-            "n_author_non_devs": "Non-Code Cntrb. Auth.",
-            "n_author_devs": "Code Cntrb. Auth.",
-            "n_non_author_devs": "Code Cntrb. Non-Auth.",
+            "n_authors": "Total Authors",
+            "n_author_non_devs": "NCC-A",
+            "n_author_devs": "CC-A",
+            "n_non_author_devs": "CC-NA",
         }
     )
 
@@ -1346,7 +1346,7 @@ for control_var, control_display_name in control_vars.items():
 
 ```{python}
 #| label: tbl-team-composition-counts
-#| tbl-cap: "Team Composition and Coding Status Counts Used in H1"
+#| tbl-cap: "Mean and Standard Deviation of Non-Code-Contributing Authors (NCC-A), Code-Contributing Authors (CC-A), and Code-Contributing Non-Authors (CC-NA) Research Team Members by Domain, Article Type, and Open Access Status. Only includes research teams from article-repository pairs with a most recent commit no later than 90 days after publication and excludes research teams which are in the top 3% of total author sizes."
 
 # Construct multi-row span HTML table
 # Columns should be: "Authors", "Code Contributing Authors", "Non-Author Code Contributors"
@@ -1388,19 +1388,19 @@ for key, count_table in control_var_tables.items():
                     value_name=control_value,
                     n_authors=count_table.loc[
                         count_table["Subset"] == control_value,
-                        "Authors",
+                        "Total Authors",
                     ].iloc[0],
                     n_author_non_devs=count_table.loc[
                         count_table["Subset"] == control_value,
-                        "Non-Code Cntrb. Auth.",
+                        "NCC-A",
                     ].iloc[0],
                     n_author_devs=count_table.loc[
                         count_table["Subset"] == control_value,
-                        "Code Cntrb. Auth.",
+                        "CC-A",
                     ].iloc[0],
                     n_non_author_devs=count_table.loc[
                         count_table["Subset"] == control_value,
-                        "Code Cntrb. Non-Auth.",
+                        "CC-NA",
                     ].iloc[0],
                 )
             )
@@ -1410,19 +1410,19 @@ for key, count_table in control_var_tables.items():
                     value_name=control_value,
                     n_authors=count_table.loc[
                         count_table["Subset"] == control_value,
-                        "Authors",
+                        "Total Authors",
                     ].iloc[0],
                     n_author_non_devs=count_table.loc[
                         count_table["Subset"] == control_value,
-                        "Non-Code Cntrb. Auth.",
+                        "NCC-A",
                     ].iloc[0],
                     n_author_devs=count_table.loc[
                         count_table["Subset"] == control_value,
-                        "Code Cntrb. Auth.",
+                        "CC-A",
                     ].iloc[0],
                     n_non_author_devs=count_table.loc[
                         count_table["Subset"] == control_value,
-                        "Code Cntrb. Non-Auth.",
+                        "CC-NA",
                     ].iloc[0],
                 )
             )
@@ -1436,9 +1436,9 @@ count_table_html = f"""
     <th><b>Control</b></th>
     <th><b>Subset</b></th>
     <th><b>Total Authors</b></th>
-    <th><b>Non-Code Cntrb. Auth.</b></th>
-    <th><b>Code Cntrb. Auth.</b></th>
-    <th><b>Code Cntrb. Non-Auth.</b></th>
+    <th><b>NCC-A</b></th>
+    <th><b>CC-A</b></th>
+    <th><b>CC-NA</b></th>
   </tr>
   {" ".join(count_portions_html)}
 </table>
@@ -1461,11 +1461,10 @@ count_piece_subsequent_row_template = """    & {color_cmd}{value_name} & {color_
 table_header = """\\begin{table}
 \\centering
 \\small
-\\caption{Team Composition and Coding Status Counts Used in H1}
+\\caption{Mean and Standard Deviation of Non-Code-Contributing Authors (NCC-A), Code-Contributing Authors (CC-A), and Code-Contributing Non-Authors (CC-NA) Research Team Members by Domain, Article Type, and Open Access Status. Only includes research teams from article-repository pairs with a most recent commit no later than 90 days after publication and excludes research teams which are in the top $3\%$ of total author sizes.}
 \\label{tbl-team-composition-counts}
-\\begin{tabular}{llrrr}
-\\toprule
-\\textbf{Control} & \\textbf{Subset} & \\textbf{Total Authors} & \\textbf{Non-Code Cntrb. Auth.} & \\textbf{Code Cntrb.\\ Auth.} & \\textbf{Code Cntrb. Non-Auth.} \\\\
+\\begin{tabular}{llrrrr}
+\\toprule\\textbf{Control} & \\textbf{Subset} & \\textbf{Total Authors} & \\textbf{NCC-A} & \\textbf{CC-A} & \\textbf{CC-NA} \\\\
 \\midrule"""
 
 table_footer = """\\bottomrule
@@ -1489,19 +1488,19 @@ for key, count_table in control_var_tables.items():
             value_name=first_value,
             n_authors=count_table.loc[
                 count_table["Subset"] == first_value,
-                "Authors",
+                "Total Authors",
             ].iloc[0],
             n_author_non_devs=count_table.loc[
                 count_table["Subset"] == first_value,
-                "Non-Code Cntrb. Auth.",
+                "NCC-A",
             ].iloc[0],
             n_author_devs=count_table.loc[
                 count_table["Subset"] == first_value,
-                "Code Cntrb. Auth.",
+                "CC-A",
             ].iloc[0],
             n_non_author_devs=count_table.loc[
                 count_table["Subset"] == first_value,
-                "Code Cntrb. Non-Auth.",
+                "CC-NA",
             ].iloc[0],
         ).rstrip()
     )
@@ -1515,19 +1514,19 @@ for key, count_table in control_var_tables.items():
                 value_name=control_value,
                 n_authors=count_table.loc[
                     count_table["Subset"] == control_value,
-                    "Authors",
+                    "Total Authors",
                 ].iloc[0],
                 n_author_non_devs=count_table.loc[
                     count_table["Subset"] == control_value,
-                    "Non-Code Cntrb. Auth.",
+                    "NCC-A",
                 ].iloc[0],
                 n_author_devs=count_table.loc[
                     count_table["Subset"] == control_value,
-                    "Code Cntrb. Auth.",
+                    "CC-A",
                 ].iloc[0],
                 n_non_author_devs=count_table.loc[
                     count_table["Subset"] == control_value,
-                    "Code Cntrb. Non-Auth.",
+                    "CC-NA",
                 ].iloc[0],
             ).rstrip()
         )
@@ -1554,7 +1553,7 @@ IPython.display.Latex(count_table_latex)
 
 ```{python}
 #| label: fig-contributor-type-over-time
-#| fig-cap: "Mean number of non-code-contributing authors, code-contributing authors, and code-contributing non-authors over time. Only includes article-repository pairs with a most recent commit no later than 90 days after publication and only includes publication years with 50 or more articles."
+#| fig-cap: "Mean number of Non-Code-Contributing Authors, Code-Contributing Authors, and Code-Contributing Non-Authors over time. Only includes article-repository pairs with a most recent commit no later than 90 days after publication and excludes research-teams which are in the top 3% of total author sizes for publication years with 50 or more articles."
 
 # Get value count of publication year
 year_counts = team_comp_no_push_after_pub["publication_year"].value_counts()
@@ -1568,14 +1567,14 @@ team_comp_no_push_after_pub_long = team_comp_no_push_after_pub_long.loc[
 
 # Look at mean of all counts of team member types over time
 sns.relplot(
-    data=team_comp_no_push_after_pub_long,
-    x="publication_year",
+    data=team_comp_no_push_after_pub_long.rename(columns={"publication_year": "Publication Year"}),
+    x="Publication Year",
     y="count",
     hue="Contributor Type",
     hue_order=[
-        "Non-Code Contrib. Authors",
-        "Code Contrib. Authors",
-        "Code Contrib. Non-Authors",
+        "Non-Code-Contrib. Authors",
+        "Code-Contrib. Authors",
+        "Code-Contrib. Non-Authors",
     ],
     kind="line",
     estimator="mean",
@@ -1584,7 +1583,7 @@ sns.relplot(
 
 ```{python}
 #| label: fig-contributor-type-over-team-size
-#| fig-cap: "Mean number of non-code-contributing authors, code-contributing authors, and code-contributing non-authors by the total number of authors on a paper. Only includes article-repository pairs with a most recent commit no later than 90 days after publication."
+#| fig-cap: "Mean number of Non-Code-Contributing Authors, Code-Contributing Authors, and Code-Contributing Non-Authors by Total Authors. Only includes article-repository pairs with a most recent commit no later than 90 days after publication and excludes research-teams which are in the top 3% of total author sizes."
 
 # Make a copy for team size comparison
 team_comp_for_team_size = team_comp_no_push_after_pub.copy()
@@ -1593,9 +1592,9 @@ team_comp_for_team_size = team_comp_no_push_after_pub.copy()
 team_comp_for_team_size = team_comp_for_team_size.rename(
     columns={
         "n_authors": "Total Authors",
-        "n_author_devs": "Code Contrib. Authors",
-        "n_author_non_devs": "Non-Code Contrib. Authors",
-        "n_non_author_devs": "Code Contrib. Non-Authors",
+        "n_author_devs": "Code-Contrib. Authors",
+        "n_author_non_devs": "Non-Code-Contrib. Authors",
+        "n_non_author_devs": "Code-Contrib. Non-Authors",
     }
 )
 
@@ -1606,9 +1605,9 @@ team_comp_for_team_size_melted = team_comp_for_team_size.melt(
         "Total Authors",
     ],
     value_vars=[
-        "Code Contrib. Authors",
-        "Non-Code Contrib. Authors",
-        "Code Contrib. Non-Authors",
+        "Code-Contrib. Authors",
+        "Non-Code-Contrib. Authors",
+        "Code-Contrib. Non-Authors",
     ],
     var_name="Contributor Type",
     value_name="count",
@@ -1621,9 +1620,9 @@ sns.relplot(
     y="count",
     hue="Contributor Type",
     hue_order=[
-        "Non-Code Contrib. Authors",
-        "Code Contrib. Authors",
-        "Code Contrib. Non-Authors",
+        "Non-Code-Contrib. Authors",
+        "Code-Contrib. Authors",
+        "Code-Contrib. Non-Authors",
     ],
     kind="line",
     estimator="mean",
