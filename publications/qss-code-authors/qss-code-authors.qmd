@@ -103,11 +103,11 @@ sns.set_palette(
 )
 
 # Get or set USE_SAMPLE
-if "QSS_CODE_AUTHORSHIP_USE_SAMPLE" in os.environ:
-    USE_SAMPLE = bool(int(os.environ["QSS_CODE_AUTHORSHIP_USE_SAMPLE"]))
-else:
-    USE_SAMPLE = True
-# USE_SAMPLE = False
+# if "QSS_CODE_AUTHORSHIP_USE_SAMPLE" in os.environ:
+#     USE_SAMPLE = bool(int(os.environ["QSS_CODE_AUTHORSHIP_USE_SAMPLE"]))
+# else:
+#     USE_SAMPLE = True
+USE_SAMPLE = False
 ```
 
 ```{python}
@@ -381,7 +381,7 @@ reduced_doc_types = pd.DataFrame(reduced_doc_types_rows)
 
 - These findings not only illuminate the relationship between code contribution and scientific impact but also provide an empirical foundation for reforming academic credit systems to better recognize software development contributions in research.
 
-# Background
+# Background {#sec-background}
 
 - The relationship between scientific software development and academic credit systems represents a complex intersection of traditional academic practices and modern research requirements.
     - academic credit traditionally focuses on analytical, theoretical, and experimental contributions [@lariviere2016contributorship; @LIU2023101432]
@@ -673,12 +673,12 @@ total_devs = merged_repository_contributor_doc_repo_links[
 ```
 
 - Our trained entity-matching model enables comprehensive identification of author-developer relationships while accounting for the complex realities of academic software development practices.
-    - in practice, to complete our dataset, we apply our trained model to all possible author and developer-account combinations within each article-repository pair
+    - in practice, to fill out our dataset, we apply our trained model to all possible author and developer-account combinations within each article-repository pair
     - The presence of multiple developer accounts per individual reflects common practices in academic software development that must be accommodated in our analysis.
     - developers often maintain separate accounts for different projects or institutions
     - account transitions are common as researchers move between roles
 
-- Further, while our model performs well overall, we note that there are some limitations to our approach.
+- Further, while our model performs well, we note that there are some limitations to our approach.
     - in most cases predictions are trivial due to minor differences in text (spelling of author name to username)
     - however we do observe a few cases in which our model may not perform as well
     - namely, shorter names, articles and repositories which have contributors with the same last name (i.e. siblings or other relationship), and "organization" accounts (i.e. research lab GitHub accounts used for management, administration, and documentation or a project)
@@ -687,6 +687,7 @@ total_devs = merged_repository_contributor_doc_repo_links[
 
 - Our final dataset provides unprecedented scale and scope for analyzing the relationship between academic authorship and software development contributions.
     - Specifically, our dataset contains `{python} total_article_repo_pairs` article-repository pairs, `{python} total_authors` distinct authors, and `{python} total_devs` distinct developer accounts.
+    - From the `{python} total_authors` distinct authors and `{python} total_devs` distinct developer accounts we are able to create `{python} len(researcher_dev_links)` annotated author-developer pairs
     - a detailed breakdown of these counts by data source, domain, document type, and open access status is available in @tbl-rs-graph-overall-counts
 
 ::: {.content-visible when-format="html"}
@@ -908,12 +909,6 @@ _ = plt.xticks(rotation=45, ha="right")
 ```
 
 # Preliminary Analysis Code Contributor Authorship and Development Dynamics of Research Teams
-
-- To enrich our pre-existing dataset, we apply our trained predictive model across pairs of authors and developer accounts.
-	- again, these pairs are all combinations of author and developer account within an individual paper
-	- specifics, how many unique author-developer account pairs are we able to find
-    - we find `{python} len(researcher_dev_links)` unique author-developer account pairs
-	- we next use this enriched dataset to understand software development dynamics within research teams, and characterize the authors who are and who aren’t code contributors.
 
 ## Software Development Dynamics Within Research Teams
 
@@ -1547,77 +1542,75 @@ IPython.display.Latex(count_table_latex)
 :::
 
 - Next we investigate how these distributions have changed over time and how they change by the total number of authors on a paper.
-	- @fig-contributor-type-over-time shows thats both, the mean number of code-contributing authors and code-contributing non-authors have remained relatively stable over time.
-	- @fig-contributor-type-over-team-size similarly shows that the mean number of code-contributing authors and code-contributing non-authors remains relatively stable across different team sizes.
-    - these descriptive statistics suggest that code-contributing non-authors are an inconsistent feature of research teams, and that at the very least, their exclusion from authorship is both, not a recent phenomenon and does not appear to be getting worse over time.
+	- @fig-contributor-type-by-time-and-size shows thats both, the mean number of code-contributing authors and code-contributing non-authors has remained relatively stable over time and across different total author sizes.
+    - these descriptive statistics suggest that code-contributing non-authors are an inconsistent feature of research teams, and while their exclusion from authorship is not a recent phenomenon, their exclusion does not appear to be getting worse over time.
 
 ```{python}
-#| label: fig-contributor-type-over-time
-#| fig-cap: "Mean number of Non-Code-Contributing Authors, Code-Contributing Authors, and Code-Contributing Non-Authors over time. Only includes article-repository pairs with a most recent commit no later than 90 days after publication and excludes research-teams which are in the top 3% of total author sizes for publication years with 50 or more articles."
-
-# Get value count of publication year
-year_counts = team_comp_no_push_after_pub["publication_year"].value_counts()
-
-# Drop years with less than 50 publications
-team_comp_no_push_after_pub_long = team_comp_no_push_after_pub_long.loc[
-    team_comp_no_push_after_pub_long["publication_year"].isin(
-        year_counts.loc[lambda x: x >= 50].index
-    )
-]
-
-# Look at mean of all counts of team member types over time
-sns.relplot(
-    data=team_comp_no_push_after_pub_long.rename(columns={"publication_year": "Publication Year"}),
-    x="Publication Year",
-    y="count",
-    hue="Contributor Type",
-    hue_order=[
-        "Non-Code-Contrib. Authors",
-        "Code-Contrib. Authors",
-        "Code-Contrib. Non-Authors",
-    ],
-    kind="line",
-    estimator="mean",
-)
-```
-
-```{python}
-#| label: fig-contributor-type-over-team-size
-#| fig-cap: "Mean number of Non-Code-Contributing Authors, Code-Contributing Authors, and Code-Contributing Non-Authors by Total Authors. Only includes article-repository pairs with a most recent commit no later than 90 days after publication and excludes research-teams which are in the top 3% of total author sizes."
+#| label: fig-contributor-type-by-time-and-size
+#| fig-cap: "Mean number of Non-Code-Contributing Authors, Code-Contributing Authors, and Code-Contributing Non-Authors by Publication Year and by Total Number of Authors. Only includes article-repository pairs with a most recent commit no later than 90 days after publication and excludes research-teams which are in the top 3% of total author sizes for publication years with 50 or more articles."
 
 # Make a copy for team size comparison
-team_comp_for_team_size = team_comp_no_push_after_pub.copy()
+team_comp_by_year_and_size = team_comp_no_push_after_pub.copy()
 
 # Rename columns
-team_comp_for_team_size = team_comp_for_team_size.rename(
+team_comp_by_year_and_size = team_comp_by_year_and_size.rename(
     columns={
         "n_authors": "Total Authors",
+        "publication_year": "Publication Year",
         "n_author_devs": "Code-Contrib. Authors",
         "n_author_non_devs": "Non-Code-Contrib. Authors",
         "n_non_author_devs": "Code-Contrib. Non-Authors",
     }
 )
 
-# Melt again but separate out "n_authors" from the rest
-team_comp_for_team_size_melted = team_comp_for_team_size.melt(
+# Get value count of publication year
+year_counts = team_comp_no_push_after_pub["publication_year"].value_counts()
+
+# Drop years with less than 50 publications
+team_comp_by_year_and_size = team_comp_by_year_and_size.loc[
+    team_comp_no_push_after_pub["publication_year"].isin(
+        year_counts.loc[lambda x: x >= 50].index
+    )
+]
+
+# First separate out the year and authors
+team_comp_by_year_and_size = team_comp_by_year_and_size.melt(
     id_vars=[
         "document_id",
-        "Total Authors",
+        "Non-Code-Contrib. Authors",
+        "Code-Contrib. Authors",
+        "Code-Contrib. Non-Authors",
     ],
     value_vars=[
-        "Code-Contrib. Authors",
+        "Publication Year",
+        "Total Authors",
+    ],
+    var_name="comparison_var",
+    value_name="value",
+)
+
+# Melt again to get the contributor type
+team_comp_by_year_and_size = team_comp_by_year_and_size.melt(
+    id_vars=[
+        "document_id",
+        "comparison_var",
+        "value",
+    ],
+    value_vars=[
         "Non-Code-Contrib. Authors",
+        "Code-Contrib. Authors",
         "Code-Contrib. Non-Authors",
     ],
     var_name="Contributor Type",
-    value_name="count",
+    value_name="Count",
 )
 
 # Plot
-sns.relplot(
-    data=team_comp_for_team_size_melted,
-    x="Total Authors",
-    y="count",
+g = sns.relplot(
+    data=team_comp_by_year_and_size,
+    x="value",
+    y="Count",
+    col="comparison_var",
     hue="Contributor Type",
     hue_order=[
         "Non-Code-Contrib. Authors",
@@ -1626,16 +1619,42 @@ sns.relplot(
     ],
     kind="line",
     estimator="mean",
+    legend=True,
+    facet_kws={"sharex": False, "sharey": False},
+    height=4,
+)
+
+g = g.set_titles("{col_name}")
+
+# Iter over axes and set x labels
+for i, ax in enumerate(g.axes.flat):
+    if i == 0:
+        ax.set_xlabel("Publication Year")
+    else:
+        ax.set_xlabel("Total Authors")
+
+# Move legend to below the plot
+sns.move_legend(
+    g,
+    bbox_to_anchor=(0.4, -0.0001),
+    loc="upper center",
+    ncol=3,
+    fontsize=12,
+    title_fontsize=14,
 )
 ```
 
 ### Modeling Citations
 
-- We model an article's total citations by the coding contributorship of the research team and controlled by a number of different factors.
-- Each control variable is modeled separately and the results are presented in the tables below:
-  - Controlling for article open access status: @{tbl-article-composition-oa-status}
-  - Controlling for article domain: @{tbl-article-composition-domain}
-  - Controlling for article type: @{tbl-article-composition-type}
+- Building upon previous work which discuss the effects of team size and team diversity on scientific impact and software quality (see @sec-background), we examine how the number of code contributors within a research team may be associated with an article's research impact.
+  - We hypothesize that more code contributors may signal greater technical complexity in research, which may be associated with higher citation counts as the community builds upon more technically sophisticated works.
+
+- However, after analyzing our data, we find few significant associations between the number of code-contributing authors and non-authors, and article citations.
+  - Without controlling for any domain, open access, or article type differences (@tbl-article-composition-overall), we find a positive association between the number of code-contributing authors and article citations with each code-contributing author being associated with a 4.5% increase in article citations (p < 0.001).
+  - Controlling for article type (@tbl-article-composition-type), we find that for preprints, each code-contributing non-author is associated with a statistically significant 2.9% decrease in expected citations, holding other variables constant (p < 0.01).
+  - For research articles, we find a significant positive association between the number of code-contributing authors and citations (p < 0.001). However, we cannot estimate the precise magnitude of this effect due to the non-significant main effect in the model.
+  - Finally, we additionally find a statistically significant relationship for code-contributing non-authors for research articles, specifically finding that each code-contributing non-author is associated with a 0.8% increase in expected citations (p < 0.001).
+  - Overall, while we find some statistically significant associations between code contributions and citation counts, these effects are relatively modest in magnitude.
 
 ```{python}
 def compute_article_level_models(
@@ -1654,37 +1673,59 @@ def compute_article_level_models(
     # Remove nans
     no_outliers = no_outliers.dropna(subset=[y_col])
 
+    # Replace names
+    no_outliers = no_outliers.rename(
+        columns={
+            "n_authors": "Total Authors",
+            # "n_author_non_devs": "Non-Code-Contrib. Authors",
+            "n_author_devs": "Code-Contrib. Authors",
+            "n_non_author_devs": "Code-Contrib. Non-Authors",
+        }
+    )
+
+    # Replace other names (except const.) by removing `_` and title casing
+    no_outliers = no_outliers.rename(
+        columns=lambda x: x.replace("_", " ").title() if x not in ["const", y_col] else x
+    )
+
     # Common features to use in all models
     required_features = [
         y_col,
-        "n_authors",
-        "n_author_devs",
-        "n_non_author_devs",
-        "years_since_publication",
+        "Total Authors",
+        # "n_author_non_devs",
+        "Code-Contrib. Authors",
+        "Code-Contrib. Non-Authors",
+        "Years Since Publication",
     ]
+
+    
 
     # Iter over different control variables and create models for each
     models = {}
     for control_var in [
-        "article_type",
-        "domain",
-        "is_open_access",
+        "no-control",
+        "Article Type",
+        "Domain",
+        "Is Open Access",
     ]:
-        # Get control variable list
-        control_variables = [
-            col for col in no_outliers.columns if col.startswith(control_var)
-        ]
+        if control_var != "no-control":
+            # Get control variable list
+            control_variables = [
+                col for col in no_outliers.columns if col.startswith(control_var)
+            ]
 
-        # Create control variable subset of the data
-        control_var_subset = no_outliers[required_features + control_variables].copy()
+            # Create control variable subset of the data
+            control_var_subset = no_outliers[required_features + control_variables].copy()
 
-        # Create interactions
-        for coding_status_col in ["n_author_devs", "n_non_author_devs"]:
-            for control_col in control_variables:
-                control_var_subset[f"{coding_status_col} * {control_col}"] = (
-                    control_var_subset[coding_status_col]
-                    * control_var_subset[control_col]
-                )
+            # Create interactions
+            for coding_status_col in ["Code-Contrib. Authors", "Code-Contrib. Non-Authors"]:
+                for control_col in control_variables:
+                    control_var_subset[f"{coding_status_col} * {control_col}"] = (
+                        control_var_subset[coding_status_col]
+                        * control_var_subset[control_col]
+                    )
+        else:
+            control_var_subset = no_outliers[required_features].copy()
 
         # Drop inf and nan
         control_var_subset = control_var_subset.replace(
@@ -1702,28 +1743,6 @@ def compute_article_level_models(
 
     return models
 ```
-
-```{python}
-# Create models for cited_by_count
-article_cited_by_count_models = compute_article_level_models(
-    "cited_by_count",
-    team_comp_no_push_after_pub_dummies,
-    glm_family=sm.families.NegativeBinomial(),
-)
-```
-
-#### Open Access Status
-
-::: {.content-visible when-format="html"}
-
-```{python}
-#| label: tbl-article-composition-oa-status
-#| tbl-cap: "Article Citations by Code Contributorship of Research Team Controlled by Open Access Status"
-
-article_cited_by_count_models["is_open_access"].summary()
-```
-
-:::
 
 ```{python}
 # LaTeX templates
@@ -1804,130 +1823,28 @@ def convert_model_results_to_printable_pdf_ready(
     return regression_table_latex, model_results_df
 ```
 
-::: {.content-visible when-format="pdf"}
-
 ```{python}
-model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
-    article_cited_by_count_models["is_open_access"],
-    tbl_cap=(
-        "Article Citations by Code Contributorship of "
-        "Research Team Controlled by Open Access Status"
-    ),
-    tbl_label="tbl-article-composition-oa-status",
+# Create models for cited_by_count
+article_cited_by_count_models = compute_article_level_models(
+    "cited_by_count",
+    team_comp_no_push_after_pub_dummies,
+    glm_family=sm.families.NegativeBinomial(),
 )
-
-IPython.display.Latex(model_results_latex)
 ```
 
-:::
-
-- open access articles
-    - n_author_devs is not significant
-    - gain `{python} np.exp(0.1554 - 0.0051)` more citations per non-author code contributor
-
-- closed access articles
-    - n_author_devs is not significant
-    - gain `{python} np.exp(0.1554)` more citations per non-author code contributor
-
-#### Domain
-
-::: {.content-visible when-format="html"}
-
-```{python}
-#| label: tbl-article-composition-domain
-#| tbl-cap: "Article Citations by Code Contributorship of Research Team Controlled by Domain"
-
-article_cited_by_count_models["domain"].summary()
-```
-
-:::
-
-::: {.content-visible when-format="pdf"}
-
-```{python}
-model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
-    article_cited_by_count_models["domain"],
-    tbl_cap=(
-        "Article Citations by Code Contributorship of "
-        "Research Team Controlled by Domain"
-    ),
-    tbl_label="tbl-article-composition-domain",
-)
-
-IPython.display.Latex(model_results_latex)
-```
-
-:::
-
-- health sciences
-    - gain `{python} np.exp(0.0944)` more citations per author code contributor compared to no author code contributor health science papers
-    - gain `{python} np.exp(0.0708)` more citations per non-author code contributor compared to no non-author code contributor health science papers
-   
-- life sciences
-    - n_author_devs is not significant
-    - n_non_author_devs is not significant
-
-- physical sciences
-    - n_author_devs is not significant
-    - gain `{python} np.exp(0.0803)` more citations per non-author code contributor compared to no non-author code contributor physical science papers
-
-- social sciences
-    - n_author_devs is not significant
-    - n_non_author_devs is not significant
-
-#### Article Type
-
-::: {.content-visible when-format="html"}
-
-```{python}
-#| label: tbl-article-composition-type
-#| tbl-cap: "Article Citations by Code Contributorship of Research Team Controlled by Article Type"
-
-article_cited_by_count_models["article_type"].summary()
-```
-
-:::
-
-::: {.content-visible when-format="pdf"}
-
-```{python}
-model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
-    article_cited_by_count_models["article_type"],
-    tbl_cap=(
-        "Article Citations by Code Contributorship of "
-        "Research Team Controlled by Article Type"
-    ),
-    tbl_label="tbl-article-composition-type",
-)
-
-IPython.display.Latex(model_results_latex)
-```
-
-:::
-
-- preprint
-    - n_author_devs is not significant
-    - gain `{python} np.exp(0.1242)` more citations per non-author code contributor compared to no non-author code contributor preprints
-
-- research article
-    - gain `{python} np.exp(0.0893)` more citations per author code contributor compared to no author code contributor research articles
-    - gain `{python} np.exp(0.0374)` more citations per non-author code contributor compared to no non-author code contributor research articles
-
-- software article
-    - n_author_devs is not significant
-    - n_non_author_devs is not significant
 
 ### Team Composition and Project Duration
-
-- We next investigate the relationship between the duration of a project and the coding contributorship of the research team.
 
 ```{python}
 team_comp_no_push_after_pub_for_duration = team_comp_no_push_after_pub.copy()
 
 # Calculate ratio
-team_comp_no_push_after_pub_for_duration["non_author_to_author_devs_ratio"] = (
-    team_comp_no_push_after_pub_for_duration["n_non_author_devs"]
-    / team_comp_no_push_after_pub_for_duration["n_author_devs"]
+team_comp_no_push_after_pub_for_duration["pct_devs_authors"] = (
+    team_comp_no_push_after_pub_for_duration["n_author_devs"]
+    / (
+        team_comp_no_push_after_pub_for_duration["n_author_devs"]
+        + team_comp_no_push_after_pub_for_duration["n_non_author_devs"]
+    )
 )
 
 # Drop inf and nan
@@ -1945,20 +1862,34 @@ team_comp_no_push_after_pub_for_duration = team_comp_no_push_after_pub_for_durat
 # Plot
 sns.lmplot(
     data=team_comp_no_push_after_pub_for_duration,
-    y="non_author_to_author_devs_ratio",
     x="repo_commit_duration",
-    scatter_kws={"alpha": 0.2},
+    y="pct_devs_authors",
+    scatter_kws={"alpha": 0.5},
     line_kws={"color": "red"},
-    order=1,
 )
+
+
 ```
 
 ```{python}
-pearsonr(
-    team_comp_no_push_after_pub_for_duration["non_author_to_author_devs_ratio"],
+# Run pearson correlation
+non_author_to_author_dev_pearson_results = pearsonr(
+    team_comp_no_push_after_pub_for_duration["pct_devs_authors"],
     team_comp_no_push_after_pub_for_duration["repo_commit_duration"],
 )
+
+non_author_to_author_dev_pearson_results
 ```
+
+- Next we investigate the relationship between the duration of a project and the coding contributorship of the research team.
+  - We find 
+
+- Building upon previous work examining standardized contribution frameworks and authorship attribution practices (see @sec-background), we investigate how project duration may influence the distribution of coding roles between authors and non-authors.
+ - We hypothesize that projects with longer development durations may show higher proportions of code-contributing authors compared to code-contributing non-authors, as sustained technical engagement could increase the likelihood of receiving authorship recognition.
+
+- Our analysis confirms our findings and we find a small but statistically significant positive correlation (r = 0.07, p < 0.001) between a repository's commit duration and its ratio of code-contributing non-authors to code-contributing authors.
+ - This suggests that, contrary to our hypothesis, longer-running projects actually tend to have slightly higher proportions of non-author developers relative to author developers.
+ - However, while this relationship is statistically significant, the correlation coefficient indicates that this effect is relatively modest in magnitude.
 
 ## Characteristics of Scientific Code Contributors
 
@@ -3043,6 +2974,23 @@ IPython.display.Latex(model_results_latex)
 
 Preprints (from arXiv) have a negative association with coding generally. Research articles have a very slim positive association with coding. Software articles have a strongly positive association with coding (unsuprising).
 
+# Discussion
+
+RE: article citations
+
+- Our findings that code contribution and distribution among research teams has only a modest relationship with citations might reflect several underlying factors.
+  - First, the relationship between code contributions and research impact may be complex and indirect - while code might enhance research reproducibility or utility, this may not directly translate into increased citations
+  - Second, current citation practices may not adequately capture or credit code contributions, as authors might reference papers without explicitly acknowledging the associated code.
+  - Third, the quality and significance of code contributions likely varies substantially across papers, making it difficult to detect strong aggregate effects.
+  - Finally, while we have attempted to find and match as many code contributing members of research teams as possible, we must acknowledge that there may be two code-centric reasons why we have not found more code contributors:
+    - First, the code may have been developed by multiple individuals but only a single individual uploaded or committed the code to a repository, thereby removing the opportunity for us to link the code to the other contributors.
+    - Second, we are primarily analyzing "analysis" repositories, which may not contain the full codebase for a project. This is particularly true for projects which separate repositories for tools, libraries, and infrastructures, than the single analysis code repository.
+
+# References
+
+::: {#refs}
+:::
+
 # Appendix
 
 ## Full Comparison of Models and Optional Features for Author-Developer-Account Matching
@@ -3137,4 +3085,119 @@ IPython.display.Latex(model_comparison_latex)
 
 :::
 
-# References
+## Linear Models for Software Development Dynamics Within Research Teams
+
+### No Controls
+
+::: {.content-visible when-format="html"}
+
+```{python}
+#| label: tbl-article-composition-overall
+#| tbl-cap: "Article Citations by Code Contributorship of Research Team"
+
+article_cited_by_count_models["no-control"].summary()
+```
+
+:::
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    article_cited_by_count_models["no-control"],
+    tbl_cap="Article Citations by Code Contributorship of Research Team",
+    tbl_label="tbl-article-composition-overall",
+)
+```
+
+:::
+
+### Controlled by Open Access Status
+
+::: {.content-visible when-format="html"}
+
+```{python}
+#| label: tbl-article-composition-oa-status
+#| tbl-cap: "Article Citations by Code Contributorship of Research Team Controlled by Open Access Status"
+
+article_cited_by_count_models["Is Open Access"].summary()
+```
+
+:::
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    article_cited_by_count_models["Is Open Access"],
+    tbl_cap=(
+        "Article Citations by Code Contributorship of "
+        "Research Team Controlled by Open Access Status"
+    ),
+    tbl_label="tbl-article-composition-oa-status",
+)
+
+IPython.display.Latex(model_results_latex)
+```
+
+:::
+
+### Controlled by Domain
+
+::: {.content-visible when-format="html"}
+
+```{python}
+#| label: tbl-article-composition-domain
+#| tbl-cap: "Article Citations by Code Contributorship of Research Team Controlled by Domain"
+
+article_cited_by_count_models["Domain"].summary()
+```
+
+:::
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    article_cited_by_count_models["Domain"],
+    tbl_cap=(
+        "Article Citations by Code Contributorship of "
+        "Research Team Controlled by Domain"
+    ),
+    tbl_label="tbl-article-composition-domain",
+)
+
+IPython.display.Latex(model_results_latex)
+```
+
+:::
+
+### Controlled by Article Type
+
+::: {.content-visible when-format="html"}
+
+```{python}
+#| label: tbl-article-composition-type
+#| tbl-cap: "Article Citations by Code Contributorship of Research Team Controlled by Article Type"
+
+article_cited_by_count_models["Article Type"].summary()
+```
+
+:::
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    article_cited_by_count_models["Article Type"],
+    tbl_cap=(
+        "Article Citations by Code Contributorship of "
+        "Research Team Controlled by Article Type"
+    ),
+    tbl_label="tbl-article-composition-type",
+)
+
+IPython.display.Latex(model_results_latex)
+```
+
+:::
