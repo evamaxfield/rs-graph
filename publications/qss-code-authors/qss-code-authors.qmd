@@ -45,6 +45,18 @@ format:
       echo: false
       warning: false
 
+  pdf:
+    toc: false
+    execute:
+      echo: false
+      warning: false
+    include-in-header:  
+      - text: |
+          \usepackage{booktabs}    % For professional-looking tables
+          \usepackage{multirow}    % For merged cells
+          \usepackage{siunitx}     % For number alignment
+          \usepackage[table]{xcolor}  % The 'table' option is crucial for \rowcolors to work
+
 ---
 
 # Random Citations
