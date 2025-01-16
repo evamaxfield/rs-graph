@@ -103,11 +103,11 @@ sns.set_palette(
 )
 
 # Get or set USE_SAMPLE
-# if "QSS_CODE_AUTHORSHIP_USE_SAMPLE" in os.environ:
-#     USE_SAMPLE = bool(int(os.environ["QSS_CODE_AUTHORSHIP_USE_SAMPLE"]))
-# else:
-#     USE_SAMPLE = True
-USE_SAMPLE = False
+if "QSS_CODE_AUTHORSHIP_USE_SAMPLE" in os.environ:
+    USE_SAMPLE = bool(int(os.environ["QSS_CODE_AUTHORSHIP_USE_SAMPLE"]))
+else:
+    USE_SAMPLE = True
+# USE_SAMPLE = False
 ```
 
 ```{python}
@@ -1859,37 +1859,22 @@ team_comp_no_push_after_pub_for_duration = team_comp_no_push_after_pub_for_durat
     team_comp_no_push_after_pub_for_duration["repo_commit_duration"] >= 0
 ]
 
-# Plot
-sns.lmplot(
-    data=team_comp_no_push_after_pub_for_duration,
-    x="repo_commit_duration",
-    y="pct_devs_authors",
-    scatter_kws={"alpha": 0.5},
-    line_kws={"color": "red"},
-)
-
-
-```
-
-```{python}
 # Run pearson correlation
 non_author_to_author_dev_pearson_results = pearsonr(
     team_comp_no_push_after_pub_for_duration["pct_devs_authors"],
     team_comp_no_push_after_pub_for_duration["repo_commit_duration"],
 )
 
-non_author_to_author_dev_pearson_results
+pearson_rho = f"{non_author_to_author_dev_pearson_results[0]:.2f}"
 ```
 
-- Next we investigate the relationship between the duration of a project and the coding contributorship of the research team.
-  - We find 
-
 - Building upon previous work examining standardized contribution frameworks and authorship attribution practices (see @sec-background), we investigate how project duration may influence the distribution of coding roles between authors and non-authors.
- - We hypothesize that projects with longer development durations may show higher proportions of code-contributing authors compared to code-contributing non-authors, as sustained technical engagement could increase the likelihood of receiving authorship recognition.
+  - We hypothesize that projects with longer development durations may show higher proportions of author-developers compared to non-author developers, as sustained technical engagement could increase the likelihood of receiving authorship recognition.
 
-- Our analysis confirms our findings and we find a small but statistically significant positive correlation (r = 0.07, p < 0.001) between a repository's commit duration and its ratio of code-contributing non-authors to code-contributing authors.
- - This suggests that, contrary to our hypothesis, longer-running projects actually tend to have slightly higher proportions of non-author developers relative to author developers.
- - However, while this relationship is statistically significant, the correlation coefficient indicates that this effect is relatively modest in magnitude.
+- However, our analysis finds no evidence to support this hypothesis:
+  - When examining the relationship between a repository's commit duration and the percentage of developers who receive authorship recognition, we find no significant correlation (r = `{python} pearson_rho`, p = n.s.).
+  - This suggests that the length of time a project has been in development has no meaningful relationship with the proportion of developers who are recognized as authors.
+  - While this suggests authorship recognition may be driven by other factors, a more precise analysis would examine individual contribution durations rather than overall project length.
 
 ## Characteristics of Scientific Code Contributors
 
@@ -2085,7 +2070,7 @@ doc_contribs_for_code_char["is_corresponding"] = (
 def _run_posthocs(
     data: pd.DataFrame,
     split_var: str,
-) -> None:            
+) -> list[dict[str, str]]:
     # Conduct pairwise posthocs
     binom_results = []
     for split_val in data[split_var].unique():
@@ -2122,18 +2107,31 @@ def _run_posthocs(
             result["p"] = p_values[i]
         
     # Print results
+    formatted_binom_results = []
     for result in binom_results:
         print(
             f"{split_var}: {result[split_var]}, "
             f"p: {result['p']}, statistic: {result['statistic']}, n: {result['n']}"
         )
+        formatted_binom_results.append({
+            split_var.replace("_", " ").title(): result[split_var].title(),
+            "Coding": result["n_code_contributors"],
+            "Total": result["n"],
+            "p": result["p"],
+        })
 
+    return formatted_binom_results
+    
 
 def _run_chi2_and_posthocs(
     data: pd.DataFrame,
     control_var: str | None,
     split_var: str,
-) -> None:
+) -> list[dict[str, str | float | int]]:
+    chi2_result_str_template = "χ2={stat:.1f}, p={p:.3f}, n={n}"
+    
+    return_vals = []
+
     if control_var is None:
         print("Overall")
         xtabs = pd.crosstab(
@@ -2141,13 +2139,20 @@ def _run_chi2_and_posthocs(
             data["is_code_contributor"],
         )
         print(xtabs)
-        chi2, p, _, _ = chi2_contingency(xtabs)
-        if p < 0.05:
-            print(f"Chi2: {chi2}, p: {p}, n: {len(data)}")
-            _run_posthocs(
+        chi2_result = chi2_contingency(xtabs)
+        if chi2_result.pvalue < 0.05:
+            print(f"Chi2: {chi2_result.statistic}, p: {chi2_result.pvalue}, n: {len(data)}")
+            posthoc_results = _run_posthocs(
                 data,
                 split_var=split_var,
             )
+
+            for posthoc_result in posthoc_results:
+                return_vals.append({
+                    "Control": "Overall",
+                    "Subset": "Overall",
+                    **posthoc_result,
+                })
 
         else:
             print(f"Coding by {split_var} not significant")
@@ -2164,57 +2169,188 @@ def _run_chi2_and_posthocs(
                 control_val_subset["is_code_contributor"],
             )
             print(xtabs)
-            chi2, p, _, _ = chi2_contingency(xtabs)
-            if p < 0.05:
-                print(f"Chi2: {chi2}, p: {p}, n: {len(control_val_subset)}")
-                _run_posthocs(
+            chi2_result = chi2_contingency(xtabs)
+            if chi2_result.pvalue < 0.05:
+                print(f"Chi2: {chi2_result.statistic}, p: {chi2_result.pvalue}, n: {len(control_val_subset)}")
+                posthoc_results = _run_posthocs(
                     control_val_subset,
                     split_var=split_var,
                 )
+
+                for posthoc_result in posthoc_results:
+                    return_vals.append({
+                        "Control": control_var.replace("_", " ").title(),
+                        "Subset": control_val.replace("_", " ").title(),
+                        **posthoc_result,
+                    })
 
             else:
                 print(f"Coding by {split_var} not significant")
 
         print()
         print()
+
+    return return_vals
 ```
 
 ```{python}
+
+position_sorter = ["First", "Middle", "Last"]
+
+domain_code_char = pd.DataFrame(
+    _run_chi2_and_posthocs(
+        doc_contribs_for_code_char,
+        control_var="domain",
+        split_var="position",
+    )
+)
+domain_code_char["Position"] = pd.Categorical(
+    domain_code_char["Position"],
+    categories=position_sorter,
+    ordered=True,
+)
+domain_code_char = domain_code_char.sort_values(["Subset", "Position"])
+
+article_type_code_char = pd.DataFrame(
+    _run_chi2_and_posthocs(
+        doc_contribs_for_code_char,
+        control_var="article_type",
+        split_var="position",
+    )
+)
+article_type_code_char["Position"] = pd.Categorical(
+    article_type_code_char["Position"],
+    categories=position_sorter,
+    ordered=True,
+)
+article_type_code_char = article_type_code_char.sort_values(["Subset", "Position"])
+
+open_access_status_code_char = pd.DataFrame(
+    _run_chi2_and_posthocs(
+        doc_contribs_for_code_char,
+        control_var="is_open_access",
+        split_var="position",
+    )
+)
+open_access_status_code_char["Position"] = pd.Categorical(
+    open_access_status_code_char["Position"],
+    categories=position_sorter,
+    ordered=True,
+)
+open_access_status_code_char = open_access_status_code_char.sort_values(["Subset", "Position"])
+
 # Run chi2 and posthocs for overall author position
-_run_chi2_and_posthocs(
-    doc_contribs_for_code_char,
-    control_var=None,
-    split_var="position",
+overall_code_char = pd.DataFrame(
+    _run_chi2_and_posthocs(
+        doc_contribs_for_code_char,
+        control_var=None,
+        split_var="position",
+    )
 )
-```
-
-#### Domain
-
-```{python}
-_run_chi2_and_posthocs(
-    doc_contribs_for_code_char,
-    control_var="domain",
-    split_var="position",
+overall_code_char["Position"] = pd.Categorical(
+    overall_code_char["Position"],
+    categories=position_sorter,
+    ordered=True,
 )
-```
+overall_code_char = overall_code_char.sort_values(["Subset", "Position"])
 
-#### Article Type
+def create_multirow_html_table(dataframes_dict):
+    # HTML templates for rows
+    initial_row_for_control_template = """
+    <tr>
+        <td rowspan="{n_control_rows}"><b>{control}</b></td>
+        <td rowspan="{n_subset_rows}"><b>{subset}</b></td>
+        <td>{position}</td>
+        <td>{coding}</td>
+        <td>{total}</td>
+        <td>{p_value}</td>
+    </tr>
+    """.strip()
 
-```{python}
-_run_chi2_and_posthocs(
-    doc_contribs_for_code_char,
-    control_var="article_type",
-    split_var="position",
-)
-```
+    initial_row_for_subset_template = """
+    <tr>
+        <td rowspan="{n_subset_rows}"><b>{subset}</b></td>
+        <td>{position}</td>
+        <td>{coding}</td>
+        <td>{total}</td>
+        <td>{p_value}</td>
+    </tr>
+    """.strip()
 
-#### Open Access Status
+    subsequent_row_template = """
+    <tr>
+        <td>{position}</td>
+        <td>{coding}</td>
+        <td>{total}</td>
+        <td>{p_value}</td>
+    </tr>
+    """.strip()
 
-```{python}
-_run_chi2_and_posthocs(
-    doc_contribs_for_code_char,
-    control_var="is_open_access",
-    split_var="position",
+    # Generate table rows
+    all_rows = []
+    
+    for control, df in dataframes_dict.items():
+        rows_for_control = []
+        # Group by subset to handle the spans
+        for subset_name, subset_group in df.groupby("Subset"):
+            subset_rows = []
+            for idx, row in subset_group.iterrows():
+                # Format p-value
+                p_value = f"{row['p']:.3f}" if row['p'] >= 0.001 else "0.000"
+                p_value = f"{p_value}***" if row['p'] < 0.05 else p_value
+                
+                row_data = {
+                    "control": control,
+                    "subset": subset_name,
+                    "position": row["Position"],
+                    "coding": row["Coding"],
+                    "total": row["Total"],
+                    "p_value": p_value,
+                    "n_subset_rows": len(subset_group),
+                    "n_control_rows": len(df),
+                }
+                
+                if len(rows_for_control) == 0 and len(subset_rows) == 0:
+                    subset_rows.append(initial_row_for_control_template.format(**row_data))
+                elif len(subset_rows) == 0:
+                    subset_rows.append(initial_row_for_subset_template.format(**row_data))
+                else:
+                    subset_rows.append(subsequent_row_template.format(**row_data))
+            
+            rows_for_control.extend(subset_rows)
+
+        all_rows.extend(rows_for_control)
+
+    # Create the final HTML table
+    table_html = f"""
+    <table>
+        <thead>
+            <tr>
+                <th>Control</th>
+                <th>Subset</th>
+                <th>Position</th>
+                <th>Coding</th>
+                <th>Total</th>
+                <th>p</th>
+            </tr>
+        </thead>
+        <tbody>
+            {'\n'.join(all_rows)}
+        </tbody>
+    </table>
+    """.strip()
+    
+    return table_html
+
+IPython.display.HTML(
+    create_multirow_html_table(
+        {
+            "Domain": domain_code_char,
+            "Article Type": article_type_code_char,
+            "Open Access Status": open_access_status_code_char,
+            "Overall": overall_code_char,
+        }
+    )
 )
 ```
 
