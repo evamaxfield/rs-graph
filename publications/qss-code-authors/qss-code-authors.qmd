@@ -85,9 +85,9 @@ from sci_soft_models.dev_author_em import data as sci_soft_models_data
 from scipy.stats import (
     binomtest,
     chi2_contingency,
-    false_discovery_control,
     pearsonr,
 )
+from statsmodels.stats.multitest import multipletests
 from sqlalchemy import text
 
 from rs_graph.db import models as db_models
@@ -1878,19 +1878,11 @@ pearson_rho = f"{non_author_to_author_dev_pearson_results[0]:.2f}"
 
 ## Characteristics of Scientific Code Contributors
 
-- Next we investigate the differences between coding and non-coding article authors.
-	- specifics, author position in authorship list is a commonly used tool in scientometrics
-	- similarly, metrics of “scientific impact” such as h-index, i10 index, and two-year mean citedness are also available to us.
-	- plot / table of the distributions between coding and non-coding authors
-	- ANOVA / Chi2 tests to see if these differences are significant
-	- results in summary
-
-- Just as before, we next investigate if these results are affected by article type and research domain.
-	- subplot + stats tests for differences by each article type
-	- subplot + stats tests for differences by each domain
-	- results in summary
-
 ### Author Positions of Code Contributing Authors
+
+- TODO: add more interpretation / text here
+- In short, we see that regardless of domain, article type, and open access status, first authors tend to be code-contributors, while middle and last authors tend not to be code-contributors.
+- See @tbl-post-hoc-tests-on-author-positions for a detailed breakdown of the author positions of code-contributing authors.
 
 ```{python}
 # Create subset documents
@@ -2097,9 +2089,9 @@ def _run_posthocs(
         )
 
         # P adjust
-        p_values = false_discovery_control(
+        _, p_values, _, _ = multipletests(
             [result["p"] for result in binom_results],
-            method="bh",
+            method="bonferroni",
         )
 
         # Replace p values
@@ -2109,10 +2101,6 @@ def _run_posthocs(
     # Print results
     formatted_binom_results = []
     for result in binom_results:
-        print(
-            f"{split_var}: {result[split_var]}, "
-            f"p: {result['p']}, statistic: {result['statistic']}, n: {result['n']}"
-        )
         formatted_binom_results.append({
             split_var.replace("_", " ").title(): result[split_var].title(),
             "Coding": result["n_code_contributors"],
@@ -2133,15 +2121,12 @@ def _run_chi2_and_posthocs(
     return_vals = []
 
     if control_var is None:
-        print("Overall")
         xtabs = pd.crosstab(
             data[split_var],
             data["is_code_contributor"],
         )
-        print(xtabs)
         chi2_result = chi2_contingency(xtabs)
         if chi2_result.pvalue < 0.05:
-            print(f"Chi2: {chi2_result.statistic}, p: {chi2_result.pvalue}, n: {len(data)}")
             posthoc_results = _run_posthocs(
                 data,
                 split_var=split_var,
@@ -2155,11 +2140,9 @@ def _run_chi2_and_posthocs(
                 })
 
         else:
-            print(f"Coding by {split_var} not significant")
-
+            pass
     else:
         for control_val in data[control_var].unique():
-            print(control_val)
             # Get data with control_val subset
             control_val_subset = data.loc[
                 data[control_var] == control_val
@@ -2168,10 +2151,8 @@ def _run_chi2_and_posthocs(
                 control_val_subset[split_var],
                 control_val_subset["is_code_contributor"],
             )
-            print(xtabs)
             chi2_result = chi2_contingency(xtabs)
             if chi2_result.pvalue < 0.05:
-                print(f"Chi2: {chi2_result.statistic}, p: {chi2_result.pvalue}, n: {len(control_val_subset)}")
                 posthoc_results = _run_posthocs(
                     control_val_subset,
                     split_var=split_var,
@@ -2185,10 +2166,7 @@ def _run_chi2_and_posthocs(
                     })
 
             else:
-                print(f"Coding by {split_var} not significant")
-
-        print()
-        print()
+                pass
 
     return return_vals
 ```
@@ -2253,146 +2231,46 @@ overall_code_char["Position"] = pd.Categorical(
     ordered=True,
 )
 overall_code_char = overall_code_char.sort_values(["Subset", "Position"])
-
-def create_multirow_html_table(dataframes_dict):
-    # HTML templates for rows
-    initial_row_for_control_template = """
-    <tr>
-        <td rowspan="{n_control_rows}"><b>{control}</b></td>
-        <td rowspan="{n_subset_rows}"><b>{subset}</b></td>
-        <td>{position}</td>
-        <td>{coding}</td>
-        <td>{total}</td>
-        <td>{p_value}</td>
-    </tr>
-    """.strip()
-
-    initial_row_for_subset_template = """
-    <tr>
-        <td rowspan="{n_subset_rows}"><b>{subset}</b></td>
-        <td>{position}</td>
-        <td>{coding}</td>
-        <td>{total}</td>
-        <td>{p_value}</td>
-    </tr>
-    """.strip()
-
-    subsequent_row_template = """
-    <tr>
-        <td>{position}</td>
-        <td>{coding}</td>
-        <td>{total}</td>
-        <td>{p_value}</td>
-    </tr>
-    """.strip()
-
-    # Generate table rows
-    all_rows = []
-    
-    for control, df in dataframes_dict.items():
-        rows_for_control = []
-        # Group by subset to handle the spans
-        for subset_name, subset_group in df.groupby("Subset"):
-            subset_rows = []
-            for idx, row in subset_group.iterrows():
-                # Format p-value
-                p_value = f"{row['p']:.3f}" if row['p'] >= 0.001 else "0.000"
-                p_value = f"{p_value}***" if row['p'] < 0.05 else p_value
-                
-                row_data = {
-                    "control": control,
-                    "subset": subset_name,
-                    "position": row["Position"],
-                    "coding": row["Coding"],
-                    "total": row["Total"],
-                    "p_value": p_value,
-                    "n_subset_rows": len(subset_group),
-                    "n_control_rows": len(df),
-                }
-                
-                if len(rows_for_control) == 0 and len(subset_rows) == 0:
-                    subset_rows.append(initial_row_for_control_template.format(**row_data))
-                elif len(subset_rows) == 0:
-                    subset_rows.append(initial_row_for_subset_template.format(**row_data))
-                else:
-                    subset_rows.append(subsequent_row_template.format(**row_data))
-            
-            rows_for_control.extend(subset_rows)
-
-        all_rows.extend(rows_for_control)
-
-    # Create the final HTML table
-    table_html = f"""
-    <table>
-        <thead>
-            <tr>
-                <th>Control</th>
-                <th>Subset</th>
-                <th>Position</th>
-                <th>Coding</th>
-                <th>Total</th>
-                <th>p</th>
-            </tr>
-        </thead>
-        <tbody>
-            {'\n'.join(all_rows)}
-        </tbody>
-    </table>
-    """.strip()
-    
-    return table_html
-
-IPython.display.HTML(
-    create_multirow_html_table(
-        {
-            "Domain": domain_code_char,
-            "Article Type": article_type_code_char,
-            "Open Access Status": open_access_status_code_char,
-            "Overall": overall_code_char,
-        }
-    )
-)
 ```
 
 ### Corresponding Status of Code Contributing Authors
 
+- TODO: add more interpretation / text here
+- See @tbl-post-hoc-tests-on-corresponding-status for a detailed breakdown of the corresponding status of code-contributing authors.
+
 ```{python}
 # Run chi2 and posthocs for overall corresponding status
-_run_chi2_and_posthocs(
-    doc_contribs_for_code_char,
-    control_var=None,
-    split_var="is_corresponding",
-)
-```
+domain_code_corresponding = pd.DataFrame(
+    _run_chi2_and_posthocs(
+        doc_contribs_for_code_char,
+        control_var="domain",
+        split_var="is_corresponding",
+    )
+).sort_values(["Subset", "Is Corresponding"])
 
-#### Domain
+article_type_code_corresponding = pd.DataFrame(
+    _run_chi2_and_posthocs(
+        doc_contribs_for_code_char,
+        control_var="article_type",
+        split_var="is_corresponding",
+    )
+).sort_values(["Subset", "Is Corresponding"])
 
-```{python}
-_run_chi2_and_posthocs(
-    doc_contribs_for_code_char,
-    control_var="domain",
-    split_var="is_corresponding",
-)
-```
+open_access_status_code_corresponding = pd.DataFrame(
+    _run_chi2_and_posthocs(
+        doc_contribs_for_code_char,
+        control_var="is_open_access",
+        split_var="is_corresponding",
+    )
+).sort_values(["Subset", "Is Corresponding"])
 
-#### Article Type
-
-```{python}
-_run_chi2_and_posthocs(
-    doc_contribs_for_code_char,
-    control_var="article_type",
-    split_var="is_corresponding",
-)
-```
-
-#### Open Access Status
-
-```{python}
-_run_chi2_and_posthocs(
-    doc_contribs_for_code_char,
-    control_var="is_open_access",
-    split_var="is_corresponding",
-)
+overall_code_corresponding = pd.DataFrame(
+    _run_chi2_and_posthocs(
+        doc_contribs_for_code_char,
+        control_var=None,
+        split_var="is_corresponding",
+    )
+).sort_values(["Subset", "Is Corresponding"])
 ```
 
 ### Modeling H-Index
@@ -3337,3 +3215,229 @@ IPython.display.Latex(model_results_latex)
 ```
 
 :::
+
+## Post-Hoc Tests for Coding vs Non-Coding Authors by Position
+
+::: {.content-visible when-format="html"}
+
+```{python}
+#| label: tbl-post-hoc-tests-on-author-positions
+#| tbl-cap: "Counts of Code-Contributing Authors ('Coding') as well as Total Authors by Position and Bonferroni Corrected p-values from Post-Hoc Binomial Tests"
+
+def create_multirow_html_table(
+    dataframes_dict: dict[str, pd.DataFrame],
+    split_var: str,
+):
+    # HTML templates for rows
+    initial_row_for_control_template = """
+    <tr>
+        <td rowspan="{n_control_rows}"><b>{control}</b></td>
+        <td rowspan="{n_subset_rows}"><b>{subset}</b></td>
+        <td>{split_val}</td>
+        <td>{coding}</td>
+        <td>{total}</td>
+        <td>{p_value}</td>
+    </tr>
+    """.strip()
+
+    initial_row_for_subset_template = """
+    <tr>
+        <td rowspan="{n_subset_rows}"><b>{subset}</b></td>
+        <td>{split_val}</td>
+        <td>{coding}</td>
+        <td>{total}</td>
+        <td>{p_value}</td>
+    </tr>
+    """.strip()
+
+    subsequent_row_template = """
+    <tr>
+        <td>{split_val}</td>
+        <td>{coding}</td>
+        <td>{total}</td>
+        <td>{p_value}</td>
+    </tr>
+    """.strip()
+
+    # Generate table rows
+    all_rows = []
+    
+    for control, df in dataframes_dict.items():
+        rows_for_control = []
+        # Group by subset to handle the spans
+        for subset_name, subset_group in df.groupby("Subset"):
+            subset_rows = []
+            for idx, row in subset_group.iterrows():
+                # Format p-value
+                p_value = f"{row['p']:.3f}" if row['p'] >= 0.001 else "0.000"
+                p_value = f"{p_value}***" if row['p'] < 0.05 else p_value
+                
+                row_data = {
+                    "control": control,
+                    "subset": subset_name,
+                    "split_val": row[split_var],
+                    "coding": row["Coding"],
+                    "total": row["Total"],
+                    "p_value": p_value,
+                    "n_subset_rows": len(subset_group),
+                    "n_control_rows": len(df),
+                }
+                
+                if len(rows_for_control) == 0 and len(subset_rows) == 0:
+                    subset_rows.append(initial_row_for_control_template.format(**row_data))
+                elif len(subset_rows) == 0:
+                    subset_rows.append(initial_row_for_subset_template.format(**row_data))
+                else:
+                    subset_rows.append(subsequent_row_template.format(**row_data))
+            
+            rows_for_control.extend(subset_rows)
+
+        all_rows.extend(rows_for_control)
+
+    # Create the final HTML table
+    table_html = f"""
+    <table>
+        <tr>
+            <th><b>Control</b></th>
+            <th><b>Subset</b></th>
+            <th><b>{split_var.replace('_', ' ').title()}</b></th>
+            <th><b>Coding</b></th>
+            <th><b>Total</b></th>
+            <th><b>p</b></th>
+        </tr>
+        {'\n'.join(all_rows)}
+    </table>
+    """.strip()
+    
+    return table_html
+
+IPython.display.HTML(
+    create_multirow_html_table(
+        {
+            "Domain": domain_code_char,
+            "Article Type": article_type_code_char,
+            "Open Access Status": open_access_status_code_char,
+            "Overall": overall_code_char,
+        },
+        split_var="Position",
+    )
+)
+```
+
+:::
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+def create_multirow_latex_table(
+    dataframes_dict: dict[str, pd.DataFrame],
+    caption: str,
+    label: str,
+    split_var: str,
+):
+    # LaTeX templates for rows
+    initial_row_for_control_template = """    \\multirow{{{n_control_rows}}}{{*}}{{\\textbf{{{control}}}}} & \\multirow{{{n_subset_rows}}}{{*}}{{\\textbf{{{subset}}}}} & {color}{split_val} & {color}{coding} & {color}{total} & {color}{p_value} \\\\"""
+
+    initial_row_for_subset_template = """    & \\multirow{{{n_subset_rows}}}{{*}}{{\\textbf{{{subset}}}}} & {color}{split_val} & {color}{coding} & {color}{total} & {color}{p_value} \\\\"""
+
+    subsequent_row_template = """    & & {color}{split_val} & {color}{coding} & {color}{total} & {color}{p_value} \\\\"""
+
+    # Table header and footer templates
+    table_header = """\\begin{table}
+\\centering
+\\small
+\\caption{%s}
+\\label{%s}
+\\begin{tabular}{llllrr}
+\\toprule
+\\textbf{Control} & \\textbf{Subset} & \\textbf{%s} & \\textbf{Coding} & \\textbf{Total} & \\textbf{p} \\\\
+\\midrule""" % (caption, label, split_var.replace('_', ' ').title())
+
+    table_footer = """\\bottomrule
+\\end{tabular}
+\\end{table}"""
+
+    # Generate table rows
+    all_rows = []
+    overall_row_count = 0  # Counter for all rows to handle coloring
+    
+    for control, df in dataframes_dict.items():
+        rows_for_control = []
+        # Group by subset to handle the spans
+        for subset_name, subset_group in df.groupby("Subset"):
+            subset_rows = []
+            for idx, row in subset_group.iterrows():
+                # Format p-value with significance stars
+                p_value = f"{row['p']:.3f}" if row['p'] >= 0.001 else "0.000"
+                if row["p"] < 0.05:
+                    p_value = f"{p_value}$^{{***}}$"
+                
+                # Add cell color for odd-numbered rows
+                color = "\\cellcolor{gray!10}" if overall_row_count % 2 == 1 else ""
+                
+                row_data = {
+                    "control": control,
+                    "subset": subset_name,
+                    "split_val": row[split_var],
+                    "coding": row["Coding"],
+                    "total": row["Total"],
+                    "p_value": p_value,
+                    "n_subset_rows": len(subset_group),
+                    "n_control_rows": len(df),
+                    "color": color
+                }
+                
+                if len(rows_for_control) == 0 and len(subset_rows) == 0:
+                    subset_rows.append(initial_row_for_control_template.format(**row_data))
+                elif len(subset_rows) == 0:
+                    subset_rows.append(initial_row_for_subset_template.format(**row_data))
+                else:
+                    subset_rows.append(subsequent_row_template.format(**row_data))
+                
+                overall_row_count += 1
+            
+            rows_for_control.extend(subset_rows)
+            
+        # Add midrule between controls (except after the last control)
+        if control != list(dataframes_dict.keys())[-1]:
+            rows_for_control.append("    \\midrule")
+            
+        all_rows.extend(rows_for_control)
+
+    # Combine all parts
+    latex_table = f"""{table_header}
+{chr(10).join(all_rows)}
+{table_footer}"""
+    
+    return latex_table
+
+IPython.display.Latex(
+    create_multirow_latex_table(
+        {
+            "Domain": domain_code_char,
+            "Article Type": article_type_code_char,
+            "Open Access Status": open_access_status_code_char,
+            "Overall": overall_code_char,
+        },
+        caption="Counts of Code-Contributing Authors ('Coding') as well as Total Authors by Position and Bonferroni Corrected p-values from Post-Hoc Binomial Tests",
+        label="tbl-post-hoc-tests-on-author-positions",
+        split_var="Position",
+    )
+)
+```
+
+:::
+
+## Post-Hoc Tests for Coding vs Non-Coding Authors by Corresponding Status
+
+```{python}
+#| label: tbl-post-hoc-tests-on-corresponding-status
+#| tbl-cap: "Counts of Code-Contributing Authors ('Coding') as well as Total Authors by Corresponding Status and Bonferroni Corrected p-values from Post-Hoc Binomial Tests"
+
+pd.concat([
+    domain_code_corresponding,
+    article_type_code_corresponding,
+    open_access_status_code_corresponding,
+    overall_code_corresponding,
+])
+```
