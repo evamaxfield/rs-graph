@@ -44,6 +44,14 @@ format:
     execute:
       echo: false
       warning: false
+    
+    # Word count
+    citeproc: false
+    filters:
+      - at: pre-quarto
+        path: _extensions/andrewheiss/wordcount/citeproc.lua
+      - at: pre-quarto
+        path: _extensions/andrewheiss/wordcount/wordcount.lua
 
   pdf:
     toc: false
@@ -57,11 +65,15 @@ format:
           \usepackage{siunitx}     % For number alignment
           \usepackage[table]{xcolor}  % The 'table' option is crucial for \rowcolors to work
 
+    # Word count
+    citeproc: false
+    filters:
+      - at: pre-quarto
+        path: _extensions/andrewheiss/wordcount/citeproc.lua
+      - at: pre-quarto
+        path: _extensions/andrewheiss/wordcount/wordcount.lua
+
 ---
-
-# Random Citations
-
-- may be interesting / useful: [https://doi.org/10.1145/1772690.1772766](https://doi.org/10.1145/1772690.1772766)
 
 # Introduction
 
@@ -351,105 +363,60 @@ for _, data_source in dataset_sources.iterrows():
 reduced_doc_types = pd.DataFrame(reduced_doc_types_rows)
 ```
 
-- Contemporary scientific research fundamentally depends on specialized software tools and computational methods [@edwards2013knowledge; @mayernik2017assessing; @howison2015currentandfuturemeasures].
-    - define scientific software (analysis scripts, research tools, computational infrastructure) [@hasselbring2024researchsoftwarecategories]
-    - software enables reproducible research and large-scale experiments [@krafczyk2019scientificreproducbility; @Trisovic2021ALS]
-    - code serves as a detailed log of research methodology [@ram2013git]
-    - due to all of the above, code is increasingly being shared alongside research articles [@Cao2023TheRO; @trujillo2022penumbra]
+Contemporary scientific research fundamentally depends on specialized software tools and computational methods [@edwards2013knowledge; @mayernik2017assessing; @howison2015currentandfuturemeasures]. These include the analysis scripts for data processing and statistical testing, and research tools and computational infrastructure for data collection and storage [@hasselbring2024researchsoftwarecategories], which act as essential components of modern research practices. Software itself additionally plays multiple critical roles: enabling reproducible research and large-scale experiments [@krafczyk2019scientificreproducbility; @Trisovic2021ALS], serving as a detailed log of research methodology [@ram2013git], and increasingly being shared alongside research articles as a crucial research artifact [@Cao2023TheRO; @trujillo2022penumbra].
 
-- The development and maintenance of scientific software requires substantial contribution, yet faces persistent challenges in receiving academic recognition [@muna2016astropyproblem].
-    - software contributions often receive only acknowledgments rather than authorship [@olivier_philippe_2019_2585783]
-    - lack of formal credit affects career advancement in academia [@Carver2022ASO; @biagioli2014scientific]
-    - other general discussion of software citations and credit systems [@Merow2023BetterIA; @Westner2024CyclingOT; @Katz2020RecognizingTV]
+Despite the fundamental importance of scientific software, its development and maintenance face persistent challenges in receiving appropriate academic recognition [@muna2016astropyproblem]. Software contributions are often relegated to acknowledgments rather than warranting authorship [@olivier_philippe_2019_2585783], and this lack of formal credit can significantly impact career advancement in academia [@Carver2022ASO; @biagioli2014scientific]. The academic community continues to grapple with developing appropriate systems for software citation and credit attribution that adequately reflect these contributions [@Merow2023BetterIA; @Westner2024CyclingOT; @Katz2020RecognizingTV].
 
-- Recent initiatives to expand academic credit systems, while promising, have not fully addressed the challenges of recognizing software contributions.
-    - describe the Contributor Roles Taxonomy (CRediT) [@brand2015beyond]
-    - previous research using CRediT (and prior systems) to understand research labor distribution [@Larivire2020InvestigatingTD; @lariviere2016contributorship; @sauermann2017authorship; @Li2023AreRC; @Lu2019CocontributorshipNA]
-    - CRediT research is still centered on traditional author lists (historic and systematic bias, self-reporting without verification, etc.) [@HAEUSSLER2013688; @gotzsche2007ghost; @chaoqun2021gendered]
+Recent initiatives like the Contributor Roles Taxonomy (CRediT) have attempted to address these challenges by expanding academic authorship criteria to include specialized roles [@brand2015beyond], but have not fully resolved the issues surrounding software contribution recognition. While previous research has used CRediT and similar systems to understand research labor distribution [@Larivire2020InvestigatingTD; @lariviere2016contributorship; @sauermann2017authorship; @Li2023AreRC; @Lu2019CocontributorshipNA], these frameworks remain largely centered on traditional author lists. This traditional focus perpetuates existing problems, including historical and systematic bias, and relies heavily on self-reporting without external verification [@HAEUSSLER2013688; @gotzsche2007ghost; @chaoqun2021gendered]. The limitations of current contribution frameworks, combined with the growing importance of software in research, highlight the need for a systematic examination of how code contributions actually relate to academic recognition and impact.
 
-- Our novel predictive model addresses these challenges by enabling systematic matching between scientific article authors and source code developer accounts.
-    - we use predictive modeling due to the lack of standardized identifiers (i.e. ORCID) for developers [@haak2012orcid]
-    - further, lack consistency in naming and email overlap [GET CITATION FOR SORTING HAT FROM GOGGINS??]
-    - semantic models handle subtle variations in identity information (general entity matching has moved to transformers and semantic embeddings) [@Li2020DeepEM; @Brunner2020EntityMW]
+These challenges raise several critical questions about the relationship between software development and academic recognition: How does the distribution of coding contributions within research teams relate to article impact? To what extent does sustained engagement in software development influence the likelihood of receiving authorship recognition? How do traditional academic roles align with actual code contributions? What are the career implications for researchers who regularly contribute code to research projects?
 
-- By applying our model across a corpus of `{python} len(doc_repo_links)` paired research articles and repositories, we provide unique insight into the dynamics of code contribution within research teams, the impact of code contribution on research outcomes, and an understanding of the authors who are and who aren’t code contributors.
-    - move from self-reporting to verifiable source code repository commit histories
-    - provide preliminary quantitative evidence of exclusion of code contributors from academic authorship
-    - model article level impact metrics as a function of software development dynamics to show the benefit code contributors have on research
-    - find that first authors are more likely to be code contributors than not
-    - find that code-contributing authors have reduced individual level impact metrics compared to their non-coding counterparts
+To address these questions, we developed a novel predictive model that enables systematic matching between scientific article authors and source code developer accounts. This approach was necessary due to the lack of standardized identifiers (like ORCID) for developers [@haak2012orcid] and inconsistencies in naming and email conventions across platforms. We leverage recent advances in transformer-based architectures and semantic embeddings to handle subtle variations in identity information [@Li2020DeepEM; @Brunner2020EntityMW].
 
-- These findings not only illuminate the relationship between code contribution and scientific impact but also provide an empirical foundation for reforming academic credit systems to better recognize software development contributions in research.
+By applying our model across a corpus of `{python} len(doc_repo_links)` paired research articles and repositories, we provide unique insight into the dynamics of code contribution within research teams. Our analysis moves beyond self-reporting to examine verifiable source-code repository commit histories, providing preliminary quantitative evidence of the exclusion of code contributors from academic authorship. While we find that code-contributing authors are associated with modest increases in article-level impact metrics (~4.5% increase in citations per code-contributing author), these effects are reduced or become statistically non-significant when controlling for factors such as domain, article type, and access status. Across every condition tested, first authors are consistently and significantly more likely to be code contributors compared to other author positions. However, when examining author-level impact metrics, we find a clear negative relationship between coding frequency and scholarly impact - authors who contribute code more frequently show progressively lower h-indices compared to their non-coding peers, a pattern that persists across various controls for author position, domain, and article type.
+
+These findings begin to illuminate the complex and sometimes counterintuitive relationship between code contribution and scientific impact. While our results suggest that software development plays an important role in modern research, they also highlight potential tensions between technical contributions and traditional academic metrics. Our quantitative evidence could help inform ongoing discussions about academic credit systems, though more research is needed to fully understand how best to recognize and reward software development contributions in research.
 
 # Background {#sec-background}
 
-- The relationship between scientific software development and academic credit systems represents a complex intersection of traditional academic practices and modern research requirements.
-    - academic credit traditionally focuses on analytical, theoretical, and experimental contributions [@lariviere2016contributorship; @LIU2023101432]
-    - software development historically viewed as technical rather than scholarly work
-    - growing recognition that research software development requires deep domain expertise [@heroux2022researchsoftware; @Carver2022ASO]
-    - increased emphasis on large scale (big data) projects has resulted in larger need for software development [@jin2015significance; @hampton2013big; @fan2014challenges]
-    - understanding this relationship requires examining both team-level dynamics and individual contributions
+The relationship between scientific software development and academic credit systems represents a complex intersection of traditional academic practices and modern research requirements. While academic credit has historically focused on analytical, theoretical, and experimental contributions [@lariviere2016contributorship; @LIU2023101432], software development has long been viewed as purely technical rather than scholarly work. However, there is growing recognition that research software development requires deep domain expertise [@heroux2022researchsoftware; @Carver2022ASO], particularly as increased emphasis on large-scale data projects has amplified the need for sophisticated computational methods [@jin2015significance; @hampton2013big; @fan2014challenges].
 
-- (H1) Modern research increasingly depends on collaborative software development, yet we lack systematic evidence of how code contribution patterns affect research outcomes.
-    - existing research focuses primarily on general team size and diversity [@Franceschet2010TheEO; @Larivire2014TeamSM; @alshebli2024china; @yang2024femaleled; @liu2021dominance; @naik2023impact]
-    - software engineering literature shows correlation between team size and code quality (many eyes make all bugs shallow) [@Wyss2023NothingBut; @meirelles2010study]
-    - limited understanding of how code contribution is associated to research impact
-    - need to understand relationship between code contributors and citation metrics to understand the value of these technical, potentially uncredited, contributions
-    - we believe that more code contributors may signal a more technical research project and that technical complexity may be rewarded with more citations
+Understanding the dynamics of scientific software development requires examining both team-level patterns and individual contributions. While existing research has extensively studied the impact of general team size and diversity on research outcomes [@Franceschet2010TheEO; @Larivire2014TeamSM; @alshebli2024china; @yang2024femaleled; @liu2021dominance; @naik2023impact], and software engineering literature has demonstrated correlations between team size and code quality [@Wyss2023NothingBut; @meirelles2010study], we lack systematic evidence of how code contribution patterns affect research impact. Given that technically sophisticated research projects often enable novel scientific insights and methodological advances, **we hypothesize that projects with more code contributors will receive higher citation counts, reflecting the value of technical contributions even when they go uncredited (H1)**.
 
-- (H2) Despite formal taxonomies like CRediT attempting to standardize contribution recognition, the criteria for granting authorship to technical contributors remain inconsistent and poorly understood across research communities.
-    - existing contribution frameworks provide definitions for software development roles [@Li2023AreRC; @Ding2021ANM]
-    - however, these frameworks may not capture the full spectrum of technical contributions
-    - repository histories allow us to examine how sustained technical engagement relates to authorship status [@ram2013git]
-    - we believe that longer project involvement increases likelihood of authorship recognition
-    - specifically, we hypothesize that projects with longer durations will show higher proportions of author-developers compared to non-author developers
+Recent efforts to standardize contribution recognition, such as the CRediT taxonomy, have attempted to establish formal roles for software development [@Li2023AreRC; @Ding2021ANM]. However, these frameworks may not capture the full spectrum of technical contributions, particularly the relationship between sustained engagement in software development and authorship recognition. Repository histories provide a unique opportunity to examine this relationship [@ram2013git], leading us to hypothesize that longer project involvement increases the likelihood of authorship recognition. **Specifically, we expect that projects with longer commit durations will be associated with higher percentages of developers who receive authorship (H2)**.
 
-- (H3 and H4) Academic authorship conventions signal both intellectual contribution and project responsibilities, yet their relationship to software development remains poorly understood.
-    - first authors traditionally responsible for primary intellectual and experimental contributions [@lariviere2016contributorship; @Larivire2020InvestigatingTD; @Jnior2016PatternsOA]
-    - corresponding authors serve as primary points of contact and often maintain research artifacts
-    - varying expectations across academic disciplines regarding technical contributions [@smith2023technical]
-    - limited research examining how these authorship roles relate to direct code contributions
-    - potential insights into how software development responsibilities are distributed within research teams
-    - we believe that first authors and corresponding authors will have higher proportions of code contribution than not.
-    - conversely, middle and last authors and non-corresponding authors will have lower proportions of code contribution than not.
+Traditional academic authorship conventions carry specific expectations about intellectual contribution and project responsibilities. First authors typically bear primary responsibility for intellectual and experimental contributions [@lariviere2016contributorship; @Larivire2020InvestigatingTD; @Jnior2016PatternsOA], while corresponding authors maintain research artifacts and serve as primary points of contact. However, expectations regarding technical contributions vary significantly across academic disciplines [@smith2023technical]. **Given these conventions, we hypothesize that first authors (H3) and corresponding authors (H4) will show higher rates of code contribution compared to middle and last authors**.
 
-- (H5) Academic career advancement has historically depended on traditional impact metrics, creating potential tension for researchers who dedicate significant time to software development.
-    - lack of formal software citation standards and adoption may directly result in software and methodological focused researchers to experience lower citation counts
-    - more generally, theoretical contributions may be more widely shared and cited than technical and methodological contributions
-    - potential career implications for researchers who prioritize coding [@hannay2009scientists; @heroux2022researchsoftware; @smith2019elevating; @cosden2022researchsoftware]
-    - need to understand relationship between code contributions and academic impact
-    - we believe that code contributing researchers will have lower individual level impact metrics than non-coding researchers, while we can't be clear on mechanism, we believe it may be do to some combination of lack of formal citation, or methodological contributions being less widely shared unless they represent fundamental shifts in the field
-      - trying to get to the idea that software is iterative and minor optimizations don't make big waves
-
-- Understanding these relationships is crucial for developing equitable academic credit systems that recognize the full spectrum of research contributions.
-    - findings will inform policy making around academic credit
-    - importance of large-scale quantitative evidence for understanding current credit systems
-    - implications for academic hiring and promotion decisions
-    - potential to develop new impact metrics that capture software contributions
+The tension between software development and academic advancement is particularly acute given the field's reliance on traditional impact metrics. **We hypothesize that researchers who frequently contribute code will be associated with lower individual-level impact metrics compared to their non-coding peers (H5)**. This may occur through multiple mechanisms: lack of standardized software citation practices reduces recognition of technical contributions, theoretical advances garner more citations than methodological improvements, and version-specific iterative software publications lead to citation-splitting across multiple articles. This pattern could explain the career implications faced by researchers who prioritize coding [@hannay2009scientists; @heroux2022researchsoftware; @smith2019elevating; @cosden2022researchsoftware].
 
 # Data and Methods
 
 ## Linking Scientific Articles and Source Code Repositories
 
-- Modern scientific research increasingly requires the public sharing of research code, creating unique opportunities to study the relationship between academic authorship and software development.
-    - many journals and platforms now require or recommend code and data sharing [@stodden2013toward; @sharma2024analytical]
-    - this requirement creates traceable links between publications and code
-    - these links enable systematic study of both article-repository and author-developer relationships [@Hata2021ScienceSoftwareLT; @Kelley2021AFF; @Stankovski2024RepoFromPaperAA; @milewicz2019characterizing]
+Modern scientific research increasingly requires the public sharing of research code, creating unique opportunities to study the relationship between academic authorship and software development. Many journals and platforms now require or recommend code and data sharing [@stodden2013toward; @sharma2024analytical], creating traceable links between publications and code that enable systematic study of both article-repository and author-developer relationships [@Hata2021ScienceSoftwareLT; @Kelley2021AFF; @Stankovski2024RepoFromPaperAA; @milewicz2019characterizing].
 
-- Our data collection process leverages multiple complementary sources of linked scientific articles and code repositories to ensure comprehensive coverage.
-    - PLOS: Traditional research articles with code requirements
-    - JOSS and SoftwareX: Specialized software-focused publications
-    - Papers with Code / ArXiv: Capturing pre-print landscape
-    - to reduce the complexity of dataset processing and enrichment, we filter out any article-source-code-repository pairs which store code somewhere other than GitHub, note: we do this for simplicity of processing but recognize that there is work elsewhere to understand code outside of GitHub [@trujillo2022penumbra]
+Our data collection process leverages multiple complementary sources of linked scientific articles and code repositories to ensure comprehensive coverage. Our dataset combines multiple sources:
 
-- Through integration of multiple data sources, we extract detailed information about both the academic and software development aspects of each project.
-    - specifically we utilize the Semantic Scholar API for article DOI resolution to ensure that we find the latest version for each article.
-    - this is particularly important for working with preprints as they may have been published in a journal since their inclusion in the Papers with Code dataset
-    - we then utilize the OpenAlex API to gather publication metadata (i.e. open access status, domain, publication date), author details (i.e. name, author position, corresponding author status), and article- and individual-level metrics (i.e. citation count, FWCI, h-index).
-    - the GitHub API provides similar information for source code repositories, including repository metadata (i.e. name, description, languages, creation date), contributor details (i.e. username, name, email), and repository-level metrics (i.e. star count, fork count, issue count).
+- PLOS: Traditional research articles with code requirements
+- JOSS and SoftwareX: Specialized software-focused publications
+- Papers with Code (ArXiv): Capturing the pre-print landscape.
 
-- while the majority of our data is sourced from Papers with Code, our additional collection from PLOS, JOSS, and SoftwareX as well as the enrichment from GitHub and OpenAlex together form one of the largest collections of linked, metadata enriched, datasets of paired scientific articles and associated source code repositories.
-    - in total, we collect and enrich data for `{python} original_doc_repo_links_len` article-repository pairs
+To reduce the complexity of dataset processing and enrichment, we filter out any article-source-code-repository pairs which store code somewhere other than GitHub. While this decision prioritizes processing simplicity, we acknowledge that while GitHub is the predominate host of much of scientific software, it is also stored and shared on other platforms [@trujillo2022penumbra].
+
+Through integration of multiple data sources, we extract detailed information about both the academic and software development aspects of each project:
+
+1. Article Resolution and Metadata:
+   - Use Semantic Scholar API for DOI resolution to find latest versions, particularly important for preprints
+   - Collect publication metadata via OpenAlex API: open access status, domain, publication date
+   - Gather author details: name, position, corresponding author status
+   - Extract impact metrics: citation count, FWCI, h-index
+
+2. Repository Information:
+   - Use GitHub API to collect repository metadata: name, description, languages, creation date
+   - Gather contributor details: username, name, email
+   - Extract engagement metrics: star count, fork count, issue count
+
+While the majority of our data is sourced from Papers with Code, our additional collection from PLOS, JOSS, and SoftwareX as well as the enrichment from GitHub and OpenAlex together form one of the largest and most comprehensively annotated collections of paired scientific articles and associated source-code repositories. In total, we collect and enrich data for `{python} original_doc_repo_links_len` article-repository pairs.
 
 ## A Predictive Model for Matching Article Authors and Source Code Contributors
 
@@ -508,21 +475,25 @@ pct_devs_with_email = round(n_devs_with_email / n_devs, 3) * 100
 n_authors = annotated_dataset["semantic_scholar_id"].nunique()
 ```
 
-- The development of an accurate author-developer matching model requires high-quality labeled training data that captures the complexity of real-world identity matching.
-    - entity matching between authors and developers is non-trivial
-    - multiple forms of name variation and incomplete information
-    - add figure showing example matches/non-matches
+The development of an accurate author-developer matching model requires high-quality labeled training data that captures the complexity of real-world identity matching. Entity matching between authors and developers is non-trivial due to multiple forms of name variation and incomplete information. These variations can include differences in formatting (e.g., "J. Smith" vs "John Smith"), institutional versus personal email addresses, different names across platforms (e.g., academic name vs GitHub username), and incomplete or outdated information.
 
-- We developed an annotation process to create a robust training dataset while maximizing efficiency and accuracy.
-    - focus on JOSS articles to increase positive match density
-    - we create author-developer pairs for annotation by creating all possible combinations of authors and developers within a single JOSS article-repository pair
-    - we take a random sample of 3000 pairs from the full set and have two independent annotators label each
-    - after all 3000 pairs are annotated, we resolve any disagreements between the two annotators
+We developed an annotation process to create a robust training dataset while maximizing efficiency and accuracy. We focused our annotation efforts on JOSS articles to increase positive match density, as these software-focused publications typically have higher overlap between authors and developers. For each JOSS author, we generated three random pairings with developer accounts from the article's associated repository. From the full set of pairs, we randomly sampled 3,000 for annotation. Two independent annotators labeled each pair as either a match or non-match. After completing all annotations, we systematically resolved any disagreements between the annotators through discussion and additional verification.
 
-- The resulting annotated dataset provides a comprehensive foundation for training our predictive model while highlighting common patterns in author-developer identity matching.
-    - after resolution of all annotated pairs, our annotated dataset contains `{python} n_positive_examples` (`{python} pct_positive_examples`%) positive and `{python} n_negative_examples` (`{python} pct_negative_examples`%) negative author-developer-account pairs
-    - there are `{python} n_authors` unique authors and `{python} n_devs` unique developer accounts within this annotated set
-    - however, not all developer accounts contain complete information, in our set `{python} n_devs_with_name` (`{python} pct_devs_with_name`%) have associated names and `{python} n_devs_with_email` (`{python} pct_devs_with_email`%) have associated emails
+The resulting annotated dataset provides a comprehensive foundation for training our predictive model while highlighting common patterns in author-developer identity matching. After resolving all annotated pairs, our final dataset contains:
+
+1. Match Distribution:
+   - `{python} n_positive_examples` (`{python} pct_positive_examples`%) positive matches
+   - `{python} n_negative_examples` (`{python} pct_negative_examples`%) negative matches
+
+2. Unique Individuals:
+   - `{python} n_authors` unique authors
+   - `{python} n_devs` unique developer accounts
+
+3. Developer Profile Completeness:
+   - `{python} n_devs_with_name` (`{python} pct_devs_with_name`%) accounts have associated names
+   - `{python} n_devs_with_email` (`{python} pct_devs_with_email`%) accounts have associated emails
+
+This distribution of matches and varying completeness of developer profiles reflects the real-world challenges in identity matching across academic and software development platforms, requiring our model to handle both complete and partial information robustly.
 
 ### Training and Evaluation
 
@@ -597,19 +568,12 @@ best_model_f1 = exp_results.loc[best_model_idx, "F1"]
 ```
 
 - After extensive model comparison we find that fine-tuning from [Microsoft's deberta-v3-base](https://huggingface.co/microsoft/deberta-v3-base) and including the developer's username and name achieves the best performance for author-developer matching.
-    - our best model achieves a binary F1 score of `{python} best_model_f1`, with an accuracy of `{python} best_model_acc`, precision of `{python} best_model_prec`, and recall of `{python} best_model_rec` (see @fig-em-model-confusion-matrix for a confusion matrix of model predictions on the test set).
+    - our best model achieves a binary F1 score of `{python} best_model_f1`, with an accuracy of `{python} best_model_acc`, precision of `{python} best_model_prec`, and recall of `{python} best_model_rec`
     - analysis of feature importance
         - note that the addition of developer's name has a "larger effect" on model performance but that could simply be because of how many more developers have a name available than an email
         - also note that there is a model that performs just as well as this one using bert-multilingual and includes the developers email however we choose to use the deberta and name only version for its simplicity as well as the fact that deberta is a much more recently developed and released model which was pre-trained on a much larger dataset.
         - considering that in most cases, deberta out-performs bert-multilingual, we believe that while the overall evaluation metrics between the top two performing models are the same, the deberta based model will generalize to other unseen data better than the bert-multilingual model
     - all model and feature set combination results are available in @tbl-em-model-comparison
-
-```{python}
-#| label: fig-em-model-confusion-matrix
-#| fig-cap: "Confusion Matrix Produced From Evaluation of Best Performing Model (deberta-v3 with developer username, developer name, and author name)."
-
-IPython.display.Image(sci_soft_models_data.FINAL_MODEL_TRAINING_DATA_DIR / "dev-author-em-confusion-matrix.png")
-```
 
 - To enable future research, we have made our trained model and supporting application library publicly available.
     - Python library implementation: [sci-soft-models](github.com/evamaxfield/sci-soft-models)
@@ -880,35 +844,6 @@ IPython.display.Latex(stats_table_latex)
 ```
 
 :::
-
-```{python}
-#| label: fig-docs-per-year
-#| fig-cap: "Number of articles by publication year. Only publication years with 100 or more articles are included."
-
-# Create a subset of the documents table with only document_id and publication_date
-documents_pub_year = documents[["id", "publication_date"]].copy()
-documents_pub_year["publication_year"] = pd.to_datetime(
-    documents_pub_year["publication_date"],
-    utc=True,
-).dt.year
-
-# Remove any documents with pub years that have less than 100 documents
-year_counts = documents_pub_year["publication_year"].value_counts()
-documents_pub_year = documents_pub_year[
-    documents_pub_year["publication_year"].isin(
-        year_counts[year_counts >= 100].index
-    )
-]
-
-# Plot
-ax = sns.countplot(
-    data=documents_pub_year,
-    x="publication_year",
-)
-
-# Rotate x-labels
-_ = plt.xticks(rotation=45, ha="right")
-```
 
 # Preliminary Analysis Code Contributor Authorship and Development Dynamics of Research Teams
 
@@ -1277,39 +1212,73 @@ control_vars = {
     "is_open_access": "OA Status",
     "domain": "Domain",
     "article_type": "Article Type",
+    "Overall": "Overall",
 }
 control_var_tables = {}
 for control_var, control_display_name in control_vars.items():
-    # Instead of taking median, let's return the mean and std in the following format
-    # "mean ± std"
-    mean_table = (
-        team_comp_no_push_after_pub_counts.groupby(control_var)[
-            ["n_authors", "n_author_non_devs", "n_author_devs", "n_non_author_devs"]
-        ]
-        .mean()
-        .reset_index()
-    )
-    std_table = (
-        team_comp_no_push_after_pub_counts.groupby(control_var)[
-            ["n_authors", "n_author_non_devs", "n_author_devs", "n_non_author_devs"]
-        ]
-        .std()
-        .reset_index()
-    )
-
-    # Merge and format to string
-    count_table_rows = []
-    for _, row in mean_table.iterrows():
-        std_row = std_table.loc[std_table[control_var] == row[control_var]]
-        count_table_rows.append(
-            {
-                control_var: row[control_var],
-                "n_authors": f"{row['n_authors']:.1f} ± {std_row['n_authors'].iloc[0]:.1f}",
-                "n_author_non_devs": f"{row['n_author_non_devs']:.1f} ± {std_row['n_author_non_devs'].iloc[0]:.1f}",
-                "n_author_devs": f"{row['n_author_devs']:.1f} ± {std_row['n_author_devs'].iloc[0]:.1f}",
-                "n_non_author_devs": f"{row['n_non_author_devs']:.1f} ± {std_row['n_non_author_devs'].iloc[0]:.1f}",
-            }
+    if control_var == "Overall":
+        mean_table = (
+            team_comp_no_push_after_pub_counts[
+                ["n_authors", "n_author_non_devs", "n_author_devs", "n_non_author_devs"]
+            ]
+            .mean()
+            .to_frame()
+            .T
         )
+        std_table = (
+            team_comp_no_push_after_pub_counts[
+                ["n_authors", "n_author_non_devs", "n_author_devs", "n_non_author_devs"]
+            ]
+            .std()
+            .to_frame()
+            .T
+        )
+
+        # Merge and format to string
+        count_table_rows = []
+        for _, row in mean_table.iterrows():
+            std_row = std_table.loc[std_table.index == row.name]
+            count_table_rows.append(
+                {
+                    "Overall": "",
+                    "n_authors": f"{row['n_authors']:.1f} ± {std_row['n_authors'].iloc[0]:.1f}",
+                    "n_author_non_devs": f"{row['n_author_non_devs']:.1f} ± {std_row['n_author_non_devs'].iloc[0]:.1f}",
+                    "n_author_devs": f"{row['n_author_devs']:.1f} ± {std_row['n_author_devs'].iloc[0]:.1f}",
+                    "n_non_author_devs": f"{row['n_non_author_devs']:.1f} ± {std_row['n_non_author_devs'].iloc[0]:.1f}",
+                }
+            )
+
+    else:
+        # Instead of taking median, let's return the mean and std in the following format
+        # "mean ± std"
+        mean_table = (
+            team_comp_no_push_after_pub_counts.groupby(control_var)[
+                ["n_authors", "n_author_non_devs", "n_author_devs", "n_non_author_devs"]
+            ]
+            .mean()
+            .reset_index()
+        )
+        std_table = (
+            team_comp_no_push_after_pub_counts.groupby(control_var)[
+                ["n_authors", "n_author_non_devs", "n_author_devs", "n_non_author_devs"]
+            ]
+            .std()
+            .reset_index()
+        )
+
+        # Merge and format to string
+        count_table_rows = []
+        for _, row in mean_table.iterrows():
+            std_row = std_table.loc[std_table[control_var] == row[control_var]]
+            count_table_rows.append(
+                {
+                    control_var: row[control_var],
+                    "n_authors": f"{row['n_authors']:.1f} ± {std_row['n_authors'].iloc[0]:.1f}",
+                    "n_author_non_devs": f"{row['n_author_non_devs']:.1f} ± {std_row['n_author_non_devs'].iloc[0]:.1f}",
+                    "n_author_devs": f"{row['n_author_devs']:.1f} ± {std_row['n_author_devs'].iloc[0]:.1f}",
+                    "n_non_author_devs": f"{row['n_non_author_devs']:.1f} ± {std_row['n_non_author_devs'].iloc[0]:.1f}",
+                }
+            )
 
     # Create dataframe
     count_table = pd.DataFrame(count_table_rows)
@@ -1362,6 +1331,17 @@ count_piece_inital_row_template = """
 </tr>
 """.strip()
 
+count_piece_bolded_row_template = """
+<tr>
+  <td rowspan="{n_rows}"><b>{row_name}</b></td>
+  <td><b>{value_name}</b></td>
+  <td><b>{n_authors}</b></td>
+  <td><b>{n_author_non_devs}</b></td>
+  <td><b>{n_author_devs}</b></td>
+  <td><b>{n_non_author_devs}</b></td>
+</tr>
+""".strip()
+
 count_piece_subsequent_row_template = """
 <tr>
   <td>{value_name}</td>
@@ -1378,29 +1358,54 @@ for key, count_table in control_var_tables.items():
     count_portion_html = []
     for i, control_value in enumerate(count_table["Subset"].unique()):
         if i == 0:
-            count_portion_html.append(
-                count_piece_inital_row_template.format(
-                    n_rows=len(count_table),
-                    row_name=key,
-                    value_name=control_value,
-                    n_authors=count_table.loc[
-                        count_table["Subset"] == control_value,
-                        "Total Authors",
-                    ].iloc[0],
-                    n_author_non_devs=count_table.loc[
-                        count_table["Subset"] == control_value,
-                        "NCC-A",
-                    ].iloc[0],
-                    n_author_devs=count_table.loc[
-                        count_table["Subset"] == control_value,
-                        "CC-A",
-                    ].iloc[0],
-                    n_non_author_devs=count_table.loc[
-                        count_table["Subset"] == control_value,
-                        "CC-NA",
-                    ].iloc[0],
+            if control_value == "":  # empty control value is for the "Overall" table
+                count_portion_html.append(
+                    count_piece_bolded_row_template.format(
+                        n_rows=len(count_table),
+                        row_name=key,
+                        value_name=control_value,
+                        n_authors=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "Total Authors",
+                        ].iloc[0],
+                        n_author_non_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "NCC-A",
+                        ].iloc[0],
+                        n_author_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "CC-A",
+                        ].iloc[0],
+                        n_non_author_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "CC-NA",
+                        ].iloc[0],
+                    )
                 )
-            )
+            else:
+                count_portion_html.append(
+                    count_piece_inital_row_template.format(
+                        n_rows=len(count_table),
+                        row_name=key,
+                        value_name=control_value,
+                        n_authors=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "Total Authors",
+                        ].iloc[0],
+                        n_author_non_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "NCC-A",
+                        ].iloc[0],
+                        n_author_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "CC-A",
+                        ].iloc[0],
+                        n_non_author_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "CC-NA",
+                        ].iloc[0],
+                    )
+                )
         else:
             count_portion_html.append(
                 count_piece_subsequent_row_template.format(
@@ -1452,6 +1457,8 @@ IPython.display.HTML(count_table_html)
 # LaTeX templates
 count_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\cellcolor{{gray!10}}{value_name} & \\cellcolor{{gray!10}}{n_authors} & \\cellcolor{{gray!10}}{n_author_non_devs} & \\cellcolor{{gray!10}}{n_author_devs} & \\cellcolor{{gray!10}}{n_non_author_devs} \\\\"""
 
+count_piece_bolded_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\textbf{{{value_name}}} & \\textbf{{{n_authors}}} & \\textbf{{{n_author_non_devs}}} & \\textbf{{{n_author_devs}}} & \\textbf{{{n_non_author_devs}}} \\\\"""
+
 count_piece_subsequent_row_template = """    & {color_cmd}{value_name} & {color_cmd}{n_authors} & {color_cmd}{n_author_non_devs} & {color_cmd}{n_author_devs} & {color_cmd}{n_non_author_devs} \\\\"""
 
 # Table header and footer templates
@@ -1475,63 +1482,78 @@ for key, count_table in control_var_tables.items():
     
     # Get unique control values
     control_values = count_table["Subset"].unique()
-    
-    # First row with category label
-    first_value = control_values[0]
-    count_portion_latex.append(
-        count_piece_initial_row_template.format(
-            n_rows=len(control_values),
-            row_name=key,
-            value_name=first_value,
-            n_authors=count_table.loc[
-                count_table["Subset"] == first_value,
-                "Total Authors",
-            ].iloc[0],
-            n_author_non_devs=count_table.loc[
-                count_table["Subset"] == first_value,
-                "NCC-A",
-            ].iloc[0],
-            n_author_devs=count_table.loc[
-                count_table["Subset"] == first_value,
-                "CC-A",
-            ].iloc[0],
-            n_non_author_devs=count_table.loc[
-                count_table["Subset"] == first_value,
-                "CC-NA",
-            ].iloc[0],
-        ).rstrip()
-    )
-    
-    # Subsequent rows with alternating colors
-    for i, control_value in enumerate(control_values[1:], 1):
-        color_cmd = "\\cellcolor{gray!10}" if i % 2 == 1 else ""
+
+    # Handle overall
+    if key == "Overall":
         count_portion_latex.append(
-            count_piece_subsequent_row_template.format(
-                color_cmd=color_cmd,
-                value_name=control_value,
+            count_piece_bolded_row_template.format(
+                n_rows=1,
+                row_name=key,
+                value_name="",
+                n_authors=total_auths,
+                n_author_non_devs=total_auth_non_devs,
+                n_author_devs=total_auth_devs,
+                n_non_author_devs=total_non_auth_devs,
+            ).rstrip()
+        )
+    
+    else:
+        # First row with category label
+        first_value = control_values[0]
+        count_portion_latex.append(
+            count_piece_initial_row_template.format(
+                n_rows=len(control_values),
+                row_name=key,
+                value_name=first_value,
                 n_authors=count_table.loc[
-                    count_table["Subset"] == control_value,
+                    count_table["Subset"] == first_value,
                     "Total Authors",
                 ].iloc[0],
                 n_author_non_devs=count_table.loc[
-                    count_table["Subset"] == control_value,
+                    count_table["Subset"] == first_value,
                     "NCC-A",
                 ].iloc[0],
                 n_author_devs=count_table.loc[
-                    count_table["Subset"] == control_value,
+                    count_table["Subset"] == first_value,
                     "CC-A",
                 ].iloc[0],
                 n_non_author_devs=count_table.loc[
-                    count_table["Subset"] == control_value,
+                    count_table["Subset"] == first_value,
                     "CC-NA",
                 ].iloc[0],
             ).rstrip()
         )
+        
+        # Subsequent rows with alternating colors
+        for i, control_value in enumerate(control_values[1:], 1):
+            color_cmd = "\\cellcolor{gray!10}" if i % 2 == 1 else ""
+            count_portion_latex.append(
+                count_piece_subsequent_row_template.format(
+                    color_cmd=color_cmd,
+                    value_name=control_value,
+                    n_authors=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "Total Authors",
+                    ].iloc[0],
+                    n_author_non_devs=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "NCC-A",
+                    ].iloc[0],
+                    n_author_devs=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "CC-A",
+                    ].iloc[0],
+                    n_non_author_devs=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "CC-NA",
+                    ].iloc[0],
+                ).rstrip()
+            )
 
-    section_latex = "\n".join(count_portion_latex)
-    if key != list(control_var_tables.keys())[-1]:  # Don't add midrule after last section
-        section_latex += "\\midrule"
-    count_portions_latex.append(section_latex)
+        section_latex = "\n".join(count_portion_latex)
+        if key != list(control_var_tables.keys())[-1]:  # Don't add midrule after last section
+            section_latex += "\\midrule"
+        count_portions_latex.append(section_latex)
 
 # Combine all parts
 count_table_latex = f"""{table_header}
@@ -2815,7 +2837,9 @@ RE: article citations
 
 # Appendix
 
+::: {.content-visible when-format="html"}
 ## Full Comparison of Models and Optional Features for Author-Developer-Account Matching
+:::
 
 ::: {.content-visible when-format="html"}
 
@@ -2907,9 +2931,13 @@ IPython.display.Latex(model_comparison_latex)
 
 :::
 
+::: {.content-visible when-format="html"}
 ## Linear Models for Software Development Dynamics Within Research Teams
+:::
 
+::: {.content-visible when-format="html"}
 ### No Controls
+:::
 
 ::: {.content-visible when-format="html"}
 
@@ -2934,7 +2962,9 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
 
 :::
 
+::: {.content-visible when-format="html"}
 ### Controlled by Open Access Status
+:::
 
 ::: {.content-visible when-format="html"}
 
@@ -2964,7 +2994,9 @@ IPython.display.Latex(model_results_latex)
 
 :::
 
+::: {.content-visible when-format="html"}
 ### Controlled by Domain
+:::
 
 ::: {.content-visible when-format="html"}
 
@@ -2994,7 +3026,9 @@ IPython.display.Latex(model_results_latex)
 
 :::
 
+::: {.content-visible when-format="html"}
 ### Controlled by Article Type
+:::
 
 ::: {.content-visible when-format="html"}
 
@@ -3024,7 +3058,9 @@ IPython.display.Latex(model_results_latex)
 
 :::
 
+::: {.content-visible when-format="html"}
 ## Post-Hoc Tests for Coding vs Non-Coding Authors by Position
+:::
 
 ::: {.content-visible when-format="html"}
 
@@ -3236,7 +3272,9 @@ IPython.display.Latex(
 
 :::
 
+::: {.content-visible when-format="html"}
 ## Post-Hoc Tests for Coding vs Non-Coding Authors by Corresponding Status
+:::
 
 ::: {.content-visible when-format="html"}
 
@@ -3279,7 +3317,9 @@ IPython.display.Latex(
 
 :::
 
+::: {.content-visible when-format="html"}
 ## Linear Models for Characterizing Code-Contributing Author H-Index
+:::
 
 ```{python}
 def compute_researcher_level_models(
@@ -3373,7 +3413,9 @@ author_h_index_models = compute_researcher_level_models(
 )
 ```
 
+::: {.content-visible when-format="html"}
 ### No Controls
+:::
 
 ::: {.content-visible when-format="html"}
 
@@ -3400,7 +3442,9 @@ IPython.display.Latex(model_results_latex)
 
 :::
 
+::: {.content-visible when-format="html"}
 ### Controlled by Author Position
+:::
 
 ::: {.content-visible when-format="html"}
 
@@ -3429,7 +3473,9 @@ IPython.display.Latex(model_results_latex)
 
 :::
 
+::: {.content-visible when-format="html"}
 ### Controlled by Domain
+:::
 
 ::: {.content-visible when-format="html"}
 
@@ -3458,7 +3504,9 @@ IPython.display.Latex(model_results_latex)
 
 :::
 
+::: {.content-visible when-format="html"}
 ### Controlled by Article Type
+:::
 
 ::: {.content-visible when-format="html"}
 
