@@ -414,10 +414,12 @@ reduced_doc_types = pd.DataFrame(reduced_doc_types_rows)
     - conversely, middle and last authors and non-corresponding authors will have lower proportions of code contribution than not.
 
 - (H5) Academic career advancement has historically depended on traditional impact metrics, creating potential tension for researchers who dedicate significant time to software development.
-    - time invested in code development may reduce traditional scholarly output as code development is a time consuming activity [@springmeyer1992characterization; @goodman2014ten]
+    - lack of formal software citation standards and adoption may directly result in software and methodological focused researchers to experience lower citation counts
+    - more generally, theoretical contributions may be more widely shared and cited than technical and methodological contributions
     - potential career implications for researchers who prioritize coding [@hannay2009scientists; @heroux2022researchsoftware; @smith2019elevating; @cosden2022researchsoftware]
     - need to understand relationship between code contributions and academic impact
-    - we believe that code contributing researchers will have lower individual level impact metrics than non-coding researchers, likely due to a combination of lack of recognition and authorship credit as well as reduced time for traditional scholarly output
+    - we believe that code contributing researchers will have lower individual level impact metrics than non-coding researchers, while we can't be clear on mechanism, we believe it may be do to some combination of lack of formal citation, or methodological contributions being less widely shared unless they represent fundamental shifts in the field
+      - trying to get to the idea that software is iterative and minor optimizations don't make big waves
 
 - Understanding these relationships is crucial for developing equitable academic credit systems that recognize the full spectrum of research contributions.
     - findings will inform policy making around academic credit
@@ -2785,10 +2787,20 @@ IPython.display.Latex(coding_status_table_latex)
 :::
 
 - Building upon previous work examining career implications for researchers who prioritize software development (see @sec-background), we investigate how varying levels of code contribution relate to scholarly impact through citation metrics.
-  - We hypothesize that researchers who contribute more code may show lower citation counts, potentially due to reduced time for traditional scholarly output and lack of recognition for technical contributions.
+    - We hypothesize that researchers who contribute more code may show lower citation counts, potentially due to a lack of formal software citation or more general attitudes towards methodological vs theoretical contributions.
 
-- TODO: fill out this results interpretation
-- tables available @tbl-researcher-coding-status-no-control, @tbl-researcher-coding-status-author-position, @tbl-researcher-coding-status-domain, @tbl-researcher-coding-status-article-type
+- While we can't confirm the underlying mechanisms, we do find strong evidence to support our general claim that code-contributing researchers are associated with lower h-indices compared to their non-coding peers.
+    - Without any controls (@tbl-researcher-coding-status-no-control), we find increasingly negative h-index effects as coding frequency increases compared to non-coding authors with scientists who occasionally make code contributions being associated with ~27.3% lower h-indices than their non-coding counterparts (p < 0.001), followed by ~53.5% lower h-indices for majority coders (p < 0.001), and ~62.1% lower h-indices for always coding authors (p < 0.001).
+    - When controlling for author position (@tbl-researcher-coding-status-author-position), we find again find a general pattern that more frequent code contribution is associated with reduced h-indices compared to non-coding peers with a few exceptions.
+        - Occasional coding first authors are associated with a ~14.9% higher h-index (p < 0.001) while always coding first authors are associated with a ~21.6% reduction in h-index compared to non-coding first authors (p < 0.001).
+        - Occasional coding middle authors are associated with a ~26.6% lower h-index (p < 0.001) while always coding middle authors are associated with a ~52.9% lower h-index compared to non-coding middle authors (p < 0.001).
+        - Occasional coding last authors are associated with a ~13.1% lower h-index (p < 0.001) while always coding last authors are associated with a ~45.7% lower h-index compared to non-coding last authors (p < 0.001).
+    - When controlling for domain (@tbl-researcher-coding-status-domain), majority coding scientists in health science domains are associated with a ~76.5% reduction in h-index compared to non-coding peers (p < 0.001), while majority coding scientists in life science see a ~47.1% reduction (p < 0.001), physical science majority coding scientists see a ~52.3% reduction (p < 0.001), and majority coding scientists in social sciences see a ~51.4% reduction in h-index compared to non-coding peers (p < 0.001).
+    - Finally, when controlling for an authors common article type (@tbl-researcher-coding-status-article-type), we find that:
+        - for authors whose most common article type is preprints, occasionally coding authors are associated with a ~25.6% lower h-index, majority coding authors are associated with a ~53.5% lower h-index, and always coding authors are associated with a ~62.9% lower h-index compared to their non-coding peers.
+        - while for authors whose most common article type is software articles, majority coding authors are associated with a ~33.1% lower h-index, and always coding authors are associated with a ~33.0% lower h-index compared to their non-coding peers.
+
+- Taken as a whole, these findings tend to indicate that the more frequently an author contributes code, the lower their h-index is likely to be relative to their peers, with one exception being first authors who occasionally contribute code.
 
 # Discussion
 
@@ -3394,7 +3406,7 @@ IPython.display.Latex(model_results_latex)
 
 :::
 
-#### Controlled by Author Position
+### Controlled by Author Position
 
 ::: {.content-visible when-format="html"}
 
@@ -3423,7 +3435,7 @@ IPython.display.Latex(model_results_latex)
 
 :::
 
-#### Controlled by Domain
+### Controlled by Domain
 
 ::: {.content-visible when-format="html"}
 
@@ -3452,7 +3464,7 @@ IPython.display.Latex(model_results_latex)
 
 :::
 
-#### Controlled by Article Type
+### Controlled by Article Type
 
 ::: {.content-visible when-format="html"}
 
