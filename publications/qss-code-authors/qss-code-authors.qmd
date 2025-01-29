@@ -2287,12 +2287,6 @@ overall_code_corresponding = pd.DataFrame(
 
 ### Modeling H-Index
 
-- We model an authors total citations by their coding status and controlled by a number of different factors.
-- Each control variable is modeled separately and the results are presented in the tables below:
-  - Controlling for an authors most frequent author position: @{tbl-researcher-coding-status-author-position}
-  - Controlling for an authors most frequent domain: @{tbl-researcher-coding-status-domain}
-  - Controlling for an authors most frequent article type: @{tbl-researcher-coding-status-article-type}
-
 ```{python}
 # First, get the set of researchers who have at least 3 documents
 researchers_w_3_docs = researchers.loc[
