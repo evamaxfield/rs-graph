@@ -1525,7 +1525,7 @@ for key, count_table in control_var_tables.items():
         )
         
         # Subsequent rows with alternating colors
-        for i, control_value in enumerate(control_values[1:], 1):
+        for i, control_value in enumerate(control_values[1:]):
             color_cmd = "\\cellcolor{gray!10}" if i % 2 == 1 else ""
             count_portion_latex.append(
                 count_piece_subsequent_row_template.format(
@@ -1550,10 +1550,11 @@ for key, count_table in control_var_tables.items():
                 ).rstrip()
             )
 
-        section_latex = "\n".join(count_portion_latex)
-        if key != list(control_var_tables.keys())[-1]:  # Don't add midrule after last section
-            section_latex += "\\midrule"
-        count_portions_latex.append(section_latex)
+    section_latex = "\n".join(count_portion_latex)
+    
+    if key != list(control_var_tables.keys())[-1]:  # Don't add midrule after last section
+        section_latex += "\\midrule"
+    count_portions_latex.append(section_latex)
 
 # Combine all parts
 count_table_latex = f"""{table_header}
@@ -2958,6 +2959,8 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
     tbl_cap="Article Citations by Code Contributorship of Research Team",
     tbl_label="tbl-article-composition-overall",
 )
+
+IPython.display.Latex(model_results_latex)
 ```
 
 :::
