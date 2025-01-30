@@ -507,21 +507,13 @@ training_split_counts = training_split_counts.set_index("split").sum(axis=1)
 training_split_pct = ((training_split_counts / training_split_counts.sum()) * 100).round(1)
 ```
 
-- To optimize our predictive model for author-contributor matching, we evaluate a variety of Transformer-based base models and input features.
-    - specifically, we fine-tune from three different base transformer models:
-        - [deberta-v3-base](https://huggingface.co/microsoft/deberta-v3-base) [@he2021debertav3; @he2021deberta]
-        - [bert-base-multilingual-cased](https://huggingface.co/bert-base-multilingual-cased) [@bert2018]
-        - [distilbert-base-uncased](https://huggingface.co/distilbert/distilbert-base-uncased) [@Sanh2019DistilBERTAD]
-    - these three models are all variations or built-upon BERT, and while significant time has passed since BERT was first introduced, BERT-based models remain a strong base for many NLP tasks across a number of domains while being relatively "small" compared to the much larger decoder transformer relatives (GPT, Llama, etc.) [@tran2024deberta; @yu2024semantic; @jeong2022scideberta]
+Our training and evaluation methodology begins with careful dataset preparation to prevent data leakage between training and test sets. To ensure complete separation of both authors and developers, we randomly selected 10% of unique authors and 10% of unique developers, designating any pairs containing these selected entities for the test set. Due to the combinatorial nature of our author-developer pairs, this entity-based splitting strategy resulted in `{python} training_split_counts["train"]` (`{python} training_split_pct["train"]`%) pairs for training and `{python} training_split_counts["test"]` (`{python} training_split_pct["test"]`%) pairs for testing.
 
-- We employed a systematic evaluation to identify optimal combination of base models and input features.
-    - first, to ensure that there was no data leakage, we split our dataset into training and test sets
-    - specifically, we created two random sets of 10% of all unique authors and 10% of all unique developers, any pairs containing either the author or developer were placed into the test set
-    - in doing so, we ensured that the model was never trained on any author or developer information later used for evaluation
-    - due to the fact that each author and developer-account can be included in multiple annotated pairs, our final training set contains `{python} training_split_counts["train"]` (`{python} training_split_pct["train"]`%) and our test set contains `{python} training_split_counts["test"]` (`{python} training_split_pct["test"]`%) author-developer-account pairs
-    - we fine-tuned each of our three base models using all combinations of available developer-account features, from including only the developer account username to including the developer's username, name, and email.
-    - to avoid overfitting and ensure generalizability, we fine-tuned each of the base models for only a single training epoch.
-    - model evaluation was performed using standard classification metrics, including accuracy, precision, recall, and F1 score
+For our predictive model, we evaluate three transformer-based architectures that have demonstrated strong performance in entity matching tasks: DeBERTa-v3-base [@he2021debertav3; @he2021deberta], mBERT (bert-base-multilingual-cased) [@bert2018], and DistilBERT [@Sanh2019DistilBERTAD]. While BERT-based architectures have been widely studied, they continue to achieve state-of-the-art results across various natural language processing tasks, particularly in scenarios requiring precise entity matching and relationship identification [@tran2024deberta; @yu2024semantic; @jeong2022scideberta].
+
+We conducted systematic evaluation of these base models across different combinations of developer-account features, ranging from using only the username to incorporating full profile information (username, display name, and email address). All models were fine-tuned using the Adam optimizer with a learning rate of 1e-05, batch sizes of 8 for both training and evaluation, and a linear learning rate scheduler. Given the size of our dataset and the binary nature of our classification task, models were trained for a single epoch to prevent overfitting.
+
+Model performance was assessed using standard binary classification metrics, with particular emphasis on the F1 score for positive (matching) pairs due to the inherent class imbalance in author-developer matching. This evaluation framework allows us to directly compare model architectures and feature combinations while accounting for both precision and recall in identifying correct matches.
 
 ```{python}
 exp_results = sci_soft_models_data.load_experimental_training_results()
@@ -569,17 +561,11 @@ best_model_rec = exp_results.loc[best_model_idx, "Recall"]
 best_model_f1 = exp_results.loc[best_model_idx, "F1"]
 ```
 
-- After extensive model comparison we find that fine-tuning from [Microsoft's deberta-v3-base](https://huggingface.co/microsoft/deberta-v3-base) and including the developer's username and name achieves the best performance for author-developer matching.
-    - our best model achieves a binary F1 score of `{python} best_model_f1`, with an accuracy of `{python} best_model_acc`, precision of `{python} best_model_prec`, and recall of `{python} best_model_rec`
-    - analysis of feature importance
-        - note that the addition of developer's name has a "larger effect" on model performance but that could simply be because of how many more developers have a name available than an email
-        - also note that there is a model that performs just as well as this one using bert-multilingual and includes the developers email however we choose to use the deberta and name only version for its simplicity as well as the fact that deberta is a much more recently developed and released model which was pre-trained on a much larger dataset.
-        - considering that in most cases, deberta out-performs bert-multilingual, we believe that while the overall evaluation metrics between the top two performing models are the same, the deberta based model will generalize to other unseen data better than the bert-multilingual model
-    - all model and feature set combination results are available in @tbl-em-model-comparison
+Our comprehensive model evaluation revealed that fine-tuning DeBERTa-v3-base [@he2021debertav3] with developer username and display name as input features produces optimal performance for author-developer matching. This model configuration achieves a binary F1 score of `{python} best_model_f1`, with accuracy of `{python} best_model_acc`, precision of `{python} best_model_prec`, and recall of `{python} best_model_rec`. A complete comparison of model architectures and feature combinations can be found in @tbl-em-model-comparison.
 
-- To enable future research, we have made our trained model and supporting application library publicly available.
-    - Python library implementation: [sci-soft-models](github.com/evamaxfield/sci-soft-models)
-    - HuggingFace model deployment: [dev-author-em-clf](https://huggingface.co/evamxb/dev-author-em-clf)
+Analysis of each model's performance revealed that including developer display names has the largest positive impact on model performance compared to username alone. While this effect might be partially attributed to the higher availability of display names in our dataset compared to email addresses, the performance improvement is notable. We additionally observe that mBERT's performance was comparable with DeBERTa's while additionally using the developer email address as an additional input feature, but selected the DeBERTa configuration for its relative simplicity and more recent and comprehensive pretraining. DeBERTa's consistent strong performance across various feature combinations, combined with its more extensive pretraining dataset, suggests better generalization potential for future applications.
+
+To facilitate the reuse of our work, we have made our trained model and supporting code publicly available. Complete fine-tuning, evaluation, and inference code is available as the Python package: [sci-soft-models](https://github.com/evamaxfield/sci-soft-models), and the fine-tuned model has been deployed to HuggingFace ([evamxb/dev-author-em-clf](https://huggingface.co/evamxb/dev-author-em-clf)).
 
 ## Linking Authors and GitHub Developer Accounts
 
@@ -640,23 +626,11 @@ total_devs = merged_repository_contributor_doc_repo_links[
 ].nunique()
 ```
 
-- Our trained entity-matching model enables comprehensive identification of author-developer relationships while accounting for the complex realities of academic software development practices.
-    - in practice, to fill out our dataset, we apply our trained model to all possible author and developer-account combinations within each article-repository pair
-    - The presence of multiple developer accounts per individual reflects common practices in academic software development that must be accommodated in our analysis.
-    - developers often maintain separate accounts for different projects or institutions
-    - account transitions are common as researchers move between roles
+Our trained entity-matching model enables comprehensive identification of author-developer relationships across all possible author and developer-account combinations within each article-repository pair. This broad application accounts for the complex realities of academic software development practices, particularly the common occurrence of researchers maintaining multiple developer accounts across different projects or institutions, and account transitions as researchers move between roles.
 
-- Further, while our model performs well, we note that there are some limitations to our approach.
-    - in most cases predictions are trivial due to minor differences in text (spelling of author name to username)
-    - however we do observe a few cases in which our model may not perform as well
-    - namely, shorter names, articles and repositories which have contributors with the same last name (i.e. siblings or other relationship), and "organization" accounts (i.e. research lab GitHub accounts used for management, administration, and documentation or a project)
-    - TODO: should we take a sample and estimate how widespread these problems are?
-    - we include appropriate filtering during analysis to ensure that we do not include author-developer pairs which are unlikely to be the same individual
+While our model demonstrates strong performance, we acknowledge certain limitations in our approach. Notably, the model's performance can be affected by shorter names (both usernames and display names) where less textual information is available for matching. Additionally, while organization accounts (such as research lab accounts used for project management) present a potential challenge for accurate matching, our filtering mechanisms applied before analysis help minimize their impact in modeling.
 
-- Our final dataset provides unprecedented scale and scope for analyzing the relationship between academic authorship and software development contributions.
-    - Specifically, our dataset contains `{python} total_article_repo_pairs` article-repository pairs, `{python} total_authors` distinct authors, and `{python} total_devs` distinct developer accounts.
-    - From the `{python} total_authors` distinct authors and `{python} total_devs` distinct developer accounts we are able to create `{python} len(researcher_dev_links)` annotated author-developer pairs
-    - a detailed breakdown of these counts by data source, domain, document type, and open access status is available in @tbl-rs-graph-overall-counts
+The resulting dataset represents, to our knowledge, the first large-scale collection of linked article-repository and author-developer-account pairs, particularly in the physical sciences. Specifically, our dataset contains `{python} total_article_repo_pairs` article-repository pairs, with `{python} total_authors` distinct authors and `{python} total_devs` distinct developer accounts. From these distinct entities, we identify `{python} len(researcher_dev_links)` annotated author-developer pairs. A detailed breakdown of these counts by data source, domain, document type, and open access status is available in @tbl-rs-graph-overall-counts.
 
 ::: {.content-visible when-format="html"}
 
