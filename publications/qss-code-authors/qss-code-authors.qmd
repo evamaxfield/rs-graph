@@ -64,6 +64,8 @@ format:
           \usepackage{multirow}    % For merged cells
           \usepackage{siunitx}     % For number alignment
           \usepackage[table]{xcolor}  % The 'table' option is crucial for \rowcolors to work
+          \usepackage{float}
+          \floatplacement{table}{H}
 
     # Word count
     citeproc: false
@@ -372,7 +374,6 @@ Recent initiatives like the Contributor Roles Taxonomy (CRediT) have attempted t
 These challenges raise several critical questions about the relationship between software development and academic recognition:
 
 - How does the distribution of coding contributions within research teams relate to article impact?
-- How is project duration related to the authorship rates of a research team's code-contributors?
 - How do traditional academic roles align with actual code contributions?
 - How are code-contribution patterns associated with an individual's scientific impact metrics?
 
@@ -389,8 +390,6 @@ These findings reveal fundamental tensions between software development and trad
 The relationship between scientific software development and academic credit systems represents a complex intersection of traditional academic practices and modern research requirements. While academic credit has historically focused on analytical, theoretical, and experimental contributions [@lariviere2016contributorship; @LIU2023101432], software development has long been viewed as purely technical rather than scholarly work. However, there is growing recognition that research software development requires deep domain expertise [@heroux2022researchsoftware; @Carver2022ASO], particularly as increased emphasis on large-scale data projects has amplified the need for sophisticated computational methods [@jin2015significance; @hampton2013big; @fan2014challenges].
 
 Understanding the dynamics of scientific software development requires examining both team-level patterns and individual contributions. Previous research has extensively studied how team composition affects research outcomes, finding that larger and more diverse teams often produce higher-impact work [@Franceschet2010TheEO; @Larivire2014TeamSM; @alshebli2024china]. Similarly, software engineering studies have demonstrated that larger development teams typically produce higher quality code [@Wyss2023NothingBut; @meirelles2010study]. However, we lack systematic evidence of how these patterns translate to academic software development, where contribution recognition follows different rules than traditional software projects. Given that technically sophisticated research projects often enable novel scientific insights and methodological advances, **we hypothesize that projects with more code contributors will receive higher citation counts, reflecting the value of technical contributions even when they go uncredited (H1)**.
-
-The relationship between sustained technical engagement and academic recognition remains poorly understood. While recent efforts like the CRediT taxonomy have attempted to formalize software development roles [@Li2023AreRC; @Ding2021ANM], these frameworks may not capture the complex dynamics of long-term technical contributions. Repository histories provide a unique opportunity to examine this relationship [@ram2013git], leading us to hypothesize that longer project durations increase higher code-contributor-authorship rates. **Specifically, we expect that projects with longer commit durations will be associated with higher percentages of developers who receive authorship (H2)**.
 
 Academic authorship conventions establish clear expectations about intellectual contribution and project responsibilities, though these vary by field and institution [@lariviere2016contributorship; @Larivire2020InvestigatingTD]. First authors typically bear primary responsibility for intellectual and experimental contributions, while corresponding authors maintain research artifacts and serve as primary points of contact [@Jnior2016PatternsOA]. The increasing importance of computational methods suggests that many first authors, who are commonly also an article's corresponding author, may need to directly engage with software development to execute their research vision [@heroux2022researchsoftware]. **Given these expectations, we hypothesize that first authors (H3) and corresponding authors (H4) will show higher rates of code contribution compared to middle, last, and non-corresponding authors**.
 
@@ -1789,49 +1788,6 @@ article_cited_by_count_models = compute_article_level_models(
 ```
 
 
-### Team Composition and Project Duration
-
-```{python}
-team_comp_no_push_after_pub_for_duration = team_comp_no_push_after_pub.copy()
-
-# Calculate ratio
-team_comp_no_push_after_pub_for_duration["pct_devs_authors"] = (
-    team_comp_no_push_after_pub_for_duration["n_author_devs"]
-    / (
-        team_comp_no_push_after_pub_for_duration["n_author_devs"]
-        + team_comp_no_push_after_pub_for_duration["n_non_author_devs"]
-    )
-)
-
-# Drop inf and nan
-team_comp_no_push_after_pub_for_duration = (
-    team_comp_no_push_after_pub_for_duration.replace(
-        [float("inf"), -float("inf")], float("nan")
-    ).dropna()
-)
-
-# Remove negative "repo_commit_duration" repos
-team_comp_no_push_after_pub_for_duration = team_comp_no_push_after_pub_for_duration[
-    team_comp_no_push_after_pub_for_duration["repo_commit_duration"] >= 0
-]
-
-# Run pearson correlation
-non_author_to_author_dev_pearson_results = pearsonr(
-    team_comp_no_push_after_pub_for_duration["pct_devs_authors"],
-    team_comp_no_push_after_pub_for_duration["repo_commit_duration"],
-)
-
-pearson_rho = f"{non_author_to_author_dev_pearson_results[0]:.2f}"
-```
-
-- Building upon previous work examining standardized contribution frameworks and authorship attribution practices (see @sec-background), we investigate how project duration may influence the distribution of coding roles between authors and non-authors.
-  - We hypothesize that projects with longer development durations may show higher proportions of author-developers compared to non-author developers, as sustained technical engagement could increase the likelihood of receiving authorship recognition.
-
-- However, our analysis finds no evidence to support this hypothesis:
-  - When examining the relationship between a repository's commit duration and the percentage of developers who receive authorship recognition, we find no significant correlation (r = `{python} pearson_rho`, p = n.s.).
-  - This suggests that the length of time a project has been in development has no meaningful relationship with the proportion of developers who are recognized as authors.
-  - While this suggests authorship recognition may be driven by other factors, a more precise analysis would examine individual contribution durations rather than overall project length.
-
 ## Characteristics of Scientific Code Contributors
 
 ### Author Positions of Code Contributing Authors
@@ -2769,9 +2725,9 @@ RE: article citations
 
 # Appendix
 
-::: {.content-visible when-format="html"}
-## Full Comparison of Models and Optional Features for Author-Developer-Account Matching
-:::
+## Extended Modeling and Analysis Results and Supporting Tables
+
+### Full Comparison of Models and Optional Features for Author-Developer-Account Matching
 
 ::: {.content-visible when-format="html"}
 
@@ -2863,13 +2819,7 @@ IPython.display.Latex(model_comparison_latex)
 
 :::
 
-::: {.content-visible when-format="html"}
-## Linear Models for Software Development Dynamics Within Research Teams
-:::
-
-::: {.content-visible when-format="html"}
-### No Controls
-:::
+### Linear Models for Software Development Dynamics Within Research Teams
 
 ::: {.content-visible when-format="html"}
 
@@ -2894,10 +2844,6 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
 IPython.display.Latex(model_results_latex)
 ```
 
-:::
-
-::: {.content-visible when-format="html"}
-### Controlled by Open Access Status
 :::
 
 ::: {.content-visible when-format="html"}
@@ -2929,10 +2875,6 @@ IPython.display.Latex(model_results_latex)
 :::
 
 ::: {.content-visible when-format="html"}
-### Controlled by Domain
-:::
-
-::: {.content-visible when-format="html"}
 
 ```{python}
 #| label: tbl-article-composition-domain
@@ -2958,10 +2900,6 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
 IPython.display.Latex(model_results_latex)
 ```
 
-:::
-
-::: {.content-visible when-format="html"}
-### Controlled by Article Type
 :::
 
 ::: {.content-visible when-format="html"}
@@ -2992,9 +2930,7 @@ IPython.display.Latex(model_results_latex)
 
 :::
 
-::: {.content-visible when-format="html"}
-## Post-Hoc Tests for Coding vs Non-Coding Authors by Position
-:::
+### Post-Hoc Tests for Coding vs Non-Coding Authors by Position
 
 ::: {.content-visible when-format="html"}
 
@@ -3206,9 +3142,7 @@ IPython.display.Latex(
 
 :::
 
-::: {.content-visible when-format="html"}
-## Post-Hoc Tests for Coding vs Non-Coding Authors by Corresponding Status
-:::
+### Post-Hoc Tests for Coding vs Non-Coding Authors by Corresponding Status
 
 ::: {.content-visible when-format="html"}
 
@@ -3251,9 +3185,7 @@ IPython.display.Latex(
 
 :::
 
-::: {.content-visible when-format="html"}
-## Linear Models for Characterizing Code-Contributing Author H-Index
-:::
+### Linear Models for Characterizing Code-Contributing Author H-Index
 
 ```{python}
 def compute_researcher_level_models(
@@ -3348,10 +3280,6 @@ author_h_index_models = compute_researcher_level_models(
 ```
 
 ::: {.content-visible when-format="html"}
-### No Controls
-:::
-
-::: {.content-visible when-format="html"}
 
 ```{python}
 #| label: tbl-researcher-coding-status-no-control
@@ -3374,10 +3302,6 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
 IPython.display.Latex(model_results_latex)
 ```
 
-:::
-
-::: {.content-visible when-format="html"}
-### Controlled by Author Position
 :::
 
 ::: {.content-visible when-format="html"}
@@ -3408,10 +3332,6 @@ IPython.display.Latex(model_results_latex)
 :::
 
 ::: {.content-visible when-format="html"}
-### Controlled by Domain
-:::
-
-::: {.content-visible when-format="html"}
 
 ```{python}
 #| label: tbl-researcher-coding-status-domain
@@ -3436,10 +3356,6 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
 IPython.display.Latex(model_results_latex)
 ```
 
-:::
-
-::: {.content-visible when-format="html"}
-### Controlled by Article Type
 :::
 
 ::: {.content-visible when-format="html"}
@@ -3468,3 +3384,46 @@ IPython.display.Latex(model_results_latex)
 ```
 
 :::
+
+## Analysis of Project Duration and Percentage Code-Contributors Who Are Authors
+
+In our pre-registered analysis plan ([https://osf.io/fc74m](https://osf.io/fc74m)), we originally hypothesized about the relationship between project duration and authorship recognition. Specifically, we posited that sustained technical engagement and academic recognition might be meaningfully related, with longer project durations potentially leading to higher rates of code-contributor authorship. We saw repository histories as providing a unique opportunity to examine this relationship, leading us to hypothesize that projects with longer commit durations would be associated with higher percentages of developers receiving authorship recognition (pre-registered as H2).
+
+```{python}
+team_comp_no_push_after_pub_for_duration = team_comp_no_push_after_pub.copy()
+
+# Calculate ratio
+team_comp_no_push_after_pub_for_duration["pct_devs_authors"] = (
+    team_comp_no_push_after_pub_for_duration["n_author_devs"]
+    / (
+        team_comp_no_push_after_pub_for_duration["n_author_devs"]
+        + team_comp_no_push_after_pub_for_duration["n_non_author_devs"]
+    )
+)
+
+# Drop inf and nan
+team_comp_no_push_after_pub_for_duration = (
+    team_comp_no_push_after_pub_for_duration.replace(
+        [float("inf"), -float("inf")], float("nan")
+    ).dropna()
+)
+
+# Remove negative "repo_commit_duration" repos
+team_comp_no_push_after_pub_for_duration = team_comp_no_push_after_pub_for_duration[
+    team_comp_no_push_after_pub_for_duration["repo_commit_duration"] >= 0
+]
+
+# Run pearson correlation
+non_author_to_author_dev_pearson_results = pearsonr(
+    team_comp_no_push_after_pub_for_duration["pct_devs_authors"],
+    team_comp_no_push_after_pub_for_duration["repo_commit_duration"],
+)
+
+pearson_rho = f"{non_author_to_author_dev_pearson_results[0]:.2f}"
+```
+
+However, our analysis found no evidence to support this hypothesis. When examining the relationship between a repository's commit duration and the percentage of developers who receive authorship recognition, we found no significant correlation (r = `{python} pearson_rho`, p = n.s.). This suggests that the length of time a project has been in development has no meaningful relationship with the proportion of developers who are recognized as authors.
+
+We ultimately decided to move this analysis to the appendix for two key methodological reasons. First, our approach of using repository-level commit duration as a proxy for individual contribution patterns proved too coarse-grained. A more precise analysis would need to examine individual-level contribution durations and patterns rather than overall project length. Second, our method did not account for the varying levels of contribution that different developers make to a repository. Simply correlating overall project duration with authorship rates fails to capture the nuanced ways that sustained, meaningful technical contributions might influence authorship decisions.
+
+These limitations suggest potential directions for future work that could more rigorously examine the relationship between long-term technical engagement and academic recognition. Such work might benefit from more granular analysis of individual contribution patterns, perhaps incorporating measures of contribution significance and sustainability rather than just temporal duration.
