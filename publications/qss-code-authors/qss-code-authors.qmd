@@ -1114,16 +1114,11 @@ mean_non_author_devs_for_papers_w_non_auth_devs = metric_str_fmt.format(
 )
 ```
 
-- We begin by measuring the distributions of different coding and non-coding contributors across all of the article-code-repository pairs within our dataset.
-    - individuals in our dataset can fall into three categories:
-        - Code-Contributing Authors (CC-A): authors for which our model predicted a match with at least one developer account which contributed code to the associated repository
-        - Non-Code-Contributing Authors (NCC-A): authors for which our model did not predict any matches with developer accouts which contributed code to the associated repository
-        - Code-Contributing Non-Authors (CC-NA): developer accounts which contributed code to the associated repository but were not predicted to be a match with any author
-    - within our dataset, we find that papers on average have `{python} total_auths` total authors, `{python} total_auth_non_devs` non-code-contributing authors, `{python} total_auth_devs` code-contributing authors, and `{python} total_non_auth_devs` code-contributing non-authors.
-    - @tbl-team-composition-counts provides a detailed breakdown of these distributions by domain, article type, and open access status.
-    - we find that `{python} n_papers_w_non_auth_devs` (`{python} pct_papers_w_non_auth_devs`%) of papers have at least one code-contributing non-author, and within this group, there is an average of `{python} mean_non_author_devs_for_papers_w_non_auth_devs` (median: `{python} median_non_author_devs_for_papers_w_non_auth_devs`) code-contributing non-authors per paper.
-	- Our finding of, on average, only a single code-contributing author on a paper, is similar to previous work in understanding distributions of labor in knowledge production from @Larivire2020InvestigatingTD which found that the CRediT tasks of "Data Curation", "Formal Analysis", "Visualization", and "Software" were all predominantly performed by a first author.
-    - However, we do also see that code-contributing non-authors are present in the data, albeit, on average, with less than one code-contributing non-author per article.
+Understanding the composition and dynamics of software development teams provides essential context for analyzing how code contributions relate to academic recognition and impact. To ensure reliable analysis, we focus on a subset of our data that includes only article-repository pairs with at least one article citation, repository commit activity that at the latest falls within 90 days of publication, and research teams of typical size (removing those with fewer than 3 authors or above the 97th percentile of team sizes).
+
+Within this filtered dataset, we categorized individuals into three groups: code-contributing authors (CC-A) who both authored papers and contributed code to associated repositories, non-code-contributing authors (NCC-A) who authored papers but showed no evidence of code contributions, and code-contributing non-authors (CC-NA) who contributed code but received no authorship recognition. This categorization revealed that papers in our dataset typically have `{python} total_auths` total authors, with `{python} total_auth_devs` code-contributing authors and `{python} total_auth_non_devs` non-code-contributing authors. Beyond the author list, papers averaged `{python} total_non_auth_devs` code-contributing non-authors. @tbl-team-composition-counts provides a detailed breakdown of these distributions by domain, article type, and open access status.
+
+Perhaps most striking is our finding that `{python} n_papers_w_non_auth_devs` papers (`{python} pct_papers_w_non_auth_devs`%) have at least one code contributor who did not receive authorship recognition. Within this substantial subset of papers, we found an average of `{python} mean_non_author_devs_for_papers_w_non_auth_devs` unrecognized code contributors per paper. The presence of only one code-contributing author per paper, on average, aligns with previous research by @Larivire2020InvestigatingTD showing that technical tasks like data curation, formal analysis, visualization, and software development typically fall to first authors. However, our finding that over a quarter of papers have unrecognized code contributors suggests a more complex dynamic between software development and authorship recognition.
 
 ```{python}
 # Create a copy of the team_comp_no_push_after_pub dataframe
@@ -1496,9 +1491,7 @@ IPython.display.Latex(count_table_latex)
 
 :::
 
-- Next we investigate how these distributions have changed over time and how they change by the total number of authors on a paper.
-	- @fig-contributor-type-by-time-and-size shows thats both, the mean number of code-contributing authors and code-contributing non-authors has remained relatively stable over time and across different total author sizes.
-    - these descriptive statistics suggest that code-contributing non-authors are an inconsistent feature of research teams, and while their exclusion from authorship is not a recent phenomenon, their exclusion does not appear to be getting worse over time.
+When examining these patterns over time and across different team sizes (@fig-contributor-type-by-time-and-size), we found that both the number of code-contributing authors and unrecognized contributors has remained relatively stable. This stability suggests that while the exclusion of code contributors from authorship isn't worsening, it represents a persistent feature of academic software development rather than a historical artifact or transition period in academic practices.
 
 ```{python}
 #| label: fig-contributor-type-by-time-and-size
@@ -1599,17 +1592,15 @@ sns.move_legend(
 )
 ```
 
-### Modeling Citations
+### Modeling Article Citations
 
-- Building upon previous work which discuss the effects of team size and team diversity on scientific impact and software quality (see @sec-background), we examine how the number of code contributors within a research team may be associated with an article's research impact.
-  - We hypothesize that more code contributors may signal greater technical complexity in research, which may be associated with higher citation counts as the community builds upon more technically sophisticated works.
+Building upon previous work examining the effects of team size and team diversity on scientific impact and software quality (see @sec-background), we investigate how the number of code contributors within a research team may be associated with an article's research impact. We hypothesize that more code contributors may signal greater technical complexity in research, which may be associated with higher citation counts as the community builds upon more technically sophisticated works.
 
-- However, after analyzing our data, we find few significant associations between the number of code-contributing authors and non-authors, and article citations.
-  - Without controlling for any domain, open access, or article type differences (@tbl-article-composition-overall), we find a positive association between the number of code-contributing authors and article citations with each code-contributing author being associated with a 4.5% increase in article citations (p < 0.001).
-  - Controlling for article type (@tbl-article-composition-type), we find that for preprints, each code-contributing non-author is associated with a statistically significant 2.9% decrease in expected citations, holding other variables constant (p < 0.01).
-  - For research articles, we find a significant positive association between the number of code-contributing authors and citations (p < 0.001). However, we cannot estimate the precise magnitude of this effect due to the non-significant main effect in the model.
-  - Finally, we additionally find a statistically significant relationship for code-contributing non-authors for research articles, specifically finding that each code-contributing non-author is associated with a 0.8% increase in expected citations (p < 0.001).
-  - Overall, while we find some statistically significant associations between code contributions and citation counts, these effects are relatively modest in magnitude.
+Using our filtered dataset of article-repository pairs, we conducted multiple regression analyses to examine these relationships while controlling for various factors. Without controlling for domain, open access, or article type differences (@tbl-article-composition-overall), we found a modest positive association between the number of code-contributing authors and article citations, with each code-contributing author being associated with a 4.5% increase in article citations (p < 0.001).
+
+When controlling for article type (@tbl-article-composition-type), we observed divergent patterns between preprints and research articles. For preprints, each code-contributing non-author was associated with a statistically significant 2.9% decrease in citations (p < 0.01). In contrast, research articles showed more positive associations: we found a significant positive relationship between code-contributing authors and citations (p < 0.001), though we cannot estimate the precise magnitude due to the non-significant main effect in the model. Additionally, each code-contributing non-author was associated with a 0.8% increase in expected citations for research articles (p < 0.001).
+
+Overall, while we find statistically significant associations between code contributions and citation counts, these effects are relatively modest in magnitude.
 
 ```{python}
 def compute_article_level_models(
@@ -1792,15 +1783,6 @@ article_cited_by_count_models = compute_article_level_models(
 
 ### Author Positions of Code Contributing Authors
 
-- Building upon previous work examining the relationship between authorship position and research contributions, we investigate how author position may relate to code contribution patterns.
-  - We hypothesize that first authors, who traditionally contribute the bulk of intellectual and experimental work, would be most likely to contribute code to a project, while middle and last authors, who often provide oversight and guidance, would be less likely to contribute code.
-
-- Our analysis supports this hypothesis:
-  - In every case tested, we find that first authors are statistically significantly more likely to be code contributors than non-code contributors across most scenarios both overall, and regardless of Domain, Article Type, and Open Access Status.
-  - Conversely, both middle authors and last authors are statistically significantly more likely to be non-code contributors.
-  - These patterns align with traditional academic authorship conventions, where first authors often take primary responsibility for both intellectual and technical aspects of the research.
-  - @tbl-post-hoc-tests-on-author-positions provides a detailed breakdown of Bonferronic-correct p-values from post-hoc binomial tests against the counts of author positions of code-contributing authors.
-
 ```{python}
 # Create subset documents
 docs_for_per_repo_stats = documents[[
@@ -1973,7 +1955,53 @@ doc_contribs_for_code_char["is_corresponding"] = (
         axis=1,
     )
 )
+
+# Calculate the percent of first authors who are code contributors
+first_author_code_contributors = doc_contribs_for_code_char.loc[
+    doc_contribs_for_code_char["position"] == "first"
+]["is_code_contributor"].sum()
+percent_first_authors_code_contributors = (
+    first_author_code_contributors
+    / len(
+        doc_contribs_for_code_char.loc[
+            doc_contribs_for_code_char["position"] == "first"
+        ]
+    )
+)
+percent_first_authors_code_contributors_str = f"{percent_first_authors_code_contributors:.1%}"
+
+middle_author_code_contributors = doc_contribs_for_code_char.loc[
+    doc_contribs_for_code_char["position"] == "middle"
+]["is_code_contributor"].sum()
+percent_middle_authors_code_contributors = (
+    middle_author_code_contributors
+    / len(
+        doc_contribs_for_code_char.loc[
+            doc_contribs_for_code_char["position"] == "middle"
+        ]
+    )
+)
+percent_middle_authors_code_contributors_str = f"{percent_middle_authors_code_contributors:.1%}"
+
+last_author_code_contributors = doc_contribs_for_code_char.loc[
+    doc_contribs_for_code_char["position"] == "last"
+]["is_code_contributor"].sum()
+percent_last_authors_code_contributors = (
+    last_author_code_contributors
+    / len(
+        doc_contribs_for_code_char.loc[
+            doc_contribs_for_code_char["position"] == "last"
+        ]
+    )
+)
+percent_last_authors_code_contributors_str = f"{percent_last_authors_code_contributors:.1%}"
 ```
+
+Building upon previous work examining the relationship between authorship position and research contributions, we investigate how author position may relate to code contribution patterns. We hypothesize that first authors, who traditionally contribute the bulk of intellectual and experimental work, would be most likely to contribute code to a project, while middle and last authors, who often provide oversight and guidance, would be less likely to contribute code.
+
+To analyze these patterns within our filtered dataset of article-repository pairs (excluding those with most recent commit dates more than 90 days after publication), we first conducted chi-square tests of independence between author position and code contribution status. These tests revealed significant associations both overall and when controlling for research domain, article type, and open access status (all p < 0.01). Following these significant results, detailed post-hoc binomial tests (@tbl-post-hoc-tests-on-author-positions) revealed clear position-based differences: `{python} percent_first_authors_code_contributors_str` of first authors contributed code to their projects, compared to only `{python} percent_middle_authors_code_contributors_str` of middle authors and `{python} percent_last_authors_code_contributors_str` of last authors. These differences remained statistically significant across all tested scenarios, regardless of research domain, article type, or open access status.
+
+These patterns strongly align with traditional academic authorship conventions, where first authors typically take primary responsibility for both intellectual and technical aspects of the research, while middle and last authors more commonly provide oversight and guidance. The consistency of these findings across different subsets of our data suggests a deeply embedded relationship between author position and technical contributions in academic software development.
 
 ```{python}
 def _run_posthocs(
