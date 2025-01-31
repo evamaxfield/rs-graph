@@ -1784,6 +1784,119 @@ article_cited_by_count_models = compute_article_level_models(
 ### Author Positions of Code Contributing Authors
 
 ```{python}
+def _run_posthocs(
+    data: pd.DataFrame,
+    split_var: str,
+) -> list[dict[str, str]]:
+    # Conduct pairwise posthocs
+    binom_results = []
+    for split_val in data[split_var].unique():
+        split_val_subset = data.loc[
+            data[split_var] == split_val
+        ]
+
+        # Run test
+        results = binomtest(
+            sum(split_val_subset["is_code_contributor"]),
+            len(split_val_subset),
+            0.5,
+        )
+        
+        # Conduct binomial test
+        binom_results.append(
+            {
+                split_var: split_val,
+                "p": results.pvalue,
+                "statistic": results.statistic,
+                "n": len(split_val_subset),
+                "n_code_contributors": sum(split_val_subset["is_code_contributor"]),
+            }
+        )
+
+        # P adjust
+        _, p_values, _, _ = multipletests(
+            [result["p"] for result in binom_results],
+            method="bonferroni",
+        )
+
+        # Replace p values
+        for i, result in enumerate(binom_results):
+            result["p"] = p_values[i]
+        
+    # Print results
+    formatted_binom_results = []
+    for result in binom_results:
+        formatted_binom_results.append({
+            split_var.replace("_", " ").title(): result[split_var].title(),
+            "Coding": result["n_code_contributors"],
+            "Total": result["n"],
+            "p": result["p"],
+        })
+
+    return formatted_binom_results
+    
+
+def _run_chi2_and_posthocs(
+    data: pd.DataFrame,
+    control_var: str | None,
+    split_var: str,
+) -> list[dict[str, str | float | int]]:
+    chi2_result_str_template = "χ2={stat:.1f}, p={p:.3f}, n={n}"
+    
+    return_vals = []
+
+    if control_var is None:
+        xtabs = pd.crosstab(
+            data[split_var],
+            data["is_code_contributor"],
+        )
+        chi2_result = chi2_contingency(xtabs)
+        if chi2_result.pvalue < 0.05:
+            posthoc_results = _run_posthocs(
+                data,
+                split_var=split_var,
+            )
+
+            for posthoc_result in posthoc_results:
+                return_vals.append({
+                    "Control": "Overall",
+                    "Subset": "Overall",
+                    **posthoc_result,
+                })
+
+        else:
+            pass
+    else:
+        for control_val in data[control_var].unique():
+            # Get data with control_val subset
+            control_val_subset = data.loc[
+                data[control_var] == control_val
+            ]
+            xtabs = pd.crosstab(
+                control_val_subset[split_var],
+                control_val_subset["is_code_contributor"],
+            )
+            chi2_result = chi2_contingency(xtabs)
+            if chi2_result.pvalue < 0.05:
+                posthoc_results = _run_posthocs(
+                    control_val_subset,
+                    split_var=split_var,
+                )
+
+                for posthoc_result in posthoc_results:
+                    return_vals.append({
+                        "Control": control_var.replace("_", " ").title(),
+                        "Subset": control_val.replace("_", " ").title(),
+                        **posthoc_result,
+                    })
+
+            else:
+                pass
+
+    return return_vals
+```
+
+```{python}
 # Create subset documents
 docs_for_per_repo_stats = documents[[
     "id",
@@ -1995,128 +2108,7 @@ percent_last_authors_code_contributors = (
     )
 )
 percent_last_authors_code_contributors_str = f"{percent_last_authors_code_contributors:.1%}"
-```
 
-Building upon previous work examining the relationship between authorship position and research contributions, we investigate how author position may relate to code contribution patterns. We hypothesize that first authors, who traditionally contribute the bulk of intellectual and experimental work, would be most likely to contribute code to a project, while middle and last authors, who often provide oversight and guidance, would be less likely to contribute code.
-
-To analyze these patterns within our filtered dataset of article-repository pairs (excluding those with most recent commit dates more than 90 days after publication), we first conducted chi-square tests of independence between author position and code contribution status. These tests revealed significant associations both overall and when controlling for research domain, article type, and open access status (all p < 0.01). Following these significant results, detailed post-hoc binomial tests (@tbl-post-hoc-tests-on-author-positions) revealed clear position-based differences: `{python} percent_first_authors_code_contributors_str` of first authors contributed code to their projects, compared to only `{python} percent_middle_authors_code_contributors_str` of middle authors and `{python} percent_last_authors_code_contributors_str` of last authors. These differences remained statistically significant across all tested scenarios, regardless of research domain, article type, or open access status.
-
-These patterns strongly align with traditional academic authorship conventions, where first authors typically take primary responsibility for both intellectual and technical aspects of the research, while middle and last authors more commonly provide oversight and guidance. The consistency of these findings across different subsets of our data suggests a deeply embedded relationship between author position and technical contributions in academic software development.
-
-```{python}
-def _run_posthocs(
-    data: pd.DataFrame,
-    split_var: str,
-) -> list[dict[str, str]]:
-    # Conduct pairwise posthocs
-    binom_results = []
-    for split_val in data[split_var].unique():
-        split_val_subset = data.loc[
-            data[split_var] == split_val
-        ]
-
-        # Run test
-        results = binomtest(
-            sum(split_val_subset["is_code_contributor"]),
-            len(split_val_subset),
-            0.5,
-        )
-        
-        # Conduct binomial test
-        binom_results.append(
-            {
-                split_var: split_val,
-                "p": results.pvalue,
-                "statistic": results.statistic,
-                "n": len(split_val_subset),
-                "n_code_contributors": sum(split_val_subset["is_code_contributor"]),
-            }
-        )
-
-        # P adjust
-        _, p_values, _, _ = multipletests(
-            [result["p"] for result in binom_results],
-            method="bonferroni",
-        )
-
-        # Replace p values
-        for i, result in enumerate(binom_results):
-            result["p"] = p_values[i]
-        
-    # Print results
-    formatted_binom_results = []
-    for result in binom_results:
-        formatted_binom_results.append({
-            split_var.replace("_", " ").title(): result[split_var].title(),
-            "Coding": result["n_code_contributors"],
-            "Total": result["n"],
-            "p": result["p"],
-        })
-
-    return formatted_binom_results
-    
-
-def _run_chi2_and_posthocs(
-    data: pd.DataFrame,
-    control_var: str | None,
-    split_var: str,
-) -> list[dict[str, str | float | int]]:
-    chi2_result_str_template = "χ2={stat:.1f}, p={p:.3f}, n={n}"
-    
-    return_vals = []
-
-    if control_var is None:
-        xtabs = pd.crosstab(
-            data[split_var],
-            data["is_code_contributor"],
-        )
-        chi2_result = chi2_contingency(xtabs)
-        if chi2_result.pvalue < 0.05:
-            posthoc_results = _run_posthocs(
-                data,
-                split_var=split_var,
-            )
-
-            for posthoc_result in posthoc_results:
-                return_vals.append({
-                    "Control": "Overall",
-                    "Subset": "Overall",
-                    **posthoc_result,
-                })
-
-        else:
-            pass
-    else:
-        for control_val in data[control_var].unique():
-            # Get data with control_val subset
-            control_val_subset = data.loc[
-                data[control_var] == control_val
-            ]
-            xtabs = pd.crosstab(
-                control_val_subset[split_var],
-                control_val_subset["is_code_contributor"],
-            )
-            chi2_result = chi2_contingency(xtabs)
-            if chi2_result.pvalue < 0.05:
-                posthoc_results = _run_posthocs(
-                    control_val_subset,
-                    split_var=split_var,
-                )
-
-                for posthoc_result in posthoc_results:
-                    return_vals.append({
-                        "Control": control_var.replace("_", " ").title(),
-                        "Subset": control_val.replace("_", " ").title(),
-                        **posthoc_result,
-                    })
-
-            else:
-                pass
-
-    return return_vals
-```
-
-```{python}
 
 position_sorter = ["First", "Middle", "Last"]
 
@@ -2178,15 +2170,13 @@ overall_code_char["Position"] = pd.Categorical(
 overall_code_char = overall_code_char.sort_values(["Subset", "Position"])
 ```
 
+Building upon previous work examining the relationship between authorship position and research contributions, we investigate how author position may relate to code contribution patterns. We hypothesize that first authors, who traditionally contribute the bulk of intellectual and experimental work, would be most likely to contribute code to a project, while middle and last authors, who often provide oversight and guidance, would be less likely to contribute code.
+
+To analyze these patterns within our filtered dataset of article-repository pairs (excluding those with most recent commit dates more than 90 days after publication), we first conducted chi-square tests of independence between author position and code contribution status. These tests revealed significant associations both overall and when controlling for research domain, article type, and open access status (all p < 0.01). Following these significant results, detailed post-hoc binomial tests (@tbl-post-hoc-tests-on-author-positions) revealed clear position-based differences: `{python} percent_first_authors_code_contributors_str` of first authors contributed code to their projects, compared to only `{python} percent_middle_authors_code_contributors_str` of middle authors and `{python} percent_last_authors_code_contributors_str` of last authors. These differences remained statistically significant across all tested scenarios, regardless of research domain, article type, or open access status.
+
+These patterns strongly align with traditional academic authorship conventions, where first authors typically take primary responsibility for both intellectual and technical aspects of the research, while middle and last authors more commonly provide oversight and guidance. The consistency of these findings across different subsets of our data suggests a deeply embedded relationship between author position and technical contributions in academic software development.
+
 ### Corresponding Status of Code Contributing Authors
-
-- Building upon our analysis of author position, we next examine how corresponding author status relates to code contribution patterns.
-  - We hypothesize that corresponding authors, who traditionally maintain research artifacts and serve as primary points of contact, would be more likely to contribute code compared to non-corresponding authors.
-
-- However, our analysis reveals patterns contrary to this hypothesis:
-  - Both corresponding and non-corresponding authors are statistically significantly less likely to be code contributors than would be expected by chance (p < 0.001) in most scenarios (@tbl-post-hoc-tests-on-corresponding-status).
-  - This pattern holds true across almost all conditions with the only exceptions found in software articles and closed access articles, where corresponding authors show no significant difference in their likelihood to contribute code.
-  - These findings suggest that the responsibility for maintaining research artifacts may not typically extend to direct code contributions, contrary to traditional assumptions about corresponding author roles.
 
 ```{python}
 # Run chi2 and posthocs for overall corresponding status
@@ -2221,7 +2211,40 @@ overall_code_corresponding = pd.DataFrame(
         split_var="is_corresponding",
     )
 ).sort_values(["Subset", "Is Corresponding"])
+
+# Calculate the percent of corresponding authors who are code contributors
+corres_author_code_contributors = doc_contribs_for_code_char.loc[
+    doc_contribs_for_code_char["is_corresponding"] == "Corresponding"
+]["is_code_contributor"].sum()
+percent_corresponding_authors_code_contributors = (
+    corres_author_code_contributors
+    / len(
+        doc_contribs_for_code_char.loc[
+            doc_contribs_for_code_char["is_corresponding"] == "Corresponding"
+        ]
+    )
+)
+percent_corresponding_authors_code_contributors_str = f"{percent_corresponding_authors_code_contributors:.1%}"
+
+non_corres_author_code_contributors = doc_contribs_for_code_char.loc[
+    doc_contribs_for_code_char["is_corresponding"] == "Not Corresponding"
+]["is_code_contributor"].sum()
+percent_non_corresponding_authors_code_contributors = (
+    non_corres_author_code_contributors
+    / len(
+        doc_contribs_for_code_char.loc[
+            doc_contribs_for_code_char["is_corresponding"] == "Not Corresponding"
+        ]
+    )
+)
+percent_non_corresponding_authors_code_contributors_str = f"{percent_non_corresponding_authors_code_contributors:.1%}"
 ```
+
+Building upon our analysis of author position, we next examine how corresponding author status relates to code contribution patterns. We hypothesize that corresponding authors, who traditionally maintain research artifacts and serve as primary points of contact, would be more likely to contribute code compared to non-corresponding authors, as this role often involves responsibility for project resources and materials.
+
+To analyze these relationships within our filtered dataset of article-repository pairs, we conducted chi-square tests of independence between corresponding author status and code contribution status. Surprisingly, these tests revealed patterns contrary to our initial hypothesis. Both corresponding and non-corresponding authors were significantly less likely to be code contributors than would be expected by chance (p < 0.01), with only `{python} percent_corresponding_authors_code_contributors_str` of corresponding authors and `{python} percent_non_corresponding_authors_code_contributors_str` of non-corresponding authors contributing code. Detailed post-hoc binomial tests (@tbl-post-hoc-tests-on-corresponding-status) revealed this pattern holds true across nearly all conditions, with only two notable exceptions: corresponding authors in software-focused articles and those in closed-access publications showed no significant difference in their likelihood to contribute code.
+
+These findings challenge conventional assumptions about the relationship between corresponding authorship and technical contributions. While corresponding authors are traditionally responsible for maintaining research artifacts, our results suggest this responsibility may not typically extend to direct engagement with software development.
 
 ### Modeling H-Index
 
