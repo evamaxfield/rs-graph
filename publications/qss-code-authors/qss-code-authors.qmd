@@ -2249,7 +2249,7 @@ To analyze these relationships within our filtered dataset of article-repository
 
 These findings challenge conventional assumptions about the relationship between corresponding authorship and technical contributions. While corresponding authors are traditionally responsible for maintaining research artifacts, our results suggest this responsibility may not typically extend to direct engagement with software development.
 
-### Modeling H-Index
+### Modeling Author H-Index
 
 ```{python}
 # First, get the set of researchers who have at least 3 documents
@@ -2744,21 +2744,19 @@ IPython.display.Latex(coding_status_table_latex)
 
 :::
 
-- Building upon previous work examining career implications for researchers who prioritize software development (see @sec-background), we investigate how varying levels of code contribution relate to scholarly impact through citation metrics.
-    - We hypothesize that researchers who contribute more code may show lower citation counts, potentially due to a lack of formal software citation or more general attitudes towards methodological vs theoretical contributions.
+Building upon previous work examining career implications for researchers who prioritize software development [@sec-background], we investigated how varying levels of code contribution relate to scholarly impact through h-index metrics. To ensure a robust analysis, we applied several key data filtering steps. We only included researchers with at least three publications in our dataset, removed those with more than three developer account associations, and used each researcher's most common (or most recent) domain, article type, and author position, with ties broken by the most recent occurrence. We also removed h-index outliers by excluding researchers below the bottom 3rd and above the top 97th percentiles.
 
-- While we can't confirm the underlying mechanisms, we do find strong evidence to support our general claim that code-contributing researchers are associated with lower h-indices compared to their non-coding peers.
-    - Without any controls (@tbl-researcher-coding-status-no-control), we find increasingly negative h-index effects as coding frequency increases compared to non-coding authors with scientists who occasionally make code contributions being associated with ~27.3% lower h-indices than their non-coding counterparts (p < 0.001), followed by ~53.5% lower h-indices for majority coders (p < 0.001), and ~62.1% lower h-indices for always coding authors (p < 0.001).
-    - When controlling for author position (@tbl-researcher-coding-status-author-position), we find again find a general pattern that more frequent code contribution is associated with reduced h-indices compared to non-coding peers with a few exceptions.
-        - Occasional coding first authors are associated with a ~14.9% higher h-index (p < 0.001) while always coding first authors are associated with a ~21.6% reduction in h-index compared to non-coding first authors (p < 0.001).
-        - Occasional coding middle authors are associated with a ~26.6% lower h-index (p < 0.001) while always coding middle authors are associated with a ~52.9% lower h-index compared to non-coding middle authors (p < 0.001).
-        - Occasional coding last authors are associated with a ~13.1% lower h-index (p < 0.001) while always coding last authors are associated with a ~45.7% lower h-index compared to non-coding last authors (p < 0.001).
-    - When controlling for domain (@tbl-researcher-coding-status-domain), majority coding scientists in health science domains are associated with a ~76.5% reduction in h-index compared to non-coding peers (p < 0.001), while majority coding scientists in life science see a ~47.1% reduction (p < 0.001), physical science majority coding scientists see a ~52.3% reduction (p < 0.001), and majority coding scientists in social sciences see a ~51.4% reduction in h-index compared to non-coding peers (p < 0.001).
-    - Finally, when controlling for an authors common article type (@tbl-researcher-coding-status-article-type), we find that:
-        - for authors whose most common article type is preprints, occasionally coding authors are associated with a ~25.6% lower h-index, majority coding authors are associated with a ~53.5% lower h-index, and always coding authors are associated with a ~62.9% lower h-index compared to their non-coding peers.
-        - while for authors whose most common article type is software articles, majority coding authors are associated with a ~33.1% lower h-index, and always coding authors are associated with a ~33.0% lower h-index compared to their non-coding peers.
+We categorized researchers' coding contributions into mutually exclusive groups: non-coders (no code contributions), any coding (code contribution in less than half of article-repository pairs), majority coding (code contribution in at least half, but not all, article-repository pairs), and always coding (code contribution in every article-repository pair).
 
-- Taken as a whole, these findings tend to indicate that the more frequently an author contributes code, the lower their h-index is likely to be relative to their peers, with one exception being first authors who occasionally contribute code.
+Our analysis revealed a consistent and statistically significant negative relationship between code contribution frequency and h-index across multiple analytical controls. In our initial uncontrolled analysis (@tbl-researcher-coding-status-no-control), we observed increasingly negative h-index effects as coding frequency increased. Compared to non-coding authors, researchers were associated with progressively lower h-indices: occasional code contributors showed a ~27.3% lower h-index (p < 0.001), majority code contributors demonstrated a ~53.5% lower h-index (p < 0.001), and always coding authors exhibited a ~62.1% lower h-index (p < 0.001).
+
+When controlling for author position (@tbl-researcher-coding-status-author-position), we found a general pattern of reduced h-indices with increased code contribution, with one notable exception. Occasional coding first authors were associated with a ~14.9% higher h-index (p < 0.001), while always coding first authors saw a ~21.6% reduction compared to non-coding first authors (p < 0.001). For middle and last authors, the pattern was more consistently negative. Middle authors who occasionally coded showed a ~26.6% lower h-index (p < 0.001), and those always coding demonstrated a ~52.9% lower h-index (p < 0.001). Similarly, last authors who occasionally coded experienced a ~13.1% lower h-index (p < 0.001), with always coding authors showing a ~45.7% lower h-index (p < 0.001).
+
+When controlling for research domain (@tbl-researcher-coding-status-domain), majority coding scientists showed significant h-index reductions across all domains. Health sciences researchers saw the most dramatic reduction at ~76.5% (p < 0.001), followed by physical sciences at ~52.3% (p < 0.001), social sciences at ~51.4% (p < 0.001), and life sciences at ~47.1% (p < 0.001).
+
+Analyzing by common article type (@tbl-researcher-coding-status-article-type) revealed similar patterns. For authors primarily publishing preprints, the h-index reductions were substantial: ~25.6% for occasional coding, ~53.5% for majority coding, and ~62.9% for always coding authors. Authors primarily publishing software articles showed slightly different but still significant reductions: ~33.1% for majority coding and ~33.0% for always coding authors.
+
+Taken as a whole, these findings indicate that the more frequently an author contributes code, the lower their h-index is likely to be relative to their peers, with the notable exception of first authors who occasionally contribute code. What makes these results particularly striking is that each of our models includes publication count as an input feature, suggesting that these h-index reductions persist even when accounting for total research output.
 
 # Discussion
 
