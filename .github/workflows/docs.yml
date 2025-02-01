@@ -30,6 +30,7 @@ jobs:
       run: |
         pip install uv && uv pip install --system ".[dev,modeling]"
         quarto install tinytex
+        sudo apt install lmodern
 
     # Setup
     - name: Download data

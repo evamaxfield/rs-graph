@@ -1,22 +1,28 @@
 ---
 title: "Code Contribution and Authorship"
-author:
+authors:
   - name: "Eva Maxfield Brown"
     email: evamxb@uw.edu
     orcid: 0000-0003-2564-0373
-    affliation:
-      name: University of Washington Information School
-      city: Seattle
-      state: Washington
-      country: USA
+    affiliations:
+      - ref: 1
+    attributes:
+        corresponding: true
+  - name: "Isaac Slaughter"
+    affiliations:
+      - ref: 1
+  - name: "Shahan Ali Memon"
+    affiliations:
+      - ref: 1
   - name: "Nicholas Weber"
     email: nmweber@uw.edu
     orcid: 0000-0002-6008-3763
-    affliation:
-      name: University of Washington Information School
-      city: Seattle
-      state: Washington
-      country: USA
+    affiliations:
+      - ref: 1
+
+affiliations:
+  - id: 1
+    name: University of Washington Information School
 
 abstract: |
   Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur eget porta erat. Morbi consectetur est vel gravida pretium. Suspendisse ut dui eu ante cursus gravida non sed sem. Nullam sapien tellus, commodo id velit id, eleifend volutpat quam. Phasellus mauris velit, dapibus finibus elementum vel, pulvinar non tellus. Nunc pellentesque pretium diam, quis maximus dolor faucibus id. Nunc convallis sodales ante, ut ullamcorper est egestas vitae. Nam sit amet enim ultrices, ultrices elit pulvinar, volutpat risus.
@@ -44,16 +50,8 @@ format:
     execute:
       echo: false
       warning: false
-    
-    # Word count
-    citeproc: false
-    filters:
-      - at: pre-quarto
-        path: _extensions/andrewheiss/wordcount/citeproc.lua
-      - at: pre-quarto
-        path: _extensions/andrewheiss/wordcount/wordcount.lua
 
-  pdf:
+  arxiv-pdf:
     toc: false
     execute:
       echo: false
@@ -74,6 +72,11 @@ format:
         path: _extensions/andrewheiss/wordcount/citeproc.lua
       - at: pre-quarto
         path: _extensions/andrewheiss/wordcount/wordcount.lua
+
+    # ArXiv template custom
+    linenumbers: true
+    authorcols: true
+    runninghead: "Code Contribution and Authorship"
 
 ---
 
