@@ -105,13 +105,14 @@ from scipy.stats import (
     pearsonr,
 )
 from statsmodels.stats.multitest import multipletests
-from sqlalchemy import text
+from sqlalchemy import text, create_engine
 
 from rs_graph.db import models as db_models
 from rs_graph.db import utils as db_utils
+from rs_graph.db.constants import PROD_DATABASE_FILEPATH
 
 # Get db engine for production database
-db_conn = db_utils.get_engine(use_prod=True)
+db_conn = create_engine(f"sqlite:///{PROD_DATABASE_FILEPATH}")
 
 # Set seaborn style
 plt.style.use("opinionated_rc")

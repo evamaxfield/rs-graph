@@ -15,15 +15,14 @@ from . import models as db_models
 
 
 def get_engine(use_prod: bool = False) -> Engine:
-    # TODO: final check on if constants can be used here
     db_path = Path(__file__).parent.parent / "data" / "files"
 
     if use_prod:
-        db_path = db_path / "rs-graph-prod.db"
+        db_path = db_path / "rs-graph-v1-prod.db"
 
         return create_engine(f"sqlite:///{db_path}")
     else:
-        db_path = db_path / "rs-graph-dev.db"
+        db_path = db_path / "rs-graph-v1-dev.db"
 
         return create_engine(f"sqlite:///{db_path}")
 
