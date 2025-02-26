@@ -1,5 +1,5 @@
 ---
-title: "Code Contribution and Authorship"
+title: "Code Contribution and Scientific Authorship"
 authors:
   - name: "Eva Maxfield Brown"
     email: evamxb@uw.edu

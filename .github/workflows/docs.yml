@@ -28,7 +28,7 @@ jobs:
       uses: quarto-dev/quarto-actions/setup@v2
     - name: Install Dependencies
       run: |
-        pip install uv && uv pip install --system ".[dev,modeling]"
+        pip install uv && uv pip install --system ".[dev,modeling,data]"
         quarto install tinytex
         sudo apt install lmodern
 
@@ -36,6 +36,8 @@ jobs:
     - name: Download data
       run: |
         rs-graph-data download
+      env:
+        DATAVERSE_TOKEN: ${{ secrets.DATAVERSE_TOKEN }}
     
     # Render and Publish
     - name: Render and Publish
