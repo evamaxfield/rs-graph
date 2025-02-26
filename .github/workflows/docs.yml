@@ -48,3 +48,4 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         QSS_CODE_AUTHORSHIP_USE_SAMPLE: 0
+        DATAVERSE_TOKEN: ${{ secrets.DATAVERSE_TOKEN }}
