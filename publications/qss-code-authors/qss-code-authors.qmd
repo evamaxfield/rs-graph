@@ -146,6 +146,9 @@ dataset_sources = read_table(db_models.DatasetSource.__tablename__)
 researcher_dev_links = read_table(
     db_models.ResearcherDeveloperAccountLink.__tablename__
 )
+document_alternate_dois = read_table(
+    db_models.DocumentAlternateDOI.__tablename__
+)
 
 # Drop all "updated_datetime" and "created_datetime" columns
 for df in [
@@ -368,6 +371,49 @@ for _, data_source in dataset_sources.iterrows():
 reduced_doc_types = pd.DataFrame(reduced_doc_types_rows)
 ```
 
+```{python}
+
+# Precompute DOI resolution statistics as that will be referenced
+# in the Data and Methods section
+
+# Groupby "name" and get percent have resolved dois
+per_dataset_doi_resolution = {}
+for dataset_source, group in doc_repo_links.merge(
+    dataset_sources,
+    left_on="dataset_source_id",
+    right_on="id",
+).groupby("name"):
+    # Get unique articles in this group
+    unique_group_articles = group.drop_duplicates(subset=["document_id"])
+
+    # Get the number of articles from this dataset
+    n_articles_in_group = len(unique_group_articles)
+    
+    # Get the number of articles with an alternate doi in this group
+    # Where the alternate doi isn't the same as the document doi
+    group_document_alternate_dois = document_alternate_dois[
+        (document_alternate_dois["document_id"].isin(unique_group_articles["document_id"]))
+        & (~document_alternate_dois["doi"].str.lower().isin(documents["doi"].str.lower()))
+    ]
+    n_articles_with_alt_doi = len(group_document_alternate_dois)
+
+    # Add to results
+    per_dataset_doi_resolution[dataset_source] = n_articles_with_alt_doi / n_articles_in_group
+
+# Get overall doi resolution
+n_articles = len(documents)
+
+# Get the number of articles with an alternate doi
+# Where the alternate doi isn't the same as the document doi
+unique_document_alternate_dois = document_alternate_dois[
+    ~document_alternate_dois["doi"].str.lower().isin(documents["doi"].str.lower())
+]
+n_articles_with_alt_doi = len(unique_document_alternate_dois)
+
+# Compute overall doi resolution
+overall_doi_resolution = n_articles_with_alt_doi / n_articles
+```
+
 Software has become integral to contemporary scientific research [@edwards2013knowledge; @mayernik2017assessing]. From analysis scripts to infrastructure for data collection [@hasselbring2024researchsoftwarecategories], specialized tools are now essential components of modern research practices. Today, research software serves multiple critical functions: enabling reproducible experiments [@krafczyk2019scientificreproducbility; @Trisovic2021ALS], providing methodological documentation [@ram2013git], and increasingly appearing alongside publications as a research artifact [@Cao2023TheRO; @trujillo2022penumbra]. Software's expanding role has changed how science is conducted, with many fields now depending on specialized tools to advance knowledge.
 
 Despite the growing dependence on software, a significant recognition gap exists between software development and traditional scientific outputs. Software contributors frequently find their work relegated to acknowledgments sections rather than warranting authorship [@olivier_philippe_2019_2585783], creating a disconnect between the value software provides and the credit its developers receive. This misalignment has consequences for scientific careers, as the lack of formal credit can significantly impact promotion and advancement within research organizations [@Carver2022ASO; @biagioli2014scientific]. The result is a system that increasingly relies on software while undervaluing those who create it, potentially discouraging talented developers from pursuing scientific careers and affecting the sustainability of research software development [@muna2016astropyproblem].
@@ -429,6 +475,14 @@ Our data collection process leverages multiple sources of linked scientific arti
 To reduce the complexity of dataset processing and enrichment, we filter out any article-source-code-repository pairs which store code somewhere other than GitHub. While this decision prioritizes processing simplicity, we acknowledge that while GitHub is the predominate host of scientific software [@Cao2023TheRO; @escamilla2022riseofgithub], it is also stored and shared on other platforms, which should be investigated as a part of future research [@trujillo2022penumbra].
 
 Through integration of multiple data sources, we extract detailed information about both the scientific and software development aspects of each project. We utilize the Semantic Scholar API for DOI resolution to ensure that we find the latest version of each article, which is particularly important for working with preprints as they may have been published in a journal since their inclusion in the Papers with Code dataset. We then utilize the OpenAlex API to gather publication metadata (open access status, domain, publication date), author details (name, author position, corresponding author status), and article- and individual-level metrics (citation counts, FWCI, h-index). The GitHub API provides similar information for source code repositories, including repository metadata (name, description, languages, creation date), contributor details (username, name, email), and repository-level metrics (star count, fork count, issue count).
+
+Semantic Scholar DOI Resolution Statistics:
+
+- Overall DOI resolution rate: `{python} round(overall_doi_resolution * 100, 1)`%
+- PLOS DOI resolution rate: `{python} round(per_dataset_doi_resolution["plos"] * 100, 1)`%
+- JOSS DOI resolution rate: `{python} round(per_dataset_doi_resolution["joss"] * 100, 1)`%
+- SoftwareX DOI resolution rate: `{python} round(per_dataset_doi_resolution["softwarex"] * 100, 1)`%
+- Papers with Code DOI resolution rate: `{python} round(per_dataset_doi_resolution["pwc"] * 100, 1)`%
 
 Taken together, we form one of the largest and most comprehensively annotated collections of paired scientific articles and associated source-code repositories. In total, we collect and enrich data for `{python} original_doc_repo_links_len` article-repository pairs.
 
