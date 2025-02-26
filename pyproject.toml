@@ -48,9 +48,14 @@ dev = [
   "alembic[tz]>=1,<2",
 ]
 modeling = [
+  "ipython",
   "matplotlib==3.8.4",  # pinned for compatibility with colormaps
+  "numpy>=1,<2",
   "opinionated>=0.0.3,<0.0.4",
+  "pandas>=1,<3",
   "scipy>=1,<2",
+  "sci_soft_models>=0.3.3",
+  "seaborn>=0.13,<0.14",
   "statsmodels>=0.14,<0.15",
 ]
 data = [
