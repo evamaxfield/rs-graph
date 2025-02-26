@@ -76,7 +76,7 @@ format:
     # ArXiv template custom
     linenumbers: true
     authorcols: true
-    runninghead: "Code Contribution and Authorship"
+    runninghead: "Code Contribution and Scientific Authorship"
 
 ---
 
@@ -448,7 +448,7 @@ pct_negative_examples = round(n_negative_examples / len(annotated_dataset), 3) *
 
 # Create function to split row details
 def split_dev_details(dev_details: str) -> dict:
-    details_list = dev_details.split(";\n")
+    details_list = dev_details.split(";\\n")
     details_dict = {}
     for detail in details_list:
         try:

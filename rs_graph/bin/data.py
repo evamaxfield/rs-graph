@@ -151,6 +151,10 @@ def _dataverse_download(dataverse_token: str | None = None) -> None:
     dv.load_dataset(
         pid=f"doi:{DATAVERSE_RS_GRAPH_V1_DATASET_DOI}",
         filedir=DATA_FILES_DIR,
+        filenames=[
+            "rs-graph-v1-prod.db",
+            "rs-graph-v1-redacted.db",
+        ]
     )
 
 
