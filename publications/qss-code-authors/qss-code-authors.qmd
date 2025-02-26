@@ -108,7 +108,6 @@ from statsmodels.stats.multitest import multipletests
 from sqlalchemy import text, create_engine
 
 from rs_graph.db import models as db_models
-from rs_graph.db import utils as db_utils
 from rs_graph.db.constants import PROD_DATABASE_FILEPATH
 
 # Get db engine for production database
