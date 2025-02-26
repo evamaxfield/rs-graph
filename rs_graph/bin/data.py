@@ -9,7 +9,6 @@ import typer
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
 from easyDataverse import Dataverse
-from gcsfs import GCSFileSystem
 
 from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.data import DATA_FILES_DIR, GCS_PROJECT_ID, REMOTE_STORAGE_BUCKET
@@ -37,6 +36,8 @@ def upload(debug: bool = False) -> None:
     `GOOGLE_APPLICATION_CREDENTIALS` environment variable set
     to the path to a service account key JSON file.
     """
+    from gcsfs import GCSFileSystem
+
     # Setup logger
     setup_logger(debug=debug)
 
@@ -67,6 +68,8 @@ class CacheStateMetadata(DataClassJsonMixin):
 
 
 def _gcs_download(force: bool = False) -> None:
+    from gcsfs import GCSFileSystem
+
     # Load env
     load_dotenv()
 
