@@ -53,6 +53,7 @@ modeling = [
   "numpy>=1,<2",
   "opinionated>=0.0.3,<0.0.4",
   "pandas>=1,<3",
+  "pyarrow>=12,<16",
   "scipy>=1,<2",
   "sci_soft_models>=0.3.3",
   "seaborn>=0.13,<0.14",
