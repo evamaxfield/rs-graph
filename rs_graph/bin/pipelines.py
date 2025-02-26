@@ -15,6 +15,7 @@ import pandas as pd
 import typer
 import yaml
 from dotenv import load_dotenv
+from gh_tokens_loader import GitHubTokensCycler
 from prefect import Task, flow, task, unmapped
 from tqdm import tqdm
 
@@ -70,25 +71,6 @@ def _wrap_func_with_coiled_prefect_task(
         return func(*args, **kwargs)
 
     return wrapped_func
-
-
-def _load_github_tokens(
-    github_tokens_file: str,
-) -> list[str]:
-    # Load tokens
-    try:
-        with open(github_tokens_file) as f:
-            tokens_file = yaml.safe_load(f)
-
-    except FileNotFoundError as e:
-        raise FileNotFoundError(
-            f"GitHub tokens file not found at path: {github_tokens_file}"
-        ) from e
-
-    # Get tokens
-    tokens_list = tokens_file["tokens"].values()
-
-    return tokens_list
 
 
 def _load_open_alex_emails(
@@ -163,7 +145,7 @@ def _store_batch_results(
 def _prelinked_dataset_ingestion_flow(
     source: str,
     use_prod: bool,
-    github_tokens: list[str],
+    github_tokens_file: str,
     open_alex_emails: list[str],
     semantic_scholar_api_key: str,
     elsevier_api_keys: list[str],
@@ -172,10 +154,10 @@ def _prelinked_dataset_ingestion_flow(
     errored_store_path: Path,
 ) -> None:
     # Get an infinite cycle of github tokens
-    cycled_github_tokens = itertools.cycle(github_tokens)
+    cycled_github_tokens = GitHubTokensCycler(github_tokens_file=github_tokens_file)
 
     # Workers is the number of github tokens
-    n_github_tokens = len(github_tokens)
+    n_github_tokens = len(cycled_github_tokens)
 
     # Get an infinite cycle of open alex emails
     cycled_open_alex_emails = itertools.cycle(open_alex_emails)
@@ -199,7 +181,7 @@ def _prelinked_dataset_ingestion_flow(
     source_func = SOURCE_MAP[source]
     print("Getting dataset...")
     source_results = source_func(
-        github_tokens=github_tokens,
+        github_tokens=cycled_github_tokens._gh_tokens,
         elsevier_api_keys=elsevier_api_keys,
         semantic_scholar_api_key=semantic_scholar_api_key,
         open_alex_emails=open_alex_emails,
@@ -378,9 +360,6 @@ def prelinked_dataset_ingestion(
     # Ignore prefect task introspection warnings
     os.environ["PREFECT_TASK_INTROSPECTION_WARN_THRESHOLD"] = "0"
 
-    # Load GitHub tokens
-    github_tokens = _load_github_tokens(github_tokens_file)
-
     # Load Open Alex emails
     open_alex_emails = _load_open_alex_emails(open_alex_emails_file)
 
@@ -391,7 +370,7 @@ def prelinked_dataset_ingestion(
     _prelinked_dataset_ingestion_flow(
         source=source,
         use_prod=use_prod,
-        github_tokens=github_tokens,
+        github_tokens_file=github_tokens_file,
         open_alex_emails=open_alex_emails,
         semantic_scholar_api_key=semantic_scholar_api_key,
         elsevier_api_keys=elsevier_api_keys,

@@ -154,7 +154,7 @@ def _dataverse_download(dataverse_token: str | None = None) -> None:
         filenames=[
             "rs-graph-v1-prod.db",
             "rs-graph-v1-redacted.db",
-        ]
+        ],
     )
 
 
