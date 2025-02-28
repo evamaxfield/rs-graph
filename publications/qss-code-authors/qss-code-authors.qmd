@@ -85,6 +85,7 @@ format:
 ```{python}
 #| output: false
 
+from collections import OrderedDict
 from datetime import datetime
 from io import StringIO
 import os
@@ -2556,267 +2557,158 @@ researchers_w_3_docs_and_coded_agg_dummies = (
 )
 ```
 
-::: {.content-visible when-format="html"}
-
-```{python}
-#| label: tbl-researcher-coding-status-counts
-#| tbl-cap: "Counts of Researcher Coding Status Used in H5"
-#| echo: false
-
-# Create position sorter
-position_sorter = ["first", "middle", "last"]
-
-# Count number of people who code any, majority, and always for each control variable
-control_vars = {
-    "common_author_position": "Freq. Author Pos.",
-    "common_domain": "Freq. Domain",
-    "common_article_type": "Freq. Article Type",
-}
-control_var_tables = {}
-for control_var, control_display_name in control_vars.items():
-    # Get counts of coding status
-    count_table = (
-        researchers_w_3_docs_and_coded_agg.groupby(control_var)[
-            ["any_coding", "majority_coding", "always_coding"]
-        ]
-        .sum()
-        .reset_index()
-    )
-
-    # Add totals
-    for val in count_table[control_var].unique():
-        count_table.loc[
-            count_table[control_var] == val, "total"
-        ] = len(
-            researchers_w_3_docs_and_coded_agg.loc[
-                researchers_w_3_docs_and_coded_agg[control_var] == val
-            ]
-        )
-
-    # Convert total to int
-    count_table["total"] = count_table["total"].astype(int)
-
-    # Change name of the control_var column to "Control Values"
-    count_table = count_table.rename(columns={control_var: "Subset"})
-
-    # Order columns
-    count_table = count_table[
-        ["Subset", "any_coding", "majority_coding", "always_coding", "total"]
-    ]
-    
-    # Rename columns
-    count_table = count_table.rename(
-        columns={
-            "any_coding": "Any Coding",
-            "majority_coding": "Majority Coding",
-            "always_coding": "Always Coding",
-            "total": "Total",
-        }
-    )
-
-    # Handle position sorter
-    if control_var == "common_author_position":
-        count_table["Subset"] = pd.Categorical(
-            count_table["Subset"],
-            categories=position_sorter,
-            ordered=True,
-        )
-
-    # Order alphabetically
-    count_table = count_table.sort_values("Subset")
-    
-    # Append
-    control_var_tables[control_display_name] = count_table
-
-# Constuct HTML Table
-
-# Construct multi-row span HTML table
-# Columns should be: "Coded Any", "Coded Majority", "Coded Always", "Total"
-# Rows should be:
-# "Most Freq. Author Position", "Most Freq. Domain", "Most Freq. Article Type"
-
-# HTML templates
-count_piece_inital_row_template = """
-<tr>
-  <td rowspan="{n_rows}">{row_name}</td>
-  <td>{value_name}</td>
-  <td>{any_coding}</td>
-  <td>{majority_coding}</td>
-  <td>{always_coding}</td>
-  <td>{total}</td>
-</tr>
-""".strip()
-
-count_piece_subsequent_row_template = """
-<tr>
-  <td>{value_name}</td>
-  <td>{any_coding}</td>
-  <td>{majority_coding}</td>
-  <td>{always_coding}</td>
-  <td>{total}</td>
-</tr>
-""".strip()
-
-# Iter over stats portions (and total)
-count_portions_html = []
-for key, count_table in control_var_tables.items():
-    count_portion_html = []
-    for i, control_value in enumerate(count_table["Subset"].unique()):
-        if i == 0:
-            count_portion_html.append(
-                count_piece_inital_row_template.format(
-                    n_rows=len(count_table),
-                    row_name=key,
-                    value_name=control_value.title(),
-                    any_coding=count_table.loc[
-                        count_table["Subset"] == control_value, "Any Coding"
-                    ].iloc[0],
-                    majority_coding=count_table.loc[
-                        count_table["Subset"] == control_value, "Majority Coding"
-                    ].iloc[0],
-                    always_coding=count_table.loc[
-                        count_table["Subset"] == control_value, "Always Coding"
-                    ].iloc[0],
-                    total=count_table.loc[
-                        count_table["Subset"] == control_value, "Total"
-                    ].iloc[0],
-                )
-            )
-        else:
-            count_portion_html.append(
-                count_piece_subsequent_row_template.format(
-                    value_name=control_value.title(),
-                    any_coding=count_table.loc[
-                        count_table["Subset"] == control_value, "Any Coding"
-                    ].iloc[0],
-                    majority_coding=count_table.loc[
-                        count_table["Subset"] == control_value, "Majority Coding"
-                    ].iloc[0],
-                    always_coding=count_table.loc[
-                        count_table["Subset"] == control_value, "Always Coding"
-                    ].iloc[0],
-                    total=count_table.loc[
-                        count_table["Subset"] == control_value, "Total"
-                    ].iloc[0],
-                )
-            )
-
-    count_portions_html.append("\n".join(count_portion_html))
-
-# Concat and wrap in table
-count_table_html = f"""
-<table>
-  <tr>
-    <th><b>Control</b></th>
-    <th><b>Subset</b></th>
-    <th><b>Any Coding</b></th>
-    <th><b>Majority Coding</b></th>
-    <th><b>Always Coding</b></th>
-    <th><b>Total</b></th>
-  </tr>
-  {" ".join(count_portions_html)}
-</table>
-""".strip()
-
-IPython.display.HTML(count_table_html)
-```
-
-:::
-
-::: {.content-visible when-format="pdf"}
-
-```{python}
-# LaTeX templates
-count_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\cellcolor{{{color}}}{value_name} & \\cellcolor{{{color}}}{any_coding} & \\cellcolor{{{color}}}{majority_coding} & \\cellcolor{{{color}}}{always_coding} & \\cellcolor{{{color}}}{total} \\\\"""
-
-count_piece_subsequent_row_template = """    & \\cellcolor{{{color}}}{value_name} & \\cellcolor{{{color}}}{any_coding} & \\cellcolor{{{color}}}{majority_coding} & \\cellcolor{{{color}}}{always_coding} & \\cellcolor{{{color}}}{total} \\\\"""
-
-# Table header and footer templates
-table_header = """\\begin{table}
-\\centering
-\\small
-\\caption{Counts of Researcher Coding Status Used in H5}
-\\label{tbl-researcher-coding-status-counts}
-\\begin{tabular}{llrrrr}
-\\toprule
-\\textbf{Control} & \\textbf{Subset} & \\textbf{Any Coding} & \\textbf{Majority Coding} & \\textbf{Always Coding} & \\textbf{Total} \\\\
-\\midrule"""
-
-table_footer = """\\bottomrule
-\\end{tabular}
-\\end{table}"""
-
-# Generate table content
-count_portions_latex = []
-for key, count_table in control_var_tables.items():
-    count_portion_latex = []
-    
-    # Get control values
-    control_values = count_table["Subset"].unique()
-    
-    # First row with category label
-    first_value = control_values[0]
-    count_portion_latex.append(
-        count_piece_initial_row_template.format(
-            n_rows=len(control_values),
-            row_name=key,
-            value_name=first_value.title(),
-            color="white",
-            any_coding=count_table.loc[
-                count_table["Subset"] == first_value, "Any Coding"
-            ].iloc[0],
-            majority_coding=count_table.loc[
-                count_table["Subset"] == first_value, "Majority Coding"
-            ].iloc[0],
-            always_coding=count_table.loc[
-                count_table["Subset"] == first_value, "Always Coding"
-            ].iloc[0],
-            total=count_table.loc[
-                count_table["Subset"] == first_value, "Total"
-            ].iloc[0]
-        )
-    )
-    
-    # Subsequent rows with alternating colors
-    for i, control_value in enumerate(control_values[1:], 1):
-        color = "gray!10" if i % 2 == 1 else "white"
-        count_portion_latex.append(
-            count_piece_subsequent_row_template.format(
-                value_name=control_value.title(),
-                color=color,
-                any_coding=count_table.loc[
-                    count_table["Subset"] == control_value, "Any Coding"
-                ].iloc[0],
-                majority_coding=count_table.loc[
-                    count_table["Subset"] == control_value, "Majority Coding"
-                ].iloc[0],
-                always_coding=count_table.loc[
-                    count_table["Subset"] == control_value, "Always Coding"
-                ].iloc[0],
-                total=count_table.loc[
-                    count_table["Subset"] == control_value, "Total"
-                ].iloc[0]
-            )
-        )
-
-    section_latex = "\n".join(count_portion_latex)
-    if key != list(control_var_tables.keys())[-1]:  # Don't add midrule after last section
-        section_latex += "\\midrule"
-    count_portions_latex.append(section_latex)
-
-# Combine all parts
-coding_status_table_latex = f"""{table_header}
-{chr(10).join(count_portions_latex)}
-{table_footer}"""
-
-IPython.display.Latex(coding_status_table_latex)
-```
-
-:::
-
 Building upon previous work examining career implications for researchers who prioritize software development [@sec-background], we investigated how varying levels of code contribution relate to scholarly impact through h-index metrics. To ensure a robust analysis, we applied several key data filtering steps. We only included researchers with at least three publications in our dataset, removed those with more than three developer account associations, and used each researcher's most common (or most recent) domain, article type, and author position, with ties broken by the most recent occurrence. We removed h-index outliers by excluding researchers below the bottom 3rd and above the top 97th percentiles. Finally, we removed any author-developer-account pairs which had a predictive model confidence of less than 0.97.
 
 We categorized researchers' coding contributions into mutually exclusive groups: non-coders (no code contributions), any coding (code contribution in less than half of article-repository pairs), majority coding (code contribution in at least half, but not all, article-repository pairs), and always coding (code contribution in every article-repository pair).
+
+@fig-author-h-index-by-coding-status shows the distribution of author h-indices across these coding frequency groups, grouped by author position, publication type, and research domain.
+
+```{python}
+#| label: fig-author-h-index-by-coding-status
+#| fig-cap: "Distribution of author h-index by coding frequency across three key publication factors. Results are grouped by each author's most frequent: (1) position in publication bylines (first, middle, or last), (2) publication type (preprint, research article, or software article), and (3) research domain (Social Sciences, Physical Sciences, Health Sciences, or Life Sciences). Within each subplot, h-indices are divided by the author's coding frequency: 'none' (no coding in any of their publications), 'any' (coding in at least one but fewer than half of their publications), 'majority' (coding in at least half but not all of their publications), and 'always' (coding in each of their publications). Authors are only included if they have three or more publications within our dataset and are associated with no more than three developer accounts, with each association have a predicted model confidence of at least 97%."
+
+def _get_coding_status_string(row: pd.Series) -> str:
+    if row["any_coding"] == 1:
+        return "any"
+    elif row["majority_coding"] == 1:
+        return "majority"
+    elif row["always_coding"] == 1:
+        return "always"
+    else:
+        return "none"
+
+researchers_w_3_docs_and_coded_agg["coding_status"] = researchers_w_3_docs_and_coded_agg.apply(
+    _get_coding_status_string,
+    axis=1,
+)
+
+# Select columns of interest
+researchers_w_3_docs_and_coded_agg_subset_for_vis = researchers_w_3_docs_and_coded_agg[
+    [
+        "researcher_id",
+        "h_index",
+        "coding_status",
+        "common_author_position",
+        "common_domain",
+        "common_article_type",
+    ]
+]
+
+# Melt control variables
+researchers_w_3_docs_and_coded_agg_vis_melted = researchers_w_3_docs_and_coded_agg_subset_for_vis.melt(
+    id_vars=["researcher_id", "h_index", "coding_status"],
+    value_vars=[
+        "common_author_position",
+        "common_domain",
+        "common_article_type",
+    ],
+    var_name="control_var",
+    value_name="control_value",
+)
+
+# Define visualization order and control variables
+vis_order = ["none", "any", "majority", "always"]
+control_vars = OrderedDict([
+    ("common_author_position", ["first", "middle", "last"]),
+    ("common_article_type", ["preprint", "research article", "software article"]),
+    ("common_domain", ["Social Sciences", "Physical Sciences", "Health Sciences", "Life Sciences"]),
+])
+
+# Set up the figure with appropriate size
+fig = plt.figure(figsize=(8, 12))
+
+# Calculate grid dimensions based on control variables
+num_controls = len(control_vars)
+max_subsets = max(len(values) for values in control_vars.values())
+grid_height = num_controls * 3  # 3 rows per control variable
+
+# Iterate through control variables to create subplots
+for control_idx, (control_var, control_values) in enumerate(control_vars.items()):
+    # Determine row position for this control variable
+    row_pos = control_idx * 3
+    
+    # Create subplots for each control value
+    for col_idx, control_value in enumerate(control_values):
+        # Create the subplot
+        ax = plt.subplot2grid(
+            (grid_height, max_subsets),
+            (row_pos, col_idx),
+            rowspan=2,
+            colspan=1
+        )
+        
+        # Filter data for this control variable and value
+        subset_data = researchers_w_3_docs_and_coded_agg_vis_melted[
+            (researchers_w_3_docs_and_coded_agg_vis_melted["control_var"] == control_var) & 
+            (researchers_w_3_docs_and_coded_agg_vis_melted["control_value"] == control_value)
+        ]
+        
+        # Create boxplot with specified configuration
+        sns.boxplot(
+            data=subset_data,
+            x="coding_status",
+            y="h_index",
+            hue="coding_status",
+            hue_order=vis_order,
+            order=vis_order,
+            ax=ax,
+            showfliers=False,
+            legend=False,
+        )
+        
+        # Set titles and labels
+        ax.set_title(f"{control_value.title()}", fontsize=14)
+        
+        if col_idx == 0:
+            ax.set_ylabel("h-index", fontsize=14)
+        else:
+            ax.set_ylabel("")
+            
+        # Never show xlabel as we use legend
+        # if col_idx == 0:
+        #     ax.set_xlabel("Coding Frequency", loc="left", fontproperties={"size": 16, "weight": "bold"})
+        # else:
+        ax.set_xlabel("")
+            
+        # Rotate x-tick labels for better readability
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
+
+    # Add row header for this control variable
+    fig.text(
+        0.119, 
+        0.95 - (control_idx * 0.299), 
+        f"{control_var.replace('_', ' ').title().replace("Common", "").strip()}", 
+        fontsize=16, 
+        ha="left", 
+        va="center", 
+        fontweight="bold"
+    )
+
+
+# # Add a legend outside the plots
+# handles = [plt.Rectangle((0,0), 1, 1, color=tuple(cmaps.bold[2:]._colors.tolist()[i])) for i in range(len(vis_order))]
+# legend = fig.legend(
+#     handles, 
+#     vis_order, 
+#     bbox_to_anchor=(0.92, 0.52),  # Position at bottom center
+#     fontsize=16,
+#     title="Author Coding Frequency",
+#     title_fontproperties={"size": 16, "weight": "bold"},
+#     alignment="left",
+# )
+
+# Adjust layout
+plt.subplots_adjust(hspace=0.2, wspace=0.2, bottom=0.1)
+plt.tight_layout(rect=[0.03, 0.06, 0.97, 0.95])
+
+# Draw a horizontal lines at those coordinates
+for y in [0.69, 0.39]:
+    line = plt.Line2D([0.066, 0.944], [y,y], transform=fig.transFigure, color="black", linestyle="--")
+    fig.add_artist(line)
+
+# Show plot
+plt.show()
+```
 
 Our analysis revealed a consistent and statistically significant negative relationship between code contribution frequency and h-index across multiple analytical controls. In our initial uncontrolled analysis (@tbl-researcher-coding-status-no-control), we observed increasingly negative h-index effects as coding frequency increased. Compared to non-coding authors, researchers were associated with progressively lower h-indices: occasional code contributors showed a ~27.3% lower h-index (p < 0.001), majority code contributors demonstrated a ~53.5% lower h-index (p < 0.001), and always coding authors exhibited a ~62.1% lower h-index (p < 0.001).
 
