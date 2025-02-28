@@ -2655,6 +2655,9 @@ for control_idx, (control_var, control_values) in enumerate(control_vars.items()
             showfliers=False,
             legend=False,
         )
+
+        # Set ylim to row specific values
+        ax.set_ylim([-1, 101])
         
         # Set titles and labels
         ax.set_title(f"{control_value.title()}", fontsize=14)
@@ -2675,7 +2678,7 @@ for control_idx, (control_var, control_values) in enumerate(control_vars.items()
 
     # Add row header for this control variable
     fig.text(
-        0.119, 
+        0.13, 
         0.95 - (control_idx * 0.299), 
         f"{control_var.replace('_', ' ').title().replace("Common", "").strip()}", 
         fontsize=16, 
