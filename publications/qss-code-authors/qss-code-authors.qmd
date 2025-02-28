@@ -2657,7 +2657,7 @@ for control_idx, (control_var, control_values) in enumerate(control_vars.items()
         )
 
         # Set ylim to row specific values
-        ax.set_ylim([-1, 110])
+        ax.set_ylim([-1, 115])
         
         # Set titles and labels
         ax.set_title(f"{control_value.title()}", fontsize=14)
