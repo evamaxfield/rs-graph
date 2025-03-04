@@ -24,7 +24,7 @@ from rs_graph.bin.data import download as download_rs_graph_data_files
 from rs_graph.bin.data import upload as upload_rs_graph_data_files
 from rs_graph.db import utils as db_utils
 from rs_graph.enrichment import article, entity_matching, github
-from rs_graph.sources import joss, plos, proto, pwc, softwarex
+from rs_graph.sources import joss, nsf, plos, proto, pwc, softwarex
 from rs_graph.utils import code_host_parsing
 
 ###############################################################################
@@ -39,7 +39,7 @@ DEFAULT_ELSEVIER_API_KEYS_FILE = ".elsevier-api-keys.yml"
 ###############################################################################
 
 
-SOURCE_MAP: dict[str, proto.DatasetRetrievalFunction] = {
+PRELINKED_DATASET_SOURCE_MAP: dict[str, proto.DatasetRetrievalFunction] = {
     "joss": joss.get_dataset,
     "plos": plos.get_dataset,
     "softwarex": softwarex.get_dataset,
@@ -178,7 +178,7 @@ def _prelinked_dataset_ingestion_flow(
     print("-" * 80)
 
     # Get dataset
-    source_func = SOURCE_MAP[source]
+    source_func = PRELINKED_DATASET_SOURCE_MAP[source]
     print("Getting dataset...")
     source_results = source_func(
         github_tokens=cycled_github_tokens._gh_tokens,
@@ -409,7 +409,7 @@ def get_random_sample_of_prelinked_source_data(
 
     # Iter over sources, take random samples of their "get_dataset" function results
     results = []
-    for source, source_func in SOURCE_MAP.items():
+    for source, source_func in PRELINKED_DATASET_SOURCE_MAP.items():
         print("Working on source:", source)
         source_results = source_func()
 
@@ -444,6 +444,136 @@ def get_random_sample_of_prelinked_source_data(
 
     # Save to CSV
     df.to_csv(outfile_path, index=False)
+
+
+@flow(
+    log_prints=True,
+)
+def _grant_mining_flow(
+    source: str,
+    batch_size: int,
+    source_start_date: str,
+    source_end_date: str,
+) -> None:
+    # Print dataset and coiled status
+    print("-" * 80)
+    print("Pipeline Options:")
+    print(f"Source: {source}")
+    print("-" * 80)
+
+    # Get basic dataset
+    print("Getting dataset...")
+    grants_dataset = nsf.get_dataset(
+        start_date=source_start_date,
+        end_date=source_end_date,
+    )
+
+    # Predict grants based on details in batches
+    print("Predicting grants for software production...")
+    n_batches_for_prediction = math.ceil(len(grants_dataset) / batch_size)
+    for i in tqdm(
+        range(0, len(grants_dataset), batch_size),
+        desc="Batches",
+        total=n_batches_for_prediction,
+    ):
+        # Get chunk
+        grants_dataset[i : i + batch_size]
+
+        # Predict grants
+        # grant_predictions = _predict_grants_for_software_production(chunk)
+
+        # Append to results
+        # grant_prediction_results.extend(grant_predictions)
+
+    # Filter down to only grants that are predicted to be for software production
+    print("Filtering down to only grants for software production...")
+    # _filter_software_production_grants(grant_predictions)
+
+    # Iter over software production grants in batches
+    # n_batches = math.ceil(len(software_production_grants) / batch_size)
+    # for i in tqdm(
+    #     range(0, len(software_production_grants), batch_size),
+    #     desc="Batches",
+    #     total=n_batches,
+    # ):
+    #     chunk = software_production_grants[i : i + batch_size]
+
+    #     # Handle any timeouts and such
+    #     try:
+    #         # Process open alex
+    #         process_article_wrapped_task = _wrap_func_with_coiled_prefect_task(
+    #             article.process_article_task,
+    #             coiled_kwargs=article_processing_cluster_config,
+    #         )
+    #         article_processing_futures = process_article_wrapped_task.map(
+    #             pair=chunk,
+    #             open_alex_email=[
+    #                 next(cycled_open_alex_emails) for _ in range(len(chunk))
+    #             ],
+    #             open_alex_email_count=n_open_alex_emails,
+    #             semantic_scholar_api_key=unmapped(semantic_scholar_api_key),
+    #         )
+
+    #         # Process github
+    #         process_github_wrapped_task = _wrap_func_with_coiled_prefect_task(
+    #             github.process_github_repo_task,
+    #             coiled_kwargs=github_cluster_config,
+    #         )
+    #         github_futures = process_github_wrapped_task.map(
+    #             pair=article_processing_futures,
+    #             github_api_key=[
+    #                 next(cycled_github_tokens)
+    #                 for _ in range(len(article_processing_futures))
+    #             ],
+    #         )
+
+    #         # Store everything
+    #         stored_futures = db_utils.store_full_details_task.map(
+    #             pair=github_futures,
+    #             use_prod=unmapped(use_prod),
+    #         )
+
+    #         # Match devs and researchers
+    #         match_devs_and_researchers_wrapped_task = (
+    #             _wrap_func_with_coiled_prefect_task(
+    #                 entity_matching.match_devs_and_researchers,
+    #                 coiled_kwargs=gpu_cluster_config,
+    #             )
+    #         )
+    #         dev_researcher_futures = match_devs_and_researchers_wrapped_task.map(
+    #             pair=stored_futures,
+    #         )
+
+    #         # Store the dev-researcher links
+    #         stored_dev_researcher_futures = (
+    #             db_utils.store_dev_researcher_em_links_task.map(
+    #                 pair=dev_researcher_futures,
+    #                 use_prod=unmapped(use_prod),
+    #             )
+    #         )
+
+    #         # Store this batch's errored results
+    #         # Update errored store path with batch index
+    #         this_batch_store_path = errored_store_path.with_name(
+    #             errored_store_path.stem + f"-{i // batch_size}.parquet"
+    #         )
+    #         _store_batch_results(
+    #             results=[f.result() for f in stored_dev_researcher_futures],
+    #             store_path=this_batch_store_path,
+    #         )
+
+    #     except Exception as e:
+    #         print("Error processing chunk, skipping storage of errors...")
+    #         print(f"Error: {e}")
+
+    #     # Always upload the database
+    #     _upload_db(use_prod)
+
+    #     # Sleep for a second before next chunk
+    #     time.sleep(1)
+
+    # # Cooldown
+    # time.sleep(3)
 
 
 ###############################################################################

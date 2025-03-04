@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from dataclasses import dataclass
+from datetime import datetime
 
 import pandas as pd
 from dataclasses_json import DataClassJsonMixin
@@ -126,3 +127,24 @@ class SuccessAndErroredResultsLists(DataClassJsonMixin):
         BasicRepositoryDocumentPair | ExpandedRepositoryDocumentPair
     ]
     errored_results: list[ErrorResult]
+
+
+@dataclass
+class GrantDetails(DataClassJsonMixin):
+    funder: str
+    grant_id: str
+    title: str | None
+    abstract: str | None
+    outcomes_report: str | None
+    directorate: str | None
+    start_date: datetime | None
+    end_date: datetime | None
+    funded_amount: str | None
+    primary_investigator: str | None
+    institution: str | None
+
+
+@dataclass
+class GrantDetailsWithSoftwareProductionPrediction(GrantDetails):
+    software_production_prediction: str
+    software_production_confidence: float
