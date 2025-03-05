@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 from dataclasses import dataclass
-from datetime import datetime
 
 import pandas as pd
 from dataclasses_json import DataClassJsonMixin
@@ -137,14 +136,16 @@ class GrantDetails(DataClassJsonMixin):
     abstract: str | None
     outcomes_report: str | None
     directorate: str | None
-    start_date: datetime | None
-    end_date: datetime | None
+    start_date: str | None
+    end_date: str | None
     funded_amount: str | None
     primary_investigator: str | None
     institution: str | None
 
 
 @dataclass
-class GrantDetailsWithSoftwareProductionPrediction(GrantDetails):
+class GrantDetailsWithSoftwareProductionPrediction(GrantDetails, DataClassJsonMixin):
     software_production_prediction: str
-    software_production_confidence: float
+    predictive_model_name: str
+    predictive_model_version: str
+    predictive_model_confidence: float

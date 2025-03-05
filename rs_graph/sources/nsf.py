@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import requests
 from datetime import datetime
+
+import requests
 from tqdm import tqdm
 
 from .. import types
@@ -54,6 +55,7 @@ NSF_AWARD_FIELDS = [
 
 NSF_AWARD_FIELDS_STR = ",".join(NSF_AWARD_FIELDS)
 
+
 class NSFDirectorates:
     Biological_Sciences = "BIO"
     Computer_and_Information_Science_and_Engineering = "CISE"
@@ -66,7 +68,10 @@ class NSFDirectorates:
     Social_Behavioral_and_Economic_Sciences = "SBE"
     Technology_Innovation_and_Partnerships = "TIP"
 
-ALL_NSF_DIRECTORATES = [getattr(NSFDirectorates, a) for a in dir(NSFDirectorates) if "__" not in a]
+
+ALL_NSF_DIRECTORATES = [
+    getattr(NSFDirectorates, a) for a in dir(NSFDirectorates) if "__" not in a
+]
 
 CFDA_NUMBER_TO_DIRECTORATE_LUT = {
     "47.041": NSFDirectorates.Engineering,
@@ -99,6 +104,7 @@ _NSF_API_URL_TEMPLATE = (
 
 ###############################################################################
 
+
 def _parse_nsf_datetime(dt: str | datetime) -> str:
     if isinstance(dt, str):
         # Assume "/" means MM/DD/YYYY format
@@ -118,6 +124,7 @@ def _parse_nsf_datetime(dt: str | datetime) -> str:
     # Should either be already formated (from "/")
     # or we had isoformat conversion or provided datetime
     return dt.strftime("%m/%d/%Y")
+
 
 def _get_nsf_chunk(
     start_date: str,
@@ -151,20 +158,25 @@ def _get_nsf_chunk(
             types.GrantDetails(
                 funder="NSF",
                 grant_id=award["id"],
-                title=award["title"] if "title" in award else "",
-                abstract=award["abstractText"] if "abstractText" in award else "",
-                outcomes_report=award["projectOutComesReport"] if "projectOutComesReport" in award else "",
+                title=award["title"] if "title" in award else None,
+                abstract=award["abstractText"] if "abstractText" in award else None,
+                outcomes_report=award["projectOutComesReport"]
+                if "projectOutComesReport" in award
+                else None,
                 directorate=CFDA_NUMBER_TO_DIRECTORATE_LUT[cfda_number],
-                start_date=award["startDate"] if "startDate" in award else "",
-                end_date=award["expDate"] if "expDate" in award else "",
-                funded_amount=award["fundsObligatedAmt"] if "fundsObligatedAmt" in award else "",
-                primary_investigator=award["pdPIName"] if "pdPIName" in award else "",
-                institution=award["awardeeName"] if "awardeeName" in award else "",
+                start_date=award["startDate"] if "startDate" in award else None,
+                end_date=award["expDate"] if "expDate" in award else None,
+                funded_amount=award["fundsObligatedAmt"]
+                if "fundsObligatedAmt" in award
+                else None,
+                primary_investigator=award["pdPIName"] if "pdPIName" in award else None,
+                institution=award["awardeeName"] if "awardeeName" in award else None,
             )
             for award in response_json["award"]
         ]
 
     return []
+
 
 def get_dataset(
     start_date: str | datetime,
@@ -190,7 +202,7 @@ def get_dataset(
 
         # Run gather
         current_offset = 1
-        with tqdm(desc=f"Getting NSF data in chunks...") as pbar:
+        with tqdm(desc="Getting NSF data in chunks...", leave=False) as pbar:
             while True:
                 # Get chunk
                 chunk = _get_nsf_chunk(
@@ -204,9 +216,13 @@ def get_dataset(
                 )
 
                 # Append to all data
-                all_directorates_data.extend([
-                    award for award in chunk if award.grant_id not in all_directorate_grant_ids
-                ])
+                all_directorates_data.extend(
+                    [
+                        award
+                        for award in chunk
+                        if award.grant_id not in all_directorate_grant_ids
+                    ]
+                )
                 all_directorate_grant_ids.update([award.grant_id for award in chunk])
 
                 break
@@ -223,4 +239,3 @@ def get_dataset(
                 pbar.update(1)
 
     return all_directorates_data
-

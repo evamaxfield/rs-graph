@@ -23,7 +23,7 @@ from rs_graph import types
 from rs_graph.bin.data import download as download_rs_graph_data_files
 from rs_graph.bin.data import upload as upload_rs_graph_data_files
 from rs_graph.db import utils as db_utils
-from rs_graph.enrichment import article, entity_matching, github
+from rs_graph.enrichment import article, entity_matching, github, grant_prediction
 from rs_graph.sources import joss, nsf, plos, proto, pwc, softwarex
 from rs_graph.utils import code_host_parsing
 
@@ -450,15 +450,19 @@ def get_random_sample_of_prelinked_source_data(
     log_prints=True,
 )
 def _grant_mining_flow(
-    source: str,
-    batch_size: int,
     source_start_date: str,
     source_end_date: str,
+    use_coiled: bool,
+    batch_size: int,
+    errored_store_path: Path,
 ) -> None:
     # Print dataset and coiled status
     print("-" * 80)
     print("Pipeline Options:")
-    print(f"Source: {source}")
+    print(f"Source Start Date: {source_start_date}")
+    print(f"Source End Date: {source_end_date}")
+    print(f"Use Coiled: {use_coiled}")
+    print(f"Batch Size: {batch_size}")
     print("-" * 80)
 
     # Get basic dataset
@@ -468,6 +472,15 @@ def _grant_mining_flow(
         end_date=source_end_date,
     )
 
+    gpu_cluster_config = {
+        "keepalive": "15m",
+        "vm_type": "t4g.medium",
+        "n_workers": [3, 4] if use_coiled else 1,
+        "spot_policy": "spot_with_fallback",
+        "threads_per_worker": 1,
+        "local": not use_coiled,
+    }
+
     # Predict grants based on details in batches
     print("Predicting grants for software production...")
     n_batches_for_prediction = math.ceil(len(grants_dataset) / batch_size)
@@ -476,104 +489,98 @@ def _grant_mining_flow(
         desc="Batches",
         total=n_batches_for_prediction,
     ):
-        # Get chunk
-        grants_dataset[i : i + batch_size]
+        # Handle any timeouts and such
+        try:
+            # Get chunk
+            chunk = grants_dataset[i : i + batch_size]
 
-        # Predict grants
-        # grant_predictions = _predict_grants_for_software_production(chunk)
+            # Predict software production
+            predict_software_production_wrapped_task = (
+                _wrap_func_with_coiled_prefect_task(
+                    grant_prediction.predict_software_production_from_grant,
+                    coiled_kwargs=gpu_cluster_config,
+                )
+            )
+            software_prediction_futures = predict_software_production_wrapped_task.map(
+                grant_details=chunk,
+            )
 
-        # Append to results
-        # grant_prediction_results.extend(grant_predictions)
+            # Store chunk results
+            # Update errored store path with batch index
+            this_batch_store_path = errored_store_path.with_name(
+                errored_store_path.stem + f"-{i // batch_size}.parquet"
+            )
+            pd.DataFrame(
+                [f.result().to_dict() for f in software_prediction_futures]
+            ).to_parquet(this_batch_store_path)
+            # _store_batch_results(
+            #     results=[f.result() for f in software_prediction_futures],
+            #     store_path=this_batch_store_path,
+            # )
 
-    # Filter down to only grants that are predicted to be for software production
-    print("Filtering down to only grants for software production...")
-    # _filter_software_production_grants(grant_predictions)
+            # # Also store
 
-    # Iter over software production grants in batches
-    # n_batches = math.ceil(len(software_production_grants) / batch_size)
-    # for i in tqdm(
-    #     range(0, len(software_production_grants), batch_size),
-    #     desc="Batches",
-    #     total=n_batches,
-    # ):
-    #     chunk = software_production_grants[i : i + batch_size]
+        except Exception as e:
+            print("Error processing chunk, skipping storage of errors...")
+            print(f"Error: {e}")
 
-    #     # Handle any timeouts and such
-    #     try:
-    #         # Process open alex
-    #         process_article_wrapped_task = _wrap_func_with_coiled_prefect_task(
-    #             article.process_article_task,
-    #             coiled_kwargs=article_processing_cluster_config,
-    #         )
-    #         article_processing_futures = process_article_wrapped_task.map(
-    #             pair=chunk,
-    #             open_alex_email=[
-    #                 next(cycled_open_alex_emails) for _ in range(len(chunk))
-    #             ],
-    #             open_alex_email_count=n_open_alex_emails,
-    #             semantic_scholar_api_key=unmapped(semantic_scholar_api_key),
-    #         )
+        # Sleep for a second before next chunk
+        time.sleep(1)
 
-    #         # Process github
-    #         process_github_wrapped_task = _wrap_func_with_coiled_prefect_task(
-    #             github.process_github_repo_task,
-    #             coiled_kwargs=github_cluster_config,
-    #         )
-    #         github_futures = process_github_wrapped_task.map(
-    #             pair=article_processing_futures,
-    #             github_api_key=[
-    #                 next(cycled_github_tokens)
-    #                 for _ in range(len(article_processing_futures))
-    #             ],
-    #         )
 
-    #         # Store everything
-    #         stored_futures = db_utils.store_full_details_task.map(
-    #             pair=github_futures,
-    #             use_prod=unmapped(use_prod),
-    #         )
+@app.command()
+def grant_to_software_ingestion(
+    source_start_date: str,
+    source_end_date: str,
+    use_coiled: bool = False,
+    batch_size: int = 10,
+) -> None:
+    """Mine grants for papers and then mine the papers for software production."""
+    # Create current datetime without microseconds
+    current_datetime = datetime.now().replace(microsecond=0)
+    # Convert to isoformat and replace colons with dashes
+    current_datetime_str = current_datetime.isoformat().replace(":", "-")
 
-    #         # Match devs and researchers
-    #         match_devs_and_researchers_wrapped_task = (
-    #             _wrap_func_with_coiled_prefect_task(
-    #                 entity_matching.match_devs_and_researchers,
-    #                 coiled_kwargs=gpu_cluster_config,
-    #             )
-    #         )
-    #         dev_researcher_futures = match_devs_and_researchers_wrapped_task.map(
-    #             pair=stored_futures,
-    #         )
+    # Create dir for this datetime
+    current_datetime_dir = DEFAULT_RESULTS_DIR / current_datetime_str
+    # Create "results" dir
+    current_datetime_dir.mkdir(exist_ok=True, parents=True)
+    errored_store_path = (
+        current_datetime_dir / "process-results-nsf-grant-mining-errored.parquet"
+    )
 
-    #         # Store the dev-researcher links
-    #         stored_dev_researcher_futures = (
-    #             db_utils.store_dev_researcher_em_links_task.map(
-    #                 pair=dev_researcher_futures,
-    #                 use_prod=unmapped(use_prod),
-    #             )
-    #         )
+    # Download latest if prod
+    # print("Downloading latest data files...")
+    # download_rs_graph_data_files(force=True)
 
-    #         # Store this batch's errored results
-    #         # Update errored store path with batch index
-    #         this_batch_store_path = errored_store_path.with_name(
-    #             errored_store_path.stem + f"-{i // batch_size}.parquet"
-    #         )
-    #         _store_batch_results(
-    #             results=[f.result() for f in stored_dev_researcher_futures],
-    #             store_path=this_batch_store_path,
-    #         )
+    # Keep track of duration
+    start_dt = datetime.now()
+    start_dt = start_dt.replace(microsecond=0)
 
-    #     except Exception as e:
-    #         print("Error processing chunk, skipping storage of errors...")
-    #         print(f"Error: {e}")
+    # Load environment variables
+    load_dotenv()
 
-    #     # Always upload the database
-    #     _upload_db(use_prod)
+    # Ignore prefect task introspection warnings
+    os.environ["PREFECT_TASK_INTROSPECTION_WARN_THRESHOLD"] = "0"
 
-    #     # Sleep for a second before next chunk
-    #     time.sleep(1)
+    # Start the flow
+    _grant_mining_flow(
+        source_start_date=source_start_date,
+        source_end_date=source_end_date,
+        use_coiled=use_coiled,
+        batch_size=batch_size,
+        errored_store_path=errored_store_path,
+    )
 
-    # # Cooldown
-    # time.sleep(3)
+    # End duration
+    end_dt = datetime.now()
+    end_dt = end_dt.replace(microsecond=0)
+
+    # Upload latest if prod
+    # upload_rs_graph_data_files()
+
+    # Log time taken
+    print(f"Total Processing Duration: {end_dt - start_dt}")
 
 
 ###############################################################################
