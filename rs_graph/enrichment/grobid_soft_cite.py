@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import os
+import shutil
 import time
+import traceback
 from pathlib import Path
 from typing import Any
-import traceback
-import logging
-import json
-import shutil
 
 import docker
 import requests
-from software_mentions_client.client import software_mentions_client as SoftwareMentionsClient
+from software_mentions_client.client import (
+    software_mentions_client as SoftwareMentionsClient,
+)
 
 from .. import types
 
@@ -31,15 +33,18 @@ DEFAULT_GROBID_CONFIG_PATH = (
 
 ###############################################################################
 
+
 def _get_download_url_from_open_alex(
     doi: str,
 ) -> str | None:
     pass
 
+
 def _get_download_url_from_semantic_scholar(
     doi: str,
 ) -> str | None:
     pass
+
 
 def setup_or_connect_to_server(  # noqa: C901
     image: str | None = None,
@@ -197,7 +202,7 @@ def process_pdf(
             f"Parsing currently only supports single files. "
             f"Provided path is a directory: '{pdf_path}'"
         )
-    
+
     # Temporary output path
     tmp_output_path = "tmp-output.json"
     if Path(tmp_output_path).exists():
@@ -211,7 +216,7 @@ def process_pdf(
     )
 
     # Read the JSON
-    with open(tmp_output_path, "r") as f:
+    with open(tmp_output_path) as f:
         annotations = json.load(f)
 
     # Parse the annotations
@@ -251,7 +256,6 @@ def extract_software_statements_from_articles(
     # document_grant_infos: list[types.DocumentWithGrantInformation],
 ) -> list[types.DocumentGrantSoftwareTriple | types.ErrorResult] | types.ErrorResult:
     try:
-
         print("Copying file")
         # Hardcoded path for now
         with requests.get(
@@ -282,7 +286,7 @@ def extract_software_statements_from_articles(
                 error="Failed to connect to GROBID server.",
                 traceback="",
             )
-        
+
         # Process the PDF
         document_grant_infos = [
             types.DocumentWithGrantInformation(
@@ -308,7 +312,7 @@ def extract_software_statements_from_articles(
         print(results)
 
         print("tearing down server")
-        
+
         # Teardown the server
         teardown_server(container)
 

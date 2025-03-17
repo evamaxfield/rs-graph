@@ -39,6 +39,7 @@ class DocumentWithGrantInformation(DataClassJsonMixin):
     funder: str
     paper_doi: str
 
+
 @dataclass
 class DocumentGrantSoftwareTriple(DataClassJsonMixin):
     grant_id: str
