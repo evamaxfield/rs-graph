@@ -34,6 +34,13 @@ class BasicRepositoryDocumentPair(DataClassJsonMixin):
 
 
 @dataclass
+class DocumentWithGrantInformation(DataClassJsonMixin):
+    grant_id: str
+    funder: str
+    paper_doi: str
+
+
+@dataclass
 class CodeHostResult:
     host: str
     owner: str | None

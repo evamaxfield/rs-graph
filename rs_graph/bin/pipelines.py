@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import coiled
+import distributed
 import pandas as pd
 import typer
 import yaml
@@ -23,7 +24,13 @@ from rs_graph import types
 from rs_graph.bin.data import download as download_rs_graph_data_files
 from rs_graph.bin.data import upload as upload_rs_graph_data_files
 from rs_graph.db import utils as db_utils
-from rs_graph.enrichment import article, entity_matching, github, grant_prediction
+from rs_graph.enrichment import (
+    article,
+    entity_matching,
+    github,
+    grant_prediction,
+    web_of_science,
+)
 from rs_graph.sources import joss, nsf, plos, proto, pwc, softwarex
 from rs_graph.utils import code_host_parsing
 
@@ -68,6 +75,10 @@ def _wrap_func_with_coiled_prefect_task(
         name=func.__name__,
     )
     def wrapped_func(*args, **kwargs):  # type: ignore
+        client = distributed.get_client()
+        print(f"Client: {client}")
+        print(f"Dashboard Link: {client.dashboard_link}")
+        time.sleep(60)
         return func(*args, **kwargs)
 
     return wrapped_func
@@ -207,7 +218,8 @@ def _prelinked_dataset_ingestion_flow(
     gpu_cluster_config = {
         "keepalive": "15m",
         "vm_type": "t4g.medium",
-        "n_workers": [3, 4],
+        "n_workers": [3, 4] if use_coiled else 1,
+        "threads_per_worker": 1,
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
     }
@@ -446,15 +458,126 @@ def get_random_sample_of_prelinked_source_data(
     df.to_csv(outfile_path, index=False)
 
 
+@task
+def _filter_errored_and_non_software_grants(
+    results: list[
+        types.GrantDetailsWithSoftwareProductionPrediction | types.ErrorResult
+    ],
+    outputs_store_path: Path,
+    batch_index: int,
+) -> list[types.GrantDetailsWithSoftwareProductionPrediction]:
+    # Filter out errored results
+    errored_results = [
+        result for result in results if isinstance(result, types.ErrorResult)
+    ]
+
+    # Filter out non-software results
+    non_software_results = [
+        result
+        for result in results
+        if isinstance(result, types.GrantDetailsWithSoftwareProductionPrediction)
+        and result.software_production_prediction == "software-not-produced"
+    ]
+
+    # Create set of software results
+    software_results = [
+        result
+        for result in results
+        if isinstance(result, types.GrantDetailsWithSoftwareProductionPrediction)
+        and result.software_production_prediction != "software-not-produced"
+    ]
+
+    # Store errored results
+    if errored_results:
+        errored_df = pd.DataFrame(errored_results)
+        errored_df.to_parquet(
+            outputs_store_path / f"grant-prediction-errors-{batch_index}.parquet"
+        )
+
+    # Store non-software results
+    if non_software_results:
+        non_software_df = pd.DataFrame(non_software_results)
+        non_software_df.to_parquet(
+            outputs_store_path / f"grant-prediction-non-software-{batch_index}.parquet"
+        )
+
+    # Return only software results
+    return software_results
+
+
+@task
+def _wrapped_get_articles_from_grant_id_funder_task(
+    grant_id: str,
+    funder: str,
+    wos_api_key: str | None = None,
+) -> (
+    list[types.DocumentWithGrantInformation]
+    | web_of_science.NullGrantArticleSearchResult
+    | types.ErrorResult
+):
+    return web_of_science.get_articles_from_grant_id_and_funder(
+        grant_id=grant_id,
+        funder=funder,
+        wos_api_key=wos_api_key,
+    )
+
+
+@task
+def _filter_errored_and_no_article_grant_search(
+    results: list[
+        list[types.DocumentWithGrantInformation]
+        | web_of_science.NullGrantArticleSearchResult
+        | types.ErrorResult
+    ],
+    outputs_store_path: Path,
+    batch_index: int,
+) -> list[types.DocumentWithGrantInformation]:
+    # Filter out errored results
+    errored_results = [
+        result for result in results if isinstance(result, types.ErrorResult)
+    ]
+
+    # Filter out no-article results
+    no_article_results = [
+        result
+        for result in results
+        if isinstance(result, web_of_science.NullGrantArticleSearchResult)
+    ]
+
+    # Create flattened set of article results
+    article_results = [
+        article for result in results if isinstance(result, list) for article in result
+    ]
+
+    # Store errored results
+    if errored_results:
+        errored_df = pd.DataFrame(errored_results)
+        errored_df.to_parquet(
+            outputs_store_path / f"grant-article-search-errors-{batch_index}.parquet"
+        )
+
+    # Store no-article results
+    if no_article_results:
+        no_article_df = pd.DataFrame(no_article_results)
+        no_article_df.to_parquet(
+            outputs_store_path
+            / f"grant-article-search-no-articles-{batch_index}.parquet"
+        )
+
+    # Return only article results
+    return article_results
+
+
 @flow(
     log_prints=True,
 )
 def _grant_mining_flow(
     source_start_date: str,
     source_end_date: str,
+    wos_api_key: str,
     use_coiled: bool,
     batch_size: int,
-    errored_store_path: Path,
+    outputs_store_path: Path,
 ) -> None:
     # Print dataset and coiled status
     print("-" * 80)
@@ -463,32 +586,70 @@ def _grant_mining_flow(
     print(f"Source End Date: {source_end_date}")
     print(f"Use Coiled: {use_coiled}")
     print(f"Batch Size: {batch_size}")
+
+    # Handle additional printing if using coiled
+    # Get AWS_APPLICATION_TAG_KEY_VALUE variable
+    coiled_vm_tags = {}
+    if "AWS_APPLICATION_TAG_KEY_VALUE" in os.environ:
+        aws_application_key_value = os.environ["AWS_APPLICATION_TAG_KEY_VALUE"]
+        coiled_vm_tags["awsApplication"] = aws_application_key_value
+    else:
+        print("WARNING: AWS_APPLICATION_TAG_KEY_VALUE not found in env")
+
+    # Check that AWS_PROFILE is set
+    if "AWS_PROFILE" in os.environ:
+        aws_profile = os.environ["AWS_PROFILE"]
+        print(f"Using AWS_PROFILE: {aws_profile}")
+    else:
+        print("WARNING: AWS_PROFILE not found in env, using default")
+
+    # Close print shop
     print("-" * 80)
 
     # Get basic dataset
-    print("Getting dataset...")
-    grants_dataset = nsf.get_dataset(
-        start_date=source_start_date,
-        end_date=source_end_date,
-    )
+    if Path("debug-grants-dataset.parquet").exists():
+        print("Loading debug grants dataset...")
+        grants_dataset_df = pd.read_parquet("debug-grants-dataset.parquet")
+        grants_dataset = [
+            types.GrantDetails(**row.to_dict())
+            for _, row in grants_dataset_df.iterrows()
+        ]
+    else:
+        print("Getting dataset...")
+        grants_dataset = nsf.get_dataset(
+            start_date=source_start_date,
+            end_date=source_end_date,
+        )
+
+        # Store to dataframe
+        grants_df = pd.DataFrame(grants_dataset)
+        grants_df.to_parquet("debug-grants-dataset.parquet")
+
+    # Print the total number of grants to process
+    print(f"Total Grants to Process: {len(grants_dataset)}")
 
     gpu_cluster_config = {
-        "keepalive": "15m",
-        "vm_type": "t4g.medium",
-        "n_workers": [3, 4] if use_coiled else 1,
-        "spot_policy": "spot_with_fallback",
+        "keepalive": "5m",
+        "vm_type": "g5.xlarge",
+        "n_workers": [1, 3] if use_coiled else 1,
+        "spot_policy": "on-demand",
+        "disk_size": 24,
         "threads_per_worker": 1,
         "local": not use_coiled,
+        "tags": coiled_vm_tags,
     }
 
     # Predict grants based on details in batches
-    print("Predicting grants for software production...")
+    print("Processing Grants...")
     n_batches_for_prediction = math.ceil(len(grants_dataset) / batch_size)
     for i in tqdm(
         range(0, len(grants_dataset), batch_size),
         desc="Batches",
         total=n_batches_for_prediction,
     ):
+        # Calculate batch index
+        batch_index = i // batch_size
+
         # Handle any timeouts and such
         try:
             # Get chunk
@@ -501,24 +662,54 @@ def _grant_mining_flow(
                     coiled_kwargs=gpu_cluster_config,
                 )
             )
-            software_prediction_futures = predict_software_production_wrapped_task.map(
-                grant_details=chunk,
+            mixed_software_prediction_futures = (
+                predict_software_production_wrapped_task.map(
+                    grant_details=chunk,
+                )
+            )
+
+            # Filter out errored results and non-software results
+            software_prediction_futures = _filter_errored_and_non_software_grants(
+                results=mixed_software_prediction_futures,
+                outputs_store_path=outputs_store_path,
+                batch_index=batch_index,
             )
 
             # Store chunk results
             # Update errored store path with batch index
-            this_batch_store_path = errored_store_path.with_name(
-                errored_store_path.stem + f"-{i // batch_size}.parquet"
+            this_batch_store_path = (
+                outputs_store_path / f"grant-prediction-software-{batch_index}.parquet"
             )
-            pd.DataFrame(
-                [f.result().to_dict() for f in software_prediction_futures]
-            ).to_parquet(this_batch_store_path)
-            # _store_batch_results(
-            #     results=[f.result() for f in software_prediction_futures],
-            #     store_path=this_batch_store_path,
-            # )
+            pd.DataFrame([f.to_dict() for f in software_prediction_futures]).to_parquet(
+                this_batch_store_path
+            )
 
-            # # Also store
+            # Get papers from grant
+            retrieved_article_futures = (
+                _wrapped_get_articles_from_grant_id_funder_task.map(
+                    grant_details=unmapped(software_prediction_futures),
+                    funder=unmapped("National Science Foundation (NSF)"),
+                    wos_api_key=unmapped(wos_api_key),
+                )
+            )
+
+            # Filter out errored results and no-article results
+            article_futures = _filter_errored_and_no_article_grant_search(
+                results=retrieved_article_futures,
+                outputs_store_path=outputs_store_path,
+                batch_index=batch_index,
+            )
+
+            # Store chunk results
+            # Update errored store path with batch index
+            this_batch_store_path = (
+                outputs_store_path / f"grant-article-search-{batch_index}.parquet"
+            )
+            pd.DataFrame([f.to_dict() for f in article_futures]).to_parquet(
+                this_batch_store_path
+            )
+            # Print the number of articles retrieved
+            print(f"Total Articles Retrieved: {len(article_futures)}")
 
         except Exception as e:
             print("Error processing chunk, skipping storage of errors...")
@@ -532,22 +723,22 @@ def _grant_mining_flow(
 def grant_to_software_ingestion(
     source_start_date: str,
     source_end_date: str,
-    use_coiled: bool = False,
+    use_coiled: bool = True,
     batch_size: int = 10,
 ) -> None:
     """Mine grants for papers and then mine the papers for software production."""
+    # Create grant-to-software dir
+    grant_to_software_dir = DEFAULT_RESULTS_DIR / "grant-to-software-pipeline"
+
     # Create current datetime without microseconds
     current_datetime = datetime.now().replace(microsecond=0)
     # Convert to isoformat and replace colons with dashes
     current_datetime_str = current_datetime.isoformat().replace(":", "-")
 
     # Create dir for this datetime
-    current_datetime_dir = DEFAULT_RESULTS_DIR / current_datetime_str
+    current_datetime_dir = grant_to_software_dir / current_datetime_str
     # Create "results" dir
     current_datetime_dir.mkdir(exist_ok=True, parents=True)
-    errored_store_path = (
-        current_datetime_dir / "process-results-nsf-grant-mining-errored.parquet"
-    )
 
     # Download latest if prod
     # print("Downloading latest data files...")
@@ -563,13 +754,20 @@ def grant_to_software_ingestion(
     # Ignore prefect task introspection warnings
     os.environ["PREFECT_TASK_INTROSPECTION_WARN_THRESHOLD"] = "0"
 
+    # Load WoS API key
+    try:
+        os.environ["WOS_API_KEY"]
+    except KeyError as e:
+        raise KeyError("Please set the WOS_API_KEY environment variable.") from e
+
     # Start the flow
     _grant_mining_flow(
         source_start_date=source_start_date,
         source_end_date=source_end_date,
+        wos_api_key=os.environ["WOS_API_KEY"],
         use_coiled=use_coiled,
         batch_size=batch_size,
-        errored_store_path=errored_store_path,
+        outputs_store_path=current_datetime_dir,
     )
 
     # End duration
