@@ -62,11 +62,9 @@ modeling = [
 ]
 data = [
   "dataclasses-json>=0.6,<0.7",
-  "dvuploader @ git+https://github.com/evamaxfield/python-dvuploader.git",
-  "easyDataverse>=0.4,<0.5",
   "python-dotenv>=1,<2",
   "tqdm>=4,<5",
-  "typer>=0.12",
+  "typer>=0.9",
 ]
 pipeline = [
   "allofplos>=1,<2",
@@ -74,6 +72,7 @@ pipeline = [
   "bokeh>=3,<4",
   "coiled>=1,<2",
   "dataclasses-json>=0.6,<0.7",
+  "docker>=7,<8",
   "gcsfs>=2023.10.0",
   "ghapi>=1,<2",
   "gh-tokens-loader>=0.1,<0.2",
@@ -90,6 +89,7 @@ pipeline = [
   "requests>=2,<3",
   "sci-soft-models @ git+https://github.com/evamaxfield/sci-soft-models.git@6fda320",
   "semanticscholar>=0.9,<0.11",
+  "software_mentions_client>=0.1,<0.2",
   "tqdm>=4,<5",
   "typer>=0.12",
 ]

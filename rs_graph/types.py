@@ -39,6 +39,18 @@ class DocumentWithGrantInformation(DataClassJsonMixin):
     funder: str
     paper_doi: str
 
+@dataclass
+class DocumentGrantSoftwareTriple(DataClassJsonMixin):
+    grant_id: str
+    funder: str
+    paper_doi: str
+    software_statement: str | None = None
+    software_statement_type: str | None = None
+    software_statement_confidence: float | None = None
+    software_name_raw: str | None = None
+    software_name_normalized: str | None = None
+    software_url: str | None = None
+
 
 @dataclass
 class CodeHostResult:

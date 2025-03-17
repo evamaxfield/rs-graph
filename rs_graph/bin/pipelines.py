@@ -507,7 +507,7 @@ def _filter_errored_and_non_software_grants(
 
 @task
 def _wrapped_get_articles_from_grant_id_funder_task(
-    grant_id: str,
+    software_prediction_result: types.GrantDetailsWithSoftwareProductionPrediction,
     funder: str,
     wos_api_key: str | None = None,
 ) -> (
@@ -516,7 +516,7 @@ def _wrapped_get_articles_from_grant_id_funder_task(
     | types.ErrorResult
 ):
     return web_of_science.get_articles_from_grant_id_and_funder(
-        grant_id=grant_id,
+        grant_id=software_prediction_result.grant_id,
         funder=funder,
         wos_api_key=wos_api_key,
     )
@@ -631,7 +631,7 @@ def _grant_mining_flow(
     gpu_cluster_config = {
         "keepalive": "5m",
         "vm_type": "g5.xlarge",
-        "n_workers": [1, 3] if use_coiled else 1,
+        "n_workers": [3, 3] if use_coiled else 1,
         "spot_policy": "on-demand",
         "disk_size": 24,
         "threads_per_worker": 1,
@@ -641,79 +641,85 @@ def _grant_mining_flow(
 
     # Predict grants based on details in batches
     print("Processing Grants...")
-    n_batches_for_prediction = math.ceil(len(grants_dataset) / batch_size)
-    for i in tqdm(
-        range(0, len(grants_dataset), batch_size),
-        desc="Batches",
-        total=n_batches_for_prediction,
-    ):
-        # Calculate batch index
-        batch_index = i // batch_size
+    # n_batches_for_prediction = math.ceil(len(grants_dataset) / batch_size)
+    # for i in tqdm(
+    #     range(0, len(grants_dataset), batch_size),
+    #     desc="Batches",
+    #     total=n_batches_for_prediction,
+    # ):
+    #     # Calculate batch index
+    #     batch_index = i // batch_size
 
-        # Handle any timeouts and such
-        try:
-            # Get chunk
-            chunk = grants_dataset[i : i + batch_size]
+    #     # Handle any timeouts and such
+    #     try:
+    #         # Get chunk
+    #         chunk = grants_dataset[i : i + batch_size]
 
-            # Predict software production
-            predict_software_production_wrapped_task = (
-                _wrap_func_with_coiled_prefect_task(
-                    grant_prediction.predict_software_production_from_grant,
-                    coiled_kwargs=gpu_cluster_config,
-                )
-            )
-            mixed_software_prediction_futures = (
-                predict_software_production_wrapped_task.map(
-                    grant_details=chunk,
-                )
-            )
+    #         # Predict software production
+    #         predict_software_production_wrapped_task = (
+    #             _wrap_func_with_coiled_prefect_task(
+    #                 grant_prediction.predict_software_production_from_grant,
+    #                 coiled_kwargs=gpu_cluster_config,
+    #             )
+    #         )
+    #         mixed_software_prediction_futures = (
+    #             predict_software_production_wrapped_task.map(
+    #                 grant_details=chunk,
+    #             )
+    #         )
 
-            # Filter out errored results and non-software results
-            software_prediction_futures = _filter_errored_and_non_software_grants(
-                results=mixed_software_prediction_futures,
-                outputs_store_path=outputs_store_path,
-                batch_index=batch_index,
-            )
+    #         # Filter out errored results and non-software results
+    #         software_prediction_futures = _filter_errored_and_non_software_grants(
+    #             results=mixed_software_prediction_futures,
+    #             outputs_store_path=outputs_store_path,
+    #             batch_index=batch_index,
+    #         )
 
-            # Store chunk results
-            # Update errored store path with batch index
-            this_batch_store_path = (
-                outputs_store_path / f"grant-prediction-software-{batch_index}.parquet"
-            )
-            pd.DataFrame([f.to_dict() for f in software_prediction_futures]).to_parquet(
-                this_batch_store_path
-            )
+    #         # Store chunk results
+    #         # Update errored store path with batch index
+    #         this_batch_store_path = (
+    #             outputs_store_path / f"grant-prediction-software-{batch_index}.parquet"
+    #         )
+    #         pd.DataFrame([f.to_dict() for f in software_prediction_futures]).to_parquet(
+    #             this_batch_store_path
+    #         )
 
-            # Get papers from grant
-            retrieved_article_futures = (
-                _wrapped_get_articles_from_grant_id_funder_task.map(
-                    grant_details=unmapped(software_prediction_futures),
-                    funder=unmapped("National Science Foundation (NSF)"),
-                    wos_api_key=unmapped(wos_api_key),
-                )
-            )
+    #         # Get papers from grant
+    #         retrieved_article_futures = (
+    #             _wrapped_get_articles_from_grant_id_funder_task.map(
+    #                 software_prediction_result=software_prediction_futures,
+    #                 funder=unmapped("National Science Foundation (NSF)"),
+    #                 wos_api_key=unmapped(wos_api_key),
+    #             )
+    #         )
 
-            # Filter out errored results and no-article results
-            article_futures = _filter_errored_and_no_article_grant_search(
-                results=retrieved_article_futures,
-                outputs_store_path=outputs_store_path,
-                batch_index=batch_index,
-            )
+    #         # Filter out errored results and no-article results
+    #         article_futures = _filter_errored_and_no_article_grant_search(
+    #             results=retrieved_article_futures,
+    #             outputs_store_path=outputs_store_path,
+    #             batch_index=batch_index,
+    #         )
 
-            # Store chunk results
-            # Update errored store path with batch index
-            this_batch_store_path = (
-                outputs_store_path / f"grant-article-search-{batch_index}.parquet"
-            )
-            pd.DataFrame([f.to_dict() for f in article_futures]).to_parquet(
-                this_batch_store_path
-            )
-            # Print the number of articles retrieved
-            print(f"Total Articles Retrieved: {len(article_futures)}")
+    #         # Store chunk results
+    #         # Update errored store path with batch index
+    #         this_batch_store_path = (
+    #             outputs_store_path / f"grant-article-search-{batch_index}.parquet"
+    #         )
+    #         pd.DataFrame([f.to_dict() for f in article_futures]).to_parquet(
+    #             this_batch_store_path
+    #         )
+    #         # Print the number of articles retrieved
+    #         print(f"Total Articles Retrieved: {len(article_futures)}")
 
-        except Exception as e:
-            print("Error processing chunk, skipping storage of errors...")
-            print(f"Error: {e}")
+            # TODO: add DOI resolution here?
+
+        # GROBID Extract Software
+        
+
+
+        # except Exception as e:
+        #     print("Error processing chunk, skipping storage of errors...")
+        #     print(f"Error: {e}")
 
         # Sleep for a second before next chunk
         time.sleep(1)
@@ -724,7 +730,7 @@ def grant_to_software_ingestion(
     source_start_date: str,
     source_end_date: str,
     use_coiled: bool = True,
-    batch_size: int = 10,
+    batch_size: int = 6,
 ) -> None:
     """Mine grants for papers and then mine the papers for software production."""
     # Create grant-to-software dir

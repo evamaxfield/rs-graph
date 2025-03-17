@@ -1,0 +1,17 @@
+{
+    "software_mention_url": "http://localhost:8060",
+    "data_path": "./data/",
+    "batch_size": 50,
+    "sleep_time": 1,
+    "concurrency": 4,
+    "timeout": 600,
+    "log_file": "client.log",
+    "log_level": "INFO",
+    "biblio_glutton_url": "",
+    "crossref_base": "https://api.crossref.org",
+    "crossref_email": "",
+    "aws_access_key_id": "",
+    "aws_secret_access_key": "",
+    "bucket_name": "",
+    "region": ""
+}

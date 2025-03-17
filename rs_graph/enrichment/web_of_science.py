@@ -156,7 +156,7 @@ def get_articles_from_grant_id_and_funder(
             raise ValueError("WOS_API_KEY environment variable not set")
 
     # Sleep for a bit to avoid hitting the API rate limit
-    time.sleep(0.65)
+    time.sleep(0.8)
 
     # Call the function with backoff for retries
     return _get_articles_from_grant_id_and_funder(
