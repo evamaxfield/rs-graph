@@ -127,13 +127,13 @@ db-upgrade target="dev":
 ###############################################################################
 # Docker management
 
-# build docker image locally
-docker-build:
-	docker build --tag rs-graph {{justfile_directory()}}
+# build grobid soft cite image
+docker-build-grobid-softcite tag="latest":
+	docker build -t evamaxfield/grobid-soft-cite:{{tag}} -f {{justfile_directory()}}/Dockerfile.softcite .
 
-# run docker in interactive mode with bash
-docker-run:
-	docker run --rm -it rs-graph bash
+# push docker image to dockerhub
+docker-push-grobid-softcite tag="latest":
+	docker push evamaxfield/grobid-soft-cite:{{tag}}
 
 ###############################################################################
 # Publications management

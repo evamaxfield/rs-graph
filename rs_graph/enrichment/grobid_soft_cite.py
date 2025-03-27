@@ -13,9 +13,7 @@ from typing import Any
 
 import docker
 import requests
-from software_mentions_client.client import (
-    software_mentions_client as SoftwareMentionsClient,
-)
+from software_mentions_client.client import software_mentions_client
 
 from .. import types
 
@@ -25,7 +23,7 @@ log = logging.getLogger(__name__)
 
 ###############################################################################
 
-DEFAULT_GROBID_IMAGE = "grobid/software-mentions:0.8.0"
+DEFAULT_GROBID_IMAGE = "grobid/software-mentions:0.8.1"
 DEFAULT_GROBID_PORT = 8060
 DEFAULT_GROBID_CONFIG_PATH = (
     Path(__file__).parent / "support" / "grobid-soft-cite-config.json"
@@ -46,10 +44,10 @@ def _get_download_url_from_semantic_scholar(
     pass
 
 
-def setup_or_connect_to_server(  # noqa: C901
+def setup_or_connect_to_server(
     image: str | None = None,
     port: int | None = None,
-) -> tuple[SoftwareMentionsClient | None, docker.models.containers.Container]:
+) -> tuple[software_mentions_client | None, docker.models.containers.Container]:
     """
     Set up or create a connection to a GROBID server.
 
@@ -90,6 +88,8 @@ def setup_or_connect_to_server(  # noqa: C901
     # Connect to Docker client
     docker_client = docker.from_env()
 
+    print("before pull or start")
+
     # Check if the image is already downloaded
     try:
         docker_client.images.get(image)
@@ -98,10 +98,12 @@ def setup_or_connect_to_server(  # noqa: C901
             f"Pulling GROBID image: '{image}' "
             f"(this will only happen the first time you run Papers without Code)."
         )
+        print("pulling docker image")
         docker_client.images.pull(image)
 
     # Check for already running image
     # Connect or start again
+    print("starting grobid container")
     found_running_grobid_image = False
     for container in docker_client.containers.list():
         if container.image.tags[0] == DEFAULT_GROBID_IMAGE:
@@ -122,32 +124,47 @@ def setup_or_connect_to_server(  # noqa: C901
     if not found_running_grobid_image:
         log.info("Setting up PDF parsing server.")
         log.debug(f"Using GROBID image: '{image}'.")
+        print("starting container")
         container = docker_client.containers.run(
             image,
             ports={"8060/tcp": port},
             detach=True,
+            # TODO: handle device
+            # device_requests=[
+            # ]
         )
         log.debug(f"Started GROBID container: '{container.short_id}'.")
         time.sleep(5)
 
     # Attempt to connect with client
-    try:
-        # Make request to check the server is alive
-        server_url = f"http://127.0.0.1:{port}"
-        response = requests.get(f"{server_url}/api/isalive")
-        response.raise_for_status()
-        log.debug(f"GROBID API available at: '{server_url}'.")
+    # try:
+    # Make request to check the server is alive
+    server_url = f"http://127.0.0.1:{port}"
+    print("checking server")
+    response = requests.get(f"{server_url}/service/isalive")
+    print("response from server")
+    print(response)
+    response.raise_for_status()
+    log.debug(f"GROBID API available at: '{server_url}'.")
+    print("GROBID API Available")
 
-        # Create a GROBID Client
-        software_mentions_client = SoftwareMentionsClient(
-            config_path=str(DEFAULT_GROBID_CONFIG_PATH),
-        )
+    # Load config and create data path
+    with open(DEFAULT_GROBID_CONFIG_PATH) as f:
+        mentions_client_config = json.load(f)
+        Path(mentions_client_config["data_path"]).mkdir(parents=True, exist_ok=True)
 
-        return software_mentions_client, container
+    # Create a GROBID Client
+    mentions_client = software_mentions_client(
+        config_path=str(DEFAULT_GROBID_CONFIG_PATH),
+    )
 
-    except Exception as e:
-        log.error(f"Failed to connect to GROBID server, error: '{e}'.")
-        return None, container
+    print("software mentions client created")
+
+    return mentions_client, container
+
+    # except Exception as e:
+    #     log.error(f"Failed to connect to GROBID server, error: '{e}'.")
+    #     return None, container
 
 
 def teardown_server(
@@ -168,7 +185,7 @@ def teardown_server(
 
 
 def process_pdf(
-    client: SoftwareMentionsClient,
+    client: software_mentions_client,
     document_grant_info: types.DocumentWithGrantInformation,
     pdf_path: str,
 ) -> dict[str, Any]:
@@ -179,6 +196,8 @@ def process_pdf(
     ----------
     client: GrobidClient
         A GROBID client to use for processing.
+    document_grant_info: DocumentWithGrantInformation
+        Information about the document and its associated grant.
     pdf_path: str
         The path to the local PDF file to process.
 
@@ -210,7 +229,7 @@ def process_pdf(
 
     # Annotate PDF
     client.annotate(
-        file_in=pdf_path,
+        file_in=str(pdf_path),
         file_out=tmp_output_path,
         full_record=None,
     )
@@ -274,11 +293,13 @@ def extract_software_statements_from_articles(
         print("setting up server")
 
         # Setup GROBID server
-        grobid_client, container = setup_or_connect_to_server(
+        mentions_client, container = setup_or_connect_to_server(
             image=DEFAULT_GROBID_IMAGE,
             port=DEFAULT_GROBID_PORT,
         )
-        if grobid_client is None:
+        print("post grobid client")
+        if mentions_client is None:
+            print("within error")
             return types.ErrorResult(
                 source="grobid_soft_cite",
                 step="setup-or-connect-to-server",
@@ -300,7 +321,7 @@ def extract_software_statements_from_articles(
             print("processing pdf")
 
             result = process_pdf(
-                client=grobid_client,
+                client=mentions_client,
                 document_grant_info=document_grant_info,
                 pdf_path="temp-local-path.pdf",
             )

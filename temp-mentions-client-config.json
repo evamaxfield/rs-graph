@@ -1,5 +1,5 @@
 {
-    "software_mention_url": "http://localhost:8060",
+    "software_mention_url": "http://35.92.154.28:8060/",
     "data_path": "./grobid-soft-cite-data/",
     "batch_size": 50,
     "sleep_time": 1,

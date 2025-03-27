@@ -1,0 +1,9 @@
+modelPreload: true
+useBinaryContextClassifiers: true
+
+models:
+  - name: "software"
+    engine: "delft"
+    delft:  
+      architecture: "BERT_CRF"
+      transformer: "allenai/scibert_scivocab_cased"

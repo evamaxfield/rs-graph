@@ -1,0 +1,14 @@
+FROM grobid/software-mentions:0.8.1
+
+COPY grobid-config.yml grobid/grobid-home/config/grobid.yaml
+    
+CMD ["sh", "-c", "java --add-opens java.base/java.lang=ALL-UNNAMED -jar build/libs/software-mentions-0.8.0-onejar.jar server resources/config/config.yml"]
+
+ARG GROBID_VERSION
+
+LABEL \
+    authors="The contributors" \
+    org.label-schema.name="software-mentions" \
+    org.label-schema.description="Image with software-mentions service" \
+    org.label-schema.url="https://github.com/softcite/software-mentions" \
+    org.label-schema.version=${GROBID_VERSION}    

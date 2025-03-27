@@ -157,3 +157,4 @@ scratch.py
 dev-author-em-clf
 all-model-results.csv
 random-sample-prelinked-sources.csv
+grobid-soft-cite-data/
