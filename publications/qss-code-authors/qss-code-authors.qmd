@@ -9,9 +9,7 @@ authors:
     attributes:
         corresponding: true
   - name: "Isaac Slaughter"
-    affiliations:
-      - ref: 1
-  - name: "Shahan Ali Memon"
+    orcid: 0000-0002-1911-2374
     affiliations:
       - ref: 1
   - name: "Nicholas Weber"
@@ -51,7 +49,7 @@ format:
       echo: false
       warning: false
 
-  arxiv-pdf:
+  pdf:
     toc: false
     execute:
       echo: false
@@ -73,10 +71,10 @@ format:
       - at: pre-quarto
         path: _extensions/andrewheiss/wordcount/wordcount.lua
 
-    # ArXiv template custom
-    linenumbers: true
-    authorcols: true
-    runninghead: "Code Contribution and Scientific Authorship"
+    # # ArXiv template custom
+    # linenumbers: true
+    # authorcols: true
+    # runninghead: "Code Contribution and Scientific Authorship"
 
 ---
 
@@ -423,9 +421,13 @@ The scientific community has attempted to address this recognition gap through v
 
 The emergence of public code repositories alongside published research presents an opportunity to address this problem. Source code repositories typically employ version control systems that maintain records of who contributes what code and when, providing a window into the patterns of software development in scientific research. Using the transaction histories from source code repositories, we developed a predictive model that enables systematic matching between scientific article authors and source code developer accounts - creating a dataset that connects formal authorship with code contributions across a corpus of scientific work.
 
-By applying our predictive model across `{python} len(doc_repo_links)` paired research articles and repositories, we identify several patterns in the relationship between code contributions and scientific recognition. Our analysis reveals that nearly 30% of articles have non-author code-contributors - individuals who helped create the software but received no formal authorship credit. We find that code-contributing authors are associated with modest increases in article-level impact metrics (~5.2% increase in citations per code-contributing author), though these effects become statistically non-significant when controlling for domain, article type, and open access status. First authors emerge as significantly more likely to be code contributors compared to other positions across all conditions tested. We also document a negative relationship between coding frequency and scholarly impact: authors who contribute code more frequently show progressively lower h-indices compared to their non-coding peers, a pattern that persists when controlling for publication count, and author's most common author position, domain, and article type.
+By applying our predictive model across almost 140,000 paired research articles and repositories, we identify several patterns in the relationship between code contributions and scientific recognition. Our analysis reveals that nearly 30% of articles have non-author code-contributors - individuals who helped create the software but received no formal authorship credit. We find that code-contributing authors are associated with modest increases in article-level impact metrics (~5.2% increase in citations per code-contributing author), though these effects become statistically non-significant when controlling for domain, article type, and open access status. First authors emerge as significantly more likely to be code contributors compared to other positions across all conditions tested. We also document a negative relationship between coding frequency and scholarly impact: authors who contribute code more frequently show progressively lower h-indices compared to their non-coding peers, a pattern that persists when controlling for publication count, and author's most common author position, domain, and article type.
 
-The primary contributions of this article are: (1) a predictive model for matching authors with developer account information that addresses challenges in identity resolution across platforms; (2) a dataset of linked authors and developers for `{python} len(doc_repo_links)` article-repository pairs, providing a resource for analyzing scientific software development patterns; and (3) preliminary analyses that reveal insights into the software development dynamics of research teams, including patterns of recognition, impact, and career implications for code contributors. These contributions provide evidence for the ongoing discussions about scientific recognition systems and raise questions about aligning institutional incentives with the spectrum of contributions that drive modern scientific progress.
+The primary contributions of this article are: (1) a predictive model for matching authors with developer account information that addresses challenges in identity resolution across platforms[^1]; (2) a dataset of linked authors and developers for ~140,000 article-repository pairs, providing a resource for analyzing scientific software development patterns[^2]; and (3) preliminary analyses that reveal insights into the software development dynamics of research teams, including patterns of recognition, impact, and career implications for code contributors. These contributions provide evidence for the ongoing discussions about scientific recognition systems and raise questions about aligning institutional incentives with the spectrum of contributions that drive modern scientific progress.
+
+[^1]: Our predictive model is made available via Huggingface at [https://huggingface.co/evamxb/dev-author-em-clf](https://huggingface.co/evamxb/dev-author-em-clf) or via our Python package, sci-soft-models ([https://github.com/evamaxfield/sci-soft-models/](https://github.com/evamaxfield/sci-soft-models/)).
+
+[^2]: Our dataset is made available via Harvard Dataverse at [https://doi.org/10.7910/DVN/KPYVI1](https://doi.org/10.7910/DVN/KPYVI1). Portions of the dataset are restricted to keep researcher and developer information private. The full dataset is available upon request via the Harvard Dataverse. For details on how to interact with this dataset, see our documentation at [https://github.com/evamaxfield/rs-graph](https://github.com/evamaxfield/rs-graph).
 
 The remainder of this paper proceeds as follows. We first provide relevant background on scientific software development and recognition, introducing the specific hypotheses that guide our investigation. Next, we detail our data and methods, describing how we created a dataset of linked article-repository pairs, trained and evaluated our predictive model for entity matching, and applied our model across each article-repository pair. We then present our preliminary analysis of the data, focusing first on article/team-level dynamics before moving to individual-level patterns, formally accepting or rejecting each hypothesis based on our findings. We conclude with a discussion of the results, limitations of our work, and areas for future improvement.
 
@@ -439,7 +441,7 @@ The computational evolution in scientific practice intersects with established f
 
 The unique characteristics of scientific software development - including the implementation of novel algorithms, requirements for deep domain knowledge, and an increased emphasis on reproducibility [@muna2016astropyproblem; @Howison2013IncentivesAI] - make team composition especially relevant. Larger development teams may enhance scientific impact through multiple mechanisms: they can produce more robust and generalizable software tools for methodological contributions, while also enabling more sophisticated computational analyses and larger-scale data processing for experimental work. Given these patterns in team dynamics, software development practices, and the computational transformation of scientific work, we propose:
 
-**H1: The number of code contributors to a research article will be positively associated with the article's citation count.**
+_H1: The number of individuals contributing code to a publication's associated repository is positively correlated with the article's citation count._
 
 ## Author Roles and Technical Contributions
 
@@ -447,9 +449,9 @@ Author positions in scientific publications signal specific roles and responsibi
 
 Source code repository contribution records provide a unique method to verify these established patterns of contribution. Given prior findings about the distribution of technical responsibilities within research teams, we expect these repository records to reflect similar patterns of engagement with software development:
 
-**H2a: First authors have higher rates of code contribution compared to authors in other positions.**
+_H2a: First authors have higher rates of code contribution compared to authors in other positions._
 
-**H2b: Corresponding authors have higher rates of code contribution compared to non-corresponding authors.**
+_H2b: Corresponding authors have higher rates of code contribution compared to non-corresponding authors._
 
 ## Code Contribution and Individual Scientific Impact
 
@@ -459,13 +461,13 @@ The challenge of recognition is compounded by inconsistent practices in software
 
 These structural challenges in how software contributions are recognized and cited suggest a potential misalignment between technical contributions and traditional scientific impact metrics. When researchers dedicate significant time to software development and maintenance, their contributions may not be fully captured by conventional bibliometric measures, regardless of the software's importance to the field. Whether through attribution practices that favor acknowledgments over authorship, or citation patterns that undervalue maintenance work, multiple mechanisms could lead to lower traditional impact metrics for active code contributors. Based on these patterns in software recognition and citation, we hypothesize:
 
-**H3: The frequency of a researcher's code contributions will be negatively associated with their h-index.**
+_H3: The frequency at which a researcher contributes code to their research projects is negatively correlated with their h-index._
 
 # Data and Methods
 
 ## Linking Scientific Articles and Source Code Repositories
 
-Modern scientific research increasingly requires the public sharing of research code, creating unique opportunities to study the relationship between scientific authorship and software development. Many journals and platforms now require or recommend code and data sharing [@stodden2013toward; @sharma2024analytical], creating traceable links between publications and code that enable systematic study of both article-repository and author-developer relationships [@Hata2021ScienceSoftwareLT; @Kelley2021AFF; @Stankovski2024RepoFromPaperAA; @milewicz2019characterizing].
+Modern scientific research increasingly requires the public sharing of research code, creating unique opportunities to study the relationship between scientific authorship and software development. Prior work in creating large linked datasets of article and repositorie pairs have utilized heuristics to mine GitHub repository README files for references to scientific publications [@WATTANAKRIENGKRAI2022111117]. Mining for publication references has problems however: there isn't a guarantee that the article-repositorie pairs are the same work or project. However, many journals and platforms now require or recommend code and data sharing [@stodden2013toward; @sharma2024analytical], creating traceable links between publications and code that enable systematic study of both article-repository and author-developer relationships [@Hata2021ScienceSoftwareLT; @Kelley2021AFF; @Stankovski2024RepoFromPaperAA; @milewicz2019characterizing].
 
 Our data collection process leverages multiple sources of linked scientific articles and code repositories to ensure broad coverage of multiple different domains and article types. Our dataset combines article-source-code-repository pairs from:
 
@@ -475,17 +477,9 @@ Our data collection process leverages multiple sources of linked scientific arti
 
 To reduce the complexity of dataset processing and enrichment, we filter out any article-source-code-repository pairs which store code somewhere other than GitHub. While this decision prioritizes processing simplicity, we acknowledge that while GitHub is the predominate host of scientific software [@Cao2023TheRO; @escamilla2022riseofgithub], it is also stored and shared on other platforms, which should be investigated as a part of future research [@trujillo2022penumbra].
 
-Through integration of multiple data sources, we extract detailed information about both the scientific and software development aspects of each project. We utilize the Semantic Scholar API for DOI resolution to ensure that we find the latest version of each article, which is particularly important for working with preprints as they may have been published in a journal since their inclusion in the Papers with Code dataset. We then utilize the OpenAlex API to gather publication metadata (open access status, domain, publication date), author details (name, author position, corresponding author status), and article- and individual-level metrics (citation counts, FWCI, h-index). The GitHub API provides similar information for source code repositories, including repository metadata (name, description, languages, creation date), contributor details (username, name, email), and repository-level metrics (star count, fork count, issue count).
+Through integration of multiple data sources, we extract detailed information about both the scientific and software development aspects of each project. We utilize the Semantic Scholar API for DOI resolution to ensure that we find the latest version of each article. This is particularly important for working with preprints as they may have been published in a journal since their inclusion in the Papers with Code dataset. Using Semantic Scholar, we resolve `{python} round(overall_doi_resolution * 100, 1)`% of all DOIs within our dataset[^3]. We then utilize the OpenAlex API to gather publication metadata (open access status, domain, publication date), author details (name, author position, corresponding author status), and article- and individual-level metrics (citation counts, FWCI, h-index). The GitHub API provides similar information for source code repositories, including repository metadata (name, description, languages, creation date), contributor details (username, name, email), and repository-level metrics (star count, fork count, issue count).
 
-Semantic Scholar DOI Resolution Statistics:
-
-- Overall DOI resolution rate: `{python} round(overall_doi_resolution * 100, 1)`%
-- PLOS DOI resolution rate: `{python} round(per_dataset_doi_resolution["plos"] * 100, 1)`%
-- JOSS DOI resolution rate: `{python} round(per_dataset_doi_resolution["joss"] * 100, 1)`%
-- SoftwareX DOI resolution rate: `{python} round(per_dataset_doi_resolution["softwarex"] * 100, 1)`%
-- Papers with Code DOI resolution rate: `{python} round(per_dataset_doi_resolution["pwc"] * 100, 1)`%
-
-Taken together, we form one of the largest and most comprehensively annotated collections of paired scientific articles and associated source-code repositories. In total, we collect and enrich data for `{python} original_doc_repo_links_len` article-repository pairs.
+[^3]: Broken out by dataset source, we resolve `{python} round(per_dataset_doi_resolution["plos"] * 100, 1)`% of all PLOS DOIs, `{python} round(per_dataset_doi_resolution["joss"] * 100, 1)`% of all JOSS DOIs, `{python} round(per_dataset_doi_resolution["softwarex"] * 100, 1)`% of all SoftwareX DOIs, and `{python} round(per_dataset_doi_resolution["pwc"] * 100, 1)`% of all Papers with Code (arXiv) DOIs.
 
 ## A Predictive Model for Matching Article Authors and Source Code Contributors
 
@@ -700,7 +694,9 @@ Our trained entity-matching model enables comprehensive identification of author
 
 While our model demonstrates strong performance, we acknowledge certain limitations in our approach. Notably, the model's performance can be affected by shorter names (both usernames and display names) where less textual information is available for matching. Additionally, while organization accounts (such as research lab accounts used for project management) present a potential challenge for accurate matching, our filtering mechanisms applied before analysis help minimize their impact in modeling.
 
-The resulting dataset represents, to our knowledge, the first large-scale collection of linked article-repository and author-developer-account pairs, particularly in the physical sciences. Specifically, our dataset contains `{python} total_article_repo_pairs` article-repository pairs, with `{python} total_authors` distinct authors and `{python} total_devs` distinct developer accounts. From these distinct entities, we identify `{python} len(researcher_dev_links)` annotated author-developer pairs. A detailed breakdown of these counts by data source, domain, document type, and open access status is available in @tbl-rs-graph-overall-counts.
+The resulting dataset represents, to our knowledge, the first large-scale collection of linked article-repository and author-developer-account pairs, particularly in the physical sciences. Specifically, our dataset contains almost 140,000 article-repository pairs, with nearly 300,000 distinct authors and more than 150,000 distinct developer accounts. From these distinct entities, we identify almost 110,000 author-developer relationships. A detailed breakdown of these counts by data source, domain, document type, and open access status is available in @tbl-rs-graph-overall-counts.
+
+Our compiled dataset is made available via Harvard Dataverse at [https://doi.org/10.7910/DVN/KPYVI1](https://doi.org/10.7910/DVN/KPYVI1). Portions of the dataset are restricted to keep researcher and developer information private. The full dataset is available upon request via the Harvard Dataverse. For details on how to interact with this dataset, see our documentation at [https://github.com/evamaxfield/rs-graph](https://github.com/evamaxfield/rs-graph).
 
 ::: {.content-visible when-format="html"}
 
@@ -1188,7 +1184,7 @@ mean_non_author_devs_for_papers_w_non_auth_devs = metric_str_fmt.format(
 )
 ```
 
-Understanding the composition and dynamics of software development teams provides essential context for analyzing how code contributions relate to scientific recognition and impact. To ensure reliable analysis, we focus on a subset of our data that includes only article-repository pairs with at least one article citation, repository commit activity that at the latest falls within 90 days of publication, and research teams of typical size (removing those with fewer than 3 authors and less than `{python} int(n_authors_97th_percentile)` authors, the 97th percentile for research team size). In addition, we filter out any author-developer pairs which have a predictive model confidence of less than 0.97.
+Understanding the composition and dynamics of software development teams provides essential context for analyzing how code contributions relate to scientific recognition and impact. To ensure reliable analysis, we focus on a subset of our article-repository pairs that meet several filtering conditions. First, we require that each article-repository pair must have at least one article citation, which helps ensure the research has received some minimal level of engagement from the scientific community. Next, we require that repository commit activity must stop prior to 90 days past the date of article publication. This ensures we aren't including projects which may add additional code contributors later, while allowing a grace period in which repositories are updated with additional documentation and publication information. We then subset the data to only include article-repository pairs with research teams of typical size by removing those with fewer than 3 authors and more than `{python} int(n_authors_97th_percentile)` authors, the 97th percentile for research team size. Finally, we filter out any author-developer pairs associated with these projects which have a predictive model confidence of less than 0.97 to ensure that we are only including high-confidence matches (TODO: add footnote reference to appendix plot). This filtering process results in a dataset of `{python} len(team_comp_no_push_after_pub)` article-repository pairs.
 
 Within this filtered dataset, we categorized individuals into three groups: code-contributing authors (CC-A) who both authored papers and contributed code to associated repositories, non-code-contributing authors (NCC-A) who authored papers but showed no evidence of code contributions, and code-contributing non-authors (CC-NA) who contributed code but received no authorship recognition. This categorization revealed that papers in our dataset typically have `{python} total_auths` total authors, with `{python} total_auth_devs` code-contributing authors and `{python} total_auth_non_devs` non-code-contributing authors. Beyond the author list, papers averaged `{python} total_non_auth_devs` code-contributing non-authors. @tbl-team-composition-counts provides a detailed breakdown of these distributions by domain, article type, and open access status.
 
@@ -1565,11 +1561,11 @@ IPython.display.Latex(count_table_latex)
 
 :::
 
-When examining these patterns over time and across different team sizes (@fig-contributor-type-by-time-and-size), we found that both the number of code-contributing authors and unrecognized contributors has remained relatively stable. This stability suggests that while the exclusion of code contributors from authorship isn't worsening, it represents a persistent feature of scientific software development rather than a historical artifact or transition period in research practices.
+When examining these patterns over time and across different team sizes (@fig-contributor-type-by-time-and-size), we found that both the number of code-contributing authors and unrecognized contributors has remained relatively stable. This stability over time suggests that while the exclusion of code contributors from authorship isn't worsening, it represents a persistent feature of scientific software development rather than a historical artifact or transition period in research practices. Similarly, the number of code-contributing non-authors remains constant even as team size grows, indicating that larger research teams do not necessarily adopt more inclusive authorship practices for code contributors, despite representing broader collaborative efforts.
 
 ```{python}
 #| label: fig-contributor-type-by-time-and-size
-#| fig-cap: "Mean number of Non-Code-Contributing Authors, Code-Contributing Authors, and Code-Contributing Non-Authors by Publication Year and by Total Number of Authors. Only includes article-repository pairs with a most recent commit no later than 90 days after publication and excludes research-teams which are in the top 3% of total author sizes for publication years with 50 or more articles."
+#| fig-cap: "Average number of contributors per article, by contribution type along with A) the year the article was published, and B) the total number of authors included on the article. Only includes article-repository pairs with a most recent commit no later than 90 days after publication and excludes research-teams which are in the top 3% of total author sizes for publication years with 50 or more articles. Shaded areas show the 95% confidence interval for the mean."
 
 # Make a copy for team size comparison
 team_comp_by_year_and_size = team_comp_no_push_after_pub.copy()
@@ -1646,13 +1642,13 @@ g = sns.relplot(
     height=4,
 )
 
-g = g.set_titles("{col_name}")
-
 # Iter over axes and set x labels
 for i, ax in enumerate(g.axes.flat):
     if i == 0:
+        ax.set_title("A")
         ax.set_xlabel("Publication Year")
     else:
+        ax.set_title("B")
         ax.set_xlabel("Total Authors")
 
 # Move legend to below the plot
@@ -2727,7 +2723,7 @@ Taken as a whole, these findings indicate that the more frequently an author con
 
 Our analysis reveals significant disparities in the recognition of software contributions to scientific research, with nearly 30% of articles having non-author code-contributors who received no formal authorship credit. This persistent pattern suggests a systemic disconnect between software development and scientific recognition systems, reflecting challenges in how scientific contributions are valued and credited. This exclusion reflects what @shapin1989invisible observed about scientific authority—the selective attribution of technical work as either genuine knowledge or mere skill significantly impacts who receives formal recognition. These findings further support previous research by @olivier_philippe_2019_2585783 and @Carver2022ASO documenting the frequent relegation of software contributors to either acknowledgment sections or receiving no credit at all, rather than authorship positions, despite the increasingly central role of software in scientific inquiry. The stability of this pattern over time indicates this is not a transitional phenomenon but rather an embedded feature of scientific software development, raising questions about scientific labor and how technical contributions are integrated into reward structures.
 
-The distribution of code contributions across author positions provides context to the hierarchical organization of scientific work. First authors emerge as significantly more likely to contribute code with 66.8% of all first authors in our dataset contributing code. Middle and last authors meanwhile were statistically significantly less likely to contribute code with only 9.1% of middle authors and 9.8% of last authors acting as code contributing members of the research team. Corresponding authors were similarly less likely than expected to be code contributors as we found that within our dataset, corresponding authors were code contributors 32.6% of the time. These patterns align with traditional scientific labor distribution where first authors typically handle technical aspects of research while middle and last authors are likely specialist contributors or provide guidance and oversight [@Larivire2020InvestigatingTD; @sauermann2017authorship]. However, our initial hypothesis that corresponding authors would also be more likely to contribute code due to their common resposibility for long-term maintenance of research artifacts' was not supported by our data. This finding suggests a potential strict division between project management responsibilities and direct technical engagement with software development. 
+Our finding that on-average, article-repository pairs have only a single code contributor mirrors prior work from @farber2020analyzingGithubPapers. Further, the distribution of code contributions across author positions provides context to the hierarchical organization of scientific work. First authors emerge as significantly more likely to contribute code with 66.8% of all first authors in our dataset contributing code. Middle and last authors meanwhile were statistically significantly less likely to contribute code with only 9.1% of middle authors and 9.8% of last authors acting as code contributing members of the research team. Corresponding authors were similarly less likely than expected to be code contributors as we found that within our dataset, corresponding authors were code contributors 32.6% of the time. These patterns align with traditional scientific labor distribution where first authors typically handle technical aspects of research while middle and last authors are likely specialist contributors or provide guidance and oversight [@Larivire2020InvestigatingTD; @sauermann2017authorship]. However, our initial hypothesis that corresponding authors would also be more likely to contribute code due to their common resposibility for long-term maintenance of research artifacts' was not supported by our data. This finding suggests a potential strict division between project management responsibilities and direct technical engagement with software development. 
 
 The modest citation advantage associated with code-contributing authors (4.5% increase in citations per code-contributing author) stands in contrast with the significant negative relationship between coding frequency and an individual's scholarly impact (h-index). This misalignment between technical contributions and scientific recognition creates an asymetrical relationship in which software development may enhance research impact but potentially penalizes individual careers. The progressive reduction in h-index as coding frequency increases indicates a cumulative disadvantage for frequent code contributors. This pattern persists even when controlling for publication count, suggesting issues in how software contributions are valued relative to other scientific outputs. These findings echo concerns raised by @muna2016astropyproblem about the sustainability of research software development and highlight how current reward structures may discourage talented developers from pursuing scientific careers.
 
@@ -2856,7 +2852,7 @@ IPython.display.Latex(model_comparison_latex)
 
 ```{python}
 #| label: tbl-article-composition-overall
-#| tbl-cap: "Article Citations by Code Contributorship of Research Team"
+#| tbl-cap: "Article citations by code contributorship of research team. Generalized linear model fit with negative binomial distribution and log link function."
 
 article_cited_by_count_models["no-control"].summary()
 ```
@@ -2868,7 +2864,11 @@ article_cited_by_count_models["no-control"].summary()
 ```{python}
 model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
     article_cited_by_count_models["no-control"],
-    tbl_cap="Article Citations by Code Contributorship of Research Team",
+    tbl_cap=(
+        "Article citations by code contributorship of research team. "
+        "Generalized linear model fit with negative binomial distribution "
+        "and log link function."
+    ),
     tbl_label="tbl-article-composition-overall",
 )
 
@@ -2881,7 +2881,7 @@ IPython.display.Latex(model_results_latex)
 
 ```{python}
 #| label: tbl-article-composition-oa-status
-#| tbl-cap: "Article Citations by Code Contributorship of Research Team Controlled by Open Access Status"
+#| tbl-cap: "Article citations by code contributorship of research team controlled by open access status. Generalized linear model fit with negative binomial distribution and log link function."
 
 article_cited_by_count_models["Is Open Access"].summary()
 ```
@@ -2894,8 +2894,10 @@ article_cited_by_count_models["Is Open Access"].summary()
 model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
     article_cited_by_count_models["Is Open Access"],
     tbl_cap=(
-        "Article Citations by Code Contributorship of "
-        "Research Team Controlled by Open Access Status"
+        "Article citations by code contributorship of research team "
+        "controlled by open access status. "
+        "Generalized linear model fit with negative binomial distribution "
+        "and log link function."
     ),
     tbl_label="tbl-article-composition-oa-status",
 )
@@ -2909,7 +2911,7 @@ IPython.display.Latex(model_results_latex)
 
 ```{python}
 #| label: tbl-article-composition-domain
-#| tbl-cap: "Article Citations by Code Contributorship of Research Team Controlled by Domain"
+#| tbl-cap: "Article citations by code contributorship of research team controlled by domain. Generalized linear model fit with negative binomial distribution and log link function."
 
 article_cited_by_count_models["Domain"].summary()
 ```
@@ -2922,8 +2924,10 @@ article_cited_by_count_models["Domain"].summary()
 model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
     article_cited_by_count_models["Domain"],
     tbl_cap=(
-        "Article Citations by Code Contributorship of "
-        "Research Team Controlled by Domain"
+        "Article citations by code contributorship of research team "
+        "controlled by domain. "
+        "Generalized linear model fit with negative binomial distribution "
+        "and log link function."
     ),
     tbl_label="tbl-article-composition-domain",
 )
@@ -2937,7 +2941,7 @@ IPython.display.Latex(model_results_latex)
 
 ```{python}
 #| label: tbl-article-composition-type
-#| tbl-cap: "Article Citations by Code Contributorship of Research Team Controlled by Article Type"
+#| tbl-cap: "Article citations by code contributorship of research team controlled by article type. Generalized linear model fit with negative binomial distribution and log link function."
 
 article_cited_by_count_models["Article Type"].summary()
 ```
@@ -2950,8 +2954,10 @@ article_cited_by_count_models["Article Type"].summary()
 model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
     article_cited_by_count_models["Article Type"],
     tbl_cap=(
-        "Article Citations by Code Contributorship of "
-        "Research Team Controlled by Article Type"
+        "Article citations by code contributorship of research team "
+        "controlled by article type. "
+        "Generalized linear model fit with negative binomial distribution "
+        "and log link function."
     ),
     tbl_label="tbl-article-composition-type",
 )
@@ -3314,7 +3320,7 @@ author_h_index_models = compute_researcher_level_models(
 
 ```{python}
 #| label: tbl-researcher-coding-status-no-control
-#| tbl-cap: "Code-Contributing Authors H-Index by Coding Status"
+#| tbl-cap: "Code-contributing authors h-index by coding status. Generalized linear model fit with Gaussian distribution and log link function."
 
 author_h_index_models["no-control"].summary()
 ```
@@ -3326,7 +3332,11 @@ author_h_index_models["no-control"].summary()
 ```{python}
 model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
     author_h_index_models["no-control"],
-    tbl_cap="Code-Contributing Authors H-Index by Coding Status",
+    tbl_cap=(
+        "Code-contributing authors h-index by coding status. "
+        "Generalized linear model fit with Gaussian distribution "
+        "and log link function."
+    ),
     tbl_label="tbl-researcher-coding-status-no-control",
 )
 
@@ -3339,7 +3349,7 @@ IPython.display.Latex(model_results_latex)
 
 ```{python}
 #| label: tbl-researcher-coding-status-author-position
-#| tbl-cap: "Researcher H-Index by Coding Status Controlled by Most Freq. Author Position"
+#| tbl-cap: "Code-contributing authors h-index by coding status controlled by most freq. author position. Generalized linear model fit with Gaussian distribution and log link function."
 
 author_h_index_models["Common Author Position"].summary()
 ```
@@ -3352,7 +3362,9 @@ author_h_index_models["Common Author Position"].summary()
 model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
     author_h_index_models["Common Author Position"],
     tbl_cap=(
-        "Researcher H-Index by Coding Status Controlled by Most Freq. Author Position"
+        "Code-contributing authors h-index by coding status "
+        "controlled by most freq. author position. "
+        "Generalized linear model fit with Gaussian distribution and log link function."
     ),
     tbl_label="tbl-researcher-coding-status-author-position",
 )
@@ -3366,7 +3378,7 @@ IPython.display.Latex(model_results_latex)
 
 ```{python}
 #| label: tbl-researcher-coding-status-domain
-#| tbl-cap: "Researcher H-Index by Coding Status Controlled by Most Freq. Domain"
+#| tbl-cap: "Code-contributing authors h-index by coding status controlled by most freq. domain. Generalized linear model fit with Gaussian distribution and log link function."
 
 author_h_index_models["Common Domain"].summary()
 ```
@@ -3379,7 +3391,9 @@ author_h_index_models["Common Domain"].summary()
 model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
     author_h_index_models["Common Domain"],
     tbl_cap=(
-        "Researcher H-Index by Coding Status Controlled by Most Freq. Domain"
+        "Code-contributing authors h-index by coding status "
+        "controlled by most freq. domain. "
+        "Generalized linear model fit with Gaussian distribution and log link function."
     ),
     tbl_label="tbl-researcher-coding-status-domain",
 )
@@ -3393,7 +3407,7 @@ IPython.display.Latex(model_results_latex)
 
 ```{python}
 #| label: tbl-researcher-coding-status-article-type
-#| tbl-cap: "Researcher H-Index by Coding Status Controlled by Most Freq. Article Type"
+#| tbl-cap: "Code-contributing authors h-index by coding status controlled by most freq. article type. Generalized linear model fit with Gaussian distribution and log link function."
 
 author_h_index_models["Common Article Type"].summary()
 ```
@@ -3406,7 +3420,9 @@ author_h_index_models["Common Article Type"].summary()
 model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
     author_h_index_models["Common Article Type"],
     tbl_cap=(
-        "Researcher H-Index by Coding Status Controlled by Most Freq. Article Type"
+        "Code-contributing authors h-index by coding status "
+        "controlled by most freq. article type. "
+        "Generalized linear model fit with Gaussian distribution and log link function."
     ),
     tbl_label="tbl-researcher-coding-status-article-type",
 )
