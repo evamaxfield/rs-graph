@@ -38,18 +38,18 @@ number-sections: true
 
 ## Specific for target format
 format:
-  html:
-    standalone: true
-    embed-resources: true
-    toc: true
-    toc-location: left
-    reference-location: margin
-    citation-location: document
-    execute:
-      echo: false
-      warning: false
+#   html:
+#     standalone: true
+#     embed-resources: true
+#     toc: true
+#     toc-location: left
+#     reference-location: margin
+#     citation-location: document
+#     execute:
+#       echo: false
+#       warning: false
 
-  pdf:
+  elsevier-pdf:
     toc: false
     execute:
       echo: false
@@ -62,6 +62,9 @@ format:
           \usepackage[table]{xcolor}  % The 'table' option is crucial for \rowcolors to work
           \usepackage{float}
           \floatplacement{table}{H}
+    journal:
+      cite-style: authoryear
+      name: "in-progress"
 
     # Word count
     citeproc: false
