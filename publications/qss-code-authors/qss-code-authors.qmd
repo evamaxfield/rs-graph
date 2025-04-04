@@ -13,7 +13,6 @@ authors:
     affiliations:
       - ref: 1
   - name: "Nicholas Weber"
-    email: nmweber@uw.edu
     orcid: 0000-0002-6008-3763
     affiliations:
       - ref: 1
@@ -49,6 +48,8 @@ format:
 #       echo: false
 #       warning: false
 
+#   \linenumbers
+
   elsevier-pdf:
     toc: false
     execute:
@@ -62,9 +63,13 @@ format:
           \usepackage[table]{xcolor}  % The 'table' option is crucial for \rowcolors to work
           \usepackage{float}
           \floatplacement{table}{H}
+          \usepackage{lineno}
+        
     journal:
       cite-style: authoryear
       name: "in-progress"
+      model: "3p"
+      layout: "onecolumn"
 
     # Word count
     citeproc: false
@@ -416,7 +421,7 @@ n_articles_with_alt_doi = len(unique_document_alternate_dois)
 overall_doi_resolution = n_articles_with_alt_doi / n_articles
 ```
 
-Software has become integral to contemporary scientific research [@edwards2013knowledge; @mayernik2017assessing]. From analysis scripts to infrastructure for data collection [@hasselbring2024researchsoftwarecategories], specialized tools are now essential components of modern research practices. Today, research software serves multiple critical functions: enabling reproducible experiments [@krafczyk2019scientificreproducbility; @Trisovic2021ALS], providing methodological documentation [@ram2013git], and increasingly appearing alongside publications as a research artifact [@Cao2023TheRO; @trujillo2022penumbra]. Software's expanding role has changed how science is conducted, with many fields now depending on specialized tools to advance knowledge.
+Software has become integral to contemporary scientific research [@edwards2013knowledge; @mayernik2017assessing]. From scripts for analysis and visualization to infrastructure for data collection [@hasselbring2024researchsoftwarecategories], software and code are now essential components of modern research practice. Today, research software serves multiple critical functions: enabling reproducible experiments [@krafczyk2019scientificreproducbility; @Trisovic2021ALS], providing methodological documentation [@ram2013git], and increasingly appearing alongside publications as an additional research artifact [@Cao2023TheRO; @trujillo2022penumbra]. Software's expanding role has changed how science is conducted, with many fields now depending on specialized tools to advance knowledge.
 
 Despite the growing dependence on software, a significant recognition gap exists between software development and traditional scientific outputs. Software contributors frequently find their work relegated to acknowledgments sections rather than warranting authorship [@olivier_philippe_2019_2585783], creating a disconnect between the value software provides and the credit its developers receive. This misalignment has consequences for scientific careers, as the lack of formal credit can significantly impact promotion and advancement within research organizations [@Carver2022ASO; @biagioli2014scientific]. The result is a system that increasingly relies on software while undervaluing those who create it, potentially discouraging talented developers from pursuing scientific careers and affecting the sustainability of research software development [@muna2016astropyproblem].
 
@@ -1673,7 +1678,7 @@ Using our filtered dataset of article-repository pairs, we conducted multiple re
 
 When controlling for article type (@tbl-article-composition-type), we observed divergent patterns between preprints and research articles. For preprints, each code-contributing non-author was associated with a statistically significant 3.1% decrease in citations (p < 0.005). In contrast, research articles showed more positive associations: we found a significant positive relationship between code-contributing authors and citations (p < 0.001), though we cannot estimate the precise magnitude due to the non-significant main effect in the model. Additionally, each code-contributing non-author was associated with a 0.7% increase in expected citations for research articles (p < 0.001).
 
-Overall, while we find statistically significant associations between code contributions and citation counts, these effects are relatively modest in magnitude.
+Based on these findings, we _**partially accept**_ our hypothesis (_H1_) that "the number of individuals contributing code to a publication's associated repository is positively correlated with the article's citation count." This acceptance is qualified by several important nuances: the relationship is statistically significant but modest in magnitude, and differs substantially between research articles (positive association) and preprints (negative association for non-author code contributors). These variations suggest that the relationship between code contributions and citation impact is context-dependent and more complex than initially hypothesized.
 
 ```{python}
 def compute_article_level_models(
@@ -1739,7 +1744,7 @@ def compute_article_level_models(
             # Create interactions
             for coding_status_col in ["Code-Contrib. Authors", "Code-Contrib. Non-Authors"]:
                 for control_col in control_variables:
-                    control_var_subset[f"{coding_status_col} * {control_col}"] = (
+                    control_var_subset[f"{coding_status_col} × {control_col}"] = (
                         control_var_subset[coding_status_col]
                         * control_var_subset[control_col]
                     )
@@ -1801,7 +1806,15 @@ def convert_model_results_to_printable_pdf_ready(
     for i, result_row in model_results_df.iterrows():
         # Determine if row should be bold and if stars should be added
         is_significant = result_row["P>|z|"] < 0.05
-        stars = "~$^{***}$" if is_significant else ""
+        stars = ""
+        if result_row["P>|z|"] < 0.001:
+            stars = "~$^{***}$"
+        elif result_row["P>|z|"] < 0.01:
+            stars = "~$^{**}$"
+        elif result_row["P>|z|"] < 0.05:
+            stars = "~$^{*}$"
+        
+        
         
         # Handle bolding - only for significant rows
         if is_significant:
@@ -2245,9 +2258,9 @@ overall_code_char = overall_code_char.sort_values(["Subset", "Position"])
 
 Building upon previous work examining the relationship between authorship position and research contributions, we investigate how author position may relate to code contribution patterns. We hypothesize that first authors, who traditionally contribute the bulk of intellectual and experimental work, would be most likely to contribute code to a project, while middle and last authors, who often provide oversight and guidance, would be less likely to contribute code.
 
-To analyze these patterns within our previously filtered dataset of article-repository pairs, we first conducted chi-square tests of independence between author position and code contribution status. These tests revealed significant associations both overall and when controlling for research domain, article type, and open access status (all p < 0.01). Following these significant results, detailed post-hoc binomial tests (@tbl-post-hoc-tests-on-author-positions) revealed clear position-based differences: `{python} percent_first_authors_code_contributors_str` of first authors contributed code to their projects, compared to only `{python} percent_middle_authors_code_contributors_str` of middle authors and `{python} percent_last_authors_code_contributors_str` of last authors. These differences remained statistically significant across all tested scenarios, regardless of research domain, article type, or open access status.
+To analyze these patterns within our previously filtered dataset of article-repository pairs, we conducted chi-square tests of independence between author position and code contribution status. These tests revealed significant associations between author position and likelihood of code contribution both overall and when controlling for research domain, article type, and open access status (all p < 0.01). This indicates that the proportion of authors who contribute code differs significantly based on author position. Following these significant associations, we examined the specific proportions across positions (@tbl-post-hoc-tests-on-author-positions): `{python} percent_first_authors_code_contributors_str` of first authors contributed code to their projects, compared to only `{python} percent_middle_authors_code_contributors_str` of middle authors and `{python} percent_last_authors_code_contributors_str` of last authors. The differences in these proportions remained statistically significant across all tested scenarios, regardless of research domain, article type, or open access status.
 
-These patterns strongly align with traditional scientific authorship conventions, where first authors typically take primary responsibility for both intellectual and technical aspects of the research, while middle and last authors more commonly provide oversight and guidance. The consistency of these findings across different subsets of our data suggests a deeply embedded relationship between author position and technical contributions in scientific software development.
+Based on these findings, we _**accept**_ our hypothesis (_H2a_) that "first authors have higher rates of code contribution compared to authors in other positions." The data clearly demonstrates that the proportion of first authors who contribute code (`{python} percent_first_authors_code_contributors_str`) is significantly higher than the proportion of both middle authors (`{python} percent_middle_authors_code_contributors_str`) and last authors (`{python} percent_last_authors_code_contributors_str`). This relationship remains robust and statistically significant across all tested conditions, including variations in research domain, article type, and open access status, indicating a fundamental connection between authorship position and technical contribution in scientific research.
 
 ### Corresponding Status of Code Contributing Authors
 
@@ -2315,9 +2328,9 @@ percent_non_corresponding_authors_code_contributors_str = f"{percent_non_corresp
 
 Building upon our analysis of author position, we next examine how corresponding author status relates to code contribution patterns. We hypothesize that corresponding authors, who traditionally maintain research artifacts and serve as primary points of contact, would be more likely to contribute code compared to non-corresponding authors, as this role often involves responsibility for project resources and materials.
 
-To analyze these relationships within our filtered dataset of article-repository pairs, we conducted chi-square tests of independence between corresponding author status and code contribution status. Surprisingly, these tests revealed patterns contrary to our initial hypothesis. Both corresponding and non-corresponding authors were significantly less likely to be code contributors than would be expected by chance (p < 0.01), with only `{python} percent_corresponding_authors_code_contributors_str` of corresponding authors and `{python} percent_non_corresponding_authors_code_contributors_str` of non-corresponding authors contributing code. Detailed post-hoc binomial tests (@tbl-post-hoc-tests-on-corresponding-status) revealed this pattern holds true across nearly all conditions, with only two notable exceptions: corresponding authors in software-focused articles and those in closed-access publications showed no significant difference in their likelihood to contribute code.
+To analyze these relationships within our filtered dataset of article-repository pairs, we conducted chi-square tests of independence between corresponding author status and code contribution status. Our analysis revealed patterns contrary to our initial hypothesis. The proportion of code contributors was low among both groups, with only `{python} percent_corresponding_authors_code_contributors_str` of corresponding authors and `{python} percent_non_corresponding_authors_code_contributors_str` of non-corresponding authors contributing code to their projects. Further examination (@tbl-post-hoc-tests-on-corresponding-status) showed that this pattern holds true across nearly all conditions, with only two notable exceptions: corresponding authors in software-focused articles and those in closed-access publications showed no significant difference in their proportion of code contributors compared to non-corresponding authors in those categories.
 
-These findings challenge conventional assumptions about the relationship between corresponding authorship and technical contributions. While corresponding authors are traditionally responsible for maintaining research artifacts, our results suggest this responsibility may not typically extend to direct engagement with software development.
+Based on these findings, we _**reject**_ our hypothesis (_H2b_) that "corresponding authors have higher rates of code contribution compared to non-corresponding authors." Contrary to our expectations, our analysis revealed that the proportion of code contributors among corresponding authors (`{python} percent_corresponding_authors_code_contributors_str`) did not significantly differ from the proportion among non-corresponding authors (`{python} percent_non_corresponding_authors_code_contributors_str`). This pattern of similar proportions remained consistent across most studied conditions, with only limited exceptions in software-focused articles and closed-access publications.
 
 ### Modeling Author H-Index
 
@@ -2614,7 +2627,7 @@ control_vars = OrderedDict([
 ])
 
 # Set up the figure with appropriate size
-fig = plt.figure(figsize=(8, 12))
+fig = plt.figure(figsize=(8, 9))
 
 # Calculate grid dimensions based on control variables
 num_controls = len(control_vars)
@@ -2720,7 +2733,7 @@ When controlling for research domain (@tbl-researcher-coding-status-domain), maj
 
 Analyzing by common article type (@tbl-researcher-coding-status-article-type) revealed similar patterns. For authors primarily publishing preprints, the h-index reductions were substantial: ~25.6% for occasional coding, ~53.5% for majority coding, and ~62.9% for always coding authors. Authors primarily publishing software articles showed slightly different but still significant reductions: ~33.1% for majority coding and ~33.0% for always coding authors.
 
-Taken as a whole, these findings indicate that the more frequently an author contributes code, the lower their h-index is likely to be relative to their peers, with the notable exception of first authors who occasionally contribute code. What makes these results particularly striking is that each of our models includes publication count as an input feature, suggesting that these h-index reductions persist even when accounting for total research output.
+Based on these findings, we _**accept**_ our hypothesis (_H3_) that "the frequency at which a researcher contributes code to their research projects is negatively correlated with their h-index." Our analysis demonstrates a clear and statistically significant negative relationship between coding frequency and scholarly impact as measured by h-index. This relationship was robust across multiple analytical controls including author position, research domain, and article type. What makes these results particularly striking is that each of our models includes publication count as an input feature, suggesting that these h-index reductions persist even when accounting for total research output.
 
 # Discussion
 
@@ -2870,7 +2883,8 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
     tbl_cap=(
         "Article citations by code contributorship of research team. "
         "Generalized linear model fit with negative binomial distribution "
-        "and log link function."
+        "and log link function. Significant p-values are indicated with asterisks: "
+        "p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)"
     ),
     tbl_label="tbl-article-composition-overall",
 )
@@ -2900,7 +2914,8 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
         "Article citations by code contributorship of research team "
         "controlled by open access status. "
         "Generalized linear model fit with negative binomial distribution "
-        "and log link function."
+        "and log link function. Significant p-values are indicated with asterisks: "
+        "p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)"
     ),
     tbl_label="tbl-article-composition-oa-status",
 )
@@ -2930,7 +2945,8 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
         "Article citations by code contributorship of research team "
         "controlled by domain. "
         "Generalized linear model fit with negative binomial distribution "
-        "and log link function."
+        "and log link function. Significant p-values are indicated with asterisks: "
+        "p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)"
     ),
     tbl_label="tbl-article-composition-domain",
 )
@@ -2960,7 +2976,8 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
         "Article citations by code contributorship of research team "
         "controlled by article type. "
         "Generalized linear model fit with negative binomial distribution "
-        "and log link function."
+        "and log link function. Significant p-values are indicated with asterisks: "
+        "p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)"
     ),
     tbl_label="tbl-article-composition-type",
 )
@@ -2976,7 +2993,7 @@ IPython.display.Latex(model_results_latex)
 
 ```{python}
 #| label: tbl-post-hoc-tests-on-author-positions
-#| tbl-cap: "Counts of Code-Contributing Authors ('Coding') as well as Total Authors by Position and Bonferroni Corrected p-values from Post-Hoc Binomial Tests"
+#| tbl-cap: "Counts of Code-Contributing Authors ('Coding') as well as Total Authors by Position and Bonferroni Corrected p-values from Post-Hoc Binomial Tests. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)."
 
 def create_multirow_html_table(
     dataframes_dict: dict[str, pd.DataFrame],
@@ -3024,7 +3041,12 @@ def create_multirow_html_table(
             for idx, row in subset_group.iterrows():
                 # Format p-value
                 p_value = f"{row['p']:.3f}" if row['p'] >= 0.001 else "0.000"
-                p_value = f"{p_value}***" if row['p'] < 0.05 else p_value
+                if row["p"] < 0.001:
+                    p_value = f"{p_value}***"
+                elif row["p"] < 0.01:
+                    p_value = f"{p_value}**"
+                elif row["p"] < 0.05:
+                    p_value = f"{p_value}*"
                 
                 row_data = {
                     "control": control,
@@ -3123,8 +3145,12 @@ def create_multirow_latex_table(
             for idx, row in subset_group.iterrows():
                 # Format p-value with significance stars
                 p_value = f"{row['p']:.3f}" if row['p'] >= 0.001 else "0.000"
-                if row["p"] < 0.05:
+                if row["p"] < 0.001:
                     p_value = f"{p_value}$^{{***}}$"
+                elif row["p"] < 0.01:
+                    p_value = f"{p_value}$^{{**}}$"
+                elif row["p"] < 0.05:
+                    p_value = f"{p_value}$^{{*}}$"
                 
                 # Add cell color for odd-numbered rows
                 color = "\\cellcolor{gray!10}" if overall_row_count % 2 == 1 else ""
@@ -3173,7 +3199,7 @@ IPython.display.Latex(
             "Open Access Status": open_access_status_code_char,
             "Overall": overall_code_char,
         },
-        caption="Counts of Code-Contributing Authors ('Coding') as well as Total Authors by Position and Bonferroni Corrected p-values from Post-Hoc Binomial Tests",
+        caption="Counts of Code-Contributing Authors ('Coding') as well as Total Authors by Position and Bonferroni Corrected p-values from Post-Hoc Binomial Tests. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***).",
         label="tbl-post-hoc-tests-on-author-positions",
         split_var="Position",
     )
@@ -3188,7 +3214,7 @@ IPython.display.Latex(
 
 ```{python}
 #| label: tbl-post-hoc-tests-on-corresponding-status
-#| tbl-cap: "Counts of Code-Contributing Authors ('Coding') as well as Total Authors by Corresponding Status and Bonferroni Corrected p-values from Post-Hoc Binomial Tests"
+#| tbl-cap: "Counts of Code-Contributing Authors ('Coding') as well as Total Authors by Corresponding Status and Bonferroni Corrected p-values from Post-Hoc Binomial Tests. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)."
 
 IPython.display.HTML(
     create_multirow_html_table(
@@ -3216,7 +3242,7 @@ IPython.display.Latex(
             "Open Access Status": open_access_status_code_corresponding,
             "Overall": overall_code_corresponding,
         },
-        caption="Counts of Code-Contributing Authors ('Coding') as well as Total Authors by Corresponding Status and Bonferroni Corrected p-values from Post-Hoc Binomial Tests",
+        caption="Counts of Code-Contributing Authors ('Coding') as well as Total Authors by Corresponding Status and Bonferroni Corrected p-values from Post-Hoc Binomial Tests. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***).",
         label="tbl-post-hoc-tests-on-corresponding-status",
         split_var="Is Corresponding",
     )
@@ -3288,7 +3314,7 @@ def compute_researcher_level_models(
             # Create interactions
             for coding_status_col in ["Any Coding", "Majority Coding", "Always Coding"]:
                 for control_col in control_variables:
-                    control_var_subset[f"{coding_status_col} * {control_col}"] = (
+                    control_var_subset[f"{coding_status_col} × {control_col}"] = (
                         control_var_subset[coding_status_col]
                         * control_var_subset[control_col]
                     )
@@ -3338,7 +3364,8 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
     tbl_cap=(
         "Code-contributing authors h-index by coding status. "
         "Generalized linear model fit with Gaussian distribution "
-        "and log link function."
+        "and log link function. Significant p-values are indicated "
+        "with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)."
     ),
     tbl_label="tbl-researcher-coding-status-no-control",
 )
@@ -3368,6 +3395,8 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
         "Code-contributing authors h-index by coding status "
         "controlled by most freq. author position. "
         "Generalized linear model fit with Gaussian distribution and log link function."
+        "Significant p-values are indicated "
+        "with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)."
     ),
     tbl_label="tbl-researcher-coding-status-author-position",
 )
@@ -3397,6 +3426,8 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
         "Code-contributing authors h-index by coding status "
         "controlled by most freq. domain. "
         "Generalized linear model fit with Gaussian distribution and log link function."
+        "Significant p-values are indicated "
+        "with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)."
     ),
     tbl_label="tbl-researcher-coding-status-domain",
 )
@@ -3426,6 +3457,8 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
         "Code-contributing authors h-index by coding status "
         "controlled by most freq. article type. "
         "Generalized linear model fit with Gaussian distribution and log link function."
+        "Significant p-values are indicated "
+        "with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)."
     ),
     tbl_label="tbl-researcher-coding-status-article-type",
 )
