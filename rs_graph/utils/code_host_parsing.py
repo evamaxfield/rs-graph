@@ -117,33 +117,63 @@ def _clean_repo_name(repo: str) -> str:
     return name
 
 
-def parse_code_host_url(url: str) -> types.CodeHostResult:
+def _clean_code_host_url(url: str) -> tuple[str, str]:
     # Standardize the URL
-    url = url.strip().lower()
+    cleaned_url = url.strip().lower()
 
     # Get rid of HTTPS, then HTTP, the www.
-    url = url.replace("https://", "")
-    url = url.replace("http://", "")
-    url = url.replace("www.", "")
+    cleaned_url = cleaned_url.replace("https://", "")
+    cleaned_url = cleaned_url.replace("http://", "")
+    cleaned_url = cleaned_url.replace("www.", "")
 
-    # If no trailing slash always add one
-    if url[-1] != "/":
-        url += "/"
+    # Handle SSH Git URLs (git@github.com:owner/repo.git)
+    if cleaned_url.startswith("git@"):
+        cleaned_url = cleaned_url.replace("git@", "")
+        cleaned_url = cleaned_url.replace(":", "/")
 
-    # Run the parsers
-    result = None
-    if gh_result := _parse_github_urls(url):
+    # Remove .git suffix if present
+    if cleaned_url.endswith(".git"):
+        cleaned_url = cleaned_url[:-4]
+
+    # Remove query parameters and fragments
+    cleaned_url = cleaned_url.split("?")[0]
+    cleaned_url = cleaned_url.split("#")[0]
+
+    # Extract base repository URL without subdirectory paths
+    # Match patterns like github.com/owner/repo/additional/path
+    parts = cleaned_url.split("/")
+    if len(parts) >= 3:
+        base_url = "/".join(parts[:3])
+        # Add trailing slash for parser matching
+        base_url = base_url + "/"
+    else:
+        # Add trailing slash if needed for parser matching
+        if cleaned_url[-1] != "/":
+            cleaned_url += "/"
+        base_url = cleaned_url
+
+    return cleaned_url, base_url
+
+
+def parse_code_host_url(url: str) -> types.CodeHostResult:
+    # Clean the URL
+    cleaned_url, base_url = _clean_code_host_url(url)
+
+    # Run the parsers on the base URL
+    if gh_result := _parse_github_urls(base_url):
         result = gh_result
-    if gl_result := _parse_gitlab_urls(url):
+    elif gl_result := _parse_gitlab_urls(base_url):
         result = gl_result
-    if bb_result := _parse_bitbucket_urls(url):
+    elif bb_result := _parse_bitbucket_urls(base_url):
         result = bb_result
-    if sf_result := _parse_sourceforge_urls(url):
+    elif sf_result := _parse_sourceforge_urls(base_url):
         result = sf_result
-
-    # If no result, raise an error
-    if result is None:
-        raise ValueError("Could not parse code host URL")
+    else:
+        # If no result, raise an error
+        raise ValueError(
+            f"Could not parse code host URL: {url} "
+            f"(after cleaning: {cleaned_url}, and found base: {base_url})"
+        )
 
     # Clean the repo name
     if result.name:
@@ -151,11 +181,11 @@ def parse_code_host_url(url: str) -> types.CodeHostResult:
 
     # For all hosts except SourceForge, the owner is required
     if result.host != "sourceforge" and result.owner is None:
-        raise ValueError("Could not parse code host URL")
+        raise ValueError(f"Could not parse code host URL (missing owner): {url}")
 
     # For SourceForge, the name is required
     if result.host == "sourceforge" and result.name is None:
-        raise ValueError("Could not parse code host URL")
+        raise ValueError(f"Could not parse code host URL (missing repo name): {url}")
 
     return result
 
@@ -166,17 +196,26 @@ def _wrapped_parse_code_host_url(
     try:
         code_host_res = parse_code_host_url(pair.repo_url)
 
-        # Check if github
-        if (
-            code_host_res.host != "github"
-            or code_host_res.owner is None
-            or code_host_res.name is None
+        # Check if we have valid repository information
+        # For GitHub, GitLab, and Bitbucket, we need both owner and name
+        if code_host_res.host in ["github", "gitlab", "bitbucket"] and (
+            code_host_res.owner is None or code_host_res.name is None
         ):
             return types.ErrorResult(
                 source=pair.source,
                 step="code-host-parsing",
                 identifier=pair.paper_doi,
-                error="Not a GitHub repository",
+                error=f"Invalid {code_host_res.host} repository: missing owner or name",
+                traceback="",
+            )
+
+        # For SourceForge, we only need the name
+        if code_host_res.host == "sourceforge" and code_host_res.name is None:
+            return types.ErrorResult(
+                source=pair.source,
+                step="code-host-parsing",
+                identifier=pair.paper_doi,
+                error="Invalid SourceForge repository: missing name",
                 traceback="",
             )
 
@@ -184,8 +223,8 @@ def _wrapped_parse_code_host_url(
             source=pair.source,
             repo_parts=types.RepoParts(
                 host=code_host_res.host,
-                owner=code_host_res.owner,
-                name=code_host_res.name,
+                owner=code_host_res.owner if code_host_res.owner else "",
+                name=code_host_res.name if code_host_res.name else "",
             ),
             paper_doi=pair.paper_doi,
             paper_extra_data=pair.paper_extra_data,
