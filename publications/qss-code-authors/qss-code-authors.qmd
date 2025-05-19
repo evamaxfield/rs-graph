@@ -425,9 +425,9 @@ Software has become integral to contemporary scientific research [@edwards2013kn
 
 Despite the growing dependence on software, a significant recognition gap exists between software development and traditional scientific outputs. Software contributors frequently find their work relegated to acknowledgments sections rather than warranting authorship [@olivier_philippe_2019_2585783], creating a disconnect between the value software provides and the credit its developers receive. This misalignment has consequences for scientific careers, as the lack of formal credit can significantly impact promotion and advancement within research organizations [@Carver2022ASO; @biagioli2014scientific]. The result is a system that increasingly relies on software while undervaluing those who create it, potentially discouraging talented developers from pursuing scientific careers and affecting the sustainability of research software development [@muna2016astropyproblem].
 
-The scientific community has attempted to address this recognition gap through various initiatives. The Contributor Roles Taxonomy (CRediT) has expanded authorship criteria to include specialized contribution roles [@brand2015beyond], while researchers have used similar taxonomies to investigate labor distribution within teams, including specialist and generalist contributors [@Larivire2020InvestigatingTD; @lariviere2016contributorship; @sauermann2017authorship; @Li2023AreRC; @Lu2019CocontributorshipNA]. Despite these efforts, limitations persist. Current frameworks remain centered on traditional author lists, perpetuating historical biases and relying heavily on self-reporting without external verification [@HAEUSSLER2013688; @gotzsche2007ghost; @chaoqun2021gendered]. The scientific community continues to work on developing appropriate systems for software citation and credit attribution that adequately reflect these contributions [@Merow2023BetterIA; @Westner2024CyclingOT; @Katz2020RecognizingTV].
+The scientific community has attempted to address this recognition gap through initiatives like the Contributor Roles Taxonomy (CRediT). CRediT supports more inclusive authorship criteria for specialized contribution roles, including software development [@brand2015beyond; @Li2023AreRC; @Lu2019CocontributorshipNA]. Despite these efforts, current frameworks remain centered on traditional author lists and may perpetuate historical biases about what consitutes meaningful scientific contribution [@HAEUSSLER2013688; @gotzsche2007ghost; @chaoqun2021gendered]. Simultaneously, researchers have also advocated for software citation systems that better reflect the unique contributions of research software developers, though these systems often remain separate from formal authorship recognition [@Merow2023BetterIA; @Westner2024CyclingOT; @Katz2020RecognizingTV].
 
-The emergence of public code repositories alongside published research presents an opportunity to address this problem. Source code repositories typically employ version control systems that maintain records of who contributes what code and when, providing a window into the patterns of software development in scientific research. Using the transaction histories from source code repositories, we developed a predictive model that enables systematic matching between scientific article authors and source code developer accounts - creating a dataset that connects formal authorship with code contributions across a corpus of scientific work.
+The emergence of public code repositories alongside published research provides a unique opportunity to study this disconnect. Source code repositories maintain detailed records of who contributes what code and when, providing a window into the patterns of software development in scientific research. Using transaction histories from these repositories, we developed a predictive model that enables systematic matching between scientific article authors and source code developer accounts. Our predictive model enables us to create a dataset of almost 140,000 linked authors and their developer accounts to understand how code contribution is distributed across research teams and the implications of frequent code contribution on an individuals career.
 
 We identify several patterns in the relationship between code contributions and scientific recognition by applying our predictive model across almost 140,000 paired research articles and repositories. Our analysis reveals that nearly 30% of articles have non-author code-contributors - individuals who helped create the software but received no formal authorship credit. We find that code-contributing authors are associated with modest increases in article-level impact metrics (~5.2% increase in citations per code-contributing author). However, these effects become statistically non-significant when controlling for domain, article type, and open access status. First authors are significantly more likely to be code contributors than other author positions across all conditions tested. We also document a negative relationship between coding frequency and scholarly impact: authors who contribute code more frequently show progressively lower h-indices than their non-coding peers, a pattern that persists when controlling for publication count, and author's most common author position, domain, and article type.
 
@@ -473,101 +473,10 @@ _H3: The frequency with which individual researchers contribute code to their re
 
 # Data and Methods
 
-## Linking Scientific Articles and Source Code Repositories
+Our analysis examines the relationship between software development contributions and scientific credit attribution through a three-step process: (1) building a dataset of linked scientific articles and code repositories, (2) developing a predictive model to match article authors with developer accounts, and (3) analyzing patterns in these relationships.
 
-Modern scientific research increasingly requires the public sharing of research code, creating unique opportunities to study the relationship between scientific authorship and software development. Prior work in creating large linked datasets of article and repository pairs has utilized heuristics to mine GitHub repository README files for references to scientific publications [@WATTANAKRIENGKRAI2022111117]. Mining for publication references has problems: there isn't a guarantee that the article-repositories pairs are the same work or project. However, many journals and platforms now require or recommend code and data sharing [@stodden2013toward; @sharma2024analytical], creating traceable links between publications and code that enable systematic study of both article-repository and author-developer relationships [@Hata2021ScienceSoftwareLT; @Kelley2021AFF; @Stankovski2024RepoFromPaperAA; @milewicz2019characterizing].
+Our dataset integrates article-repository pairs from four sources, each with explicit mechanisms for code sharing: the Journal of Open Source Software (JOSS) and SoftwareX require code repositories as part of publication, Papers with Code directly connects preprints with implementations, and Public Library of Science (PLOS) articles include mandatory data and code availability statements that we mined for repository links. We focused exclusively on GitHub-hosted repositories, which represent the predominant platform for scientific software sharing [@Cao2023TheRO; @escamilla2022riseofgithub]. For each article-repository pair, we resolved DOIs via Semantic Scholar to ensure we captured the latest version of each publication, extracted publication metadata and author metrics through OpenAlex, and collected repository information via the GitHub API. This created a comprehensive dataset with information about both the scientific and software development aspects of each project.
 
-Our data collection process leverages multiple sources of linked scientific articles and code repositories to ensure broad coverage of multiple domains and article types. Our dataset combines article-source-code-repository pairs from traditional research articles from the Public Library of Science (PLOS), software-focused publications from the Journal of Open Source Software (JOSS) and SoftwareX, and preprints from Papers with Code.
-
-To simplify dataset processing and enrichment, we filter out any article-source-code-repository pairs that store code somewhere other than GitHub. While GitHub is the predominate host of scientific software [@Cao2023TheRO; @escamilla2022riseofgithub], it is also stored and shared on other platforms, which should be investigated as part of future research [@trujillo2022penumbra].
-
-Integrating multiple data sources, we extract detailed information about the scientific and software development aspects of each project. We utilize the Semantic Scholar API for DOI resolution to ensure we find the latest version of each article. Resolving article DOIs is particularly important when working with preprints, as journals may have published these papers since their inclusion in the Papers with Code dataset. Using Semantic Scholar, we resolve `{python} round(overall_doi_resolution * 100, 1)`% of all DOIs within our dataset[^3]. We then utilize the OpenAlex API to gather publication metadata (open access status, domain, publication date), author details (name, author position, corresponding author status), and article- and individual-level metrics (citation counts, FWCI, h-index). The GitHub API provides similar information for source code repositories, including repository metadata (name, description, languages, creation date), contributor details (username, name, email), and repository-level metrics (star count, fork count, issue count).
-
-[^3]: Broken out by dataset source, we resolve `{python} round(per_dataset_doi_resolution["plos"] * 100, 1)`% of all PLOS DOIs, `{python} round(per_dataset_doi_resolution["joss"] * 100, 1)`% of all JOSS DOIs, `{python} round(per_dataset_doi_resolution["softwarex"] * 100, 1)`% of all SoftwareX DOIs, and `{python} round(per_dataset_doi_resolution["pwc"] * 100, 1)`% of all Papers with Code (arXiv) DOIs.
-
-## A Predictive Model for Matching Article Authors and Source Code Contributors
-
-### Annotated Dataset Creation
-
-```{python}
-#| output: false
-
-# We run this in it's own cell so that output from data download doesn't show
-# Load annotated dataset
-annotated_dataset = sci_soft_models_data.load_annotated_dev_author_em_dataset()
-```
-
-```{python}
-# Get counts of positive and negative examples
-n_positive_examples = len(annotated_dataset.loc[annotated_dataset["match"]])
-n_negative_examples = len(annotated_dataset.loc[~annotated_dataset["match"]])
-pct_positive_examples = round(n_positive_examples / len(annotated_dataset), 3) * 100
-pct_negative_examples = round(n_negative_examples / len(annotated_dataset), 3) * 100
-
-# Create function to split row details
-def split_dev_details(dev_details: str) -> dict:
-    details_list = dev_details.split(";\\n")
-    details_dict = {}
-    for detail in details_list:
-        try:
-            key, value = detail.split(": ", 1)
-        except Exception:
-            print(detail)
-            raise
-
-        # Only keep username, name, and email
-        if key in ["username", "name", "email"]:
-            # If value is "None" replace with None
-            if value == "None":
-                value = None
-
-            # Store to details dict
-            details_dict[key] = value
-    
-    return details_dict
-
-# Split dev details
-all_dev_details = annotated_dataset["dev_details"].apply(split_dev_details)
-
-# Convert to dataframe
-all_dev_details_df = pd.DataFrame(all_dev_details.tolist())
-
-# Drop duplicates on username
-all_dev_details_df = all_dev_details_df.drop_duplicates(subset=["username"])
-
-# Get counts
-n_devs = len(all_dev_details_df)
-n_devs_with_name = all_dev_details_df["name"].notnull().sum()
-n_devs_with_email = all_dev_details_df["email"].notnull().sum()
-
-pct_devs_with_name = round(n_devs_with_name / n_devs, 3) * 100
-pct_devs_with_email = round(n_devs_with_email / n_devs, 3) * 100
-
-# Get unique authors from original frame from unique semantic scholar id
-n_authors = annotated_dataset["semantic_scholar_id"].nunique()
-```
-
-Creating an accurate author-developer matching model requires quality-labeled training data that reflects real-world identity matching challenges. Exact-matching on names or emails is insufficient due to variations in formatting (e.g., "J. Doe" vs. "Jane Doe"), use of institutional versus personal email addresses, and incomplete information. However, author and developer account information often contains sufficient similarities for probabilistic matching, such as when author "Jane Doe" corresponds to username "jdoe" or "janedoe123".
-
-To efficiently build our training and evaluation dataset, we used JOSS articles as we believed they typically feature higher author-developer-account overlap, increasing positive match density. We generated semantic embeddings for each developer account and author name using the [multi-qa-MiniLM-L6-cos-v1](https://huggingface.co/sentence-transformers/multi-qa-MiniLM-L6-cos-v1) model from Sentence Transformers Python library [@reimers-2019-sentence-bert]. We then calculated cosine similarity between all potential author-developer-account pairs for each article-repository pair. Finally, for annotation, we selected the three most similar authors for each developer account.
-
-From these generated author-developer-account pairs, we randomly selected 3,000 for classification by two independent annotators as either matches or non-matches, resolving disagreements through discussion and verification. The resulting dataset contains `{python} n_positive_examples` (`{python} pct_positive_examples`%) positive matches and `{python} n_negative_examples` (`{python} pct_negative_examples`%) negative matches, comprising `{python} n_authors` unique authors and `{python} n_devs` unique developer accounts. Supporting our premise that exact matching is insufficient, only `{python} int(n_devs_with_name)` (`{python} float(pct_devs_with_name)`%) developer accounts have associated names and `{python} int(n_devs_with_email)` (`{python} float(pct_devs_with_email)`%) have associated emails.
-
-### Training and Evaluation
-
-```{python}
-training_split_counts = sci_soft_models_data.load_final_model_training_split_details()
-
-# Take sum on rows
-training_split_counts = training_split_counts.set_index("split").sum(axis=1)
-training_split_pct = ((training_split_counts / training_split_counts.sum()) * 100).round(1)
-```
-
-Our training and evaluation methodology begins with careful dataset preparation to prevent data leakage between training and test sets. To ensure complete separation of authors and developers, we randomly selected 10% of unique authors and 10% of unique developers, designating any pairs containing these selected entities for the test set. Due to the combinatorial nature of our author-developer pairs, this entity-based splitting strategy resulted in `{python} int(training_split_counts["train"])` (`{python} float(training_split_pct["train"])`%) pairs for training and `{python} int(training_split_counts["test"])` (`{python} float(training_split_pct["test"])`%) pairs for testing.
-
-For our predictive model, we evaluate three transformer-based architectures that have demonstrated strong performance in entity matching tasks: DeBERTa-v3-base [@he2021debertav3; @he2021deberta], mBERT (bert-base-multilingual-cased) [@bert2018], and DistilBERT [@Sanh2019DistilBERTAD]. We systematically evaluated these base models across different combinations of developer-account features, ranging from using only the username to incorporating complete profile information (username, display name, and email address). We fine-tuned all models using the Adam optimizer with a linear learning rate of 1e-05 for training and a batch size of 8 for training and evaluation. Given the size of our dataset and the binary nature of our classification task, models were trained for a single epoch to prevent overfitting.
-
-We evaluated model performance using using standard binary classification metrics: precision, recall, and F1-score. This evaluation framework allows us to directly compare model architectures and feature combinations while accounting for precision and recall in identifying correct matches.
 
 ```{python}
 exp_results = sci_soft_models_data.load_experimental_training_results()
@@ -615,13 +524,9 @@ best_model_rec = exp_results.loc[best_model_idx, "Recall"]
 best_model_f1 = exp_results.loc[best_model_idx, "F1"]
 ```
 
-Our comprehensive model evaluation revealed that fine-tuning DeBERTa-v3-base [@he2021debertav3] with developer username and display name as input features produces optimal performance for author-developer matching. This model configuration achieves a binary F1 score of `{python} float(best_model_f1)`, with an accuracy of `{python} float(best_model_acc)`, precision of `{python} float(best_model_prec)`, and recall of `{python} float(best_model_rec)`. @tbl-em-model-comparison presents a complete comparison of model architectures and feature combinations.
+To match article authors with repository developer accounts, we developed a machine learning approach using transformer-based architectures. Entity matching presents unique challenges, as exact name or email matching is insufficient due to formatting variations and incomplete information (e.g., "J. Doe" vs. "Jane Doe" in publications, or use of institutional versus personal email addresses). While exact matching fails, there is typically high semantic overlap between author information and developer account details that our model can leverage. We created a gold-standard dataset of 3,000 annotated author-developer account pairs from JOSS publications, where two independent reviewers classified each pair as matching or non-matching. After systematic evaluation of three transformer architectures with various feature combinations, our optimal model (fine-tuned DeBERTa-v3-base including developer account username and display name in the training data) achieved an F1 score of `{python} float(best_model_f1)`, with `{python} float(best_model_prec)` precision and `{python} float(best_model_rec)` recall (detailed comparison available in the Appendix).
 
-Analysis of each model's performance revealed that including developer display names has the largest positive impact on model performance compared to username alone. We also observed that mBERT's performance was comparable to DeBERTa's while using the developer email address as an additional input feature. However, we selected the DeBERTa configuration for its simplicity and more recent and comprehensive pretraining. Models fine-tuned from DeBERTa had consistent strong performance across various feature combinations and its more extensive pretraining dataset suggest better generalization potential for future applications.
-
-To facilitate the reuse of our work, we have made our trained model and supporting code publicly available. Complete fine-tuning, evaluation, and inference code is available as the Python package: [sci-soft-models](https://github.com/evamaxfield/sci-soft-models), and the fine-tuned model has been released on HuggingFace ([evamxb/dev-author-em-clf](https://huggingface.co/evamxb/dev-author-em-clf)).
-
-## Linking Authors and GitHub Developer Accounts
+Applying our model across all article-repository pairs yielded a large-scale dataset linking scientific authors and code contributors. As shown in @tbl-rs-graph-overall-counts, this dataset contains approximately 140,000 article-repository pairs spanning multiple domains and publication types, with nearly 300,000 distinct authors and more than 150,000 developer accounts. From these, we identified almost 110,000 author-developer account relationships, creating a unique resource for investigating code contribution patterns in scientific teams. This dataset enables systematic examination of how software development work relates to scientific recognition and career trajectories. Both the dataset ([https://doi.org/10.7910/DVN/KPYVI1](https://doi.org/10.7910/DVN/KPYVI1)) and model ([https://huggingface.co/evamxb/dev-author-em-clf](https://huggingface.co/evamxb/dev-author-em-clf)) are made publicly available to support further research.
 
 ```{python}
 # Compute stats
@@ -679,14 +584,6 @@ total_devs = merged_repository_contributor_doc_repo_links[
     "developer_account_id"
 ].nunique()
 ```
-
-Our trained entity-matching model enables comprehensive identification of author-developer relationships across all possible author and developer-account combinations within each article-repository pair. This broad application accounts for the complex realities of scientific software development practices, particularly when researchers maintain multiple developer accounts across different projects or institutions and account transitions as researchers move between roles.
-
-While our model demonstrates strong performance, we acknowledge certain limitations in our approach. Notably, shorter names (both usernames and display names) can affect the model's performance, where less textual information is available for matching. Additionally, while organization accounts (such as research lab accounts used for project management) present a potential challenge for accurate matching. However, our filtering mechanisms applied before analysis help minimize their impact in modeling.
-
-The resulting dataset represents the first large-scale collection of linked article-repository and author-developer-account pairs. Specifically, our dataset contains almost 140,000 article-repository pairs, with nearly 300,000 distinct authors and more than 150,000 developer accounts. From these distinct entities, we identify almost 110,000 author-developer relationships. A detailed breakdown of these counts by data source, domain, document type, and open access status is available in @tbl-rs-graph-overall-counts.
-
-Our compiled dataset is made available via Harvard Dataverse at [https://doi.org/10.7910/DVN/KPYVI1](https://doi.org/10.7910/DVN/KPYVI1). Portions of the dataset are restricted to keep researcher and developer information private. The full dataset is available upon request via the Harvard Dataverse. For details on interacting with this dataset, see our documentation at [https://github.com/evamaxfield/rs-graph](https://github.com/evamaxfield/rs-graph).
 
 ::: {.content-visible when-format="html"}
 
@@ -1174,9 +1071,9 @@ mean_non_author_devs_for_papers_w_non_auth_devs = metric_str_fmt.format(
 )
 ```
 
-Understanding the composition and dynamics of software development teams provides essential context for analyzing how code contributions relate to scientific recognition and impact. To ensure reliable analysis, we focus on a subset of our article-repository pairs that meet several filtering conditions. First, we require that each article-repository pair have at least one citation, which helps ensure the research has received a basic level of engagement from the scientific community. Next, we require that repository commit activity must stop prior to 90 days past the date of article publication. Disallowing long-term projects ensures we do not include projects that may add additional code contributors later while still allowing a grace period during which developers can update repositories with additional documentation and publication information. We then subset the data to only include article-repository pairs with research teams of typical size by removing those with fewer than three authors and more than `{python} int(n_authors_97th_percentile)` authors, the 97th percentile for research team size. Finally, we filter out any author-developer pairs associated with these projects with predictive model confidence of less than 0.97 to ensure that we only include high-confidence matches[^4]. This filtering process results in a dataset of `{python} len(team_comp_no_push_after_pub)` article-repository pairs.
+Understanding the composition and dynamics of software development teams provides essential context for analyzing how code contributions relate to scientific recognition and impact. To ensure reliable analysis, we focus on a subset of our article-repository pairs that meet several filtering conditions. First, we require that each article-repository pair have at least one citation, which helps ensure the research has received a basic level of engagement from the scientific community. Next, we require that repository commit activity must stop prior to 90 days past the date of article publication. Disallowing long-term projects ensures we do not include projects that may add additional code contributors later while still allowing a grace period during which developers can update repositories with additional documentation and publication information. We then subset the data to only include article-repository pairs with research teams of typical size by removing those with fewer than three authors and more than `{python} int(n_authors_97th_percentile)` authors, the 97th percentile for research team size. Finally, we filter out any author-developer pairs associated with these projects with predictive model confidence of less than 0.97 to ensure that we only include high-confidence matches[^3]. This filtering process results in a dataset of `{python} len(team_comp_no_push_after_pub)` article-repository pairs.
 
-[^4]: @fig-dist-of-author-dev-pred-confidence shows the distribution of predictive model confidence scores for author-developer pairs to justify this threshold. We chose the 0.97 threshold to ensure that we only include high-confidence matches while retaining a large proportion of the data.
+[^3]: @fig-dist-of-author-dev-pred-confidence shows the distribution of predictive model confidence scores for author-developer pairs to justify this threshold. We chose the 0.97 threshold to ensure that we only include high-confidence matches while retaining a large proportion of the data.
 
 Within this filtered dataset, we categorized individuals into three groups: code-contributing authors (CC-A) who both authored papers and contributed code to associated repositories, non-code-contributing authors (NCC-A) who authored papers but showed no evidence of code contributions, and code-contributing non-authors (CC-NA) who contributed code but received no authorship recognition. This categorization revealed that papers in our dataset typically have `{python} total_auths` total authors, with `{python} total_auth_devs` code-contributing authors and `{python} total_auth_non_devs` non-code-contributing authors. Beyond the author list, papers averaged `{python} total_non_auth_devs` code-contributing non-authors. @tbl-team-composition-counts details these distributions by domain, article type, and open access status.
 
@@ -2752,7 +2649,255 @@ Despite their growing importance, the persistent underrecognition of software co
 
 # Appendix
 
-## Extended Modeling and Analysis Results and Supporting Tables
+## Extended Data and Methods
+
+### Building a Dataset of Linked Scientific Articles and Code Repositories
+
+The increasing emphasis on research transparency has led many journals and platforms to require or recommend code and data sharing [@stodden2013toward; @sharma2024analytical], creating traceable links between publications and code. These explicit links enable systematic study of both article-repository and author-developer account relationships [@Hata2021ScienceSoftwareLT; @Kelley2021AFF; @Stankovski2024RepoFromPaperAA; @milewicz2019characterizing].
+
+Our dataset collection process leveraged four sources of linked scientific articles and code repositories, each with specific mechanisms for establishing these connections:
+
+1. **Public Library of Science (PLOS)**: We extracted repository links from PLOS articles' mandatory data and code availability statements.
+2. **Journal of Open Source Software (JOSS)**: JOSS requires explicit code repository submission and review as a core part of its publication process.
+3. **SoftwareX**: Similar to JOSS, SoftwareX mandates code repositories as a publication requirement.
+4. **Papers with Code**: This platform directly connects machine learning preprints with their implementations.
+
+To create a comprehensive and analyzable dataset, we enriched these article-repository pairs with metadata from multiple sources. We utilized the Semantic Scholar API for DOI resolution to ensure we found the latest version of each article. This resolution step was particularly important when working with preprints, as journals may have published these papers since their inclusion in the Papers with Code dataset. Using Semantic Scholar, we successfully resolved `{python} round(overall_doi_resolution * 100, 1)`% of all DOIs within our dataset[^4].
+
+We then utilized the OpenAlex API to gather detailed publication metadata, including:
+
+- Publication characteristics (open access status, domain, publication date)
+- Author details (name, author position, corresponding author status)
+- Article- and individual-level metrics (citation counts, FWCI, h-index)
+
+Similarly, the GitHub API provided comprehensive information for source code repositories:
+
+- Repository metadata (name, description, programming languages, creation date)
+- Contributor details (username, display name, email)
+- Repository-level metrics (star count, fork count, issue count)
+
+[^4]: Broken out by dataset source, we resolved `{python} round(per_dataset_doi_resolution["plos"] * 100, 1)`% of all PLOS DOIs, `{python} round(per_dataset_doi_resolution["joss"] * 100, 1)`% of all JOSS DOIs, `{python} round(per_dataset_doi_resolution["softwarex"] * 100, 1)`% of all SoftwareX DOIs, and `{python} round(per_dataset_doi_resolution["pwc"] * 100, 1)`% of all Papers with Code (arXiv) DOIs.
+
+### Developing a Predictive Model for Author-Developer Account Matching
+
+#### Annotated Dataset Creation
+
+```{python}
+#| output: false
+
+# We run this in it's own cell so that output from data download doesn't show
+# Load annotated dataset
+annotated_dataset = sci_soft_models_data.load_annotated_dev_author_em_dataset()
+
+# Get counts of positive and negative examples
+n_positive_examples = len(annotated_dataset.loc[annotated_dataset["match"]])
+n_negative_examples = len(annotated_dataset.loc[~annotated_dataset["match"]])
+pct_positive_examples = round(n_positive_examples / len(annotated_dataset), 3) * 100
+pct_negative_examples = round(n_negative_examples / len(annotated_dataset), 3) * 100
+
+# Create function to split row details
+def split_dev_details(dev_details: str) -> dict:
+    details_list = dev_details.split(";\\n")
+    details_dict = {}
+    for detail in details_list:
+        try:
+            key, value = detail.split(": ", 1)
+        except Exception:
+            print(detail)
+            raise
+
+        # Only keep username, name, and email
+        if key in ["username", "name", "email"]:
+            # If value is "None" replace with None
+            if value == "None":
+                value = None
+
+            # Store to details dict
+            details_dict[key] = value
+    
+    return details_dict
+
+# Split dev details
+all_dev_details = annotated_dataset["dev_details"].apply(split_dev_details)
+
+# Convert to dataframe
+all_dev_details_df = pd.DataFrame(all_dev_details.tolist())
+
+# Drop duplicates on username
+all_dev_details_df = all_dev_details_df.drop_duplicates(subset=["username"])
+
+# Get counts
+n_devs = len(all_dev_details_df)
+n_devs_with_name = all_dev_details_df["name"].notnull().sum()
+n_devs_with_email = all_dev_details_df["email"].notnull().sum()
+
+pct_devs_with_name = round(n_devs_with_name / n_devs, 3) * 100
+pct_devs_with_email = round(n_devs_with_email / n_devs, 3) * 100
+
+# Get unique authors from original frame from unique semantic scholar id
+n_authors = annotated_dataset["semantic_scholar_id"].nunique()
+```
+
+Creating an accurate author-developer account matching model required quality-labeled training data that reflects real-world identity matching challenges. Exact-matching on names or emails proved insufficient due to variations in formatting (e.g., "J. Doe" vs. "Jane Doe"), use of institutional versus personal email addresses, and incomplete information. However, author and developer account information often contains sufficient similarities for probabilistic matching, such as when author "Jane Doe" corresponds to username "jdoe" or "janedoe123".
+
+To efficiently build our training and evaluation dataset, we used JOSS articles as we believed they typically feature higher author-developer-account overlap, increasing positive match density. Our dataset creation process followed these steps:
+
+1. We generated semantic embeddings for each developer account and author name using the [multi-qa-MiniLM-L6-cos-v1](https://huggingface.co/sentence-transformers/multi-qa-MiniLM-L6-cos-v1) model from the Sentence Transformers Python library [@reimers-2019-sentence-bert].
+2. We calculated cosine similarity between all potential author-developer-account pairs for each article-repository pair.
+3. For annotation efficiency, we selected the three most similar authors for each developer account.
+
+From these generated author-developer-account pairs, we randomly selected 3,000 for classification by two independent annotators as either matches or non-matches, resolving disagreements through discussion and verification. The resulting dataset contains `{python} n_positive_examples` (`{python} pct_positive_examples`%) positive matches and `{python} n_negative_examples` (`{python} pct_negative_examples`%) negative matches, comprising `{python} n_authors` unique authors and `{python} n_devs` unique developer accounts. 
+
+Our collected data for annotation confirmed that exact matching would be insufficient—only `{python} int(n_devs_with_name)` (`{python} float(pct_devs_with_name)`%) of developer accounts had associated display names and just `{python} int(n_devs_with_email)` (`{python} float(pct_devs_with_email)`%) had associated email addresses.
+
+#### Training and Evaluation {#sec-appendix-model-training-eval}
+
+```{python}
+training_split_counts = sci_soft_models_data.load_final_model_training_split_details()
+
+# Take sum on rows
+training_split_counts = training_split_counts.set_index("split").sum(axis=1)
+training_split_pct = ((training_split_counts / training_split_counts.sum()) * 100).round(1)
+```
+
+Our training and evaluation methodology began with careful dataset preparation to prevent data leakage between training and test sets. To ensure complete separation of authors and developers, we randomly selected 10% of unique authors and 10% of unique developers, designating any pairs containing these selected entities for the test set. This entity-based splitting strategy resulted in `{python} int(training_split_counts["train"])` (`{python} float(training_split_pct["train"])`%) pairs for training and `{python} int(training_split_counts["test"])` (`{python} float(training_split_pct["test"])`%) pairs for testing.
+
+For our predictive model, we evaluated three transformer-based architectures that have demonstrated strong performance in entity matching tasks:
+
+- DeBERTa-v3-base [@he2021debertav3; @he2021deberta]
+- mBERT (bert-base-multilingual-cased) [@bert2018]
+- DistilBERT [@Sanh2019DistilBERTAD]
+
+We systematically evaluated these base models across different combinations of developer-account features, ranging from using only the username to incorporating complete profile information (username, display name, and email address). We fine-tuned all models using the Adam optimizer with a linear learning rate of 1e-05 for training and a batch size of 8 for training and evaluation. Given the size of our dataset and the binary nature of our classification task, models were trained for a single epoch to prevent overfitting.
+
+We evaluated model performance using standard binary classification metrics: precision, recall, and F1-score. This evaluation framework allowed us to directly compare model architectures and feature combinations while accounting for the balance between precision and recall in identifying correct matches.
+
+Our comprehensive model evaluation revealed that fine-tuning DeBERTa-v3-base [@he2021debertav3] with developer username and display name as input features produces optimal performance for author-developer matching. This model configuration achieved a binary F1 score of `{python} float(best_model_f1)`, with an accuracy of `{python} float(best_model_acc)`, precision of `{python} float(best_model_prec)`, and recall of `{python} float(best_model_rec)`. @tbl-em-model-comparison presents a complete comparison of model architectures and feature combinations.
+
+::: {.content-visible when-format="html"}
+
+```{python}
+#| label: tbl-em-model-comparison
+#| tbl-cap: "Comparison of Models for Author-Developer-Account Matching"
+
+exp_results
+```
+
+:::
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+def df_to_latex_table(
+    df: pd.DataFrame,
+    caption: str,
+    label: str,
+    alignment: str = None,
+    float_format: str = ".3f"
+) -> str:
+    # Generate column alignment if not provided
+    if alignment is None:
+        # Use 'l' for string/object columns, 'r' for numeric columns
+        alignment = "".join(
+            ["l" if dtype.kind in "OUS" else "r" for dtype in df.dtypes]
+        )
+    else:
+        # Ensure provided alignment matches number of columns
+        if len(alignment) != len(df.columns):
+            raise ValueError(f"Alignment string length ({len(alignment)}) must match number of columns ({len(df.columns)})")
+    
+    # Create header row
+    header_row = " & ".join([f"\\textbf{{{col}}}" for col in df.columns]) + " \\\\"
+    
+    # Create data rows with alternating colors
+    data_rows = []
+    for i, row in enumerate(df.itertuples(index=False)):
+        color = "gray!10" if i % 2 == 1 else "white"
+        
+        # Format each cell value
+        cells = []
+        for val, dtype in zip(row, df.dtypes):
+            if pd.isna(val):
+                cells.append("")
+            elif dtype.kind in "fc":  # Float or complex
+                try:
+                    cells.append(f"{float(val):{float_format}}")
+                except (ValueError, TypeError):
+                    cells.append(str(val))
+            else:
+                cells.append(str(val))
+        
+        # Create the row with consistent cell coloring
+        colored_cells = [f"\\cellcolor{{{color}}}{cell}" for cell in cells]
+        row_str = " & ".join(colored_cells) + " \\\\"
+        data_rows.append(f"    {row_str}")
+    
+    # Combine into final table
+    table_template = f"""\\begin{{table}}
+\\centering
+\\caption{{{caption}}}
+\\label{{{label}}}
+\\begin{{tabular}}{{{alignment}}}
+\\toprule
+{header_row}
+\\midrule
+{chr(10).join(data_rows)}
+\\bottomrule
+\\end{{tabular}}
+\\end{{table}}"""
+
+    return table_template
+
+```
+
+```{python}
+# Convert to LaTeX table
+model_comparison_latex = df_to_latex_table(
+    exp_results,
+    caption="Comparison of Models for Author-Developer-Account Matching",
+    label="tbl-em-model-comparison",
+    alignment="llrrrr",
+)
+
+IPython.display.Latex(model_comparison_latex)
+```
+
+:::
+
+Analysis of each model's performance revealed that including developer display names had the largest positive impact on model performance compared to username alone. We also observed that mBERT's performance was comparable to DeBERTa's while using the developer email address as an additional input feature. However, we selected the DeBERTa configuration as it had consistent strong performance across various feature combinations.
+
+To facilitate the reuse of our work, we have made our trained model and supporting code publicly available. Complete fine-tuning, evaluation, and inference code is available as the Python package: [sci-soft-models](https://github.com/evamaxfield/sci-soft-models), and the fine-tuned model has been released on HuggingFace ([evamxb/dev-author-em-clf](https://huggingface.co/evamxb/dev-author-em-clf)).
+
+#### Model Limitations
+
+While our model demonstrates strong performance, we acknowledge certain limitations in our approach:
+
+1. **Short name sensitivity**: Shorter names (both usernames and display names) can affect the model's performance, as less textual information is available for matching.
+2. **Organization accounts**: Research lab accounts used for project management present a potential challenge for accurate matching, as they don't correspond to individual authors. However, our filtering mechanisms applied before analysis help minimize their impact in modeling.
+
+### Dataset Characteristics and Repository Types
+
+Our compiled dataset appears to contain a mix of repository types, varying from analysis script repositories to software tools and likely some "code dumps" (where code is copied to a new repository immediately before publication). This diversity is reflected in the commit duration patterns across different publication types. The median commit duration for repositories in our analysis is:
+
+- 47 days for preprints
+- 104 days for research articles
+- 247 days for software articles
+
+Complete statistics on commit durations, including count, mean, and quantile details, are available in @tbl-commit-duration-distributions.
+
+```{python}
+#| label: tbl-commit-duration-distributions
+#| tbl-cap: "Commit duration (in days) distributions for different publication types. Only includes article-repository pairs with a most recent commit no later than 90 days after publication and excludes publications from research teams in the top 3% of total author sizes."
+
+commit_dist_plotting_data = team_comp_no_push_after_pub.copy()
+commit_dist_plotting_data = commit_dist_plotting_data.sort_values(
+    "article_type",
+)
+commit_dist_plotting_data["repo_commit_duration"] = commit_dist_plotting_data["repo_commit_duration"] * 365.25
+commit_dist_plotting_data.groupby(["article_type"])["repo_commit_duration"].describe(percentiles=[0.1, 0.25, 0.5, 0.75, 0.9])
+```
+
+## Modeling and Analysis Supporting Tables and Figures
 
 ### Distributions of Author-Developer-Account Prediction Confidence
 
@@ -2861,98 +3006,6 @@ g.fig.tight_layout()
 ```
 
 Thresholding the predictive model confidence at 0.97 resulted in a `{python} pct_removed_from_conf_thresh`% reduction in the number of author-developer-account pairs. This threshold was chosen to ensure a high level of confidence in the matches while retaining a large number of pairs for analysis.
-
-### Full Comparison of Models and Optional Features for Author-Developer-Account Matching
-
-::: {.content-visible when-format="html"}
-
-```{python}
-#| label: tbl-em-model-comparison
-#| tbl-cap: "Comparison of Models for Author-Developer-Account Matching"
-
-exp_results
-```
-
-:::
-
-::: {.content-visible when-format="pdf"}
-
-```{python}
-def df_to_latex_table(
-    df: pd.DataFrame,
-    caption: str,
-    label: str,
-    alignment: str = None,
-    float_format: str = ".3f"
-) -> str:
-    # Generate column alignment if not provided
-    if alignment is None:
-        # Use 'l' for string/object columns, 'r' for numeric columns
-        alignment = "".join(
-            ["l" if dtype.kind in "OUS" else "r" for dtype in df.dtypes]
-        )
-    else:
-        # Ensure provided alignment matches number of columns
-        if len(alignment) != len(df.columns):
-            raise ValueError(f"Alignment string length ({len(alignment)}) must match number of columns ({len(df.columns)})")
-    
-    # Create header row
-    header_row = " & ".join([f"\\textbf{{{col}}}" for col in df.columns]) + " \\\\"
-    
-    # Create data rows with alternating colors
-    data_rows = []
-    for i, row in enumerate(df.itertuples(index=False)):
-        color = "gray!10" if i % 2 == 1 else "white"
-        
-        # Format each cell value
-        cells = []
-        for val, dtype in zip(row, df.dtypes):
-            if pd.isna(val):
-                cells.append("")
-            elif dtype.kind in "fc":  # Float or complex
-                try:
-                    cells.append(f"{float(val):{float_format}}")
-                except (ValueError, TypeError):
-                    cells.append(str(val))
-            else:
-                cells.append(str(val))
-        
-        # Create the row with consistent cell coloring
-        colored_cells = [f"\\cellcolor{{{color}}}{cell}" for cell in cells]
-        row_str = " & ".join(colored_cells) + " \\\\"
-        data_rows.append(f"    {row_str}")
-    
-    # Combine into final table
-    table_template = f"""\\begin{{table}}
-\\centering
-\\caption{{{caption}}}
-\\label{{{label}}}
-\\begin{{tabular}}{{{alignment}}}
-\\toprule
-{header_row}
-\\midrule
-{chr(10).join(data_rows)}
-\\bottomrule
-\\end{{tabular}}
-\\end{{table}}"""
-
-    return table_template
-
-```
-
-```{python}
-# Convert to LaTeX table
-model_comparison_latex = df_to_latex_table(
-    exp_results,
-    caption="Comparison of Models for Author-Developer-Account Matching",
-    label="tbl-em-model-comparison",
-    alignment="llrrrr",
-)
-
-IPython.display.Latex(model_comparison_latex)
-```
-
-:::
 
 ### Linear Models for Software Development Dynamics Within Research Teams
 
