@@ -904,6 +904,7 @@ docs_w_1_citation = docs_w_1_citation.drop_duplicates(
 
 # Iter over articles and get the team composition info
 team_composition_rows = []
+relationships_removed_from_confidence_thresh = set()
 for _, row in docs_w_1_citation.iterrows():
     # Get a boolean value for "no pushes after publication"
     repo_details = repositories.loc[repositories["id"] == row["repository_id"]].iloc[0]
@@ -933,9 +934,16 @@ for _, row in docs_w_1_citation.iterrows():
     )
 
     # Drop any author dev links that have less than 97% confidence
-    author_dev_links = author_dev_links.loc[
+    author_dev_links_filtered = author_dev_links.loc[
         author_dev_links["predictive_model_confidence"] >= 0.97
     ]
+    for _, relationship_row in author_dev_links.loc[
+        author_dev_links["predictive_model_confidence"] < 0.97
+    ].iterrows():
+        # If the relationship was removed, add it to the set
+        relationships_removed_from_confidence_thresh.add(
+            (relationship_row["researcher_id"], relationship_row["developer_account_id"])
+        )
 
     # Get the set of dev_researcher_links for the devs
     dev_researcher_links = researcher_dev_links.loc[
@@ -950,16 +958,23 @@ for _, row in docs_w_1_citation.iterrows():
     )
 
     # Drop any dev researcher links that have less than 97% confidence
-    dev_researcher_links = dev_researcher_links.loc[
+    dev_researcher_links_filtered = dev_researcher_links.loc[
         dev_researcher_links["predictive_model_confidence"] >= 0.97
     ]
+    for _, relationship_row in dev_researcher_links.loc[
+        dev_researcher_links["predictive_model_confidence"] < 0.97
+    ].iterrows():
+        # If the relationship was removed, add it to the set
+        relationships_removed_from_confidence_thresh.add(
+            (relationship_row["researcher_id"], relationship_row["developer_account_id"])
+        )
 
     # Get the number of authors who were devs on this paper
     n_author_devs = 0
     n_author_non_devs = 0
     for author_id in author_ids:
-        author_dev_ids = author_dev_links.loc[
-            author_dev_links["researcher_id"] == author_id
+        author_dev_ids = author_dev_links_filtered.loc[
+            author_dev_links_filtered["researcher_id"] == author_id
         ]["developer_account_id"].unique()
 
         # Count
@@ -971,8 +986,8 @@ for _, row in docs_w_1_citation.iterrows():
     # Get the number of devs who aren't authors
     n_non_author_devs = 0
     for dev_id in dev_ids:
-        dev_researcher_ids = dev_researcher_links.loc[
-            dev_researcher_links["developer_account_id"] == dev_id
+        dev_researcher_ids = dev_researcher_links_filtered.loc[
+            dev_researcher_links_filtered["developer_account_id"] == dev_id
         ]["researcher_id"].unique()
 
         # No dev should be matched to more than 3 authors
@@ -1232,7 +1247,7 @@ team_comp_no_push_after_pub_total_devs = team_comp_no_push_after_pub_counts_tabl
 
 Understanding the composition and dynamics of software development teams provides essential context for analyzing how code contributions relate to scientific recognition and impact. To ensure reliable analysis, we focus on a subset of our article-repository pairs that meet several filtering conditions. First, we require that each article-repository pair have at least one citation, which helps ensure the research has received a basic level of engagement from the scientific community. Next, we require that repository commit activity must stop prior to 90 days past the date of article publication. Disallowing long-term projects ensures we do not include projects that may add additional code contributors later while still allowing a grace period during which developers can update repositories with additional documentation and publication information. We then subset the data to only include article-repository pairs with research teams of typical size by removing those with fewer than three authors and more than `{python} int(n_authors_97th_percentile)` authors, the 97th percentile for research team size. Finally, we filter out any author-developer pairs associated with these projects with predictive model confidence of less than 0.97 to ensure that we only include high-confidence matches[^3]. This filtering process results in a dataset of `{python} len(team_comp_no_push_after_pub)` article-repository pairs. A table with the counts of article-repository pairs, authors, and developers by data sources, domains, document types, and access status for this filtered dataset is shown in @tbl-team-comp-no-push-after-pub-counts.
 
-[^3]: @fig-dist-of-author-dev-pred-confidence shows the distribution of predictive model confidence scores for author-developer pairs to justify this threshold. We chose the 0.97 threshold to ensure that we only include high-confidence matches while retaining a large proportion of the data.
+[^3]: @fig-dist-of-author-dev-pred-confidence shows the distribution of predictive model confidence scores for author-developer pairs to justify this threshold. We chose the 0.97 threshold to ensure that we only include high-confidence matches while retaining a large proportion of the data (~90,000 author-developer pairs) as less than 3000 author-developer-account pairs have a confidence less than 0.97 in the whole unfiltered dataset.
 
 Within this filtered dataset, we categorized individuals into three groups: code-contributing authors (CC-A) who both authored papers and contributed code to associated repositories, non-code-contributing authors (NCC-A) who authored papers but showed no evidence of code contributions, and code-contributing non-authors (CC-NA) who contributed code but received no authorship recognition. This categorization revealed that papers in our dataset typically have `{python} total_auths` total authors, with `{python} total_auth_devs` code-contributing authors and `{python} total_auth_non_devs` non-code-contributing authors. Beyond the author list, papers averaged `{python} total_non_auth_devs` code-contributing non-authors. @tbl-team-composition-counts details these distributions by domain, article type, and open access status.
 
@@ -2351,11 +2366,24 @@ researchers_w_3_docs = (
 
 # Now for each of these, we want to see if they have coded on the document
 researchers_coded = []
+individuals_removed_from_confidence_thresh = 0
 for _, row in researchers_w_3_docs.iterrows():
     # Check for dev account
     dev_links = researcher_dev_links.loc[
         researcher_dev_links["researcher_id"] == row["researcher_id"]
     ]
+
+    # Remove any links with less than 97% confidence
+    before_drop_count = len(dev_links)
+    dev_links = dev_links.loc[
+        dev_links["predictive_model_confidence"] >= 0.97
+    ]
+    after_drop_count = len(dev_links)
+    individuals_removed_from_confidence_thresh += (
+        before_drop_count - after_drop_count
+    )
+
+    # Fast exit
     if len(dev_links) == 0:
         researchers_coded.append(
             {
@@ -3031,6 +3059,9 @@ thresholded_reduced_researcher_dev_links = (
 )
 
 # Caluclate how much data was removed
+count_removed_from_conf_thresh = len(
+    merged_reduced_researcher_dev_links
+) - len(thresholded_reduced_researcher_dev_links)
 pct_removed_from_conf_thresh = round(
     (
         1 - (len(thresholded_reduced_researcher_dev_links) / len(merged_reduced_researcher_dev_links))
@@ -3068,7 +3099,7 @@ g.set_titles(col_template="{col_name} set")
 g.fig.tight_layout()
 ```
 
-Thresholding the predictive model confidence at 0.97 resulted in a `{python} pct_removed_from_conf_thresh`% reduction in the number of author-developer-account pairs. This threshold was chosen to ensure a high level of confidence in the matches while retaining a large number of pairs for analysis.
+Thresholding the predictive model confidence at 0.97 resulted in a `{python} pct_removed_from_conf_thresh`% (`{python} count_removed_from_conf_thresh`) reduction in the number of author-developer-account pairs (from an unfiltered total of `{python} len(merged_reduced_researcher_dev_links)` author-developer-account pairs). This threshold was chosen to ensure a high level of confidence in the matches while retaining a large number of pairs for analysis.
 
 ## Filtered Dataset Description for Article-Citation, Author-Position, and Author-Correspondence Analysis
 
