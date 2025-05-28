@@ -2513,7 +2513,7 @@ researchers_w_3_docs_and_coded_agg_dummies = (
 )
 ```
 
-Building upon previous work examining career implications for researchers who prioritize software development (see @sec-background), we investigated how varying levels of code contribution relate to scholarly impact through h-index metrics. To ensure a robust analysis, we applied several key data filtering steps. We only included researchers with at least three publications in our dataset, removed those with more than three developer account associations, and used each researcher's most common domain, article type, and author position, with ties broken by the most recent occurrence. We removed h-index outliers by excluding researchers below the bottom 3rd and above the top 97th percentiles. Finally, we removed any author-developer-account pairs with a predictive model confidence of less than 0.97.
+Building upon previous work examining career implications for researchers who prioritize software development (see @sec-background), we investigated how varying levels of code contribution relate to scholarly impact through h-index metrics. To ensure a robust analysis, we applied several key data filtering steps. We only included researchers with at least three publications in our dataset, removed those with more than three developer account associations, and used each researcher's most common domain, article type, and author position, with ties broken by the most recent occurrence. We removed h-index outliers by excluding researchers below the bottom 3rd and above the top 97th percentiles. Finally, we removed any author-developer-account pairs with a predictive model confidence of less than 0.97. @tbl-h-index-counts summarizes the number of researchers in each coding frequency group, categorized by author position, publication type, and research domain.
 
 We categorized researchers' coding contributions into mutually exclusive groups: non-coders (no code contributions), any coding (code contribution in less than half of article-repository pairs), majority coding (code contribution in at least half, but not all, article-repository pairs), and always coding (code contribution in every article-repository pair).
 
@@ -3506,7 +3506,259 @@ IPython.display.Latex(
 
 :::
 
-### Linear Models for Characterizing Code-Contributing Author H-Index
+
+## Filtered Dataset Description for h-Index Analysis
+
+```{python}
+def _get_counts_by_column_for_h_index_data(
+    df: pd.DataFrame,
+    column_name: str,
+) -> list[dict[str, int]]:
+    counts = []
+    for value in df[column_name].unique():
+        subset = df.loc[df[column_name] == value]
+
+        # Append counts
+        counts.append({
+            column_name: value,
+            "n_authors": subset["researcher_id"].nunique(),
+            "n_any_coding": int(subset["any_coding"].sum()),
+            "n_majority_coding": int(subset["majority_coding"].sum()),
+            "n_always_coding": int(subset["always_coding"].sum()),
+        })
+
+    return counts
+
+h_index_domain_stats = _get_counts_by_column_for_h_index_data(
+    researchers_w_3_docs_and_coded_agg,
+    "common_domain",
+)
+h_index_article_type_stats = _get_counts_by_column_for_h_index_data(
+    researchers_w_3_docs_and_coded_agg,
+    "common_article_type",
+)
+h_index_author_position_stats = _get_counts_by_column_for_h_index_data(
+    researchers_w_3_docs_and_coded_agg,
+    "common_author_position",
+)
+
+h_index_total_authors = researchers_w_3_docs_and_coded_agg["researcher_id"].nunique()
+h_index_n_any_coding = int(researchers_w_3_docs_and_coded_agg["any_coding"].sum())
+h_index_n_majority_coding = int(researchers_w_3_docs_and_coded_agg["majority_coding"].sum())
+h_index_n_always_coding = int(researchers_w_3_docs_and_coded_agg["always_coding"].sum())
+```
+
+::: {.content-visible when-format="html"}
+
+```{python}
+#| label: tbl-h-index-counts
+#| tbl-cap: "Counts of Total Authors, n Any Coding Authors, n Majority Coding Authors, and n Always Coding Authors by Common Domain, Document Type, and Author Position. Authors are only included if they have three or more publications within our dataset and are associated with no more than three developer accounts, with each association having a predicted model confidence of at least 97%."
+
+# Construct multi-row span HTML table
+# Columns should be: "n_authors", "n_any_coding", "n_majority_coding", "n_always_coding"
+# Rows should be:
+# "By Common Domain", "By Common Document Type", "By Common Author Position" and "Total"
+
+# HTML templates
+stats_piece_inital_row_template = """
+<tr>
+<td rowspan="{n_rows}">{row_name}</td>
+<td>{value_name}</td>
+<td>{n_authors}</td>
+<td>{n_any_coding}</td>
+<td>{n_majority_coding}</td>
+<td>{n_always_coding}</td>
+</tr>
+""".strip()
+
+stats_piece_subsequent_row_template = """
+<tr>
+<td>{value_name}</td>
+<td>{n_authors}</td>
+<td>{n_any_coding}</td>
+<td>{n_majority_coding}</td>
+<td>{n_always_coding}</td>
+</tr>
+""".strip()
+
+# Iter over stats portions (and total)
+stats_portions_html = []
+for stats_portion, stats_name, value_key in [
+    (h_index_domain_stats, "<b>By Commmon Domain</b>", "common_domain"),
+    (h_index_article_type_stats, "<b>By Document Type</b>", "common_article_type"),
+    (h_index_author_position_stats, "<b>By Author Position</b>", "common_author_position"),
+    (
+        [
+            {
+                "empty": "",
+                "n_authors": f"<b>{h_index_total_authors}</b>",
+                "n_any_coding": f"<b>{h_index_n_any_coding}</b>",
+                "n_majority_coding": f"<b>{h_index_n_majority_coding}</b>",
+                "n_always_coding": f"<b>{h_index_n_always_coding}</b>",
+            }
+        ],
+        "<b>Total</b>",
+        "empty",
+    ),
+]:
+    # Order by value_key
+    if value_key != "empty":
+        stats_portion = sorted(
+            stats_portion, key=lambda x: x[value_key]
+        )
+
+    stats_portion_html = []
+    for i, stats_piece in enumerate(stats_portion):
+        if i == 0:
+            stats_portion_html.append(
+                stats_piece_inital_row_template.format(
+                    n_rows=len(stats_portion),
+                    row_name=stats_name,
+                    value_name=stats_piece[value_key].title(),
+                    n_authors=stats_piece["n_authors"],
+                    n_any_coding=stats_piece["n_any_coding"],
+                    n_majority_coding=stats_piece["n_majority_coding"],
+                    n_always_coding=stats_piece["n_always_coding"],
+                )
+            )
+        else:
+            stats_portion_html.append(
+                stats_piece_subsequent_row_template.format(
+                    value_name=stats_piece[value_key].title(),
+                    n_authors=stats_piece["n_authors"],
+                    n_any_coding=stats_piece["n_any_coding"],
+                    n_majority_coding=stats_piece["n_majority_coding"],
+                    n_always_coding=stats_piece["n_always_coding"],
+                )
+            )
+
+    stats_portions_html.append("\n".join(stats_portion_html))
+
+# Concat and wrap in table
+stats_table_html = f"""
+<table>
+<tr>
+    <th><b>Category</b></th>
+    <th><b>Subset</b></th>
+    <th><b>Total Authors</b></th>
+    <th><b>Any Code</b></th>
+    <th><b>Majority Code</b></th>
+    <th><b>Always Code</b></th>
+</tr>
+{" ".join(stats_portions_html)}
+</table>
+""".strip()
+
+IPython.display.HTML(stats_table_html)
+```
+
+:::
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+# LaTeX templates
+stats_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\cellcolor{{gray!10}}{value_name} & \\cellcolor{{gray!10}}{n_authors} & \\cellcolor{{gray!10}}{n_any_coding} & \\cellcolor{{gray!10}}{n_majority_coding} & \\cellcolor{{gray!10}}{n_always_coding} \\\\"""
+
+stats_piece_subsequent_row_template = """    & {value_name} & {n_authors} & {n_any_coding} & {n_majority_coding} & {n_always_coding} \\\\"""
+
+caption = (
+    "Counts of Total Authors, n Any Coding Authors, n Majority Coding Authors, "
+    "and n Always Coding Authors by Common Domain, Document Type, "
+    "and Author Position. Authors are only included if they have three "
+    "or more publications within our dataset and are associated with "
+    "no more than three developer accounts, with each association "
+    "having a predicted model confidence of at least 97\%."
+)
+label = "tbl-h-index-counts"
+
+# Table header and footer templates
+table_header_start = """\\begin{{table}}
+\\centering
+\\small
+\\caption{{{caption}}}
+\\label{{{label}}}
+\\begin{{tabular}}{{llrrrr}}
+\\toprule
+\\textbf{{Category}} & \\textbf{{Subset}} & \\textbf{{Total Authors}} & \\textbf{{Any Code}} & \\textbf{{Majority Code}} & \\textbf{{Always Code}} \\\\
+\\midrule""".format(
+    caption=caption,
+    label=label,
+)
+
+table_footer = """\\bottomrule
+\\end{tabular}
+\\end{table}"""
+
+# Generate table content
+stats_portions_latex = []
+for stats_portion, stats_name, value_key in [
+    (h_index_domain_stats, "By Commmon Domain", "common_domain"),
+    (h_index_article_type_stats, "By Document Type", "common_article_type"),
+    (h_index_author_position_stats, "By Author Position", "common_author_position"),
+    (
+        [
+            {
+                "empty": "",
+                "n_authors": h_index_total_authors,
+                "n_any_coding": h_index_n_any_coding,
+                "n_majority_coding": h_index_n_majority_coding,
+                "n_always_coding": h_index_n_always_coding,
+            }
+        ],
+        "Total",
+        "empty",
+    ),
+]:
+    # Order by value_key
+    if value_key != "empty":
+        stats_portion = sorted(
+            stats_portion, key=lambda x: x[value_key]
+        )
+
+    stats_portion_latex = []
+    if stats_name == "Total":
+        stats_portion_latex.append(
+            f"    \\textbf{{Total}} & & \\textbf{{{stats_portion[0]['n_authors']}}} & \\textbf{{{stats_portion[0]['n_any_coding']}}} & \\textbf{{{stats_portion[0]['n_majority_coding']}}} & \\textbf{{{stats_portion[0]['n_always_coding']}}} \\\\"
+        )
+    else:
+        # Add the first row with the category label and colored cells
+        first_piece = stats_portion[0]
+        stats_portion_latex.append(
+            stats_piece_initial_row_template.format(
+                n_rows=len(stats_portion),
+                row_name=stats_name,
+                value_name=first_piece[value_key].title(),
+                n_authors=first_piece["n_authors"],
+                n_any_coding=first_piece["n_any_coding"],
+                n_majority_coding=first_piece["n_majority_coding"],
+                n_always_coding=first_piece["n_always_coding"],
+            ).rstrip()
+        )
+        
+        # Add subsequent rows with alternating colors
+        for i, stats_piece in enumerate(stats_portion[1:]):
+            color_cmd = "\\cellcolor{gray!10}" if i % 2 == 1 else ""
+            stats_portion_latex.append(
+                f"    & {color_cmd}{stats_piece[value_key]} & {color_cmd}{stats_piece['n_authors']} & {color_cmd}{stats_piece['n_any_coding']} & {color_cmd}{stats_piece['n_majority_coding']} & {color_cmd}{stats_piece['n_always_coding']} \\\\"
+            )
+
+    section_latex = "\n".join(stats_portion_latex)
+    if stats_name != "Total":
+        section_latex += "\\midrule"
+    stats_portions_latex.append(section_latex)
+
+# Combine all parts
+stats_table_latex = f"""{table_header_start}
+{"\n".join(stats_portions_latex)}
+{table_footer}"""
+
+IPython.display.Latex(stats_table_latex)
+```
+
+:::
+
+## h-Index Linear Model Results
 
 ```{python}
 def compute_researcher_level_models(
