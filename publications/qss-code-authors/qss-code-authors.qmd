@@ -423,7 +423,7 @@ The scientific community has attempted to address this recognition gap through i
 
 The emergence of public code repositories alongside published research provides a unique opportunity to study this disconnect. Source code repositories maintain detailed records of who contributes what code and when, providing a window into the patterns of software development in scientific research. Using transaction histories from these repositories, we developed a predictive model that enables systematic matching between scientific article authors and source code developer accounts. Our predictive model enables us to create a dataset of almost 140,000 linked authors and their developer accounts to understand how code contribution is distributed across research teams and the implications of frequent code contribution on an individuals career.
 
-We identify several patterns in the relationship between code contributions and scientific recognition by applying our predictive model across almost 140,000 paired research articles and repositories. Our analysis reveals that nearly 30% of articles have non-author code-contributors - individuals who helped create the software but received no formal authorship credit. We find that code-contributing authors are associated with modest increases in article-level impact metrics (~5.2% increase in citations per code-contributing author). However, these effects become statistically non-significant when controlling for domain, article type, and open access status. First authors are significantly more likely to be code contributors than other author positions across all conditions tested. We also document a negative relationship between coding frequency and scholarly impact: authors who contribute code more frequently show progressively lower h-indices than their non-coding peers, a pattern that persists when controlling for publication count, and author's most common author position, domain, and article type.
+We identify several patterns in the relationship between code contributions and scientific recognition by applying our predictive model across almost 140,000 paired research articles and repositories. Our analysis reveals that nearly 30% of articles have non-author code-contributors - individuals who helped create the software but received no formal authorship credit. We find that code-contributing authors are associated with modest increases in article-level impact metrics (~5.1% increase in citations per code-contributing author). However, these effects become statistically non-significant when controlling for domain, article type, and open access status. First authors are significantly more likely to be code contributors than other author positions across all conditions tested. We also document a negative relationship between coding frequency and scholarly impact: authors who contribute code more frequently show progressively lower h-indices than their non-coding peers, a pattern that persists when controlling for publication count, and author's most common author position, domain, and article type.
 
 The primary contributions of this article are: (1) a predictive model for matching authors with developer account information that addresses challenges in identity resolution across platforms[^1]; (2) a dataset of linked authors and developers for ~140,000 article-repository pairs, providing a resource for analyzing scientific software development patterns[^2]; and (3) analyses that reveal insights into the software development dynamics of research teams, including patterns of recognition, impact, and career implications for code contributors. These contributions provide evidence for the ongoing discussions about scientific recognition systems and raise questions about aligning institutional incentives with the spectrum of contributions that drive modern scientific progress.
 
@@ -581,9 +581,15 @@ total_devs = merged_repository_contributor_doc_repo_links[
 ::: {.content-visible when-format="html"}
 
 ```{python}
-#| label: tbl-rs-graph-overall-counts
-#| tbl-cap: "Counts of Article-Repository Pairs, Authors, and Developers by Data Sources, Domains, Document Types, and Access Status."
-
+def _get_html_for_counts_table(
+    domain_stats,
+    doc_type_stats,
+    access_stats,
+    data_source_stats,
+    total_article_repo_pairs,
+    total_authors,
+    total_devs,
+):
 # Construct multi-row span HTML table
 # Columns should be: "n_article_repo_pairs", "n_authors", "n_devs"
 # Rows should be:
@@ -629,9 +635,10 @@ for stats_portion, stats_name, value_key in [
         "empty",
     ),
 ]:
-    # Order by article-repo pairs
+        # Order by value_key
+        if value_key != "empty":
     stats_portion = sorted(
-        stats_portion, key=lambda x: x["n_article_repo_pairs"], reverse=True
+                stats_portion, key=lambda x: x[value_key]
     )
 
     stats_portion_html = []
@@ -673,6 +680,23 @@ stats_table_html = f"""
 </table>
 """.strip()
 
+    return stats_table_html
+```
+
+```{python}
+#| label: tbl-rs-graph-overall-counts
+#| tbl-cap: "Counts of Article-Repository Pairs, Authors, and Developers by Data Sources, Domains, Document Types, and Access Status in the Full, Unfiltered Dataset."
+
+stats_table_html = _get_html_for_counts_table(
+    domain_stats=domain_stats,
+    doc_type_stats=doc_type_stats,
+    access_stats=access_stats,
+    data_source_stats=data_source_stats,
+    total_article_repo_pairs=total_article_repo_pairs,
+    total_authors=total_authors,
+    total_devs=total_devs,
+)
+
 IPython.display.HTML(stats_table_html)
 ```
 
@@ -681,21 +705,35 @@ IPython.display.HTML(stats_table_html)
 ::: {.content-visible when-format="pdf"}
 
 ```{python}
+def _get_latex_for_counts_table(
+    caption,
+    label,
+    domain_stats,
+    doc_type_stats,
+    access_stats,
+    data_source_stats,
+    total_article_repo_pairs,
+    total_authors,
+    total_devs,
+):
 # LaTeX templates
 stats_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\cellcolor{{gray!10}}{value_name} & \\cellcolor{{gray!10}}{article_repo_pairs} & \\cellcolor{{gray!10}}{authors} & \\cellcolor{{gray!10}}{devs} \\\\"""
 
 stats_piece_subsequent_row_template = """    & {value_name} & {article_repo_pairs} & {authors} & {devs} \\\\"""
 
 # Table header and footer templates
-table_header = """\\begin{table}
+    table_header_start = """\\begin{{table}}
 \\centering
 \\small
-\\caption{Counts of Article-Repository Pairs, Authors, and Developers by Data Sources, Domains, Document Types, and Access Status.}
-\\label{tbl-rs-graph-overall-counts}
-\\begin{tabular}{llrrr}
+    \\caption{{{caption}}}
+    \\label{{{label}}}
+    \\begin{{tabular}}{{llrrr}}
 \\toprule
-\\textbf{Category} & \\textbf{Subset} & \\textbf{Article-Repository Pairs} & \\textbf{Authors} & \\textbf{Developers} \\\\
-\\midrule"""
+    \\textbf{{Category}} & \\textbf{{Subset}} & \\textbf{{Article-Repository Pairs}} & \\textbf{{Authors}} & \\textbf{{Developers}} \\\\
+    \\midrule""".format(
+        caption=caption,
+        label=label,
+    )
 
 table_footer = """\\bottomrule
 \\end{tabular}
@@ -721,9 +759,10 @@ for stats_portion, stats_name, value_key in [
         "empty",
     ),
 ]:
-    # Order by article-repo pairs
+        # Order by value_key
+        if value_key != "empty":
     stats_portion = sorted(
-        stats_portion, key=lambda x: x["n_article_repo_pairs"], reverse=True
+                stats_portion, key=lambda x: x[value_key]
     )
 
     stats_portion_latex = []
@@ -758,9 +797,25 @@ for stats_portion, stats_name, value_key in [
     stats_portions_latex.append(section_latex)
 
 # Combine all parts
-stats_table_latex = f"""{table_header}
+    stats_table_latex = f"""{table_header_start}
 {"\n".join(stats_portions_latex)}
 {table_footer}"""
+
+    return stats_table_latex
+```
+
+```{python}
+stats_table_latex = _get_latex_for_counts_table(
+    caption="Counts of Article-Repository Pairs, Authors, and Developers by Data Sources, Domains, Document Types, and Access Status in the Full, Unfiltered Dataset.",
+    label="tbl-rs-graph-overall-counts",
+    domain_stats=domain_stats,
+    doc_type_stats=doc_type_stats,
+    access_stats=access_stats,
+    data_source_stats=data_source_stats,
+    total_article_repo_pairs=total_article_repo_pairs,
+    total_authors=total_authors,
+    total_devs=total_devs,
+)
 
 IPython.display.Latex(stats_table_latex)
 ```
@@ -795,12 +850,10 @@ docs_w_1_citation = docs_w_1_citation.rename(columns={"id": "document_id"})
 
 # Merge repository id in
 docs_w_1_citation = docs_w_1_citation.merge(
-    doc_repo_links[
-        [
+    doc_repo_links[[
             "document_id",
             "repository_id",
-        ]
-    ],
+    ]],
     left_on="document_id",
     right_on="document_id",
 )
@@ -922,6 +975,10 @@ for _, row in docs_w_1_citation.iterrows():
             dev_researcher_links["developer_account_id"] == dev_id
         ]["researcher_id"].unique()
 
+        # No dev should be matched to more than 3 authors
+        if len(dev_researcher_ids) > 3:
+            continue
+
         # Count
         if not any(dev_researcher_id in author_ids for dev_researcher_id in dev_researcher_ids):
             n_non_author_devs += 1
@@ -931,6 +988,8 @@ for _, row in docs_w_1_citation.iterrows():
         {
             "document_id": row["document_id"],
             "repository_id": row["repository_id"],
+            "author_ids": author_ids.tolist(),
+            "dev_ids": dev_ids.tolist(),
             "n_authors": n_authors,
             "n_author_non_devs": n_author_non_devs,
             "n_author_devs": n_author_devs,
@@ -1015,6 +1074,24 @@ team_comp_no_push_after_pub = team_comp_no_push_after_pub.loc[
     <= team_comp_no_push_after_pub["n_authors"].quantile(0.97)
 ]
 
+# Get columns needed for counts table
+team_comp_no_push_after_pub_counts_table = team_comp_no_push_after_pub[
+    [
+        "document_id",
+        "repository_id",
+        "author_ids",
+        "dev_ids",
+        "article_type",
+        "domain",
+        "is_open_access",
+    ]
+].copy()
+
+# Drop author_ids and dev_ids from original dataframe
+team_comp_no_push_after_pub = team_comp_no_push_after_pub.drop(
+    columns=["author_ids", "dev_ids"]
+)
+
 # Add dummies
 team_comp_no_push_after_pub_dummies = pd.get_dummies(
     team_comp_no_push_after_pub,
@@ -1062,9 +1139,98 @@ mean_non_author_devs_for_papers_w_non_auth_devs = metric_str_fmt.format(
         team_comp_no_push_after_pub["n_non_author_devs"] > 0
     ]["n_non_author_devs"].std(),
 )
+
+# Merge counts table with dataset sources
+team_comp_no_push_after_pub_counts_table = team_comp_no_push_after_pub_counts_table.merge(
+    doc_repo_links[[
+        "document_id",
+        "repository_id",
+        "dataset_source_id",
+    ]],
+    on=["document_id", "repository_id"],
+    how="left",
+).merge(
+    dataset_sources.rename(
+        columns={
+            "id": "dataset_source_id", "name": "dataset_source_name"
+        }
+    ),
+    on="dataset_source_id",
+    how="left",
+)
+
+# Get counts by:
+# - domain
+# - article type
+# - open access status
+# - dataset source
+# - total
+
+def _get_counts_by_column(
+    df: pd.DataFrame,
+    column_name: str,
+    category: str,
+    subset_replace: dict | None = None,
+) -> dict:
+    counts = []
+    for value in df[column_name].unique():
+        subset = df.loc[df[column_name] == value]
+
+        # Replace value if subset_replace is provided
+        if subset_replace is not None and value in subset_replace:
+            value = subset_replace[value]
+
+        # Get counts
+        author_ids = set(subset["author_ids"].explode().dropna().unique())
+        dev_ids = set(subset["dev_ids"].explode().dropna().unique())
+
+        # Append counts
+        counts.append({
+            category: value,
+            "n_article_repo_pairs": len(subset),
+            "n_authors": len(author_ids),
+            "n_devs": len(dev_ids),
+        })
+
+    return counts
+
+team_comp_no_push_after_pub_counts_domain = _get_counts_by_column(
+    team_comp_no_push_after_pub_counts_table,
+    "domain",
+    "domain",
+)
+team_comp_no_push_after_pub_counts_article_type = _get_counts_by_column(
+    team_comp_no_push_after_pub_counts_table,
+    "article_type",
+    "doc_type",
+)
+team_comp_no_push_after_pub_counts_open_access = _get_counts_by_column(
+    team_comp_no_push_after_pub_counts_table,
+    "is_open_access",
+    "access_status",
+    subset_replace={
+        0: "Closed",
+        1: "Open",
+    },
+)
+team_comp_no_push_after_pub_counts_dataset_source = _get_counts_by_column(
+    team_comp_no_push_after_pub_counts_table,
+    "dataset_source_name",
+    "data_source",
+)
+
+team_comp_no_push_after_pub_total_pairs = len(
+    team_comp_no_push_after_pub_counts_table
+)
+team_comp_no_push_after_pub_total_authors = team_comp_no_push_after_pub_counts_table[
+    "author_ids"
+].explode().dropna().nunique()
+team_comp_no_push_after_pub_total_devs = team_comp_no_push_after_pub_counts_table[
+    "dev_ids"
+].explode().dropna().nunique()
 ```
 
-Understanding the composition and dynamics of software development teams provides essential context for analyzing how code contributions relate to scientific recognition and impact. To ensure reliable analysis, we focus on a subset of our article-repository pairs that meet several filtering conditions. First, we require that each article-repository pair have at least one citation, which helps ensure the research has received a basic level of engagement from the scientific community. Next, we require that repository commit activity must stop prior to 90 days past the date of article publication. Disallowing long-term projects ensures we do not include projects that may add additional code contributors later while still allowing a grace period during which developers can update repositories with additional documentation and publication information. We then subset the data to only include article-repository pairs with research teams of typical size by removing those with fewer than three authors and more than `{python} int(n_authors_97th_percentile)` authors, the 97th percentile for research team size. Finally, we filter out any author-developer pairs associated with these projects with predictive model confidence of less than 0.97 to ensure that we only include high-confidence matches[^3]. This filtering process results in a dataset of `{python} len(team_comp_no_push_after_pub)` article-repository pairs.
+Understanding the composition and dynamics of software development teams provides essential context for analyzing how code contributions relate to scientific recognition and impact. To ensure reliable analysis, we focus on a subset of our article-repository pairs that meet several filtering conditions. First, we require that each article-repository pair have at least one citation, which helps ensure the research has received a basic level of engagement from the scientific community. Next, we require that repository commit activity must stop prior to 90 days past the date of article publication. Disallowing long-term projects ensures we do not include projects that may add additional code contributors later while still allowing a grace period during which developers can update repositories with additional documentation and publication information. We then subset the data to only include article-repository pairs with research teams of typical size by removing those with fewer than three authors and more than `{python} int(n_authors_97th_percentile)` authors, the 97th percentile for research team size. Finally, we filter out any author-developer pairs associated with these projects with predictive model confidence of less than 0.97 to ensure that we only include high-confidence matches[^3]. This filtering process results in a dataset of `{python} len(team_comp_no_push_after_pub)` article-repository pairs. A table with the counts of article-repository pairs, authors, and developers by data sources, domains, document types, and access status for this filtered dataset is shown in @tbl-team-comp-no-push-after-pub-counts.
 
 [^3]: @fig-dist-of-author-dev-pred-confidence shows the distribution of predictive model confidence scores for author-developer pairs to justify this threshold. We chose the 0.97 threshold to ensure that we only include high-confidence matches while retaining a large proportion of the data.
 
@@ -1548,9 +1714,9 @@ sns.move_legend(
 
 Building upon previous work examining the effects of team size and team diversity on scientific impact and software quality (see @sec-background), we investigate how the number of code contributors within a research team may be associated with an article's research impact. We hypothesized that more code contributors might signal greater technical complexity in research, which may be associated with higher citation counts as the community builds upon more technically sophisticated works.
 
-Using our filtered dataset of article-repository pairs, we conducted multiple regression analyses to examine these relationships while controlling for various factors. Without controlling for domain, open access, or article type differences (@tbl-article-composition-overall), our analysis revealed a modest positive association between the number of code contributing authors and article citations, with each code-contributing author associated with a 5.2% increase in article citations (p < 0.001).
+Using our filtered dataset of article-repository pairs (@tbl-team-comp-no-push-after-pub-counts), we conducted multiple regression analyses to examine these relationships while controlling for various factors. Without controlling for domain, open access, or article type differences (@tbl-article-composition-overall), our analysis revealed a modest positive association between the number of code contributing authors and article citations, with each code-contributing author associated with a 5.1% increase in article citations (p < 0.001).
 
-When controlling for article type (@tbl-article-composition-type), we observed divergent patterns between preprints and research articles. For preprints, each code-contributing non-author was associated with a statistically significant 3.1% decrease in citations (p < 0.005). In contrast, research articles showed more positive associations: we found a significant positive relationship between code-contributing authors and citations (p < 0.001), though we cannot estimate the precise magnitude due to the non-significant main effect in the model. Additionally, each code-contributing non-author was associated with a 0.7% increase in expected citations for research articles (p < 0.001).
+When controlling for article type (@tbl-article-composition-type), we observed divergent patterns between preprints and research articles. For preprints, each code-contributing non-author was associated with a statistically significant 3.2% decrease in citations (p < 0.005). In contrast, research articles showed more positive associations: we found a significant positive relationship between code-contributing authors and citations (p < 0.001), though we cannot estimate the precise magnitude due to the non-significant main effect in the model. Additionally, each code-contributing non-author was associated with a 0.1% increase in expected citations for research articles (p < 0.001).
 
 Based on these findings, we _**partially accept**_ our hypothesis (_H1_) that "the number of individuals contributing code to a publication's associated repository positively correlates with the article's citation count." Several important nuances qualify this acceptance: the relationship is statistically significant but modest in magnitude and differs substantially between research articles (positive association) and preprints (negative association for non-author code contributors). These variations suggest that the relationship between code contributions and citation impact is context-dependent and more complex than initially hypothesized.
 
@@ -1837,7 +2003,6 @@ def _run_chi2_and_posthocs(
                 control_val_subset["is_code_contributor"],
             )
             chi2_result = chi2_contingency(xtabs)
-            if chi2_result.pvalue < 0.05:
                 posthoc_results = _run_posthocs(
                     control_val_subset,
                     split_var=split_var,
@@ -1850,118 +2015,21 @@ def _run_chi2_and_posthocs(
                         **posthoc_result,
                     })
 
-            else:
-                pass
-
     return return_vals
 ```
 
 ```{python}
-# Create subset documents
-docs_for_per_repo_stats = documents[[
-    "id",
-    "publication_date",
-    "is_open_access",
-]].copy()
-
-# Take sample?
-if USE_SAMPLE:
-    docs_for_per_repo_stats = docs_for_per_repo_stats.sample(frac=0.02, random_state=12)
-
-# Rename id to document_id
-docs_for_per_repo_stats = docs_for_per_repo_stats.rename(columns={"id": "document_id"})
-
-# Merge repository id in
-docs_for_per_repo_stats = docs_for_per_repo_stats.merge(
-    doc_repo_links[
-        [
+doc_contribs_for_code_char = document_contributors.loc[
+    document_contributors["document_id"].isin(team_comp_no_push_after_pub["document_id"])
+].merge(
+    team_comp_no_push_after_pub[[
             "document_id",
             "repository_id",
-        ]
-    ],
-    left_on="document_id",
-    right_on="document_id",
+        "is_open_access",
+        "domain",
+        "article_type",
+    ]]
 )
-
-# Merge in document details (domain, document type)
-docs_for_per_repo_stats = (
-    docs_for_per_repo_stats.merge(
-        document_topics[["document_id", "topic_id"]],
-        left_on="document_id",
-        right_on="document_id",
-    )
-    .merge(
-        repositories[["id", "last_pushed_datetime"]],
-        left_on="repository_id",
-        right_on="id",
-    )
-    .drop(
-        columns=["id"],
-    )
-    .merge(
-        topics[["id", "domain_name"]],
-        left_on="topic_id",
-        right_on="id",
-    )
-    .drop(
-        columns=["id", "topic_id"],
-    )
-    .merge(
-        reduced_doc_types,
-        left_on="document_id",
-        right_on="document_id",
-    )
-    .rename(
-        columns={
-            "domain_name": "domain",
-            "reduced_doc_type": "article_type",
-        }
-    )
-)
-
-# Drop any documents that have more than one repository (and vice versa)
-docs_for_per_repo_stats = docs_for_per_repo_stats.drop_duplicates(
-    subset=["document_id"], keep=False
-)
-docs_for_per_repo_stats = docs_for_per_repo_stats.drop_duplicates(
-    subset=["repository_id"], keep=False
-)
-
-# Convert datetimes to datetimes
-docs_for_per_repo_stats["publication_date"] = pd.to_datetime(
-    docs_for_per_repo_stats["publication_date"],
-    utc=True,
-)
-docs_for_per_repo_stats["last_pushed_datetime"] = pd.to_datetime(
-    docs_for_per_repo_stats["last_pushed_datetime"],
-    utc=True,
-)
-
-# Remove any documents that have pushes after 90 days
-# past publication
-docs_for_per_repo_stats = docs_for_per_repo_stats.loc[
-    (docs_for_per_repo_stats["last_pushed_datetime"] - docs_for_per_repo_stats["publication_date"]).dt.days <= 90
-]
-
-# Drop publication date and last pushed datetime
-docs_for_per_repo_stats = docs_for_per_repo_stats.drop(
-    columns=[
-        "publication_date",
-        "last_pushed_datetime",
-    ]
-)
-
-# Get document contributors
-doc_contribs_for_code_char = document_contributors.loc[
-    document_contributors["document_id"].isin(docs_for_per_repo_stats["document_id"])
-]
-
-# Merge with docs_for_per_repo_stats
-doc_contribs_for_code_char = doc_contribs_for_code_char.merge(
-    docs_for_per_repo_stats,
-    left_on="document_id",
-    right_on="document_id",
-).drop(columns=["id"])
 
 # Iter over rows and check if the author is a dev on the same article-repo pair
 doc_contribs_for_code_char_rows = []
@@ -1996,6 +2064,10 @@ for i, row in doc_contribs_for_code_char.iterrows():
                 "is_code_contributor": False,
             }
         )
+
+    # If there are more than three author dev links, ignore
+    elif len(author_dev_links) > 3:
+        continue
     
     else:
         # Add same rows and add "is_code_contributor" based on if developer_account_id is in this_repo_devs
@@ -2069,9 +2141,6 @@ percent_last_authors_code_contributors = (
 )
 percent_last_authors_code_contributors_str = f"{percent_last_authors_code_contributors:.1%}"
 
-
-position_sorter = ["First", "Middle", "Last"]
-
 domain_code_char = pd.DataFrame(
     _run_chi2_and_posthocs(
         doc_contribs_for_code_char,
@@ -2079,6 +2148,7 @@ domain_code_char = pd.DataFrame(
         split_var="position",
     )
 )
+position_sorter = ["First", "Middle", "Last"]
 domain_code_char["Position"] = pd.Categorical(
     domain_code_char["Position"],
     categories=position_sorter,
@@ -2132,7 +2202,7 @@ overall_code_char = overall_code_char.sort_values(["Subset", "Position"])
 
 Building upon previous work examining the relationship between authorship position and research contributions, we investigate how author position may relate to code contribution patterns. We hypothesized that first authors, traditionally contributing the bulk of intellectual and experimental work, are most likely to contribute code to a project. In contrast, middle and last authors often provide oversight and guidance and would be less likely to contribute code.
 
-To analyze these patterns within our previously filtered dataset of article-repository pairs, we conducted Chi-square tests of independence between author position and code contribution status. These tests revealed significant associations between author position and likelihood of code contribution overall and when controlling for research domain, article type, and open access status (all p < 0.01), indicating that the proportion of authors contributing code differs significantly based on author position. Following these significant associations, we examined the specific proportions across positions (@tbl-post-hoc-tests-on-author-positions): `{python} percent_first_authors_code_contributors_str` of first authors contributed code to their projects, compared to only `{python} percent_middle_authors_code_contributors_str` of middle authors and `{python} percent_last_authors_code_contributors_str` of last authors. The differences in these proportions remained statistically significant across all tested scenarios, regardless of research domain, article type, or open access status.
+To analyze these patterns within our previously filtered dataset of article-repository pairs (@tbl-team-comp-no-push-after-pub-counts), we conducted Chi-square tests of independence between author position and code contribution status. These tests revealed significant associations between author position and likelihood of code contribution overall and when controlling for research domain, article type, and open access status (all p < 0.01), indicating that the proportion of authors contributing code differs significantly based on author position. Following these significant associations, we examined the specific proportions across positions (@tbl-post-hoc-tests-on-author-positions): `{python} percent_first_authors_code_contributors_str` of first authors contributed code to their projects, compared to only `{python} percent_middle_authors_code_contributors_str` of middle authors and `{python} percent_last_authors_code_contributors_str` of last authors. The differences in these proportions remained statistically significant across all tested scenarios, regardless of research domain, article type, or open access status.
 
 Based on these findings, we _**accept**_ our hypothesis (_H2a_) that "first authors have higher code contribution rates than authors in other positions." The data demonstrates that the proportion of first authors who contribute code (`{python} percent_first_authors_code_contributors_str`) is significantly higher than the proportion of both middle authors (`{python} percent_middle_authors_code_contributors_str`) and last authors (`{python} percent_last_authors_code_contributors_str`). This relationship remains robust and statistically significant across all tested conditions, including variations in research domain, article type, and open access status, indicating a fundamental connection between authorship position and technical contribution in scientific research.
 
@@ -2202,9 +2272,9 @@ percent_non_corresponding_authors_code_contributors_str = f"{percent_non_corresp
 
 Building upon our analysis of author position, we next examine how corresponding author status relates to code contribution patterns. We hypothesized that corresponding authors, who traditionally maintain research artifacts and serve as primary points of contact, would be more likely to contribute code compared to non-corresponding authors, as this role often involves responsibility for project resources and materials.
 
-To analyze these relationships within our filtered dataset of article-repository pairs, we conducted Chi-square tests of independence between corresponding author status and code contribution status. Our analysis revealed patterns contrary to our initial hypothesis. The proportion of code contributors was low among both groups, with only `{python} percent_corresponding_authors_code_contributors_str` of corresponding authors and `{python} percent_non_corresponding_authors_code_contributors_str` of non-corresponding authors contributing code to their projects. Further examination (@tbl-post-hoc-tests-on-corresponding-status) showed that this pattern holds across nearly all conditions, with only two notable exceptions: corresponding authors in software-focused articles and those in closed-access publications showed no significant difference in their proportion of code contributors compared to non-corresponding authors in those categories.
+To analyze these relationships within our filtered dataset of article-repository pairs, we conducted Chi-square tests of independence between corresponding author status and code contribution status. Our analysis revealed patterns contrary to our initial hypothesis. The proportion of code contributors was low among both groups, with only `{python} percent_corresponding_authors_code_contributors_str` of corresponding authors and `{python} percent_non_corresponding_authors_code_contributors_str` of non-corresponding authors contributing code to their projects. Further examination (@tbl-post-hoc-tests-on-corresponding-status) showed that this pattern holds across nearly all conditions, with only a single exception: corresponding authors in closed-access publications showed no significant difference in their proportion of code contributors. However, this was tested with a sample of less than 200 authors.
 
-Based on these findings, we _**reject**_ our hypothesis (_H2b_) that "corresponding authors have higher code contribution rates than non-corresponding authors." Contrary to our expectations, our analysis revealed that the proportion of code contributors among corresponding authors (`{python} percent_corresponding_authors_code_contributors_str`) did not significantly differ from the proportion among non-corresponding authors (`{python} percent_non_corresponding_authors_code_contributors_str`). This pattern of similar proportions remained consistent across most studied conditions, with only limited exceptions in software-focused articles and closed-access publications.
+Based on these findings, we _**reject**_ our hypothesis (_H2b_) that "corresponding authors have higher code contribution rates than non-corresponding authors." Contrary to our expectations, our analysis revealed that the proportion of code contributors among corresponding authors (`{python} percent_corresponding_authors_code_contributors_str`) did not significantly differ from the proportion among non-corresponding authors (`{python} percent_non_corresponding_authors_code_contributors_str`). This pattern of similar proportions remained consistent across most studied conditions, with a single, small sample size exception in closed-access publications.
 
 ### Modeling Author H-Index
 
@@ -2615,7 +2685,7 @@ Our analysis reveals significant disparities in the recognition of software cont
 
 Our finding that, on average, article-repository pairs have only a single code contributor mirrors prior work from @farber2020analyzingGithubPapers. Further, the distribution of code contributions across author positions provides context to the hierarchical organization of scientific work. First authors emerge as significantly more likely to contribute code with `{python} percent_first_authors_code_contributors_str` of all first authors in our dataset contributing code. Middle and last authors, meanwhile, were statistically significantly less likely to contribute code, with only `{python} percent_middle_authors_code_contributors_str` of middle authors and `{python} percent_last_authors_code_contributors_str` of last authors acting as code-contributing members of the research team. Corresponding authors were similarly less likely than expected to be code contributors, as we found that within our dataset, corresponding authors were code contributors `{python} percent_corresponding_authors_code_contributors_str` of the time. These patterns align with traditional scientific labor distribution where first authors typically handle technical aspects of research while middle and last authors are likely specialist contributors or provide guidance and oversight [@Larivire2020InvestigatingTD; @sauermann2017authorship]. However, our data did not support our initial hypothesis that corresponding authors would also be more likely to contribute code due to their shared responsibility for the long-term maintenance of research artifacts. This finding suggests a potential strict division between project management responsibilities and direct technical engagement with software development. 
 
-The modest citation advantage associated with code-contributing authors (5.2% increase in citations per code-contributing author) stands in contrast with the significant negative relationship between coding frequency and an individual's scholarly impact (h-index). This misalignment between technical contributions and scientific recognition creates an asymmetrical relationship in which software development may enhance research impact but potentially penalizes individual careers. The progressive reduction in h-index as coding frequency increases indicates a cumulative disadvantage for frequent code contributors. This pattern persists even when controlling for publication count, suggesting issues in how software contributions are valued relative to other scientific outputs. These findings echo concerns raised by @muna2016astropyproblem about the sustainability of research software development and highlight how current reward structures may discourage talented developers from pursuing scientific careers.
+The modest citation advantage associated with code-contributing authors (5.1% increase in citations per code-contributing author) stands in contrast with the significant negative relationship between coding frequency and an individual's scholarly impact (h-index). This misalignment between technical contributions and scientific recognition creates an asymmetrical relationship in which software development may enhance research impact but potentially penalizes individual careers. The progressive reduction in h-index as coding frequency increases indicates a cumulative disadvantage for frequent code contributors. This pattern persists even when controlling for publication count, suggesting issues in how software contributions are valued relative to other scientific outputs. These findings echo concerns raised by @muna2016astropyproblem about the sustainability of research software development and highlight how current reward structures may discourage talented developers from pursuing scientific careers.
 
 Software development represents a form of scholarly labor that has become increasingly essential to modern research yet remains incompletely integrated into formal recognition systems. Similar to the high proportion of articles with authors who made data curation contributions towards research observed by @Larivire2020InvestigatingTD, our finding that a quarter of papers have unacknowledged code contributors highlights a labor role that is simultaneously common and undervalued. The prevalence of code contributions across domains demonstrates the importance of this work to contemporary research. However, the persistent exclusion of contributors from authorship suggests that researchers continue to classify software development as technical support rather than intellectual contribution. This classification may reflect disciplinary traditions that privilege certain forms of scholarly production despite the growing recognition that software represents a legitimate research output [@Katz2020RecognizingTV]. The tension between software's importance and contributors' recognition status raises questions about how we define, value, and reward different forms of scientific labor in an increasingly computational research landscape.
 
@@ -3000,7 +3070,54 @@ g.fig.tight_layout()
 
 Thresholding the predictive model confidence at 0.97 resulted in a `{python} pct_removed_from_conf_thresh`% reduction in the number of author-developer-account pairs. This threshold was chosen to ensure a high level of confidence in the matches while retaining a large number of pairs for analysis.
 
-### Linear Models for Software Development Dynamics Within Research Teams
+## Filtered Dataset Description for Article-Citation, Author-Position, and Author-Correspondence Analysis
+
+::: {.content-visible when-format="html"}
+
+```{python}
+#| label: tbl-team-comp-no-push-after-pub-counts
+#| tbl-cap: "Counts of article-repository pairs, authors, and developers for research teams. Only includes research teams from article-repository pairs with a most recent commit no later than 90 days after publication and excludes research teams in the top 3% of total author sizes."
+
+team_comp_no_push_after_pub_counts_html = _get_html_for_counts_table(
+    domain_stats=team_comp_no_push_after_pub_counts_domain,
+    doc_type_stats=team_comp_no_push_after_pub_counts_article_type,
+    access_stats=team_comp_no_push_after_pub_counts_open_access,
+    data_source_stats=team_comp_no_push_after_pub_counts_dataset_source,
+    total_article_repo_pairs=team_comp_no_push_after_pub_total_pairs,
+    total_authors=team_comp_no_push_after_pub_total_authors,
+    total_devs=team_comp_no_push_after_pub_total_devs,
+)
+
+IPython.display.HTML(team_comp_no_push_after_pub_counts_html)
+```
+
+:::
+
+::: {.content-visible when-format="pdf"}
+
+```{python}
+team_comp_no_push_after_pub_counts_latex = _get_latex_for_counts_table(
+    caption=(
+        "Counts of article-repository pairs, authors, and developers for research teams. "
+        "Only includes research teams from article-repository pairs with a "
+        "most recent commit no later than 90 days after publication and excludes "
+        "research teams in the top 3\% of total author sizes."
+    ),
+    label="tbl-team-comp-no-push-after-pub-counts",
+    domain_stats=team_comp_no_push_after_pub_counts_domain,
+    doc_type_stats=team_comp_no_push_after_pub_counts_article_type,
+    access_stats=team_comp_no_push_after_pub_counts_open_access,
+    data_source_stats=team_comp_no_push_after_pub_counts_dataset_source,
+    total_article_repo_pairs=team_comp_no_push_after_pub_total_pairs,
+    total_authors=team_comp_no_push_after_pub_total_authors,
+    total_devs=team_comp_no_push_after_pub_total_devs,
+)
+
+IPython.display.Latex(team_comp_no_push_after_pub_counts_latex)
+```
+
+:::
+
 
 ::: {.content-visible when-format="html"}
 
