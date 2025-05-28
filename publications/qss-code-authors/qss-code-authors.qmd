@@ -48,8 +48,6 @@ format:
       echo: false
       warning: false
 
-#   \linenumbers
-
   elsevier-pdf:
     toc: false
     execute:
@@ -64,6 +62,7 @@ format:
           \usepackage{float}
           \floatplacement{table}{H}
           \usepackage{lineno}
+          \linenumbers
         
     journal:
       cite-style: authoryear
@@ -78,11 +77,6 @@ format:
         path: _extensions/andrewheiss/wordcount/citeproc.lua
       - at: pre-quarto
         path: _extensions/andrewheiss/wordcount/wordcount.lua
-
-    # # ArXiv template custom
-    # linenumbers: true
-    # authorcols: true
-    # runninghead: "Code Contribution and Scientific Authorship"
 
 ---
 
