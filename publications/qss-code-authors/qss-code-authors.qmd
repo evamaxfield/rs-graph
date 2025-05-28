@@ -590,95 +590,95 @@ def _get_html_for_counts_table(
     total_authors,
     total_devs,
 ):
-# Construct multi-row span HTML table
-# Columns should be: "n_article_repo_pairs", "n_authors", "n_devs"
-# Rows should be:
-# "By Data Source", "By Domain", "By Document Type", "By Access Status", and "Total"
+    # Construct multi-row span HTML table
+    # Columns should be: "n_article_repo_pairs", "n_authors", "n_devs"
+    # Rows should be:
+    # "By Data Source", "By Domain", "By Document Type", "By Access Status", and "Total"
 
-# HTML templates
-stats_piece_inital_row_template = """
-<tr>
-  <td rowspan="{n_rows}">{row_name}</td>
-  <td>{value_name}</td>
-  <td>{article_repo_pairs}</td>
-  <td>{authors}</td>
-  <td>{devs}</td>
-</tr>
-""".strip()
+    # HTML templates
+    stats_piece_inital_row_template = """
+    <tr>
+    <td rowspan="{n_rows}">{row_name}</td>
+    <td>{value_name}</td>
+    <td>{article_repo_pairs}</td>
+    <td>{authors}</td>
+    <td>{devs}</td>
+    </tr>
+    """.strip()
 
-stats_piece_subsequent_row_template = """
-<tr>
-  <td>{value_name}</td>
-  <td>{article_repo_pairs}</td>
-  <td>{authors}</td>
-  <td>{devs}</td>
-</tr>
-""".strip()
+    stats_piece_subsequent_row_template = """
+    <tr>
+    <td>{value_name}</td>
+    <td>{article_repo_pairs}</td>
+    <td>{authors}</td>
+    <td>{devs}</td>
+    </tr>
+    """.strip()
 
-# Iter over stats portions (and total)
-stats_portions_html = []
-for stats_portion, stats_name, value_key in [
-    (domain_stats, "<b>By Domain</b>", "domain"),
-    (doc_type_stats, "<b>By Document Type</b>", "doc_type"),
-    (access_stats, "<b>By Access Status</b>", "access_status"),
-    (data_source_stats, "<b>By Data Source</b>", "data_source"),
-    (
-        [
-            {
-                "empty": "",
-                "n_article_repo_pairs": f"<b>{total_article_repo_pairs}</b>",
-                "n_authors": f"<b>{total_authors}</b>",
-                "n_devs": f"<b>{total_devs}</b>",
-            }
-        ],
-        "<b>Total</b>",
-        "empty",
-    ),
-]:
+    # Iter over stats portions (and total)
+    stats_portions_html = []
+    for stats_portion, stats_name, value_key in [
+        (domain_stats, "<b>By Domain</b>", "domain"),
+        (doc_type_stats, "<b>By Document Type</b>", "doc_type"),
+        (access_stats, "<b>By Access Status</b>", "access_status"),
+        (data_source_stats, "<b>By Data Source</b>", "data_source"),
+        (
+            [
+                {
+                    "empty": "",
+                    "n_article_repo_pairs": f"<b>{total_article_repo_pairs}</b>",
+                    "n_authors": f"<b>{total_authors}</b>",
+                    "n_devs": f"<b>{total_devs}</b>",
+                }
+            ],
+            "<b>Total</b>",
+            "empty",
+        ),
+    ]:
         # Order by value_key
         if value_key != "empty":
-    stats_portion = sorted(
+            stats_portion = sorted(
                 stats_portion, key=lambda x: x[value_key]
-    )
-
-    stats_portion_html = []
-    for i, stats_piece in enumerate(stats_portion):
-        if i == 0:
-            stats_portion_html.append(
-                stats_piece_inital_row_template.format(
-                    n_rows=len(stats_portion),
-                    row_name=stats_name,
-                    value_name=stats_piece[value_key],
-                    article_repo_pairs=stats_piece["n_article_repo_pairs"],
-                    authors=stats_piece["n_authors"],
-                    devs=stats_piece["n_devs"],
-                )
-            )
-        else:
-            stats_portion_html.append(
-                stats_piece_subsequent_row_template.format(
-                    value_name=stats_piece[value_key],
-                    article_repo_pairs=stats_piece["n_article_repo_pairs"],
-                    authors=stats_piece["n_authors"],
-                    devs=stats_piece["n_devs"],
-                )
             )
 
-    stats_portions_html.append("\n".join(stats_portion_html))
+        stats_portion_html = []
+        for i, stats_piece in enumerate(stats_portion):
+            if i == 0:
+                stats_portion_html.append(
+                    stats_piece_inital_row_template.format(
+                        n_rows=len(stats_portion),
+                        row_name=stats_name,
+                        value_name=stats_piece[value_key],
+                        article_repo_pairs=stats_piece["n_article_repo_pairs"],
+                        authors=stats_piece["n_authors"],
+                        devs=stats_piece["n_devs"],
+                    )
+                )
+            else:
+                stats_portion_html.append(
+                    stats_piece_subsequent_row_template.format(
+                        value_name=stats_piece[value_key],
+                        article_repo_pairs=stats_piece["n_article_repo_pairs"],
+                        authors=stats_piece["n_authors"],
+                        devs=stats_piece["n_devs"],
+                    )
+                )
 
-# Concat and wrap in table
-stats_table_html = f"""
-<table>
-  <tr>
-    <th><b>Category</b></th>
-    <th><b>Subset</b></th>
-    <th><b>Article-Repository Pairs</b></th>
-    <th><b>Authors</b></th>
-    <th><b>Developers</b></th>
-  </tr>
-  {" ".join(stats_portions_html)}
-</table>
-""".strip()
+        stats_portions_html.append("\n".join(stats_portion_html))
+
+    # Concat and wrap in table
+    stats_table_html = f"""
+    <table>
+    <tr>
+        <th><b>Category</b></th>
+        <th><b>Subset</b></th>
+        <th><b>Article-Repository Pairs</b></th>
+        <th><b>Authors</b></th>
+        <th><b>Developers</b></th>
+    </tr>
+    {" ".join(stats_portions_html)}
+    </table>
+    """.strip()
 
     return stats_table_html
 ```
@@ -716,90 +716,90 @@ def _get_latex_for_counts_table(
     total_authors,
     total_devs,
 ):
-# LaTeX templates
-stats_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\cellcolor{{gray!10}}{value_name} & \\cellcolor{{gray!10}}{article_repo_pairs} & \\cellcolor{{gray!10}}{authors} & \\cellcolor{{gray!10}}{devs} \\\\"""
+    # LaTeX templates
+    stats_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\cellcolor{{gray!10}}{value_name} & \\cellcolor{{gray!10}}{article_repo_pairs} & \\cellcolor{{gray!10}}{authors} & \\cellcolor{{gray!10}}{devs} \\\\"""
 
-stats_piece_subsequent_row_template = """    & {value_name} & {article_repo_pairs} & {authors} & {devs} \\\\"""
+    stats_piece_subsequent_row_template = """    & {value_name} & {article_repo_pairs} & {authors} & {devs} \\\\"""
 
-# Table header and footer templates
+    # Table header and footer templates
     table_header_start = """\\begin{{table}}
-\\centering
-\\small
+    \\centering
+    \\small
     \\caption{{{caption}}}
     \\label{{{label}}}
     \\begin{{tabular}}{{llrrr}}
-\\toprule
+    \\toprule
     \\textbf{{Category}} & \\textbf{{Subset}} & \\textbf{{Article-Repository Pairs}} & \\textbf{{Authors}} & \\textbf{{Developers}} \\\\
     \\midrule""".format(
         caption=caption,
         label=label,
     )
 
-table_footer = """\\bottomrule
-\\end{tabular}
-\\end{table}"""
+    table_footer = """\\bottomrule
+    \\end{tabular}
+    \\end{table}"""
 
-# Generate table content
-stats_portions_latex = []
-for stats_portion, stats_name, value_key in [
-    (domain_stats, "By Domain", "domain"),
-    (doc_type_stats, "By Document Type", "doc_type"),
-    (access_stats, "By Access Status", "access_status"),
-    (data_source_stats, "By Data Source", "data_source"),
-    (
-        [
-            {
-                "empty": "",
-                "n_article_repo_pairs": total_article_repo_pairs,
-                "n_authors": total_authors,
-                "n_devs": total_devs,
-            }
-        ],
-        "Total",
-        "empty",
-    ),
-]:
+    # Generate table content
+    stats_portions_latex = []
+    for stats_portion, stats_name, value_key in [
+        (domain_stats, "By Domain", "domain"),
+        (doc_type_stats, "By Document Type", "doc_type"),
+        (access_stats, "By Access Status", "access_status"),
+        (data_source_stats, "By Data Source", "data_source"),
+        (
+            [
+                {
+                    "empty": "",
+                    "n_article_repo_pairs": total_article_repo_pairs,
+                    "n_authors": total_authors,
+                    "n_devs": total_devs,
+                }
+            ],
+            "Total",
+            "empty",
+        ),
+    ]:
         # Order by value_key
         if value_key != "empty":
-    stats_portion = sorted(
+            stats_portion = sorted(
                 stats_portion, key=lambda x: x[value_key]
-    )
-
-    stats_portion_latex = []
-    if stats_name == "Total":
-        stats_portion_latex.append(
-            f"    \\textbf{{Total}} & & \\textbf{{{stats_portion[0]['n_article_repo_pairs']}}} & \\textbf{{{stats_portion[0]['n_authors']}}} & \\textbf{{{stats_portion[0]['n_devs']}}} \\\\"
-        )
-    else:
-        # Add the first row with the category label and colored cells
-        first_piece = stats_portion[0]
-        stats_portion_latex.append(
-            stats_piece_initial_row_template.format(
-                n_rows=len(stats_portion),
-                row_name=stats_name,
-                value_name=first_piece[value_key],
-                article_repo_pairs=first_piece["n_article_repo_pairs"],
-                authors=first_piece["n_authors"],
-                devs=first_piece["n_devs"],
-            ).rstrip()
-        )
-        
-        # Add subsequent rows with alternating colors
-        for i, stats_piece in enumerate(stats_portion[1:]):
-            color_cmd = "\\cellcolor{gray!10}" if i % 2 == 1 else ""
-            stats_portion_latex.append(
-                f"    & {color_cmd}{stats_piece[value_key]} & {color_cmd}{stats_piece['n_article_repo_pairs']} & {color_cmd}{stats_piece['n_authors']} & {color_cmd}{stats_piece['n_devs']} \\\\"
             )
 
-    section_latex = "\n".join(stats_portion_latex)
-    if stats_name != "Total":
-        section_latex += "\\midrule"
-    stats_portions_latex.append(section_latex)
+        stats_portion_latex = []
+        if stats_name == "Total":
+            stats_portion_latex.append(
+                f"    \\textbf{{Total}} & & \\textbf{{{stats_portion[0]['n_article_repo_pairs']}}} & \\textbf{{{stats_portion[0]['n_authors']}}} & \\textbf{{{stats_portion[0]['n_devs']}}} \\\\"
+            )
+        else:
+            # Add the first row with the category label and colored cells
+            first_piece = stats_portion[0]
+            stats_portion_latex.append(
+                stats_piece_initial_row_template.format(
+                    n_rows=len(stats_portion),
+                    row_name=stats_name,
+                    value_name=first_piece[value_key],
+                    article_repo_pairs=first_piece["n_article_repo_pairs"],
+                    authors=first_piece["n_authors"],
+                    devs=first_piece["n_devs"],
+                ).rstrip()
+            )
+            
+            # Add subsequent rows with alternating colors
+            for i, stats_piece in enumerate(stats_portion[1:]):
+                color_cmd = "\\cellcolor{gray!10}" if i % 2 == 1 else ""
+                stats_portion_latex.append(
+                    f"    & {color_cmd}{stats_piece[value_key]} & {color_cmd}{stats_piece['n_article_repo_pairs']} & {color_cmd}{stats_piece['n_authors']} & {color_cmd}{stats_piece['n_devs']} \\\\"
+                )
 
-# Combine all parts
+        section_latex = "\n".join(stats_portion_latex)
+        if stats_name != "Total":
+            section_latex += "\\midrule"
+        stats_portions_latex.append(section_latex)
+
+    # Combine all parts
     stats_table_latex = f"""{table_header_start}
-{"\n".join(stats_portions_latex)}
-{table_footer}"""
+    {"\n".join(stats_portions_latex)}
+    {table_footer}"""
 
     return stats_table_latex
 ```
@@ -851,8 +851,8 @@ docs_w_1_citation = docs_w_1_citation.rename(columns={"id": "document_id"})
 # Merge repository id in
 docs_w_1_citation = docs_w_1_citation.merge(
     doc_repo_links[[
-            "document_id",
-            "repository_id",
+        "document_id",
+        "repository_id",
     ]],
     left_on="document_id",
     right_on="document_id",
@@ -2018,17 +2018,17 @@ def _run_chi2_and_posthocs(
                 control_val_subset["is_code_contributor"],
             )
             chi2_result = chi2_contingency(xtabs)
-                posthoc_results = _run_posthocs(
-                    control_val_subset,
-                    split_var=split_var,
-                )
+            posthoc_results = _run_posthocs(
+                control_val_subset,
+                split_var=split_var,
+            )
 
-                for posthoc_result in posthoc_results:
-                    return_vals.append({
-                        "Control": control_var.replace("_", " ").title(),
-                        "Subset": control_val.replace("_", " ").title(),
-                        **posthoc_result,
-                    })
+            for posthoc_result in posthoc_results:
+                return_vals.append({
+                    "Control": control_var.replace("_", " ").title(),
+                    "Subset": control_val.replace("_", " ").title(),
+                    **posthoc_result,
+                })
 
     return return_vals
 ```
@@ -2038,8 +2038,8 @@ doc_contribs_for_code_char = document_contributors.loc[
     document_contributors["document_id"].isin(team_comp_no_push_after_pub["document_id"])
 ].merge(
     team_comp_no_push_after_pub[[
-            "document_id",
-            "repository_id",
+        "document_id",
+        "repository_id",
         "is_open_access",
         "domain",
         "article_type",
@@ -2711,7 +2711,7 @@ Based on these findings, we _**accept**_ our hypothesis (_H3_) that "the frequen
 
 Our analysis reveals significant disparities in the recognition of software contributions to scientific research, with nearly 30% of articles having non-author code-contributors who received no formal authorship credit. This persistent pattern suggests a systemic disconnect between software development and scientific recognition systems, reflecting challenges in how scientific contributions are valued and credited. This exclusion reflects what @shapin1989invisible observed about scientific authority—the selective attribution of technical work as either genuine knowledge or mere skill significantly impacts who receives formal recognition. These findings further support previous research by @olivier_philippe_2019_2585783 and @Carver2022ASO documenting the frequent relegation of software contributors to either acknowledgment sections or receiving no credit at all, rather than authorship positions, despite the increasingly central role of software in scientific inquiry. The stability of this pattern over time indicates that this phenomenon has embedded itself in scientific software development rather than representing a transitional phase, raising questions about scientific labor and how reward structures integrate technical contributions.
 
-Our finding that, on average, article-repository pairs have only a single code contributor mirrors prior work from @farber2020analyzingGithubPapers. Further, the distribution of code contributions across author positions provides context to the hierarchical organization of scientific work. First authors emerge as significantly more likely to contribute code with `{python} percent_first_authors_code_contributors_str` of all first authors in our dataset contributing code. Middle and last authors, meanwhile, were statistically significantly less likely to contribute code, with only `{python} percent_middle_authors_code_contributors_str` of middle authors and `{python} percent_last_authors_code_contributors_str` of last authors acting as code-contributing members of the research team. Corresponding authors were similarly less likely than expected to be code contributors, as we found that within our dataset, corresponding authors were code contributors `{python} percent_corresponding_authors_code_contributors_str` of the time. These patterns align with traditional scientific labor distribution where first authors typically handle technical aspects of research while middle and last authors are likely specialist contributors or provide guidance and oversight [@Larivire2020InvestigatingTD; @sauermann2017authorship]. However, our data did not support our initial hypothesis that corresponding authors would also be more likely to contribute code due to their shared responsibility for the long-term maintenance of research artifacts. This finding suggests a potential strict division between project management responsibilities and direct technical engagement with software development. 
+Our finding that, on average, article-repository pairs have only a single code contributor mirrors prior work from @farber2020analyzingGithubPapers. Further, the distribution of code contributions across author positions provides context to the hierarchical organization of scientific work. First authors emerge as significantly more likely to contribute code with `{python} percent_first_authors_code_contributors_str` of all first authors in our dataset contributing code. Middle and last authors, meanwhile, were statistically significantly less likely to contribute code, with only `{python} percent_middle_authors_code_contributors_str` of middle authors and `{python} percent_last_authors_code_contributors_str` of last authors acting as code-contributing members of the research team. Corresponding authors were similarly less likely than expected to be code contributors, as we found that within our dataset, corresponding authors were code contributors `{python} percent_corresponding_authors_code_contributors_str` of the time. These patterns align with traditional scientific labor distribution where first authors typically handle technical aspects of research while middle and last authors are likely specialist contributors or provide guidance and oversight [@Larivire2020InvestigatingTD; @sauermann2017authorship]. However, our data did not support our initial hypothesis that corresponding authors would also be more likely to contribute code due to their shared responsibility for the long-term maintenance of research artifacts. This finding suggests a potential strict division between project management responsibilities and direct technical engagement with software development.
 
 The modest citation advantage associated with code-contributing authors (5.1% increase in citations per code-contributing author) stands in contrast with the significant negative relationship between coding frequency and an individual's scholarly impact (h-index). This misalignment between technical contributions and scientific recognition creates an asymmetrical relationship in which software development may enhance research impact but potentially penalizes individual careers. The progressive reduction in h-index as coding frequency increases indicates a cumulative disadvantage for frequent code contributors. This pattern persists even when controlling for publication count, suggesting issues in how software contributions are valued relative to other scientific outputs. These findings echo concerns raised by @muna2016astropyproblem about the sustainability of research software development and highlight how current reward structures may discourage talented developers from pursuing scientific careers.
 
@@ -2727,7 +2727,7 @@ Our analytical approach required substantial data filtering to ensure reliable r
 
 ## Future Work
 
-Future technical improvements may enhance our understanding of the relationship between software development and scientific recognition systems. Expanding analysis beyond GitHub to include other code hosting platforms would provide a more comprehensive understanding of scientific software development practices across domains and institutional contexts. More sophisticated entity-matching techniques could improve author-developer account identification, particularly for cases with limited information or common names. Developing more nuanced measures of code contribution quality and significance beyond binary contribution identification would better capture the true impact of technical contributions to research. These methodological advances would enable more precise tracking of how code contributions translate—or fail to translate—into formal scientific recognition, providing clearer evidence for policy interventions. 
+Future technical improvements may enhance our understanding of the relationship between software development and scientific recognition systems. Expanding analysis beyond GitHub to include other code hosting platforms would provide a more comprehensive understanding of scientific software development practices across domains and institutional contexts. More sophisticated entity-matching techniques could improve author-developer account identification, particularly for cases with limited information or common names. Developing more nuanced measures and classifications of code contribution type, quality, and significance beyond binary contribution identification would better capture the true impact of technical contributions to research. These methodological advances would enable more precise tracking of how code contributions translate—or fail to translate—into formal scientific recognition, providing clearer evidence for policy interventions. 
 
 Our findings point to several directions for future research on the changing nature of scientific labor and recognition. Longitudinal studies tracking how code contribution patterns affect career trajectories would provide valuable insights into the long-term impacts of the observed h-index disparities and whether these effects vary across career stages. Comparative analyses across different scientific domains could reveal discipline-specific norms and practices around software recognition, potentially identifying models that more equitably credit technical contributions. Qualitative studies examining how research teams make authorship decisions regarding code contributors would complement our quantitative findings by illuminating the social and organizational factors influencing recognition practices. Additionally, to better understand corresponding authors' role in maintaining research artifacts, future work could remove the 90-day post-publication commit activity filter to examine long-term sustainability actions. However, this approach would need to address the introduction of contributors unrelated to the original paper.
 
@@ -2751,7 +2751,7 @@ Our dataset collection process leveraged four sources of linked scientific artic
 1. **Public Library of Science (PLOS)**: We extracted repository links from PLOS articles' mandatory data and code availability statements.
 2. **Journal of Open Source Software (JOSS)**: JOSS requires explicit code repository submission and review as a core part of its publication process.
 3. **SoftwareX**: Similar to JOSS, SoftwareX mandates code repositories as a publication requirement.
-4. **Papers with Code**: This platform directly connects machine learning preprints with their implementations.
+4. **Papers with Code**: This platform directly connects machine learning preprints with their implementations. We focus solely on the "official" article-repository relationships rather than the "unverified" or "unofficial" links.
 
 To create a comprehensive and analyzable dataset, we enriched these article-repository pairs with metadata from multiple sources. We utilized the Semantic Scholar API for DOI resolution to ensure we found the latest version of each article. This resolution step was particularly important when working with preprints, as journals may have published these papers since their inclusion in the Papers with Code dataset. Using Semantic Scholar, we successfully resolved `{python} round(overall_doi_resolution * 100, 1)`% of all DOIs within our dataset[^4].
 
@@ -2988,9 +2988,7 @@ commit_dist_plotting_data["repo_commit_duration"] = commit_dist_plotting_data["r
 commit_dist_plotting_data.groupby(["article_type"])["repo_commit_duration"].describe(percentiles=[0.1, 0.25, 0.5, 0.75, 0.9])
 ```
 
-## Modeling and Analysis Supporting Tables and Figures
-
-### Distributions of Author-Developer-Account Prediction Confidence
+## Distributions of Author-Developer-Account Prediction Confidence
 
 ```{python}
 #| label: fig-dist-of-author-dev-pred-confidence
@@ -3149,6 +3147,7 @@ IPython.display.Latex(team_comp_no_push_after_pub_counts_latex)
 
 :::
 
+## Article Citation Linear Model Results
 
 ::: {.content-visible when-format="html"}
 
@@ -3273,13 +3272,13 @@ IPython.display.Latex(model_results_latex)
 
 :::
 
-### Post-Hoc Tests for Coding vs Non-Coding Authors by Position
+## Post-Hoc Tests for Coding vs Non-Coding Authors by Position
 
 ::: {.content-visible when-format="html"}
 
 ```{python}
 #| label: tbl-post-hoc-tests-on-author-positions
-#| tbl-cap: "Counts of Code-Contributing Authors ('Coding') as well as Total Authors by Position and Bonferroni Corrected p-values from Post-Hoc Binomial Tests. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)."
+#| tbl-cap: "Counts of Code-Contributing Authors ('Coding') as well as Total Authors by Position and Bonferroni Corrected p-values from Post-Hoc Binomial Tests. Significant p-values are indicated with asterisks: p < 0.05 (`*`), p < 0.01 (`**`), p < 0.001 (`***`)."
 
 def create_multirow_html_table(
     dataframes_dict: dict[str, pd.DataFrame],
@@ -3494,13 +3493,15 @@ IPython.display.Latex(
 
 :::
 
-### Post-Hoc Tests for Coding vs Non-Coding Authors by Corresponding Status
+Counts of authors in @tbl-post-hoc-tests-on-author-positions may differ slightly from counts in @tbl-team-comp-no-push-after-pub-counts. @tbl-team-comp-no-push-after-pub-counts counts unique authors, while @tbl-post-hoc-tests-on-author-positions counts unique author-document pairs (i.e., the same author may appear in multiple documents).
+
+## Post-Hoc Tests for Coding vs Non-Coding Authors by Corresponding Status
 
 ::: {.content-visible when-format="html"}
 
 ```{python}
 #| label: tbl-post-hoc-tests-on-corresponding-status
-#| tbl-cap: "Counts of Code-Contributing Authors ('Coding') as well as Total Authors by Corresponding Status and Bonferroni Corrected p-values from Post-Hoc Binomial Tests. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)."
+#| tbl-cap: "Counts of Code-Contributing Authors ('Coding') as well as Total Authors by Corresponding Status and Bonferroni Corrected p-values from Post-Hoc Binomial Tests. Significant p-values are indicated with asterisks: p < 0.05 (`*`), p < 0.01 (`**`), p < 0.001 (`***`)."
 
 IPython.display.HTML(
     create_multirow_html_table(
@@ -3537,6 +3538,7 @@ IPython.display.Latex(
 
 :::
 
+Counts of authors in @tbl-post-hoc-tests-on-corresponding-status may differ slightly from counts in @tbl-team-comp-no-push-after-pub-counts. @tbl-team-comp-no-push-after-pub-counts counts unique authors, while @tbl-post-hoc-tests-on-corresponding-status counts unique author-document pairs (i.e., the same author may appear in multiple documents).
 
 ## Filtered Dataset Description for h-Index Analysis
 
