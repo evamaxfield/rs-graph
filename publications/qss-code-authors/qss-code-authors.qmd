@@ -3203,7 +3203,7 @@ When broken out by contribution type, we find that:
 - _"missed classifications" (n=61)_: 49 contributed code, 12 contributed documentation, and 0 contributed some other type of change
 - _"unclear" (n=61)_: 50 contributed code, 8 contributed documentation, and 3 contributed some other type of change
 
-Tables @tbl-true-cc-na-commit-stats and @tbl-unclear-cc-na-commit-stats present commit statistics for true non-authors and unclear cases, respectively. Among true non-authors making code contributions, the top quartile (75th percentile and above) contributed approximately 10% of total repository commits and 14.4% of absolute changes (additions + deletions). The unclear cases showed substantially higher contribution levels. Code contributors in this group made up 50.5% of total repository commits and 41.7% of repository absolute changes even at the 25th percentile.
+@tbl-true-cc-na-commit-stats and @tbl-unclear-cc-na-commit-stats present commit statistics for true non-authors and unclear cases, respectively. Among true non-authors making code contributions, the top quartile (75th percentile and above) contributed approximately 10% of total repository commits and 14.4% of absolute changes (additions + deletions). The unclear cases showed substantially higher contribution levels. Code contributors in this group made up 50.5% of total repository commits and 41.7% of repository absolute changes even at the 25th percentile.
 
 ```{python}
 def _get_stats_for_author_cls(
