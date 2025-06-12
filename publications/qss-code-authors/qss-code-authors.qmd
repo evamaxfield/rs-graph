@@ -3336,7 +3336,7 @@ _get_stats_for_author_cls(
 )
 ```
 
-We observed a notable pattern where very few true non-authors (n=4) were repository owners, while a substantial portion of unclear cases (n=30, 49%) owned the repositories they contributed to. This suggests many unclear contributors were likely primary code authors who could not be matched due to limited profile information. When excluding repository owners from the unclear group (Table @tbl-unclear-cc-na-commit-stats-no-repo-owner), the median contribution drops to 34.6% of total commits and 12.7% of absolute changes, though this still represents substantial technical involvement.
+We observed a notable pattern where very few true non-authors (n=4) were repository owners, while a substantial portion of unclear cases (n=30, 49%) owned the repositories they contributed to. This suggests many unclear contributors were likely primary code authors who could not be matched due to limited profile information. When excluding repository owners from the unclear group (@tbl-unclear-cc-na-commit-stats-no-repo-owner), the median contribution drops to 34.6% of total commits and 12.7% of absolute changes, though this still represents substantial technical involvement.
 
 ```{python}
 #| label: tbl-unclear-cc-na-commit-stats-no-repo-owner
