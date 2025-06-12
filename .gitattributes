@@ -2,6 +2,7 @@
 *.ipynb linguist-detectable=false
 *.tex linguist-detectable=false
 *.bib linguist-detectable=false
+*.cls linguist-detectable=false
 *.lua linguist-detectable=false
 *.sty linguist-detectable=false
 *.html linguist-detectable=false
