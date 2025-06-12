@@ -1,8 +1,0 @@
-# ingore jupyter notebooks, tex, bibtex, and lua
-*.ipynb linguist-vendored
-*.tex linguist-vendored
-*.bib llinguist-vendored
-*.cls linguist-vendored
-*.lua linguist-vendored
-*.sty linguist-vendored
-*.html linguist-vendored
