@@ -140,8 +140,8 @@ docker-run:
 
 # hot-reload quarto doc
 quarto-serve project="qss-code-authors":
-	-quarto preview {{justfile_directory()}}/publications/{{project}}/
+	-quarto preview {{justfile_directory()}}/publications/{{project}}/qss-code-authors.qmd
 
 # render quarto doc
 quarto-render project="qss-code-authors":
-	-quarto render {{justfile_directory()}}/publications/{{project}}/
+	-quarto render {{justfile_directory()}}/publications/{{project}}/qss-code-authors.qmd

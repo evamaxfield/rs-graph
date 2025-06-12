@@ -419,9 +419,9 @@ Software and collaboration are two essential ingredients in contemporary science
 
 In the following paper we unite these two literatures to better understand how the development of software effects the allocation of credit in collaborative settings. In doing so, we take advantage of advances in natural language processing and machine learning to develop unique data sources that compliment traditional biblimetric indicators. We first build a comprehensive dataset of \~140,000 paired research articles and code repositories - giving us a verified connection between the software that supports new knowledge claims made in the published literature. Next, we develop a predictive model that matches the authors of a research article and the developer accounts of a linked source code repository - giving us a unique way to understand the allocation of credit for software contributions. We apply the predictive model to our dataset and then use the commit history of public software repositories to test three hypothesis.
 
-We identify several patterns that distinguish code contributions from formal scientific recognition. We show that nearly 30% (n=X) of articles have non-author code-contributors - individuals who may have helped create the software but received no formal authorship credit. We find that code-contributing authors are associated with a modest increase in article-level impact metrics (\~5.1% increase in citations per code-contributing author), but these effects become statistically non-significant when controlling for domain, article type, and open access status. First authors are significantly more likely to be code contributors than other author positions across all conditions tested. We also find a negative relationship between coding frequency and scholarly impact: Authors who contribute code more frequently show progressively lower h-indices than their non-coding peers, a pattern that persists when controlling for publication count, and author's most common author position, domain, and article type.
+We identify several patterns that distinguish code contributions from formal scientific recognition. We show that \~30% (n=6529) of articles have non-author code-contributors - individuals who may have helped create the software but received no formal authorship credit. We find that code-contributing authors are associated with a modest increase in article-level impact metrics (\~5.1% increase in citations per code-contributing author), but these effects become statistically non-significant when controlling for domain, article type, and open access status. First authors are significantly more likely to be code contributors than other author positions across all conditions tested. We also find a negative relationship between coding frequency and scholarly impact: Authors who contribute code more frequently show progressively lower h-indices than their non-coding peers, a pattern that persists when controlling for publication count, and author's most common author position, domain, and article type.
 
-The remainder of this paper proceeds as follows. First, we review related work regarding scientific software development and the recognition of code contributors in scientific credit systems. In doing so, we motive three specific hypotheses that guide our investigation. Next, we detail our data and methods, describing how we dataset of linked article-repository pairs, trained and evaluated a predictive model for entity matching, and applied this model across each article-repository pair. We then present our analysis, focusing on article-level dynamics before moving to individual-level patterns, formally accepting or rejecting each hypothesis based on our findings. We conclude by discussing the results, limitations of our work, and areas for future improvement.
+The remainder of this paper proceeds as follows. First, we review related work regarding scientific software development and the recognition of code contributors in scientific credit systems. In doing so, we motive three specific hypotheses that guide our investigation. Next, we detail our data and methods, describing how we linked article-repository pairs, trained and evaluated a predictive model for entity matching, and applied this model across each article-repository pair. We then present our analysis, focusing on article-level dynamics before moving to individual-level patterns, formally accepting or rejecting each hypothesis based on our findings. We conclude by discussing the results, limitations of our work, and areas for future improvement.
 
 # Background {#sec-background}
 
@@ -431,7 +431,7 @@ The proper allocation of credit has been a longstanding topic in social studies 
 
 Recognition of technical contributions to scientific work is also a longstanding topic in social studies of science. Shapin's history of innovation describes how "invisible technicians" allowed Francis Bacon and Robert Boyle to, as the latter describes, "do experiments by others hands" [@shapin1989invisible]. As a technical artifact, scientific software is recognized as being important to contemporary research [@hettrick2014s] but many existing accounts of devlopment and long-term maintenance describe inequalities in credit, recognition, and career advancement [@muna2016astropyproblem]. Much of the existing literature on the role and importance of software in science is ethnographic [@howison2011incentives, @paine2017has, @neang2023organizing, @hannay2009scientists] or small scale surveys [@Carver2022ASO, @momcheva2015software].
 
-These two literatures - collaboration and scientific software - are rarely connected via quantiative research. In this paper, we build unique datasets that allow us to unite these two bodies of parralel findings on the allocation of credit in collaborative settings, and the development of scientific software. In doing so, we state three formal hypothesis that we will test in the following sections.
+These two literatures - collaboration and scientific software - are rarely connected via quantiative research. In this paper, we build unique datasets that allow us to unite these two bodies of parallel findings on the allocation of credit in collaborative settings, and the development of scientific software. In doing so, we state three formal hypothesis that we will test in the following sections.
 
 ## H1: Research Team Composition and Scientific Attention
 
@@ -1247,7 +1247,11 @@ Understanding the composition and dynamics of software development teams provide
 
 Within this filtered dataset, we categorized individuals into three groups: code-contributing authors (CC-A) who both authored papers and contributed code to associated repositories, non-code-contributing authors (NCC-A) who authored papers but showed no evidence of code contributions, and code-contributing non-authors (CC-NA) who contributed code but received no authorship recognition. This categorization revealed that papers in our dataset typically have `{python} total_auths` total authors, with `{python} total_auth_devs` code-contributing authors and `{python} total_auth_non_devs` non-code-contributing authors. Beyond the author list, papers averaged `{python} total_non_auth_devs` code-contributing non-authors. @tbl-team-composition-counts details these distributions by domain, article type, and open access status.
 
-Perhaps most striking is our finding that `{python} n_papers_w_non_auth_devs` papers (`{python} pct_papers_w_non_auth_devs`%) have at least one code contributor who did not receive authorship recognition. Within this substantial subset of papers, we found an average of `{python} mean_non_author_devs_for_papers_w_non_auth_devs` unrecognized code contributors per paper. On average, only one code-contributing author per paper aligns with previous research by @Larivire2020InvestigatingTD, showing that technical tasks like data curation, formal analysis, visualization, and software development typically fall to first authors. However, our finding that over a quarter of papers have unrecognized code contributors suggests a more complex dynamic between software development and authorship recognition.
+Perhaps most striking is our finding that `{python} n_papers_w_non_auth_devs` papers (`{python} pct_papers_w_non_auth_devs`%) have at least one code contributor who was not matched to any article author. Within this substantial subset of papers, we found an average of `{python} mean_non_author_devs_for_papers_w_non_auth_devs` un-matched code contributors per paper. To better understand the nature of these contributions, we conducted an analysis using a random sample of 200 code-contributing non-authors (see @sec-appendix-additional-cc-na-analysis for full methodology).
+
+Our analysis revealed three distinct groups: 39% represent true non-authors (individuals who likely shouldn't be matched to an author), 30.5% appear to be missed classifications (individuals who likely should have been matched to authors), and the remaining 30.5% were unclear due to limited profile information. The majority of contributors across all groups made code changes rather than just documentation updates. Among true non-authors, 77.6% contributed code, with the top quartile contributing approximately 10% of total repository commits and 14% of absolute code changes. The unclear cases showed substantially higher contribution levels— many were repository owners with extensive engagement, yet even among the non-owners the median contributor accounted for approximately 35% of repository commits and 13% of absolute changes. Due to our limited sample size, we do not generalize these findings to the entire population but note that they describe the diverse nature of code contribution patterns from potentially unacknowledged contributors.
+
+These findings reveal a more complex dynamic between software development and authorship recognition than previously documented. While our finding that each paper averages only a single code-contributing author aligns with previous research showing technical tasks typically fall to first authors [@Larivire2020InvestigatingTD], the substantial contributions made by unrecognized contributors suggests systematic gaps in how scientific software development work is credited.
 
 ```{python}
 # Create a copy of the team_comp_no_push_after_pub dataframe
@@ -2700,7 +2704,7 @@ Based on these findings, we ***accept*** our hypothesis (*H3*) that "the frequen
 
 # Discussion
 
-Our analysis reveals significant disparities in the recognition of software contributions to scientific research, with nearly 30% of articles having non-author code-contributors who received no formal authorship credit. This persistent pattern suggests a systemic disconnect between software development and scientific recognition systems, reflecting challenges in how scientific contributions are valued and credited. This exclusion reflects what @shapin1989invisible observed about scientific authority—the selective attribution of technical work as either genuine knowledge or mere skill significantly impacts who receives formal recognition. These findings further support previous research by @olivier_philippe_2019_2585783 and @Carver2022ASO documenting the frequent relegation of software contributors to either acknowledgment sections or receiving no credit at all, rather than authorship positions, despite the increasingly central role of software in scientific inquiry. The stability of this pattern over time indicates that this phenomenon has embedded itself in scientific software development rather than representing a transitional phase, raising questions about scientific labor and how reward structures integrate technical contributions.
+Our analysis reveals significant disparities in the recognition of software contributions to scientific research, with \~30% (n=`{python} n_papers_w_non_auth_devs`) of articles having code-contributors not matched to any article author, partially representing unrecognized code contribution. This persistent pattern over time and team size suggests a systemic disconnect between software development and scientific recognition systems, reflecting challenges in how scientific contributions are valued and credited. This exclusion reflects what @shapin1989invisible observed about scientific authority—the selective attribution of technical work as either genuine knowledge or mere skill significantly impacts who receives formal recognition. These findings further support previous research by @olivier_philippe_2019_2585783 and @Carver2022ASO documenting the frequent relegation of software contributors to either acknowledgment sections or receiving no credit at all, rather than authorship positions, despite the increasingly central role of software in scientific inquiry. The stability of this pattern over time indicates that this phenomenon has embedded itself in scientific software development rather than representing a transitional phase, raising questions about scientific labor and how reward structures integrate technical contributions.
 
 Our finding that, on average, article-repository pairs have only a single code contributor mirrors prior work from @farber2020analyzingGithubPapers. Further, the distribution of code contributions across author positions provides context to the hierarchical organization of scientific work. First authors emerge as significantly more likely to contribute code with `{python} percent_first_authors_code_contributors_str` of all first authors in our dataset contributing code. Middle and last authors, meanwhile, were statistically significantly less likely to contribute code, with only `{python} percent_middle_authors_code_contributors_str` of middle authors and `{python} percent_last_authors_code_contributors_str` of last authors acting as code-contributing members of the research team. Corresponding authors were similarly less likely than expected to be code contributors, as we found that within our dataset, corresponding authors were code contributors `{python} percent_corresponding_authors_code_contributors_str` of the time. These patterns align with traditional scientific labor distribution where first authors typically handle technical aspects of research while middle and last authors are likely specialist contributors or provide guidance and oversight [@Larivire2020InvestigatingTD; @sauermann2017authorship]. However, our data did not support our initial hypothesis that corresponding authors would also be more likely to contribute code due to their shared responsibility for the long-term maintenance of research artifacts. This finding suggests a potential strict division between project management responsibilities and direct technical engagement with software development.
 
@@ -2718,7 +2722,7 @@ Our analytical approach required substantial data filtering to ensure reliable r
 
 ## Future Work
 
-Future technical improvements may enhance our understanding of the relationship between software development and scientific recognition systems. Expanding analysis beyond GitHub to include other code hosting platforms would provide a more comprehensive understanding of scientific software development practices across domains and institutional contexts. More sophisticated entity-matching techniques could improve author-developer account identification, particularly for cases with limited information or common names. Developing more nuanced measures and classifications of code contribution type, quality, and significance beyond binary contribution identification would better capture the true impact of technical contributions to research. These methodological advances would enable more precise tracking of how code contributions translate—or fail to translate—into formal scientific recognition, providing clearer evidence for policy interventions.
+Future technical improvements may enhance our understanding of the relationship between software development and scientific recognition systems. Expanding analysis beyond GitHub to include other code hosting platforms would provide a more comprehensive understanding of scientific software development practices across domains and institutional contexts. More sophisticated entity-matching techniques could improve author-developer account identification, particularly for cases with limited information or common names. Developing more nuanced measures and classifications of code contribution type, quality, and significance beyond binary contribution identification would better capture the true impact of technical contributions to research (as we have started to do in @sec-appendix-model-training-eval). These methodological advances would enable more precise tracking of how code contributions translate—or fail to translate—into formal scientific recognition, providing clearer evidence for policy interventions.
 
 Our findings point to several directions for future research on the changing nature of scientific labor and recognition. Longitudinal studies tracking how code contribution patterns affect career trajectories would provide valuable insights into the long-term impacts of the observed h-index disparities and whether these effects vary across career stages. Comparative analyses across different scientific domains could reveal discipline-specific norms and practices around software recognition, potentially identifying models that more equitably credit technical contributions. Qualitative studies examining how research teams make authorship decisions regarding code contributors would complement our quantitative findings by illuminating the social and organizational factors influencing recognition practices. Additionally, to better understand corresponding authors' role in maintaining research artifacts, future work could remove the 90-day post-publication commit activity filter to examine long-term sustainability actions. However, this approach would need to address the introduction of contributors unrelated to the original paper.
 
@@ -3128,7 +3132,227 @@ team_comp_no_push_after_pub_counts_latex = _get_latex_for_counts_table(
 
 IPython.display.Latex(team_comp_no_push_after_pub_counts_latex)
 ```
+
 :::
+
+## Additional Analysis of Code-Contributing Non-Authors {#sec-appendix-additional-cc-na-analysis}
+
+### Sample Construction and Labeling
+
+To better understand the nature and extent of contributions made by code-contributing non-authors in our dataset, we conducted a detailed analysis using a random sample of 200 individuals from our filtered dataset used in other analyses (@tbl-team-comp-no-push-after-pub-counts). Our analysis combined qualitative labeling of contribution types with quantitative analysis of commit activity, additions, and deletions made by these contributors to their respective article-repository pairs.
+
+#### Annotation Process
+
+Two independent annotators labeled each of the 200 code-contributing non-authors across three dimensions after completing two rounds of trial labeling on 20 cases to establish agreement. The final labeling criteria were:
+
+**Contribution Type**:
+
+- _"docs"_: Contributors who only modified documentation files (README, LICENSE, etc.) or made changes limited to code comments.
+- _"code"_: Contributors who modified actual code files (.py, .R, .js, etc.) with substantive changes, or modified code support files (requirements.txt, pyproject.toml, package.json, etc.). Contributors who made both code and documentation changes were labeled as "code".
+- _"other"_: Contributors whose changes did not fit the above categories, including those who committed to upstream forks or merged code without authoring it.
+
+**Author Matching Assessment**:
+
+- _"yes"_: Contributors who should have been matched to an author (missed classification).
+- _"no"_: Contributors correctly classified as non-authors.
+- _"unclear"_: Cases with insufficient information for determination.
+
+**Bot Account Detection**:
+
+- _"yes"_: Automated accounts (GitHub Actions, Dependabot, etc.).
+- _"no"_: Human users.
+
+After establishing criteria agreement, each annotator independently labeled 90 contributors, with the final sample of 200 created by combining both sets plus the 20 cases used for criteria development.
+
+#### Quantitative Metrics
+
+For each code-contributing non-author, we collected commit activity data using the GitHub API contributor stats endpoint:
+
+- **Number of Commits**: The total number of commits made by the code-contributing to the article-repository pair.
+- **Number of Additions**: The total number of lines of code added by the code-contributing to the article-repository pair.
+- **Number of Deletions**: The total number of lines of code deleted by the code-contributing to the article-repository pair.
+- **Number of Total Repository Commits**: The total number of commits made to the article-repository pair, regardless of code-contributor.
+- **Number of Total Repository Additions**: The total number of lines of code added to the article-repository pair, regardless of code-contributor.
+- **Number of Total Repository Deletions**: The total number of lines of code deleted from the article-repository pair, regardless of code-contributor.
+
+We additionally, calculated the absolute change for each code-contributor as the sum of additions and deletions, which provides a measure of the total impact of their contributions. Further, we normalized these metrics by the total number of commits, additions, deletions, and absolute changes made to the article-repository pair, regardless of code-contributor. This normalization allows us to compare the relative contribution of each code-contributing non-author to the overall contribution of the article-repository pair.
+
+### Results
+
+```{python}
+EXTRA_DATA_PATH = Path.cwd() / "extra-data"
+
+initial_set = pd.read_csv(EXTRA_DATA_PATH / "cc-na-initial-set.csv")
+eva_set = pd.read_csv(EXTRA_DATA_PATH / "cc-na-eva.csv")
+nic_set = pd.read_csv(EXTRA_DATA_PATH / "cc-na-nic.csv")
+nic_set["is_bot_account"] = "no"
+nic_set = nic_set.drop(
+    columns=[col for col in nic_set.columns if col.startswith("Unnamed:")]
+)
+
+# Combine the datasets
+combined_set = pd.concat(
+    [initial_set, eva_set, nic_set], ignore_index=True
+).reset_index(drop=True)
+```
+
+We find that 39% (78) of code-contributing non-authors were correctly classified as non-authors, 30.5% (61) were unclear due to insufficient profile information, and 30.5% (61) appeared to be missed classifications that should have been matched to authors. Only 2 accounts (1%) were identified as bot accounts.
+
+When broken out by contribution type, we find that:
+
+- _"true non-authors" (n=78)_: 59 contributed code, 13 contributed documentation, and 4 contributed some other type of change
+- _"missed classifications" (n=61)_: 49 contributed code, 12 contributed documentation, and 0 contributed some other type of change
+- _"unclear" (n=61)_: 50 contributed code, 8 contributed documentation, and 3 contributed some other type of change
+
+Tables @tbl-true-cc-na-commit-stats and @tbl-unclear-cc-na-commit-stats present commit statistics for true non-authors and unclear cases, respectively. Among true non-authors making code contributions, the top quartile (75th percentile and above) contributed approximately 10% of total repository commits and 14.4% of absolute changes (additions + deletions). The unclear cases showed substantially higher contribution levels. Code contributors in this group made up 50.5% of total repository commits and 41.7% of repository absolute changes even at the 25th percentile.
+
+```{python}
+def _get_stats_for_author_cls(
+    data: pd.DataFrame, author_cls: str | list[str], repo_owner_filter: str = "all"
+) -> pd.DataFrame:
+    # Get repo owner from repository_url
+    data["repo_owner"] = data["repository_url"].str.split("/").str[3].str.lower()
+    # Get contributor name from developer_account_url
+    data["contributor_name"] = (
+        data["developer_account_url"].str.split("/").str[3].str.lower()
+    )
+
+    # Handle ignore_repo_owners
+    if repo_owner_filter == "none":
+        # Filter out rows where repo_owner == contributor_name
+        data = data.loc[data["repo_owner"] != data["contributor_name"]].copy()
+    elif repo_owner_filter == "only":
+        # Filter to only rows where repo_owner == contributor_name
+        data = data.loc[data["repo_owner"] == data["contributor_name"]].copy()
+    # If repo_owner_filter is "all", do nothing
+
+    # Filter to author cls
+    if isinstance(author_cls, str):
+        # If author_cls is a string, filter to that single class
+        data = data.loc[data["is_actually_author"] == author_cls].copy()
+    elif isinstance(author_cls, list):
+        # If author_cls is a list, filter to those classes
+        data = data.loc[data["is_actually_author"].isin(author_cls)].copy()
+
+    # Scope down to just is_actually_author == author_cls
+    # And which contribution type is "code"
+    # Take the quantiles, mean, and std of their commits (n_commits)
+    # divided by total commits (total_repo_commits)
+    commit_stats = (
+        data.loc[
+            (data["is_bot_account"] == "no")
+            & (data["contrib_type"] == "code")
+        ]
+        .dropna(subset=["n_commits", "total_repo_commits"])
+        .apply(lambda x: x["n_commits"] / x["total_repo_commits"], axis=1)
+        .describe()
+        .round(3)
+    )
+
+    # Same thing but for n_additions and total_repo_additions
+    addition_stats = (
+        data.loc[
+            (data["is_bot_account"] == "no")
+            & (data["contrib_type"] == "code")
+            & (data["total_repo_additions"] > 0)
+        ]
+        .dropna(subset=["n_additions", "total_repo_additions"])
+        .apply(lambda x: x["n_additions"] / x["total_repo_additions"], axis=1)
+        .describe()
+        .round(3)
+    )
+
+    # Same thing but with n_deletions and total_repo_deletions
+    deletion_stats = (
+        data.loc[
+            (data["is_bot_account"] == "no")
+            & (data["contrib_type"] == "code")
+            & (data["total_repo_deletions"] > 0)
+        ]
+        .dropna(subset=["n_deletions", "total_repo_deletions"])
+        .apply(lambda x: x["n_deletions"] / x["total_repo_deletions"], axis=1)
+        .describe()
+        .round(3)
+    )
+
+    # Combine n_additions and n_deletions into a single column
+    # Combined total additions and deletions into a single column
+    data["n_additions_deletions"] = data["n_additions"].fillna(0) + data[
+        "n_deletions"
+    ].fillna(0)
+    data["total_repo_additions_deletions"] = data["total_repo_additions"].fillna(
+        0
+    ) + data["total_repo_deletions"].fillna(0)
+    # Calculate the ratio of additions and deletions to total repo additions and deletions
+    abs_stats = (
+        data.loc[
+            (data["is_bot_account"] == "no")
+            & (data["contrib_type"] == "code")
+            & (data["total_repo_additions_deletions"] > 0)
+        ]
+        .dropna(subset=["n_additions_deletions", "total_repo_additions_deletions"])
+        .apply(
+            lambda x: x["n_additions_deletions"] / x["total_repo_additions_deletions"],
+            axis=1,
+        )
+        .describe()
+        .round(3)
+    )
+
+    # Create frame
+    stats_frame = pd.DataFrame(
+        {
+            "commit_stats": commit_stats,
+            "addition_stats": addition_stats,
+            "deletion_stats": deletion_stats,
+            "abs_stats": abs_stats,
+        }
+    ).T
+
+    # Remove "count" from columns
+    stats_frame = stats_frame.drop(columns=["count"])
+
+    return stats_frame
+```
+
+```{python}
+#| label: tbl-true-cc-na-commit-stats
+#| tbl-cap: "Commit statistics for code-contributing non-authors labeled as true non-authors. Statistics are calculated as the proportion of commits, additions, deletions, and absolute changes made by the code-contributing non-author to the total commits, additions, deletions, and absolute changes made to the article-repository pair, regardless of code-contributor."
+
+_get_stats_for_author_cls(
+    data=combined_set,
+    author_cls="no",
+    repo_owner_filter="all",
+)
+```
+
+```{python}
+#| label: tbl-unclear-cc-na-commit-stats
+#| tbl-cap: "Commit statistics for code-contributing non-authors labeled as unclear. Statistics are calculated as the proportion of commits, additions, deletions, and absolute changes made by the code-contributing non-author to the total commits, additions, deletions, and absolute changes made to the article-repository pair, regardless of code-contributor."
+
+_get_stats_for_author_cls(
+    data=combined_set,
+    author_cls="unclear",
+    repo_owner_filter="all",
+)
+```
+
+We observed a notable pattern where very few true non-authors (n=4) were repository owners, while a substantial portion of unclear cases (n=30, 49%) owned the repositories they contributed to. This suggests many unclear contributors were likely primary code authors who could not be matched due to limited profile information. When excluding repository owners from the unclear group (Table @tbl-unclear-cc-na-commit-stats-no-repo-owner), the median contribution drops to 34.6% of total commits and 12.7% of absolute changes, though this still represents substantial technical involvement.
+
+```{python}
+#| label: tbl-unclear-cc-na-commit-stats-no-repo-owner
+#| tbl-cap: "Commit statistics for code-contributing non-authors labeled as unclear, excluding repository owners. Statistics are calculated as the proportion of commits, additions, deletions, and absolute changes made by the code-contributing non-author to the total commits, additions, deletions, and absolute changes made to the article-repository pair, regardless of code-contributor."
+
+_get_stats_for_author_cls(
+    data=combined_set,
+    author_cls="unclear",
+    repo_owner_filter="none",
+)
+```
+
+Our analysis provides evidence that code-contributing non-authors represent a heterogeneous group with varying contribution levels. While defining "substantial" contribution worthy of authorship remains challenging, our findings reveal a clear mix of legitimate non-authors and potentially missed classifications, with both groups often contributing meaningful portions of repository commits and code changes.
+
+However, our sample size of 200 limits generalizability to the full population of code-contributing non-authors. Additionally, the manual annotation process introduces potential subjectivity despite our established criteria, and our reliance on publicly available GitHub profiles may systematically underestimate contributions from developers with minimal profile information.
 
 ## Article Citation Linear Model Results
 
