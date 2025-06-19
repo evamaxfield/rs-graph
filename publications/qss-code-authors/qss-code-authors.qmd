@@ -50,8 +50,6 @@ format:
 
   elsevier-pdf:
     toc: false
-    mainfont: Times New Roman
-    sansfont: Times New Roman
     execute:
       echo: false
       warning: false
