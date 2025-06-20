@@ -4,7 +4,7 @@ Research Software Graph (rs-graph) is a software repository which contains the f
 
 1. A Python library for collecting, processing, and standardizing scientific publication and associated research software/code from multiple sources.
 
-2. Select publications, analysis scripts, and presentations which utilize the created dataset(s). Notably, this includes our preprint [Code Contribution and Scientific Authorship](https://evamaxfield.github.io/rs-graph/qss-code-contribution.html) which investigates how code contributions are recognized and rewarded in scientific publications.
+2. Select publications, analysis scripts, and presentations which utilize the created dataset(s). Notably, this includes our preprint [Code Contribution and Credit in Science](https://evamaxfield.github.io/rs-graph/qss-code-contribution.html) which investigates how code contributions are recognized and rewarded in scientific publications.
 
 If you are interested in:
 
@@ -52,10 +52,9 @@ While there is more information available in the dataset, these are the primary 
 
 ### rs-graph-v1
 
-The initial release of data from our processing pipeline is stored in Harvard Dataverse:
-[doi:10.7910/DVN/KPYVI1](https://doi.org/10.7910/DVN/KPYVI1)
+The initial release of data from our processing pipeline is stored in Harvard Dataverse: [https://dataverse.harvard.edu/previewurl.xhtml?token=6a5f7b30-9ca7-433c-8c42-13372d55b7d2](https://dataverse.harvard.edu/previewurl.xhtml?token=6a5f7b30-9ca7-433c-8c42-13372d55b7d2)
 
-This dataset was used to create the preprint manuscript [Code Contribution and Scientific Authorship](https://evamaxfield.github.io/rs-graph/qss-code-contribution.html).
+This dataset was used to create the preprint manuscript [Code Contribution and Credit in Science](https://evamaxfield.github.io/rs-graph/qss-code-contribution.html).
 
 To access the dataset, please create an account on Harvard Dataverse and download the
 `rs-graph-v1-redacted.db` and/or `rs-graph-v1-prod.db` SQLite database file(s).
@@ -159,7 +158,7 @@ with Session(engine) as session:
 
 ## Publications
 
-### Code Contribution and Scientific Authorship
+### Code Contribution and Credit in Science
 
 **Note:** You will need to request access to the `rs-graph-v1-prod.db` SQLite database file from
 Harvard Dataverse ([doi:10.7910/DVN/KPYVI1](https://doi.org/10.7910/DVN/KPYVI1)) to regenerate the manuscript.
