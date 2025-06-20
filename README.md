@@ -52,7 +52,7 @@ While there is more information available in the dataset, these are the primary 
 
 ### rs-graph-v1
 
-The initial release of data from our processing pipeline is stored in Harvard Dataverse: [https://dataverse.harvard.edu/previewurl.xhtml?token=6a5f7b30-9ca7-433c-8c42-13372d55b7d2](https://dataverse.harvard.edu/previewurl.xhtml?token=6a5f7b30-9ca7-433c-8c42-13372d55b7d2)
+The initial release of data from our processing pipeline is stored in Harvard Dataverse: [https://doi.org/10.7910/DVN/KPYVI1](https://doi.org/10.7910/DVN/KPYVI1)
 
 This dataset was used to create the preprint manuscript [Code Contribution and Credit in Science](https://evamaxfield.github.io/rs-graph/qss-code-contribution.html).
 
@@ -161,7 +161,7 @@ with Session(engine) as session:
 ### Code Contribution and Credit in Science
 
 **Note:** You will need to request access to the `rs-graph-v1-prod.db` SQLite database file from
-Harvard Dataverse [https://dataverse.harvard.edu/previewurl.xhtml?token=6a5f7b30-9ca7-433c-8c42-13372d55b7d2](https://dataverse.harvard.edu/previewurl.xhtml?token=6a5f7b30-9ca7-433c-8c42-13372d55b7d2) to regenerate the manuscript.
+Harvard Dataverse [https://doi.org/10.7910/DVN/KPYVI1](https://doi.org/10.7910/DVN/KPYVI1) to regenerate the manuscript.
 The `rs-graph-v1-redacted.db` file is not sufficient to regenerate the manuscript.
 
 The manuscript is located at: [./publications/qss-code-authors/qss-code-authors.qmd](./publications/qss-code-authors/qss-code-authors.qmd)
