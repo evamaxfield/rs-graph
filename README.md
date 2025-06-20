@@ -161,7 +161,7 @@ with Session(engine) as session:
 ### Code Contribution and Credit in Science
 
 **Note:** You will need to request access to the `rs-graph-v1-prod.db` SQLite database file from
-Harvard Dataverse ([doi:10.7910/DVN/KPYVI1](https://doi.org/10.7910/DVN/KPYVI1)) to regenerate the manuscript.
+Harvard Dataverse [https://dataverse.harvard.edu/previewurl.xhtml?token=6a5f7b30-9ca7-433c-8c42-13372d55b7d2](https://dataverse.harvard.edu/previewurl.xhtml?token=6a5f7b30-9ca7-433c-8c42-13372d55b7d2) to regenerate the manuscript.
 The `rs-graph-v1-redacted.db` file is not sufficient to regenerate the manuscript.
 
 The manuscript is located at: [./publications/qss-code-authors/qss-code-authors.qmd](./publications/qss-code-authors/qss-code-authors.qmd)
