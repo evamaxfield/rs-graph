@@ -102,7 +102,7 @@ def _load_elsevier_api_keys(
 
     except FileNotFoundError as e:
         raise FileNotFoundError(
-            f"GitHub tokens file not found at path: {elsevier_api_keys_file}"
+            f"Elsevier tokens file not found at path: {elsevier_api_keys_file}"
         ) from e
 
     # Get tokens
@@ -154,7 +154,7 @@ def _prelinked_dataset_ingestion_flow(
     errored_store_path: Path,
 ) -> None:
     # Get an infinite cycle of github tokens
-    cycled_github_tokens = GitHubTokensCycler(github_tokens_file=github_tokens_file)
+    cycled_github_tokens = GitHubTokensCycler(gh_tokens_file=github_tokens_file)
 
     # Workers is the number of github tokens
     n_github_tokens = len(cycled_github_tokens)

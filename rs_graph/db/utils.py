@@ -18,11 +18,11 @@ def get_engine(use_prod: bool = False) -> Engine:
     db_path = Path(__file__).parent.parent / "data" / "files"
 
     if use_prod:
-        db_path = db_path / "rs-graph-v1-prod.db"
+        db_path = db_path / "rs-graph-v2-prod.db"
 
         return create_engine(f"sqlite:///{db_path}")
     else:
-        db_path = db_path / "rs-graph-v1-dev.db"
+        db_path = db_path / "rs-graph-v2-dev.db"
 
         return create_engine(f"sqlite:///{db_path}")
 

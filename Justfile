@@ -105,24 +105,25 @@ setup-infra project=default_project:
 
 db_path := justfile_directory() + "/rs_graph/data/files/rs-graph"
 current_git_details := `git log -n 1 --pretty=format:"Git Commit: %h"`
+db_version := "v2"
 
 # create a new migration (can only run if git is clean)
 db-migrate target="dev":
 	git update-index --really-refresh
-	sed -i '' 's|REPLACE_SQLITE_DB_PATH|{{db_path}}-{{target}}.db|g' {{justfile_directory()}}/alembic.ini
+	sed -i '' 's|REPLACE_SQLITE_DB_PATH|{{db_path}}-{{db_version}}-{{target}}.db|g' {{justfile_directory()}}/alembic.ini
 	mkdir -p {{justfile_directory()}}/rs_graph/data/files
 	-alembic revision --autogenerate -m "{{current_git_details}}"
 	-alembic upgrade head
-	sed -i '' 's|{{db_path}}-{{target}}.db|REPLACE_SQLITE_DB_PATH|g' {{justfile_directory()}}/alembic.ini
+	sed -i '' 's|{{db_path}}-{{db_version}}-{{target}}.db|REPLACE_SQLITE_DB_PATH|g' {{justfile_directory()}}/alembic.ini
 	sleep 0.5
 	git add -A
 	git commit -m "New migration for target: {{target}}"
 
 db-upgrade target="dev":
-	sed -i '' 's|REPLACE_SQLITE_DB_PATH|{{db_path}}-{{target}}.db|g' {{justfile_directory()}}/alembic.ini
+	sed -i '' 's|REPLACE_SQLITE_DB_PATH|{{db_path}}-{{db_version}}-{{target}}.db|g' {{justfile_directory()}}/alembic.ini
 	mkdir -p {{justfile_directory()}}/rs_graph/data/files
 	-alembic upgrade head
-	sed -i '' 's|{{db_path}}-{{target}}.db|REPLACE_SQLITE_DB_PATH|g' {{justfile_directory()}}/alembic.ini
+	sed -i '' 's|{{db_path}}-{{db_version}}-{{target}}.db|REPLACE_SQLITE_DB_PATH|g' {{justfile_directory()}}/alembic.ini
 
 ###############################################################################
 # Docker management
