@@ -68,7 +68,9 @@ class FundingInstanceDetails(DataClassJsonMixin):
 
 @dataclass
 class OpenAlexResultModels(DataClassJsonMixin):
-    source_model: db_models.DatasetSource
+    dataset_source_model: db_models.DatasetSource
+    document_source_model: db_models.Source | None
+    primary_location_model: db_models.Source | None
     document_model: db_models.Document
     document_abstract_model: db_models.DocumentAbstract
     document_alternate_dois: list[str]

@@ -42,6 +42,52 @@ class DatasetSource(StrippedSQLModel, table=True):  # type: ignore
     )
 
 
+class Source(StrippedSQLModel, table=True):  # type: ignore
+    """Stores the basic information about a possible document source."""
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(unique=True, index=True)
+    open_alex_id: str = Field(unique=True)
+
+    # Data
+    source_type: str = Field(index=True)
+    host_organization_open_alex_id: str | None = None
+
+    # Updates
+    created_datetime: datetime = Field(
+        sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime = Field(
+        sa_column=Column(DateTime(), onupdate=func.now())
+    )
+
+
+class Location(StrippedSQLModel, table=True):  # type: ignore
+    """Stores the basic information about a document's possible location."""
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+
+    # Data
+    is_open_access: bool = Field(index=True)
+    landing_page_url: str | None = Field(index=True)
+    pdf_url: str | None = Field(index=True)
+    license: str | None = Field(index=True)
+    version: str | None = Field(index=True)
+
+    # Foreign Keys
+    source_id: int = Field(foreign_key="source.id", index=True)
+
+    # Updates
+    created_datetime: datetime = Field(
+        sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime = Field(
+        sa_column=Column(DateTime(), onupdate=func.now())
+    )
+
+
 class Document(StrippedSQLModel, table=True):  # type: ignore
     """Stores paper, report, or other academic document details."""
 
@@ -54,12 +100,16 @@ class Document(StrippedSQLModel, table=True):  # type: ignore
     title: str
     publication_date: date = Field(index=True)
     cited_by_count: int = Field(index=True)
-    cited_by_percentile_year_min: int = Field(index=True)
-    cited_by_percentile_year_max: int = Field(index=True)
     fwci: float | None = Field(index=True, nullable=True)
+    citation_normalized_percentile: float | None = Field(index=True, nullable=True)
     document_type: str = Field(index=True)
     is_open_access: bool = Field(index=True)
     open_access_status: str = Field(index=True)
+
+    # Foreign Keys
+    primary_location_id: int | None = Field(
+        foreign_key="location.id", index=True, nullable=True
+    )
 
     # Updates
     created_datetime: datetime = Field(
@@ -224,6 +274,8 @@ class Institution(StrippedSQLModel, table=True):  # type: ignore
 
     # Data
     name: str = Field(index=True)
+    country_code: str = Field(index=True)
+    institution_type: str = Field(index=True)
     ror: str
 
     # Updates
@@ -357,11 +409,13 @@ class Repository(StrippedSQLModel, table=True):  # type: ignore
     stargazers_count: int = Field(index=True)
     watchers_count: int = Field(index=True)
     open_issues_count: int = Field(index=True)
+    # default_branch: str | None = Field(index=True, nullable=True)
+    # commits_count: int = Field(index=True)
     size_kb: int
+    # topics: str | None = Field(nullable=True)
+    # license: str | None = Field(index=True, nullable=True)
     creation_datetime: datetime = Field(index=True)
     last_pushed_datetime: datetime = Field(index=True)
-
-    # TODO: add total commits field
 
     # Updates
     created_datetime: datetime = Field(
@@ -408,6 +462,31 @@ class RepositoryLanguage(StrippedSQLModel, table=True):  # type: ignore
     __table_args__ = (UniqueConstraint("repository_id", "language"),)
 
     # Data
+    bytes_of_code: int
+
+    # Updates
+    created_datetime: datetime = Field(
+        sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime = Field(
+        sa_column=Column(DateTime(), onupdate=func.now())
+    )
+
+
+class RepositoryFile(StrippedSQLModel, table=True):  # type: ignore
+    """Stores the connection between a repository and a file."""
+
+    __tablename__ = "repository_file"
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+    repository_id: int = Field(foreign_key="repository.id", index=True)
+    path: str = Field(index=True)
+
+    __table_args__ = (UniqueConstraint("repository_id", "path"),)
+
+    # Data
+    tree_type: str  # e.g. "blob" for files, "tree" for directories
     bytes_of_code: int
 
     # Updates

@@ -244,9 +244,6 @@ def process_article(
             doi=updated_doi,
         )
 
-        # Get FWCI
-        document_fwci = open_alex_work["fwci"]
-
         # Convert inverted index abstract to string
         if open_alex_work["abstract_inverted_index"] is None:
             abstract_text = None
@@ -254,6 +251,29 @@ def process_article(
             abstract_text = convert_from_inverted_index_abstract(
                 open_alex_work["abstract_inverted_index"]
             )
+
+        # Create Document Source and Primary Location
+        if open_alex_work["primary_location"] is not None:
+            document_source = db_models.Source(
+                name=open_alex_work["primary_location"]["source"]["display_name"],
+                open_alex_id=open_alex_work["primary_location"]["source"]["id"],
+                source_type=open_alex_work["primary_location"]["source"]["type"],
+                host_organization_open_alex_id=open_alex_work["primary_location"][
+                    "source"
+                ]["host_organization"],
+            )
+            primary_location = db_models.Location(
+                is_open_access=open_alex_work["primary_location"]["is_oa"],
+                landing_page_url=open_alex_work["primary_location"]["landing_page_url"],
+                pdf_url=open_alex_work["primary_location"]["pdf_url"],
+                license=open_alex_work["primary_location"]["license"],
+                version=open_alex_work["primary_location"]["version"],
+                source_id=document_source.id,
+            )
+        else:
+            # If no primary location, set to None
+            document_source = None
+            primary_location = None
 
         # Create DatasetSource
         dataset_source = db_models.DatasetSource(name=pair.source)
@@ -265,16 +285,14 @@ def process_article(
             title=open_alex_work["title"],
             publication_date=date.fromisoformat(open_alex_work["publication_date"]),
             cited_by_count=open_alex_work["cited_by_count"],
-            cited_by_percentile_year_min=open_alex_work["cited_by_percentile_year"][
-                "min"
-            ],
-            cited_by_percentile_year_max=open_alex_work["cited_by_percentile_year"][
-                "max"
-            ],
-            fwci=document_fwci,
+            fwci=open_alex_work["fwci"],
+            citation_normalized_percentile=open_alex_work[
+                "citation_normalized_percentile"
+            ]["value"],
             document_type=open_alex_work["type"],
             is_open_access=open_alex_work["open_access"]["is_oa"],
             open_access_status=open_alex_work["open_access"]["oa_status"],
+            primary_location_id=primary_location.id if primary_location else None,
         )
 
         # Create the abstract
@@ -352,6 +370,8 @@ def process_article(
                 institution = db_models.Institution(
                     open_alex_id=institution_details["id"],
                     name=institution_details["display_name"],
+                    country_code=institution_details["country_code"],
+                    institution_type=institution_details["type"],
                     ror=institution_details["ror"],
                 )
                 institution_models.append(institution)
@@ -395,7 +415,9 @@ def process_article(
 
         # Attach everything back to the pair
         pair.open_alex_results = types.OpenAlexResultModels(
-            source_model=dataset_source,
+            dataset_source_model=dataset_source,
+            document_source_model=document_source,
+            primary_location_model=primary_location,
             document_model=document,
             document_abstract_model=abstract_model,
             document_alternate_dois=alternate_dois,

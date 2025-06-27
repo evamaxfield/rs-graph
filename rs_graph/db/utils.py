@@ -76,7 +76,7 @@ def _get_or_add_and_flush(
     return model
 
 
-def store_full_details(
+def store_full_details(  # noqa: C901
     pair: types.ExpandedRepositoryDocumentPair,
     use_prod: bool = False,
 ) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
@@ -91,12 +91,43 @@ def store_full_details(
             assert pair.repo_parts is not None
 
             # Dataset source
-            pair.open_alex_results.source_model = _get_or_add_and_flush(
-                model=pair.open_alex_results.source_model, session=session
+            pair.open_alex_results.dataset_source_model = _get_or_add_and_flush(
+                model=pair.open_alex_results.dataset_source_model, session=session
             )
-            assert pair.open_alex_results.source_model.id is not None
+            assert pair.open_alex_results.dataset_source_model.id is not None
 
-            # Document (update dataset source)
+            # Store the document source
+            if pair.open_alex_results.document_source_model is not None:
+                pair.open_alex_results.document_source_model = _get_or_add_and_flush(
+                    model=pair.open_alex_results.document_source_model, session=session
+                )
+                assert (
+                    pair.open_alex_results.document_source_model.id  # type: ignore
+                    is not None
+                )
+            # Store the primary location
+            if pair.open_alex_results.primary_location_model is not None:
+                # Update with the document source id
+                if pair.open_alex_results.document_source_model is not None:
+                    pair.open_alex_results.primary_location_model.source_id = (
+                        pair.open_alex_results.document_source_model.id
+                    )
+
+                # Add and flush
+                pair.open_alex_results.primary_location_model = _get_or_add_and_flush(
+                    model=pair.open_alex_results.primary_location_model, session=session
+                )
+                assert (
+                    pair.open_alex_results.primary_location_model.id  # type: ignore
+                    is not None
+                )
+
+                # Update the document model with the primary location id
+                pair.open_alex_results.document_model.primary_location_id = (
+                    pair.open_alex_results.primary_location_model.id  # type: ignore
+                )
+
+            # Document
             pair.open_alex_results.document_model = _get_or_add_and_flush(
                 model=pair.open_alex_results.document_model, session=session
             )
@@ -266,12 +297,12 @@ def store_full_details(
             d_r = db_models.DocumentRepositoryLink(
                 document_id=pair.open_alex_results.document_model.id,
                 repository_id=pair.github_results.repository_model.id,
-                dataset_source_id=pair.open_alex_results.source_model.id,
+                dataset_source_id=pair.open_alex_results.dataset_source_model.id,
             )
             _get_or_add_and_flush(model=d_r, session=session)
 
             # Get all the info needed to refresh after commit
-            dataset_source_id = pair.open_alex_results.source_model.id
+            dataset_source_id = pair.open_alex_results.dataset_source_model.id
             document_model_id = pair.open_alex_results.document_model.id
             repository_model_id = pair.github_results.repository_model.id
             developer_account_model_ids = [
