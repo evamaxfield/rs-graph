@@ -119,10 +119,10 @@ db-migrate target="dev":
 	git commit -m "New migration for target: {{target}}"
 
 db-upgrade target="dev":
-	sed -i 's|REPLACE_SQLITE_DB_PATH|{{db_path}}-{{target}}.db|g' {{justfile_directory()}}/alembic.ini
+	sed -i '' 's|REPLACE_SQLITE_DB_PATH|{{db_path}}-{{target}}.db|g' {{justfile_directory()}}/alembic.ini
 	mkdir -p {{justfile_directory()}}/rs_graph/data/files
 	-alembic upgrade head
-	sed -i 's|{{db_path}}-{{target}}.db|REPLACE_SQLITE_DB_PATH|g' {{justfile_directory()}}/alembic.ini
+	sed -i '' 's|{{db_path}}-{{target}}.db|REPLACE_SQLITE_DB_PATH|g' {{justfile_directory()}}/alembic.ini
 
 ###############################################################################
 # Docker management
