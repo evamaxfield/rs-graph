@@ -11,6 +11,7 @@ from datetime import datetime
 from functools import partial
 
 import backoff
+import requests
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
 from fastcore.net import HTTP403ForbiddenError
@@ -171,6 +172,47 @@ def process_github_repo(
             name=pair.repo_parts.host,
         )
 
+        # Get the default branch as it is needed for commit count and file lists
+        default_branch = repo_info.get("default_branch", None)
+        if default_branch is not None:
+            # Get the commit count for the default branch via checking
+            # header response for the page count after rel="last"
+            # https://stackoverflow.com/a/70610670
+            try:
+                # Use raw requests lib rather than GhApi
+                # As we need the headers
+                response = requests.get(
+                    f"https://api.github.com/repos/{pair.repo_parts.owner}/{pair.repo_parts.name}/commits",
+                    params={"sha": default_branch, "per_page": 1, "page": 1},
+                    headers={"Authorization": f"Bearer {github_api_key}"}
+                    if github_api_key
+                    else {},
+                )
+
+                # Raise for status
+                response.raise_for_status()
+
+                # Parse the Link header
+                # We want the page right before rel="last"
+                link_header = response.headers.get("Link", "")
+                if link_header:
+                    # Split by comma to get each part
+                    _, last_page = link_header.split(", ")
+                    # Extract the page number from the last page
+                    last_page_url = last_page.split(";")[0].strip("<>")
+                    commits_count = int(last_page_url.split("page=")[-1])
+                else:
+                    commits_count = None
+
+            except Exception:
+                commits_count = None
+
+            finally:
+                # Sleep to avoid API limits
+                time.sleep(0.85)
+        else:
+            commits_count = None
+
         # Create the repository
         repo = db_models.Repository(
             code_host_id=code_host.id,
@@ -182,7 +224,12 @@ def process_github_repo(
             stargazers_count=repo_info["stargazers_count"],
             watchers_count=repo_info["watchers_count"],
             open_issues_count=repo_info["open_issues_count"],
+            commits_count=commits_count,
             size_kb=repo_info["size"],
+            topics=";".join(repo_info["topics"]) if repo_info["topics"] else None,
+            primary_language=repo_info["language"],
+            default_branch=default_branch,
+            license=repo_info["license"]["name"] if repo_info["license"] else None,
             creation_datetime=datetime.fromisoformat(repo_info["created_at"]),
             last_pushed_datetime=datetime.fromisoformat(repo_info["pushed_at"]),
         )

@@ -347,11 +347,12 @@ class Repository(StrippedSQLModel, table=True):  # type: ignore
     stargazers_count: int = Field(index=True)
     watchers_count: int = Field(index=True)
     open_issues_count: int = Field(index=True)
-    # default_branch: str | None = Field(index=True, nullable=True)
-    # commits_count: int = Field(index=True)
+    commits_count: int | None = Field(index=True)
     size_kb: int
-    # topics: str | None = Field(nullable=True)
-    # license: str | None = Field(index=True, nullable=True)
+    topics: str | None = Field(nullable=True)
+    primary_language: str | None = Field(index=True, nullable=True)
+    default_branch: str | None = Field(index=True, nullable=True)
+    license: str | None = Field(index=True, nullable=True)
     creation_datetime: datetime = Field(index=True)
     last_pushed_datetime: datetime = Field(index=True)
 
