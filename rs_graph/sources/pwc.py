@@ -16,8 +16,7 @@ from .. import types
 ###############################################################################
 
 DOWNLOAD_URL = (
-    "https://production-media.paperswithcode.com/"
-    "about/links-between-papers-and-code.json.gz"
+    "https://production-media.paperswithcode.com/" "about/links-between-papers-and-code.json.gz"
 )
 
 ###############################################################################

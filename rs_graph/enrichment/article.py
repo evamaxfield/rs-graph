@@ -215,7 +215,7 @@ def get_open_alex_author_from_id(
     return open_alex_authors[author_id]
 
 
-def process_article(
+def process_article(  # noqa: C901
     pair: types.ExpandedRepositoryDocumentPair,
     open_alex_email: str,
     open_alex_email_count: int,
@@ -252,15 +252,18 @@ def process_article(
                 open_alex_work["abstract_inverted_index"]
             )
 
-        # Create Document Source and Primary Location
+        # Create Primary Document Source and Primary Location
         if open_alex_work["primary_location"] is not None:
-            document_source = db_models.Source(
+            primary_document_source = db_models.Source(
                 name=open_alex_work["primary_location"]["source"]["display_name"],
                 open_alex_id=open_alex_work["primary_location"]["source"]["id"],
                 source_type=open_alex_work["primary_location"]["source"]["type"],
-                host_organization_open_alex_id=open_alex_work["primary_location"][
-                    "source"
-                ]["host_organization"],
+                host_organization_name=open_alex_work["primary_location"]["source"][
+                    "host_organization"
+                ]["host_organization_name"],
+                host_organization_open_alex_id=open_alex_work["primary_location"]["source"][
+                    "host_organization"
+                ],
             )
             primary_location = db_models.Location(
                 is_open_access=open_alex_work["primary_location"]["is_oa"],
@@ -268,15 +271,49 @@ def process_article(
                 pdf_url=open_alex_work["primary_location"]["pdf_url"],
                 license=open_alex_work["primary_location"]["license"],
                 version=open_alex_work["primary_location"]["version"],
-                source_id=document_source.id,
+                source_id=primary_document_source.id,
             )
         else:
             # If no primary location, set to None
-            document_source = None
+            primary_document_source = None
             primary_location = None
+
+        # Create Best OA Document Source and Best OA Location
+        if open_alex_work["best_oa_location"] is not None:
+            best_oa_document_source = db_models.Source(
+                name=open_alex_work["best_oa_location"]["source"]["display_name"],
+                open_alex_id=open_alex_work["best_oa_location"]["source"]["id"],
+                source_type=open_alex_work["best_oa_location"]["source"]["type"],
+                host_organization_name=open_alex_work["best_oa_location"]["source"][
+                    "host_organization"
+                ]["host_organization_name"],
+                host_organization_open_alex_id=open_alex_work["best_oa_location"]["source"][
+                    "host_organization"
+                ],
+            )
+            best_oa_location = db_models.Location(
+                is_open_access=open_alex_work["best_oa_location"]["is_oa"],
+                landing_page_url=open_alex_work["best_oa_location"]["landing_page_url"],
+                pdf_url=open_alex_work["best_oa_location"]["pdf_url"],
+                license=open_alex_work["best_oa_location"]["license"],
+                version=open_alex_work["best_oa_location"]["version"],
+                source_id=best_oa_document_source.id,
+            )
+        else:
+            # If no best OA location, set to None
+            best_oa_document_source = None
+            best_oa_location = None
 
         # Create DatasetSource
         dataset_source = db_models.DatasetSource(name=pair.source)
+
+        # Check for citation_normalized_percentile
+        if open_alex_work["citation_normalized_percentile"] is not None:
+            citation_normalized_percentile = open_alex_work["citation_normalized_percentile"][
+                "value"
+            ]
+        else:
+            citation_normalized_percentile = None
 
         # Create the Document
         document = db_models.Document(
@@ -286,13 +323,12 @@ def process_article(
             publication_date=date.fromisoformat(open_alex_work["publication_date"]),
             cited_by_count=open_alex_work["cited_by_count"],
             fwci=open_alex_work["fwci"],
-            citation_normalized_percentile=open_alex_work[
-                "citation_normalized_percentile"
-            ]["value"],
+            citation_normalized_percentile=citation_normalized_percentile,
             document_type=open_alex_work["type"],
             is_open_access=open_alex_work["open_access"]["is_oa"],
             open_access_status=open_alex_work["open_access"]["oa_status"],
             primary_location_id=primary_location.id if primary_location else None,
+            best_oa_location_id=best_oa_location.id if best_oa_location else None,
         )
 
         # Create the abstract
@@ -349,9 +385,7 @@ def process_article(
                 cited_by_count=open_alex_author["cited_by_count"],
                 h_index=open_alex_author["summary_stats"]["h_index"],
                 i10_index=open_alex_author["summary_stats"]["i10_index"],
-                two_year_mean_citedness=open_alex_author["summary_stats"][
-                    "2yr_mean_citedness"
-                ],
+                two_year_mean_citedness=open_alex_author["summary_stats"]["2yr_mean_citedness"],
             )
 
             # Create the connection between researcher and document
@@ -416,8 +450,10 @@ def process_article(
         # Attach everything back to the pair
         pair.open_alex_results = types.OpenAlexResultModels(
             dataset_source_model=dataset_source,
-            document_source_model=document_source,
+            primary_document_source_model=primary_document_source,
             primary_location_model=primary_location,
+            best_oa_document_source_model=best_oa_document_source,
+            best_oa_location_model=best_oa_location,
             document_model=document,
             document_abstract_model=abstract_model,
             document_alternate_dois=alternate_dois,

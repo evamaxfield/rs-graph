@@ -115,12 +115,12 @@ exclude = ["*docs/*", "*tests/*"]
 
 # tools
 [tool.black]
-line-length = 88
+line-length = 96
 target-version = ["py310", "py311", "py312"]
 
 # https://github.com/charliermarsh/ruff
 [tool.ruff]
-line-length = 88
+line-length = 96
 target-version = "py310"
 extend-select = [
     "E",      # style errors

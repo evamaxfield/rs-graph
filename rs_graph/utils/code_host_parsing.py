@@ -222,9 +222,7 @@ def filter_repo_paper_pairs(
             for result in results
             if isinstance(result, types.ExpandedRepositoryDocumentPair)
         ],
-        errored_results=[
-            result for result in results if isinstance(result, types.ErrorResult)
-        ],
+        errored_results=[result for result in results if isinstance(result, types.ErrorResult)],
     )
 
     # Log total succeeded and errored

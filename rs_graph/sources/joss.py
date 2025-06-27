@@ -8,9 +8,7 @@ from .. import types
 
 ###############################################################################
 
-JOSS_PUBLISHED_PAPERS_URL_TEMPLATE = (
-    "https://joss.theoj.org/papers/published.json?page={page}"
-)
+JOSS_PUBLISHED_PAPERS_URL_TEMPLATE = "https://joss.theoj.org/papers/published.json?page={page}"
 
 ###############################################################################
 
@@ -62,9 +60,7 @@ def get_dataset(
     # Process each page
     while continue_next:
         # Get response
-        response = requests.get(
-            JOSS_PUBLISHED_PAPERS_URL_TEMPLATE.format(page=current_page)
-        )
+        response = requests.get(JOSS_PUBLISHED_PAPERS_URL_TEMPLATE.format(page=current_page))
 
         # Raise error
         try:

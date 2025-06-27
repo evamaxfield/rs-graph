@@ -67,9 +67,7 @@ class ExtendedPaperDetails(DataClassJsonMixin):
     Exception,
     max_time=10,
 )
-def _get_single_paper_details(
-    doi: str, api: SemanticScholar
-) -> ExtendedPaperDetails | None:
+def _get_single_paper_details(doi: str, api: SemanticScholar) -> ExtendedPaperDetails | None:
     try:
         # Get full paper details
         paper = api.get_paper(

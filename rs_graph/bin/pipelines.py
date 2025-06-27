@@ -126,9 +126,7 @@ def _store_batch_results(
     print("Storing batch results...")
 
     # Get only errors
-    errored_results = [
-        result for result in results if isinstance(result, types.ErrorResult)
-    ]
+    errored_results = [result for result in results if isinstance(result, types.ErrorResult)]
 
     # Log this batch counts
     print(f"This Batch Success: {len(results) - len(errored_results)}")
@@ -241,9 +239,7 @@ def _prelinked_dataset_ingestion_flow(
             )
             article_processing_futures = process_article_wrapped_task.map(
                 pair=chunk,
-                open_alex_email=[
-                    next(cycled_open_alex_emails) for _ in range(len(chunk))
-                ],
+                open_alex_email=[next(cycled_open_alex_emails) for _ in range(len(chunk))],
                 open_alex_email_count=n_open_alex_emails,
                 semantic_scholar_api_key=unmapped(semantic_scholar_api_key),
             )
@@ -256,8 +252,7 @@ def _prelinked_dataset_ingestion_flow(
             github_futures = process_github_wrapped_task.map(
                 pair=article_processing_futures,
                 github_api_key=[
-                    next(cycled_github_tokens)
-                    for _ in range(len(article_processing_futures))
+                    next(cycled_github_tokens) for _ in range(len(article_processing_futures))
                 ],
             )
 
@@ -268,22 +263,18 @@ def _prelinked_dataset_ingestion_flow(
             )
 
             # Match devs and researchers
-            match_devs_and_researchers_wrapped_task = (
-                _wrap_func_with_coiled_prefect_task(
-                    entity_matching.match_devs_and_researchers,
-                    coiled_kwargs=gpu_cluster_config,
-                )
+            match_devs_and_researchers_wrapped_task = _wrap_func_with_coiled_prefect_task(
+                entity_matching.match_devs_and_researchers,
+                coiled_kwargs=gpu_cluster_config,
             )
             dev_researcher_futures = match_devs_and_researchers_wrapped_task.map(
                 pair=stored_futures,
             )
 
             # Store the dev-researcher links
-            stored_dev_researcher_futures = (
-                db_utils.store_dev_researcher_em_links_task.map(
-                    pair=dev_researcher_futures,
-                    use_prod=unmapped(use_prod),
-                )
+            stored_dev_researcher_futures = db_utils.store_dev_researcher_em_links_task.map(
+                pair=dev_researcher_futures,
+                use_prod=unmapped(use_prod),
             )
 
             # Store this batch's errored results
@@ -333,9 +324,7 @@ def prelinked_dataset_ingestion(
     current_datetime_dir = DEFAULT_RESULTS_DIR / current_datetime_str
     # Create "results" dir
     current_datetime_dir.mkdir(exist_ok=True, parents=True)
-    errored_store_path = (
-        current_datetime_dir / f"process-results-{source}-errored.parquet"
-    )
+    errored_store_path = current_datetime_dir / f"process-results-{source}-errored.parquet"
 
     # Download latest if prod
     if use_prod:
@@ -353,9 +342,7 @@ def prelinked_dataset_ingestion(
     try:
         semantic_scholar_api_key = os.environ["SEMANTIC_SCHOLAR_API_KEY"]
     except KeyError as e:
-        raise KeyError(
-            "Please set the SEMANTIC_SCHOLAR_API_KEY environment variable."
-        ) from e
+        raise KeyError("Please set the SEMANTIC_SCHOLAR_API_KEY environment variable.") from e
 
     # Ignore prefect task introspection warnings
     os.environ["PREFECT_TASK_INTROSPECTION_WARN_THRESHOLD"] = "0"

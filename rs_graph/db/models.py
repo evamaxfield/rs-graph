@@ -34,12 +34,8 @@ class DatasetSource(StrippedSQLModel, table=True):  # type: ignore
     name: str = Field(unique=True)
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class Source(StrippedSQLModel, table=True):  # type: ignore
@@ -52,15 +48,12 @@ class Source(StrippedSQLModel, table=True):  # type: ignore
 
     # Data
     source_type: str = Field(index=True)
+    host_organization_name: str | None = Field(index=True)
     host_organization_open_alex_id: str | None = None
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class Location(StrippedSQLModel, table=True):  # type: ignore
@@ -80,12 +73,8 @@ class Location(StrippedSQLModel, table=True):  # type: ignore
     source_id: int = Field(foreign_key="source.id", index=True)
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class Document(StrippedSQLModel, table=True):  # type: ignore
@@ -110,14 +99,13 @@ class Document(StrippedSQLModel, table=True):  # type: ignore
     primary_location_id: int | None = Field(
         foreign_key="location.id", index=True, nullable=True
     )
+    best_open_access_location_id: int | None = Field(
+        foreign_key="location.id", index=True, nullable=True
+    )
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class DocumentAlternateDOI(StrippedSQLModel, table=True):  # type: ignore
@@ -136,12 +124,8 @@ class DocumentAlternateDOI(StrippedSQLModel, table=True):  # type: ignore
     doi: str = Field(unique=True)
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class DocumentAbstract(StrippedSQLModel, table=True):  # type: ignore
@@ -159,12 +143,8 @@ class DocumentAbstract(StrippedSQLModel, table=True):  # type: ignore
     content: str | None = None
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class Topic(StrippedSQLModel, table=True):  # type: ignore
@@ -184,12 +164,8 @@ class Topic(StrippedSQLModel, table=True):  # type: ignore
     domain_open_alex_id: str
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class DocumentTopic(StrippedSQLModel, table=True):  # type: ignore
@@ -208,12 +184,8 @@ class DocumentTopic(StrippedSQLModel, table=True):  # type: ignore
     score: float = Field(index=True)
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class Researcher(StrippedSQLModel, table=True):  # type: ignore
@@ -232,12 +204,8 @@ class Researcher(StrippedSQLModel, table=True):  # type: ignore
     two_year_mean_citedness: float = Field(index=True)
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class DocumentContributor(StrippedSQLModel, table=True):  # type: ignore
@@ -257,12 +225,8 @@ class DocumentContributor(StrippedSQLModel, table=True):  # type: ignore
     is_corresponding: bool = Field(index=True)
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class Institution(StrippedSQLModel, table=True):  # type: ignore
@@ -279,12 +243,8 @@ class Institution(StrippedSQLModel, table=True):  # type: ignore
     ror: str
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class DocumentContributorInstitution(StrippedSQLModel, table=True):  # type: ignore
@@ -294,20 +254,14 @@ class DocumentContributorInstitution(StrippedSQLModel, table=True):  # type: ign
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    document_contributor_id: int = Field(
-        foreign_key="document_contributor.id", index=True
-    )
+    document_contributor_id: int = Field(foreign_key="document_contributor.id", index=True)
     institution_id: int = Field(foreign_key="institution.id", index=True)
 
     __table_args__ = (UniqueConstraint("document_contributor_id", "institution_id"),)
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class Funder(StrippedSQLModel, table=True):  # type: ignore
@@ -321,12 +275,8 @@ class Funder(StrippedSQLModel, table=True):  # type: ignore
     name: str = Field(index=True)
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class FundingInstance(StrippedSQLModel, table=True):  # type: ignore
@@ -342,12 +292,8 @@ class FundingInstance(StrippedSQLModel, table=True):  # type: ignore
     __table_args__ = (UniqueConstraint("funder_id", "award_id"),)
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class DocumentFundingInstance(StrippedSQLModel, table=True):  # type: ignore
@@ -363,12 +309,8 @@ class DocumentFundingInstance(StrippedSQLModel, table=True):  # type: ignore
     __table_args__ = (UniqueConstraint("document_id", "funding_instance_id"),)
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class CodeHost(StrippedSQLModel, table=True):  # type: ignore
@@ -383,12 +325,8 @@ class CodeHost(StrippedSQLModel, table=True):  # type: ignore
     name: str = Field(unique=True, index=True)
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class Repository(StrippedSQLModel, table=True):  # type: ignore
@@ -418,12 +356,8 @@ class Repository(StrippedSQLModel, table=True):  # type: ignore
     last_pushed_datetime: datetime = Field(index=True)
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class RepositoryReadme(StrippedSQLModel, table=True):  # type: ignore
@@ -441,12 +375,8 @@ class RepositoryReadme(StrippedSQLModel, table=True):  # type: ignore
     content: str | None = None
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class RepositoryLanguage(StrippedSQLModel, table=True):  # type: ignore
@@ -465,12 +395,8 @@ class RepositoryLanguage(StrippedSQLModel, table=True):  # type: ignore
     bytes_of_code: int
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class RepositoryFile(StrippedSQLModel, table=True):  # type: ignore
@@ -490,12 +416,8 @@ class RepositoryFile(StrippedSQLModel, table=True):  # type: ignore
     bytes_of_code: int
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class DeveloperAccount(StrippedSQLModel, table=True):  # type: ignore
@@ -515,12 +437,8 @@ class DeveloperAccount(StrippedSQLModel, table=True):  # type: ignore
     email: str | None = None
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class RepositoryContributor(StrippedSQLModel, table=True):  # type: ignore
@@ -538,12 +456,8 @@ class RepositoryContributor(StrippedSQLModel, table=True):  # type: ignore
     # TODO: add "total commits" field
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 # TODO: Store basic repository commit details
@@ -572,12 +486,8 @@ class DocumentRepositoryLink(StrippedSQLModel, table=True):  # type: ignore
     predictive_model_confidence: float | None = None
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
 class ResearcherDeveloperAccountLink(StrippedSQLModel, table=True):  # type: ignore
@@ -598,9 +508,5 @@ class ResearcherDeveloperAccountLink(StrippedSQLModel, table=True):  # type: ign
     predictive_model_confidence: float | None = None
 
     # Updates
-    created_datetime: datetime = Field(
-        sa_column=Column(DateTime(), server_default=func.now())
-    )
-    updated_datetime: datetime = Field(
-        sa_column=Column(DateTime(), onupdate=func.now())
-    )
+    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
+    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))

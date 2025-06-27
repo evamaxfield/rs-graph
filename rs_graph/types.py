@@ -69,8 +69,10 @@ class FundingInstanceDetails(DataClassJsonMixin):
 @dataclass
 class OpenAlexResultModels(DataClassJsonMixin):
     dataset_source_model: db_models.DatasetSource
-    document_source_model: db_models.Source | None
-    primary_location_model: db_models.Source | None
+    primary_document_source_model: db_models.Source | None
+    primary_location_model: db_models.Location | None
+    best_oa_document_source_model: db_models.Source | None
+    best_oa_location_model: db_models.Location | None
     document_model: db_models.Document
     document_abstract_model: db_models.DocumentAbstract
     document_alternate_dois: list[str]
@@ -117,14 +119,10 @@ class StoredRepositoryDocumentPair(DataClassJsonMixin):
     researcher_models: list[db_models.Researcher]
 
     # Added after processing
-    researcher_developer_links: list[
-        db_models.ResearcherDeveloperAccountLink
-    ] | None = None
+    researcher_developer_links: list[db_models.ResearcherDeveloperAccountLink] | None = None
 
 
 @dataclass
 class SuccessAndErroredResultsLists(DataClassJsonMixin):
-    successful_results: list[
-        BasicRepositoryDocumentPair | ExpandedRepositoryDocumentPair
-    ]
+    successful_results: list[BasicRepositoryDocumentPair | ExpandedRepositoryDocumentPair]
     errored_results: list[ErrorResult]

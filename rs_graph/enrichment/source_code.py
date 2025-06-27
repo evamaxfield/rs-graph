@@ -76,9 +76,7 @@ def get_commit_details(commit: Commit) -> CommitDetails:
     )
 
 
-def process_commits(
-    repo: Repo, tqdm_kwargs: dict[str, str] | None
-) -> list[CommitDetails]:
+def process_commits(repo: Repo, tqdm_kwargs: dict[str, str] | None) -> list[CommitDetails]:
     # Get count of commits
     commit_count = int(repo.git.rev_list("--count", "HEAD"))
 

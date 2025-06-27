@@ -150,9 +150,7 @@ def process_github_repo(
             )
 
             # Decode the content
-            repo_readme = base64.b64decode(repo_readme_response["content"]).decode(
-                "utf-8"
-            )
+            repo_readme = base64.b64decode(repo_readme_response["content"]).decode("utf-8")
 
         except Exception:
             repo_readme = None

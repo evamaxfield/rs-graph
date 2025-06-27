@@ -9,9 +9,7 @@ import polars as pl
 ###############################################################################
 
 # SOFTCITE DATA
-SOFTCITE_PREPPED_DATA_STORAGE_PATH = (
-    Path(__file__).parent / "softcite-2025-prepped.parquet"
-)
+SOFTCITE_PREPPED_DATA_STORAGE_PATH = Path(__file__).parent / "softcite-2025-prepped.parquet"
 SOFTCITE_MENTIONS_NAME = "mentions.pdf.parquet"
 SOFTCITE_PAPERS_NAME = "papers.parquet"
 SOFTCITE_PURPOSE_ASSESSMENTS_NAME = "purpose_assessments.pdf.parquet"
@@ -41,9 +39,7 @@ def _prep_softcite_2025_data(data_dir: Path) -> None:
     # Read the data
     mentions = pl.scan_parquet(data_dir_path / SOFTCITE_MENTIONS_NAME)
     papers = pl.scan_parquet(data_dir_path / SOFTCITE_PAPERS_NAME)
-    purpose_assessments = pl.scan_parquet(
-        data_dir_path / SOFTCITE_PURPOSE_ASSESSMENTS_NAME
-    )
+    purpose_assessments = pl.scan_parquet(data_dir_path / SOFTCITE_PURPOSE_ASSESSMENTS_NAME)
 
     # Filter for high confidence "created" and "shared" mentions
     high_conf_created = (
@@ -86,9 +82,7 @@ def _prep_softcite_2025_data(data_dir: Path) -> None:
         .select(
             pl.col("paper_id"),
             pl.col("doi").str.strip_chars().str.to_lowercase().alias("doi"),
-            pl.col("software_mention_id")
-            .str.strip_chars()
-            .alias("software_mention_id"),
+            pl.col("software_mention_id").str.strip_chars().alias("software_mention_id"),
             pl.col("url_raw"),
         )
         .unique(
