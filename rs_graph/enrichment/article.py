@@ -259,8 +259,8 @@ def process_article(  # noqa: C901
                 open_alex_id=open_alex_work["primary_location"]["source"]["id"],
                 source_type=open_alex_work["primary_location"]["source"]["type"],
                 host_organization_name=open_alex_work["primary_location"]["source"][
-                    "host_organization"
-                ]["host_organization_name"],
+                    "host_organization_name"
+                ],
                 host_organization_open_alex_id=open_alex_work["primary_location"]["source"][
                     "host_organization"
                 ],
@@ -285,8 +285,8 @@ def process_article(  # noqa: C901
                 open_alex_id=open_alex_work["best_oa_location"]["source"]["id"],
                 source_type=open_alex_work["best_oa_location"]["source"]["type"],
                 host_organization_name=open_alex_work["best_oa_location"]["source"][
-                    "host_organization"
-                ]["host_organization_name"],
+                    "host_organization_name"
+                ],
                 host_organization_open_alex_id=open_alex_work["best_oa_location"]["source"][
                     "host_organization"
                 ],
