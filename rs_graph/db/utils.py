@@ -290,6 +290,11 @@ def store_full_details(  # noqa: C901
                 repo_language.repository_id = pair.github_results.repository_model.id
                 repo_language = _get_or_add_and_flush(model=repo_language, session=session)
 
+            # Store the repository file models
+            for repo_file in pair.github_results.repository_file_models:
+                repo_file.repository_id = pair.github_results.repository_model.id
+                repo_file = _get_or_add_and_flush(model=repo_file, session=session)
+
             # Repository contributor details
             for repo_contributor_detail in pair.github_results.repository_contributor_details:
                 # Developer account

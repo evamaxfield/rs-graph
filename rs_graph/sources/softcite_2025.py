@@ -42,15 +42,17 @@ def _prep_softcite_2025_data(data_dir: Path) -> None:
     purpose_assessments = pl.scan_parquet(data_dir_path / SOFTCITE_PURPOSE_ASSESSMENTS_NAME)
 
     # Filter for high confidence "created" and "shared" mentions
-    high_conf_created = (
+    created_and_shared = (
         purpose_assessments.filter(
             pl.col("scope") == "document",
             pl.col("purpose").is_in(["created", "shared"]),
-            pl.col("certainty_score") >= 0.90,
+            pl.col("certainty_score") >= 0.5,
+        )
+        .select(
+            "software_mention_id",
+            "certainty_score",
         )
         .unique(subset=["software_mention_id"])
-        .collect()["software_mention_id"]
-        .to_list()
     )
 
     # Get the unique GitHub URLs from the mentions
@@ -64,8 +66,10 @@ def _prep_softcite_2025_data(data_dir: Path) -> None:
             .str.strip_chars_end(")")
             .alias("url_raw"),
         )
-        .filter(
-            pl.col("software_mention_id").is_in(high_conf_created),
+        .join(
+            created_and_shared,
+            on="software_mention_id",
+            how="inner",
         )
         .unique(
             subset=["software_mention_id", "url_raw"],
@@ -84,6 +88,7 @@ def _prep_softcite_2025_data(data_dir: Path) -> None:
             pl.col("doi").str.strip_chars().str.to_lowercase().alias("doi"),
             pl.col("software_mention_id").str.strip_chars().alias("software_mention_id"),
             pl.col("url_raw"),
+            pl.col("certainty_score"),
         )
         .unique(
             subset=["doi", "url_raw"],

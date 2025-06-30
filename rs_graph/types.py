@@ -94,6 +94,7 @@ class GitHubResultModels(DataClassJsonMixin):
     repository_readme_model: db_models.RepositoryReadme
     repository_language_models: list[db_models.RepositoryLanguage]
     repository_contributor_details: list[RepositoryContributorDetails]
+    repository_file_models: list[db_models.RepositoryFile]
 
 
 @dataclass

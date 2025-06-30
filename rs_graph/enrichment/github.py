@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import logging
 import time
 import traceback
 from dataclasses import dataclass
@@ -19,10 +18,6 @@ from ghapi.all import GhApi
 
 from .. import types
 from ..db import models as db_models
-
-###############################################################################
-
-log = logging.getLogger(__name__)
 
 ###############################################################################
 
@@ -112,7 +107,7 @@ def get_repo_contributors(
     return [_get_user_partial(login=contrib["login"]) for contrib in contributors]
 
 
-def process_github_repo(
+def process_github_repo(  # noqa: C901
     pair: types.ExpandedRepositoryDocumentPair,
     github_api_key: str | None = None,
     top_n: int = 30,
@@ -245,6 +240,38 @@ def process_github_repo(
                 )
             )
 
+        # Get repository files
+        all_repo_files = []
+        if default_branch:
+            try:
+                # Use the git trees API to get the files in the repository
+                tree_results = api.git.get_tree(
+                    owner=pair.repo_parts.owner,
+                    repo=pair.repo_parts.name,
+                    tree_sha=default_branch,
+                    recursive=True,
+                )
+
+                # Iterate through the tree and create RepositoryFile models
+                for file in tree_results["tree"]:
+                    all_repo_files.append(
+                        db_models.RepositoryFile(
+                            repository_id=repo.id,
+                            path=file["path"],
+                            tree_type=file["type"],
+                            bytes_of_code=file.get("size", 0),
+                        )
+                    )
+
+            except Exception as e:
+                # Ignore the error if the tree cannot be fetched
+                all_repo_files = []
+                print(f"Error fetching repository files: {e}")
+
+            finally:
+                # Sleep to avoid API limits
+                time.sleep(0.85)
+
         # For each contributor, create a developer account
         # and then link the dev account to the repo
         # as a repository contributor
@@ -282,6 +309,7 @@ def process_github_repo(
             ),
             repository_language_models=all_repo_languages,
             repository_contributor_details=all_repo_contributors,
+            repository_file_models=all_repo_files,
         )
 
         return pair
