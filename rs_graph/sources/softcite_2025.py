@@ -50,8 +50,10 @@ def _prep_softcite_2025_data(data_dir: Path) -> None:
         )
         .select(
             "software_mention_id",
+            "purpose",
             "certainty_score",
         )
+        .sort("certainty_score", descending=True)
         .unique(subset=["software_mention_id"])
     )
 
@@ -86,9 +88,11 @@ def _prep_softcite_2025_data(data_dir: Path) -> None:
         .select(
             pl.col("paper_id"),
             pl.col("doi").str.strip_chars().str.to_lowercase().alias("doi"),
+            (pl.lit("https://doi.org/") + pl.col("doi").str.strip_chars()).alias("doi_url"),
             pl.col("software_mention_id").str.strip_chars().alias("software_mention_id"),
             pl.col("url_raw"),
             pl.col("certainty_score"),
+            pl.col("purpose"),
         )
         .unique(
             subset=["doi", "url_raw"],
