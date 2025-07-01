@@ -61,16 +61,16 @@ class Location(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
+    landing_page_url: str | None = Field(index=True)
+    pdf_url: str | None = Field(index=True)
+    source_id: int = Field(foreign_key="source.id", index=True)
+
+    __table_args__ = (UniqueConstraint("landing_page_url", "pdf_url", "source_id"),)
 
     # Data
     is_open_access: bool = Field(index=True)
-    landing_page_url: str | None = Field(index=True)
-    pdf_url: str | None = Field(index=True)
     license: str | None = Field(index=True)
     version: str | None = Field(index=True)
-
-    # Foreign Keys
-    source_id: int = Field(foreign_key="source.id", index=True)
 
     # Updates
     created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))

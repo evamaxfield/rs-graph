@@ -372,6 +372,6 @@ def get_dataset(
 
     # Return the results
     return types.SuccessAndErroredResultsLists(
-        success=results,
-        errored=[],
+        successful_results=results,
+        errored_results=[],
     )
