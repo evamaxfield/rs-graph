@@ -24,7 +24,7 @@ from rs_graph.bin.data import download as download_rs_graph_data_files
 from rs_graph.bin.data import upload as upload_rs_graph_data_files
 from rs_graph.db import utils as db_utils
 from rs_graph.enrichment import article, entity_matching, github
-from rs_graph.sources import joss, plos, proto, pwc, softwarex
+from rs_graph.sources import joss, plos, proto, pwc, softcite_2025, softwarex
 from rs_graph.utils import code_host_parsing
 
 ###############################################################################
@@ -44,6 +44,7 @@ SOURCE_MAP: dict[str, proto.DatasetRetrievalFunction] = {
     "plos": plos.get_dataset,
     "softwarex": softwarex.get_dataset,
     "pwc": pwc.get_dataset,
+    "softcite-2025": softcite_2025.get_dataset,
 }
 
 
