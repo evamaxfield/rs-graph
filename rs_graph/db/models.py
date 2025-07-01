@@ -194,6 +194,7 @@ class Researcher(StrippedSQLModel, table=True):  # type: ignore
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
     open_alex_id: str = Field(unique=True)
+    orcid: str | None = Field(index=True, nullable=True)
 
     # Data
     name: str

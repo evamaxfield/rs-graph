@@ -380,6 +380,7 @@ def process_article(  # noqa: C901
             # Create the Researcher
             researcher = db_models.Researcher(
                 open_alex_id=open_alex_author["id"],
+                orcid=open_alex_author["orcid"],
                 name=open_alex_author["display_name"],
                 works_count=open_alex_author["works_count"],
                 cited_by_count=open_alex_author["cited_by_count"],
