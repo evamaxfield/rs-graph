@@ -338,6 +338,9 @@ def _prep_softcite_2025_data_for_use(data_dir: str | Path) -> None:
             # Remove whitespace
             .alias("repo_url"),
         )
+        .unique(
+            subset=["doi", "repo_url"],
+        )
         .collect()
     )
 
