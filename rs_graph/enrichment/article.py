@@ -254,25 +254,38 @@ def process_article(  # noqa: C901
 
         # Create Primary Document Source and Primary Location
         if open_alex_work["primary_location"] is not None:
-            primary_document_source = db_models.Source(
-                name=open_alex_work["primary_location"]["source"]["display_name"],
-                open_alex_id=open_alex_work["primary_location"]["source"]["id"],
-                source_type=open_alex_work["primary_location"]["source"]["type"],
-                host_organization_name=open_alex_work["primary_location"]["source"][
-                    "host_organization_name"
-                ],
-                host_organization_open_alex_id=open_alex_work["primary_location"]["source"][
-                    "host_organization"
-                ],
-            )
-            primary_location = db_models.Location(
-                is_open_access=open_alex_work["primary_location"]["is_oa"],
-                landing_page_url=open_alex_work["primary_location"]["landing_page_url"],
-                pdf_url=open_alex_work["primary_location"]["pdf_url"],
-                license=open_alex_work["primary_location"]["license"],
-                version=open_alex_work["primary_location"]["version"],
-                source_id=primary_document_source.id,
-            )
+            if open_alex_work["primary_location"]["source"] is not None:
+                primary_document_source = db_models.Source(
+                    name=open_alex_work["primary_location"]["source"]["display_name"],
+                    open_alex_id=open_alex_work["primary_location"]["source"]["id"],
+                    source_type=open_alex_work["primary_location"]["source"]["type"],
+                    host_organization_name=open_alex_work["primary_location"]["source"][
+                        "host_organization_name"
+                    ],
+                    host_organization_open_alex_id=open_alex_work["primary_location"]["source"][
+                        "host_organization"
+                    ],
+                )
+
+                primary_location = db_models.Location(
+                    is_open_access=open_alex_work["primary_location"]["is_oa"],
+                    landing_page_url=open_alex_work["primary_location"]["landing_page_url"],
+                    pdf_url=open_alex_work["primary_location"]["pdf_url"],
+                    license=open_alex_work["primary_location"]["license"],
+                    version=open_alex_work["primary_location"]["version"],
+                    source_id=primary_document_source.id,
+                )
+            else:
+                primary_document_source = None
+                primary_location = db_models.Location(
+                    is_open_access=open_alex_work["primary_location"]["is_oa"],
+                    landing_page_url=open_alex_work["primary_location"]["landing_page_url"],
+                    pdf_url=open_alex_work["primary_location"]["pdf_url"],
+                    license=open_alex_work["primary_location"]["license"],
+                    version=open_alex_work["primary_location"]["version"],
+                    source_id=None,
+                )
+
         else:
             # If no primary location, set to None
             primary_document_source = None
@@ -280,25 +293,37 @@ def process_article(  # noqa: C901
 
         # Create Best OA Document Source and Best OA Location
         if open_alex_work["best_oa_location"] is not None:
-            best_oa_document_source = db_models.Source(
-                name=open_alex_work["best_oa_location"]["source"]["display_name"],
-                open_alex_id=open_alex_work["best_oa_location"]["source"]["id"],
-                source_type=open_alex_work["best_oa_location"]["source"]["type"],
-                host_organization_name=open_alex_work["best_oa_location"]["source"][
-                    "host_organization_name"
-                ],
-                host_organization_open_alex_id=open_alex_work["best_oa_location"]["source"][
-                    "host_organization"
-                ],
-            )
-            best_oa_location = db_models.Location(
-                is_open_access=open_alex_work["best_oa_location"]["is_oa"],
-                landing_page_url=open_alex_work["best_oa_location"]["landing_page_url"],
-                pdf_url=open_alex_work["best_oa_location"]["pdf_url"],
-                license=open_alex_work["best_oa_location"]["license"],
-                version=open_alex_work["best_oa_location"]["version"],
-                source_id=best_oa_document_source.id,
-            )
+            if open_alex_work["best_oa_location"]["source"] is not None:
+                best_oa_document_source = db_models.Source(
+                    name=open_alex_work["best_oa_location"]["source"]["display_name"],
+                    open_alex_id=open_alex_work["best_oa_location"]["source"]["id"],
+                    source_type=open_alex_work["best_oa_location"]["source"]["type"],
+                    host_organization_name=open_alex_work["best_oa_location"]["source"][
+                        "host_organization_name"
+                    ],
+                    host_organization_open_alex_id=open_alex_work["best_oa_location"]["source"][
+                        "host_organization"
+                    ],
+                )
+                best_oa_location = db_models.Location(
+                    is_open_access=open_alex_work["best_oa_location"]["is_oa"],
+                    landing_page_url=open_alex_work["best_oa_location"]["landing_page_url"],
+                    pdf_url=open_alex_work["best_oa_location"]["pdf_url"],
+                    license=open_alex_work["best_oa_location"]["license"],
+                    version=open_alex_work["best_oa_location"]["version"],
+                    source_id=best_oa_document_source.id,
+                )
+
+            else:
+                best_oa_document_source = None
+                best_oa_location = db_models.Location(
+                    is_open_access=open_alex_work["best_oa_location"]["is_oa"],
+                    landing_page_url=open_alex_work["best_oa_location"]["landing_page_url"],
+                    pdf_url=open_alex_work["best_oa_location"]["pdf_url"],
+                    license=open_alex_work["best_oa_location"]["license"],
+                    version=open_alex_work["best_oa_location"]["version"],
+                    source_id=None,
+                )
         else:
             # If no best OA location, set to None
             best_oa_document_source = None

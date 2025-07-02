@@ -63,7 +63,7 @@ class Location(StrippedSQLModel, table=True):  # type: ignore
     id: int | None = Field(default=None, primary_key=True)
     landing_page_url: str | None = Field(index=True)
     pdf_url: str | None = Field(index=True)
-    source_id: int = Field(foreign_key="source.id", index=True)
+    source_id: int | None = Field(foreign_key="source.id", index=True, nullable=True)
 
     __table_args__ = (UniqueConstraint("landing_page_url", "pdf_url", "source_id"),)
 
@@ -239,9 +239,9 @@ class Institution(StrippedSQLModel, table=True):  # type: ignore
 
     # Data
     name: str = Field(index=True)
-    country_code: str = Field(index=True)
-    institution_type: str = Field(index=True)
-    ror: str
+    country_code: str | None = Field(index=True, nullable=True)
+    institution_type: str | None = Field(index=True, nullable=True)
+    ror: str | None = Field(index=True, nullable=True)
 
     # Updates
     created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
@@ -354,6 +354,7 @@ class Repository(StrippedSQLModel, table=True):  # type: ignore
     primary_language: str | None = Field(index=True, nullable=True)
     default_branch: str | None = Field(index=True, nullable=True)
     license: str | None = Field(index=True, nullable=True)
+    processed_at_sha: str | None = Field(index=True, nullable=True)
     creation_datetime: datetime = Field(index=True)
     last_pushed_datetime: datetime = Field(index=True)
 

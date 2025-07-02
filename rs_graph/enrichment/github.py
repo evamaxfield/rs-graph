@@ -187,6 +187,9 @@ def process_github_repo(  # noqa: C901
                 # Raise for status
                 response.raise_for_status()
 
+                # Get the sha
+                processed_at_sha = response.json()[0]["sha"]
+
                 # Parse the Link header
                 # We want the page right before rel="last"
                 link_header = response.headers.get("Link", "")
@@ -200,6 +203,7 @@ def process_github_repo(  # noqa: C901
                     commits_count = None
 
             except Exception:
+                processed_at_sha = None
                 commits_count = None
 
             finally:
@@ -225,6 +229,7 @@ def process_github_repo(  # noqa: C901
             primary_language=repo_info["language"],
             default_branch=default_branch,
             license=repo_info["license"]["name"] if repo_info["license"] else None,
+            processed_at_sha=processed_at_sha,
             creation_datetime=datetime.fromisoformat(repo_info["created_at"]),
             last_pushed_datetime=datetime.fromisoformat(repo_info["pushed_at"]),
         )
