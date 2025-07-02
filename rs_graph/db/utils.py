@@ -392,8 +392,9 @@ def store_full_details(  # noqa: C901
 
 @task(
     log_prints=True,
-    retries=2,
-    retry_delay_seconds=2,
+    retries=3,
+    retry_delay_seconds=3,
+    retry_jitter_factor=0.5,
 )
 def store_full_details_task(
     pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,
@@ -452,8 +453,9 @@ def store_dev_researcher_em_links(
 
 @task(
     log_prints=True,
-    retries=2,
-    retry_delay_seconds=2,
+    retries=3,
+    retry_delay_seconds=3,
+    retry_jitter_factor=0.5,
 )
 def store_dev_researcher_em_links_task(
     pair: types.StoredRepositoryDocumentPair | types.ErrorResult,
