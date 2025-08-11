@@ -109,6 +109,10 @@ class ExpandedRepositoryDocumentPair(DataClassJsonMixin):
     open_alex_results: OpenAlexResultModels | None = None
     github_results: GitHubResultModels | None = None
 
+    # Processing metadata
+    open_alex_processing_time_seconds: float | None = None
+    github_processing_time_seconds: float | None = None
+
 
 @dataclass
 class StoredRepositoryDocumentPair(DataClassJsonMixin):
@@ -121,6 +125,13 @@ class StoredRepositoryDocumentPair(DataClassJsonMixin):
 
     # Added after processing
     researcher_developer_links: list[db_models.ResearcherDeveloperAccountLink] | None = None
+
+    # Processing metadata
+    open_alex_processing_time_seconds: float | None = None
+    github_processing_time_seconds: float | None = None
+    store_article_and_repository_time_seconds: float | None = None
+    author_developer_matching_time_seconds: float | None = None
+    store_author_developer_links_time_seconds: float | None = None
 
 
 @dataclass

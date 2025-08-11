@@ -5,7 +5,9 @@ import math
 import os
 import random
 import time
+from collections import deque
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -120,10 +122,20 @@ def _upload_db(
         upload_rs_graph_data_files()
 
 
+@dataclass
+class ProcessingTimes:
+    open_alex_processing_times: deque[float]
+    github_processing_times: deque[float]
+    store_article_and_repository_times: deque[float]
+    author_developer_matching_times: deque[float]
+    store_author_developer_links_times: deque[float]
+
+
 def _store_batch_results(
     results: list[types.StoredRepositoryDocumentPair | types.ErrorResult],
     store_path: Path,
-) -> None:
+    processing_times: ProcessingTimes,
+) -> ProcessingTimes:
     print("Storing batch results...")
 
     # Get only errors
@@ -137,6 +149,32 @@ def _store_batch_results(
     errored_df = pd.DataFrame(errored_results)
     errored_df.to_parquet(store_path)
 
+    # Update processing times
+    for result in results:
+        if isinstance(result, types.StoredRepositoryDocumentPair):
+            if result.open_alex_processing_time_seconds is not None:
+                processing_times.open_alex_processing_times.append(
+                    result.open_alex_processing_time_seconds
+                )
+            if result.github_processing_time_seconds is not None:
+                processing_times.github_processing_times.append(
+                    result.github_processing_time_seconds
+                )
+            if result.store_article_and_repository_time_seconds is not None:
+                processing_times.store_article_and_repository_times.append(
+                    result.store_article_and_repository_time_seconds
+                )
+            if result.author_developer_matching_time_seconds is not None:
+                processing_times.author_developer_matching_times.append(
+                    result.author_developer_matching_time_seconds
+                )
+            if result.store_author_developer_links_time_seconds is not None:
+                processing_times.store_author_developer_links_times.append(
+                    result.store_author_developer_links_time_seconds
+                )
+
+    return processing_times
+
 
 @flow(
     log_prints=True,
@@ -149,6 +187,7 @@ def _prelinked_dataset_ingestion_flow(
     semantic_scholar_api_key: str,
     elsevier_api_keys: list[str],
     use_coiled: bool,
+    coiled_region: str,
     batch_size: int,
     errored_store_path: Path,
 ) -> None:
@@ -170,6 +209,7 @@ def _prelinked_dataset_ingestion_flow(
     print(f"Source: {source}")
     print(f"Use Prod Database: {use_prod}")
     print(f"Use Coiled: {use_coiled}")
+    print(f"Coiled Region: {coiled_region}")
     print(f"Batch Size: {batch_size}")
     print(f"GitHub Token Count: {n_github_tokens}")
     print(f"Open Alex Email Count: {n_open_alex_emails}")
@@ -190,10 +230,11 @@ def _prelinked_dataset_ingestion_flow(
     article_processing_cluster_config = {
         "keepalive": "15m",
         "vm_type": "t4g.small",
-        "n_workers": 1,
-        "threads_per_worker": 6,
+        "n_workers": 2,
+        "threads_per_worker": n_open_alex_emails,
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
+        "region": coiled_region,
     }
     github_cluster_config = {
         "keepalive": "15m",
@@ -202,13 +243,15 @@ def _prelinked_dataset_ingestion_flow(
         "threads_per_worker": n_github_tokens,
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
+        "region": coiled_region,
     }
     gpu_cluster_config = {
         "keepalive": "15m",
-        "vm_type": "t4g.medium",
-        "n_workers": [3, 4],
+        "vm_type": "g4dn.xlarge",
+        "n_workers": [2, 3],
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
+        "region": coiled_region,
     }
 
     # Filter dataset
@@ -220,6 +263,15 @@ def _prelinked_dataset_ingestion_flow(
     stored_filtered_results = db_utils.filter_stored_pairs(
         code_filtered_results.successful_results,
         use_prod=use_prod,
+    )
+
+    # Keep track of processing times
+    processing_times = ProcessingTimes(
+        open_alex_processing_times=deque(maxlen=1024),
+        github_processing_times=deque(maxlen=1024),
+        store_article_and_repository_times=deque(maxlen=1024),
+        author_developer_matching_times=deque(maxlen=1024),
+        store_author_developer_links_times=deque(maxlen=1024),
     )
 
     # Create chunks of batch_size of the results to process
@@ -283,9 +335,58 @@ def _prelinked_dataset_ingestion_flow(
             this_batch_store_path = errored_store_path.with_name(
                 errored_store_path.stem + f"-{i // batch_size}.parquet"
             )
-            _store_batch_results(
+            processing_times = _store_batch_results(
                 results=[f.result() for f in stored_dev_researcher_futures],
                 store_path=this_batch_store_path,
+                processing_times=processing_times,
+            )
+
+            # Log "{median} ({mean} +- {std})" for each processing time
+            open_alex_processing_times_described = pd.Series(
+                processing_times.open_alex_processing_times
+            ).describe()
+            github_processing_times_described = pd.Series(
+                processing_times.github_processing_times
+            ).describe()
+            store_article_and_repository_times_described = pd.Series(
+                processing_times.store_article_and_repository_times
+            ).describe()
+            author_developer_matching_times_described = pd.Series(
+                processing_times.author_developer_matching_times
+            ).describe()
+            store_author_developer_links_times_described = pd.Series(
+                processing_times.store_author_developer_links_times
+            ).describe()
+
+            # Log with two decimal places
+            print("Processing Times (ignoring retries):")
+            print(
+                f"Open Alex: {open_alex_processing_times_described['50%']:.2f} "
+                f"({open_alex_processing_times_described['mean']:.2f} "
+                f"+- {open_alex_processing_times_described['std']:.2f})"
+            )
+            print(
+                f"GitHub: {github_processing_times_described['50%']:.2f} "
+                f"({github_processing_times_described['mean']:.2f} "
+                f"+- {github_processing_times_described['std']:.2f})"
+            )
+            print(
+                f"Store Article and Repository: "
+                f"{store_article_and_repository_times_described['50%']:.2f} "
+                f"({store_article_and_repository_times_described['mean']:.2f} "
+                f"+- {store_article_and_repository_times_described['std']:.2f})"
+            )
+            print(
+                f"Author Developer Matching: "
+                f"{author_developer_matching_times_described['50%']:.2f} "
+                f"({author_developer_matching_times_described['mean']:.2f} "
+                f"+- {author_developer_matching_times_described['std']:.2f})"
+            )
+            print(
+                f"Store Author Developer Links: "
+                f"{store_author_developer_links_times_described['50%']:.2f} "
+                f"({store_author_developer_links_times_described['mean']:.2f} "
+                f"+- {store_author_developer_links_times_described['std']:.2f})"
             )
 
         except Exception as e:
@@ -307,6 +408,7 @@ def prelinked_dataset_ingestion(
     source: str,
     use_prod: bool = False,
     use_coiled: bool = False,
+    coiled_region: str = "us-west-2",
     github_tokens_file: str = DEFAULT_GITHUB_TOKENS_FILE,
     open_alex_emails_file: str = DEFAULT_OPEN_ALEX_EMAILS_FILE,
     elsevier_api_keys_file: str = DEFAULT_ELSEVIER_API_KEYS_FILE,
@@ -363,6 +465,7 @@ def prelinked_dataset_ingestion(
         semantic_scholar_api_key=semantic_scholar_api_key,
         elsevier_api_keys=elsevier_api_keys,
         use_coiled=use_coiled,
+        coiled_region=coiled_region,
         batch_size=batch_size,
         errored_store_path=errored_store_path,
     )

@@ -100,9 +100,9 @@ def _increment_call_count_and_check(open_alex_email_count: int) -> None:
     if current_status.call_count % 1000 == 0:
         print(f"OpenAlex Daily API call count: {current_status.call_count}")
 
-    # If we've made 60,000 calls in a single day (per OpenAlex email)
+    # If we've made 90,000 calls in a single day (per OpenAlex email)
     # pause all processing until tomorrow
-    if current_status.call_count >= (60_000 * open_alex_email_count):
+    if current_status.call_count >= (90_000 * open_alex_email_count):
         print("Sleeping until tomorrow to avoid OpenAlex API limit.")
         while date.today() == current_status.current_date:
             time.sleep(600)
@@ -510,9 +510,22 @@ def process_article_task(
     if isinstance(pair, types.ErrorResult):
         return pair
 
-    return process_article(
+    # Get start time
+    start_time = time.perf_counter()
+
+    # Process article
+    result = process_article(
         pair=pair,
         open_alex_email=open_alex_email,
         open_alex_email_count=open_alex_email_count,
         semantic_scholar_api_key=semantic_scholar_api_key,
     )
+
+    # Get end time
+    end_time = time.perf_counter()
+
+    # Attach processing time if successful
+    if isinstance(result, types.ExpandedRepositoryDocumentPair):
+        result.open_alex_processing_time_seconds = end_time - start_time
+
+    return result

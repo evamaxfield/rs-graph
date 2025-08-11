@@ -337,8 +337,21 @@ def process_github_repo_task(
     if isinstance(pair, types.ErrorResult):
         return pair
 
-    return process_github_repo(
+    # Get start time
+    start_time = time.perf_counter()
+
+    # Process the GitHub repo
+    result = process_github_repo(
         pair=pair,
         github_api_key=github_api_key,
         top_n=top_n,
     )
+
+    # Get end time
+    end_time = time.perf_counter()
+
+    # Attach processing time if successful
+    if isinstance(result, types.ExpandedRepositoryDocumentPair):
+        result.github_processing_time_seconds = end_time - start_time
+
+    return result

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import traceback
 
 from sci_soft_models import dev_author_em
@@ -19,6 +20,9 @@ def match_devs_and_researchers(
         return pair
 
     try:
+        # Get start time
+        start_time = time.perf_counter()
+
         # Get the model details
         model_details = dev_author_em.get_model_details()
 
@@ -66,6 +70,12 @@ def match_devs_and_researchers(
 
         # Attach
         pair.researcher_developer_links = linked_dev_researcher_pairs
+
+        # Get end time
+        end_time = time.perf_counter()
+
+        # Attach processing time
+        pair.author_developer_matching_time_seconds = end_time - start_time
 
         return pair
 

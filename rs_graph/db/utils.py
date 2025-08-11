@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import time
 import traceback
 from pathlib import Path
 
@@ -403,7 +404,22 @@ def store_full_details_task(
     if isinstance(pair, types.ErrorResult):
         return pair
 
-    return store_full_details(pair=pair, use_prod=use_prod)
+    # Get start time
+    start_time = time.time()
+
+    # Store the full details
+    result = store_full_details(pair=pair, use_prod=use_prod)
+
+    # Get end time and calculate processing time
+    end_time = time.time()
+
+    # Add processing time to the pair
+    if isinstance(result, types.StoredRepositoryDocumentPair):
+        result.open_alex_processing_time_seconds = end_time - start_time
+        result.github_processing_time_seconds = end_time - start_time
+        result.store_article_and_repository_time_seconds = end_time - start_time
+
+    return result
 
 
 def store_dev_researcher_em_links(
@@ -464,7 +480,23 @@ def store_dev_researcher_em_links_task(
     if isinstance(pair, types.ErrorResult):
         return pair
 
-    return store_dev_researcher_em_links(pair=pair, use_prod=use_prod)
+    # Get start time
+    start_time = time.perf_counter()
+
+    # Store the developer-researcher links
+    pair = store_dev_researcher_em_links(
+        pair=pair,
+        use_prod=use_prod,
+    )
+
+    # Get end time
+    end_time = time.perf_counter()
+
+    # Attach processing time
+    if isinstance(pair, types.StoredRepositoryDocumentPair):
+        pair.store_author_developer_links_time_seconds = end_time - start_time
+
+    return pair
 
 
 def check_pair_exists(
