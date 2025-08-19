@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import gzip
 import json
-import shutil
 import traceback
 from pathlib import Path
 
-import requests
 from tqdm import tqdm
 
 from .. import types
@@ -26,9 +24,7 @@ PAPERS_WITH_CODE_SNAPSHOT_PATH = CURRENT_DIR / "links-between-papers-and-code.js
 # Snapshot URL:
 # https://web.archive.org/web/20250000000000*/https://production-media.paperswithcode.com/about/links-between-papers-and-code.json.gz
 
-DOWNLOAD_URL = (
-    "https://web.archive.org/web/20250728234509/https://production-media.paperswithcode.com/about/links-between-papers-and-code.json.gz"
-)
+DOWNLOAD_URL = "https://web.archive.org/web/20250728234509/https://production-media.paperswithcode.com/about/links-between-papers-and-code.json.gz"
 
 ###############################################################################
 

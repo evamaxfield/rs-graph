@@ -2,11 +2,13 @@
 
 import time
 import traceback
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from prefect import task
 from sqlalchemy.engine import Engine
-from sqlmodel import Session, SQLModel, UniqueConstraint, create_engine, select
+from sqlmodel import Session, SQLModel, UniqueConstraint, create_engine, select, update
 from tqdm import tqdm
 
 from .. import types
@@ -594,3 +596,118 @@ def filter_stored_pairs(
     print(f"Remaining pairs: {len(unprocessed_pairs)}")
 
     return unprocessed_pairs
+
+
+@dataclass
+class HydratedAuthorDeveloperLink:
+    id: int
+    researcher: db_models.Researcher
+    developer_account: db_models.DeveloperAccount
+    last_snowball_processed_datetime: datetime | None
+
+
+def get_hydrated_author_developer_links(
+    use_prod: bool = False,
+    filter_datetime_difference: str | None = None,
+    n: int | None = None,
+) -> list[HydratedAuthorDeveloperLink]:
+    """
+    Get all researcher-developer account links with full model details.
+
+    Parameters
+    ----------
+    use_prod: bool
+        Whether to use production database
+    filter_datetime_difference: str | None
+        Optional time string (e.g. "365 days") to filter
+        links that haven't been processed in this timeframe
+    n: int | None
+        Optional limit on the number of links to return
+    """
+    # Get the engine
+    engine = get_engine(use_prod=use_prod)
+
+    # Create a session
+    with Session(engine) as session:
+        # Get all the researcher-developer account links with joins
+        stmt = (
+            select(
+                db_models.ResearcherDeveloperAccountLink,
+                db_models.Researcher,
+                db_models.DeveloperAccount,
+            )
+            .join(db_models.Researcher)
+            .join(db_models.DeveloperAccount)
+        )
+
+        # Apply datetime filtering if specified
+        if filter_datetime_difference is not None:
+            from dask.utils import parse_timedelta
+
+            cutoff_datetime = datetime.now() - parse_timedelta(filter_datetime_difference)
+            stmt = stmt.where(
+                (
+                    db_models.ResearcherDeveloperAccountLink.last_snowball_processed_datetime
+                    is None
+                )
+                | (
+                    db_models.ResearcherDeveloperAccountLink.last_snowball_processed_datetime
+                    < cutoff_datetime
+                )
+            )
+
+        # Limit results if specified
+        if n is not None:
+            stmt = stmt.limit(n)
+
+        # Execute the query
+        results = session.exec(stmt).all()
+
+        # Convert to hydrated objects
+        hydrated_links = []
+        for link, researcher, developer_account in results:
+            hydrated_links.append(
+                HydratedAuthorDeveloperLink(
+                    id=link.id,
+                    researcher=researcher,
+                    developer_account=developer_account,
+                    last_snowball_processed_datetime=link.last_snowball_processed_datetime,
+                )
+            )
+
+        return hydrated_links
+
+
+def update_snowball_processed_datetime(
+    link_ids: list[int],
+    processed_datetime: datetime | None = None,
+    use_prod: bool = False,
+) -> None:
+    """
+    Update the last_snowball_processed_datetime for the given link IDs.
+
+    Parameters
+    ----------
+    link_ids: list[int]
+        List of ResearcherDeveloperAccountLink IDs to update
+    processed_datetime: datetime | None
+        Datetime to set (defaults to current time)
+    use_prod: bool
+        Whether to use production database
+    """
+    if processed_datetime is None:
+        processed_datetime = datetime.now()
+
+    # Get the engine
+    engine = get_engine(use_prod=use_prod)
+
+    # Create a session
+    with Session(engine) as session:
+        # Update the links
+        stmt = (
+            update(db_models.ResearcherDeveloperAccountLink)
+            .where(db_models.ResearcherDeveloperAccountLink.id in link_ids)
+            .values(last_snowball_processed_datetime=processed_datetime)
+        )
+        session.exec(stmt)
+        session.commit()

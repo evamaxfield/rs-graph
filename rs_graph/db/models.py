@@ -509,6 +509,11 @@ class ResearcherDeveloperAccountLink(StrippedSQLModel, table=True):  # type: ign
     predictive_model_name: str | None = None
     predictive_model_version: str | None = None
     predictive_model_confidence: float | None = None
+    last_snowball_processed_datetime: datetime | None = Field(
+        default=None,
+        index=True,
+        nullable=True,
+    )
 
     # Updates
     created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))

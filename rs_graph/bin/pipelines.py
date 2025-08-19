@@ -537,6 +537,94 @@ def get_random_sample_of_prelinked_source_data(
     df.to_csv(outfile_path, index=False)
 
 
+@app.command()
+def snowball_sampling_discovery(
+    author_developer_links_filter_datetime_difference: str = "2 year",
+    article_repository_allowed_datetime_difference: str = "2 years",
+    process_n: int = 20,
+    use_prod: bool = False,
+    use_coiled: bool = False,
+    coiled_region: str = "us-west-2",
+    github_tokens_file: str = DEFAULT_GITHUB_TOKENS_FILE,
+    open_alex_emails_file: str = DEFAULT_OPEN_ALEX_EMAILS_FILE,
+) -> None:
+    """
+    Discover new article-repository pairs via snowball sampling.
+
+    This will use the existing database starting from stored
+    researcher-developer-account links, then lookup each author's articles
+    and their repositories, use our article-repository matching model
+    to predict new pairs, and then conduct standard processing.
+    """
+    # Load environment variables
+    load_dotenv()
+
+    # Get semantic scholar API key
+    try:
+        os.environ["SEMANTIC_SCHOLAR_API_KEY"]
+    except KeyError as e:
+        raise KeyError("Please set the SEMANTIC_SCHOLAR_API_KEY environment variable.") from e
+
+    # Load Open Alex emails
+    _load_open_alex_emails(open_alex_emails_file)
+
+    # Load Elsevier API keys
+    _load_elsevier_api_keys(DEFAULT_ELSEVIER_API_KEYS_FILE)
+
+    # Create current datetime without microseconds
+    current_datetime = datetime.now().replace(microsecond=0)
+    # Convert to isoformat and replace colons with dashes
+    current_datetime_str = current_datetime.isoformat().replace(":", "-")
+
+    # Create dir for this datetime
+    current_datetime_dir = DEFAULT_RESULTS_DIR / current_datetime_str
+    # Create "results" dir
+    current_datetime_dir.mkdir(exist_ok=True, parents=True)
+    current_datetime_dir / "snowball-sampling-discovery-errored.parquet"
+
+    # Each flow should process a single author-developer-account pair
+
+    # Basic steps of the flow:
+    # 1. Get all author-developer-account links from the database
+    # 2. Filter pairs to keep only, never processed pairs, or pairs that were processed
+    #    before author_developer_links_filter_datetime_difference
+    # 3. For each pair, get the author's articles from OpenAlex and
+    #    repositories from GitHub
+    # 4. Create possible article-repository pairs by creating pairs of each
+    #    article and repository in which each pair is within
+    #    article_repository_allowed_datetime_difference of each other
+    # 5. Use the article-repository matching model to predict which pairs are
+    #    likely to be valid
+    # 6. Process the pairs using the standard processing flow
+    #    (we can skip this for now, just note how many pairs would be processed)
+
+    # Get author-developer-account links from the database
+    print("Getting author-developer-account links from the database...")
+    hydrated_author_developer_links = db_utils.get_hydrated_author_developer_links(
+        use_prod=use_prod,
+        filter_datetime_difference=author_developer_links_filter_datetime_difference,
+        n=process_n,
+    )
+
+    # For now, let's just log what we would process and mark as processed
+    processed_link_ids = []
+    for link in hydrated_author_developer_links:
+        print(
+            f"Would process: Researcher {link.researcher.name} (ID: {link.researcher.id}) "
+            f"<-> Developer {link.developer_account.username} (ID: {link.developer_account.id})"
+        )
+        processed_link_ids.append(link.id)
+
+    # Mark these links as processed
+    if processed_link_ids:
+        print(f"Marking {len(processed_link_ids)} links as processed...")
+        # db_utils.update_snowball_processed_datetime(
+        #     link_ids=processed_link_ids,
+        #     use_prod=use_prod,
+        # )
+        print("Successfully updated processed timestamps")
+
+
 ###############################################################################
 
 
