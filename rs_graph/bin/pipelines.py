@@ -28,6 +28,7 @@ from rs_graph.db import utils as db_utils
 from rs_graph.enrichment import article, entity_matching, github
 from rs_graph.sources import joss, plos, proto, pwc, softcite_2025, softwarex
 from rs_graph.utils import code_host_parsing
+from rs_graph.utils.dt_and_td import parse_timedelta
 
 ###############################################################################
 
@@ -537,11 +538,75 @@ def get_random_sample_of_prelinked_source_data(
     df.to_csv(outfile_path, index=False)
 
 
+@flow(
+    log_prints=True,
+)
+def _author_developer_article_repository_discovery_flow(
+    researcher_open_alex_id: str,
+    developer_account_username: str,
+    allowed_datetime_difference: str,
+    use_prod: bool = False,
+    use_coiled: bool = False,
+    coiled_region: str = "us-west-2",
+    github_tokens_file: str = DEFAULT_GITHUB_TOKENS_FILE,
+    open_alex_emails_file: str = DEFAULT_OPEN_ALEX_EMAILS_FILE,
+) -> None:
+    # Load environment variables
+    load_dotenv()
+
+    # Get open alex emails
+    open_alex_emails = _load_open_alex_emails(open_alex_emails_file)
+
+    # Get gh tokens
+    cycled_github_tokens = GitHubTokensCycler(gh_tokens_file=github_tokens_file)
+
+    # TODO: make all of these tasks that run in parallel
+
+    # Get all papers from OpenAlex for the researcher
+    author_works = article.get_articles_for_researcher(
+        researcher_open_alex_id=researcher_open_alex_id,
+        open_alex_email=next(cycled_github_tokens),
+        open_alex_email_count=len(open_alex_emails),
+    )
+
+    # Get all repositories for the developer account
+    developer_repos = github.get_github_repos_for_developer(
+        username=developer_account_username,
+        github_api_key=next(cycled_github_tokens),
+    )
+
+    # Calculate total possible pairs
+    total_possible_pairs = len(author_works) * len(developer_repos)
+    print(f"Total possible pairs: {total_possible_pairs}")
+
+    # Get possible article-repository pairs for matching
+    possible_pairs = entity_matching.get_possible_article_repository_pairs_for_matching(
+        works=author_works,
+        repos=developer_repos,
+        max_datetime_difference=parse_timedelta(allowed_datetime_difference),
+    )
+
+    # Print possible pairs
+    print(f"Possible pairs: {len(possible_pairs)}")
+
+    # Print top 5 pairs title, doi, and repo url
+    print("Top 5 possible pairs:")
+    for possible_pair in possible_pairs[:5]:
+        print(
+            f"Title: {possible_pair.work['title']}, DOI: {possible_pair.work['doi']}, "
+            f"Repo URL: https://github.com/{possible_pair.repository['full_name']}"
+        )
+
+    print()
+    print()
+
+
 @app.command()
 def snowball_sampling_discovery(
     author_developer_links_filter_datetime_difference: str = "2 years",
     article_repository_allowed_datetime_difference: str = "2 years",
     process_n: int = 20,
+    author_developer_links_filter_confidence_threshold: float = 0.97,
     use_prod: bool = False,
     use_coiled: bool = False,
     coiled_region: str = "us-west-2",
@@ -556,21 +621,6 @@ def snowball_sampling_discovery(
     and their repositories, use our article-repository matching model
     to predict new pairs, and then conduct standard processing.
     """
-    # Load environment variables
-    load_dotenv()
-
-    # Get semantic scholar API key
-    try:
-        os.environ["SEMANTIC_SCHOLAR_API_KEY"]
-    except KeyError as e:
-        raise KeyError("Please set the SEMANTIC_SCHOLAR_API_KEY environment variable.") from e
-
-    # Load Open Alex emails
-    _load_open_alex_emails(open_alex_emails_file)
-
-    # Load Elsevier API keys
-    _load_elsevier_api_keys(DEFAULT_ELSEVIER_API_KEYS_FILE)
-
     # Create current datetime without microseconds
     current_datetime = datetime.now().replace(microsecond=0)
     # Convert to isoformat and replace colons with dashes
@@ -585,9 +635,6 @@ def snowball_sampling_discovery(
     # Each flow should process a single author-developer-account pair
 
     # Basic steps of the flow:
-    # 1. Get all author-developer-account links from the database
-    # 2. Filter pairs to keep only, never processed pairs, or pairs that were processed
-    #    before author_developer_links_filter_datetime_difference
     # 3. For each pair, get the author's articles from OpenAlex and
     #    repositories from GitHub
     # 4. Create possible article-repository pairs by creating pairs of each
@@ -603,6 +650,7 @@ def snowball_sampling_discovery(
     hydrated_author_developer_links = db_utils.get_hydrated_author_developer_links(
         use_prod=use_prod,
         filter_datetime_difference=author_developer_links_filter_datetime_difference,
+        filter_confidence_threshold=author_developer_links_filter_confidence_threshold,
         n=process_n,
     )
 
@@ -610,8 +658,19 @@ def snowball_sampling_discovery(
     processed_link_ids = []
     for link in hydrated_author_developer_links:
         print(
-            f"Would process: Researcher {link.researcher.name} (ID: {link.researcher.id}) "
+            f"Would process: Researcher {link.researcher.name} "
+            f"(ID: {link.researcher.id}, {link.researcher.open_alex_id}) "
             f"<-> Developer {link.developer_account.username} (ID: {link.developer_account.id})"
+        )
+        _author_developer_article_repository_discovery_flow(
+            researcher_open_alex_id=link.researcher.open_alex_id,
+            developer_account_username=link.developer_account.username,
+            allowed_datetime_difference=article_repository_allowed_datetime_difference,
+            use_prod=use_prod,
+            use_coiled=use_coiled,
+            coiled_region=coiled_region,
+            github_tokens_file=github_tokens_file,
+            open_alex_emails_file=open_alex_emails_file,
         )
         processed_link_ids.append(link.id)
 

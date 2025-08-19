@@ -620,6 +620,7 @@ class HydratedAuthorDeveloperLink:
 def get_hydrated_author_developer_links(
     use_prod: bool = False,
     filter_datetime_difference: str | None = None,
+    filter_confidence_threshold: float = 0.97,
     n: int | None = None,
 ) -> list[HydratedAuthorDeveloperLink]:
     """
@@ -632,6 +633,8 @@ def get_hydrated_author_developer_links(
     filter_datetime_difference: str | None
         Optional time string (e.g. "365 days") to filter
         links that haven't been processed in this timeframe
+    filter_confidence_threshold: float
+        Confidence threshold to filter links (default 0.97)
     n: int | None
         Optional limit on the number of links to return
     """
@@ -666,7 +669,11 @@ def get_hydrated_author_developer_links(
                         )
                         < cutoff_datetime
                     ),
-                )
+                ),
+                (
+                    col(db_models.ResearcherDeveloperAccountLink.predictive_model_confidence)
+                    >= filter_confidence_threshold
+                ),
             )
 
         # Limit results if specified

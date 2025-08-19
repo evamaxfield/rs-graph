@@ -14,7 +14,7 @@ import requests
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
 from fastcore.net import HTTP403ForbiddenError
-from ghapi.all import GhApi
+from ghapi.all import GhApi, paged
 
 from .. import types
 from ..db import models as db_models
@@ -355,3 +355,36 @@ def process_github_repo_task(
         result.github_processing_time_seconds = end_time - start_time
 
     return result
+
+
+def get_github_repos_for_developer(
+    username: str,
+    github_api_key: str | None = None,
+) -> list[dict] | types.ErrorResult:
+    """Get all GitHub repositories for a developer account."""
+    # Setup API
+    api = _setup_gh_api(github_api_key)
+
+    try:
+        # Page and get repos
+        repo_pager = paged(
+            api.repos.list_for_user,
+            username=username,
+            type="all",
+            per_page=100,
+        )
+
+        developer_repos = []
+        for page in repo_pager:
+            developer_repos.extend(page)
+
+        return developer_repos
+
+    except Exception as e:
+        return types.ErrorResult(
+            source="snowball-sampling-discovery",
+            step="github-repos-for-developer",
+            identifier=username,
+            error=str(e),
+            traceback=traceback.format_exc(),
+        )

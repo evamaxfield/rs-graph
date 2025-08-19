@@ -32,7 +32,7 @@ timedelta_sizes.update(tds2)
 timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
 
 
-def parse_timedelta(
+def parse_timedelta(  # noqa: C901
     s: str | float | timedelta,
     default: str | Literal[False] = "seconds",
 ) -> timedelta:
@@ -68,6 +68,8 @@ def parse_timedelta(
         return s
     if isinstance(s, Number):
         s_str = str(s)
+    if isinstance(s, str):
+        s_str = s
 
     # Should be a string now, parse
     s_str = s_str.replace(" ", "")

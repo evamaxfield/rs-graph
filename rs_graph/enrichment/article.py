@@ -529,3 +529,41 @@ def process_article_task(
         result.open_alex_processing_time_seconds = end_time - start_time
 
     return result
+
+
+def get_articles_for_researcher(
+    researcher_open_alex_id: str,
+    open_alex_email: str,
+    open_alex_email_count: int,
+) -> list[pyalex.Work] | types.ErrorResult:
+    """Get articles for a researcher."""
+    try:
+        # Setup OpenAlex API
+        _setup_open_alex(open_alex_email=open_alex_email)
+
+        # Strip the open alex url from the id if needed
+        if "https://openalex.org/" in researcher_open_alex_id:
+            researcher_open_alex_id = researcher_open_alex_id.split("https://openalex.org/")[-1]
+
+        # Get works api
+        open_alex_works = pyalex.Works()
+
+        # Increment call count and then actually request
+        author_works = []
+        pager = open_alex_works.filter(author={"id": researcher_open_alex_id}).paginate(
+            per_page=200
+        )
+        for page in pager:
+            _increment_call_count_and_check(open_alex_email_count=open_alex_email_count)
+            author_works.extend(page)
+
+        return author_works
+
+    except Exception as e:
+        return types.ErrorResult(
+            source="snowball-sampling-discovery",
+            step="get-articles-for-researcher",
+            identifier=researcher_open_alex_id,
+            error=str(e),
+            traceback=traceback.format_exc(),
+        )
