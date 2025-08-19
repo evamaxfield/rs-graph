@@ -539,7 +539,7 @@ def get_random_sample_of_prelinked_source_data(
 
 @app.command()
 def snowball_sampling_discovery(
-    author_developer_links_filter_datetime_difference: str = "2 year",
+    author_developer_links_filter_datetime_difference: str = "2 years",
     article_repository_allowed_datetime_difference: str = "2 years",
     process_n: int = 20,
     use_prod: bool = False,

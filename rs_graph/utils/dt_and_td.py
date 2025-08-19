@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-from numbers import Number
 from datetime import timedelta
+from numbers import Number
 from typing import Literal
 
 timedelta_sizes = {
@@ -31,15 +31,17 @@ tds2.update({k + "s": v for k, v in tds2.items()})
 timedelta_sizes.update(tds2)
 timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
 
+
 def parse_timedelta(
     s: str | float | timedelta,
     default: str | Literal[False] = "seconds",
 ) -> timedelta:
-    """Parse timedelta string to number of seconds
+    """Parse timedelta string to number of seconds.
 
     Parameters
     ----------
-    s : str, float, timedelta, or None
+    s : str, float, timedelta
+        String to parse, or a float representing seconds, or a timedelta object.
     default: str or False, optional
         Unit of measure if s  does not specify one. Defaults to seconds.
         Set to False to require s to explicitly specify its own unit.
@@ -90,9 +92,7 @@ def parse_timedelta(
         multiplier = timedelta_sizes[suffix.lower()]
     except KeyError:
         valid_units = ", ".join(timedelta_sizes.keys())
-        raise KeyError(
-            f"Invalid time unit: {suffix}. Valid units are: {valid_units}"
-        ) from None
+        raise KeyError(f"Invalid time unit: {suffix}. Valid units are: {valid_units}") from None
 
     result = n * multiplier
     if int(result) == result:

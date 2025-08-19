@@ -8,10 +8,21 @@ from pathlib import Path
 
 from prefect import task
 from sqlalchemy.engine import Engine
-from sqlmodel import Session, SQLModel, UniqueConstraint, create_engine, select, update
+from sqlalchemy.sql.operators import is_
+from sqlmodel import (
+    Session,
+    SQLModel,
+    UniqueConstraint,
+    col,
+    create_engine,
+    or_,
+    select,
+    update,
+)
 from tqdm import tqdm
 
 from .. import types
+from ..utils.dt_and_td import parse_timedelta
 from . import models as db_models
 
 ###############################################################################
@@ -642,17 +653,19 @@ def get_hydrated_author_developer_links(
 
         # Apply datetime filtering if specified
         if filter_datetime_difference is not None:
-            from dask.utils import parse_timedelta
-
             cutoff_datetime = datetime.now() - parse_timedelta(filter_datetime_difference)
             stmt = stmt.where(
-                (
-                    db_models.ResearcherDeveloperAccountLink.last_snowball_processed_datetime
-                    is None
-                )
-                | (
-                    db_models.ResearcherDeveloperAccountLink.last_snowball_processed_datetime
-                    < cutoff_datetime
+                or_(
+                    is_(
+                        db_models.ResearcherDeveloperAccountLink.last_snowball_processed_datetime,
+                        None,
+                    ),
+                    (
+                        col(
+                            db_models.ResearcherDeveloperAccountLink.last_snowball_processed_datetime
+                        )
+                        < cutoff_datetime
+                    ),
                 )
             )
 
