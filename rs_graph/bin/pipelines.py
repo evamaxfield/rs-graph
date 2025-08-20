@@ -783,9 +783,11 @@ def _author_developer_article_repository_discovery_flow(
                 ignore_index=True,
             )
 
-            # Store estimates and errors
-            updated_estimates_df.to_parquet(this_delta_store_path)
-            updated_errors_df.to_parquet(this_delta_errors_path)
+            # Only store if there is data
+            if len(updated_estimates_df) > 0:
+                updated_estimates_df.to_parquet(this_delta_store_path)
+            if len(updated_errors_df) > 0:
+                updated_errors_df.to_parquet(this_delta_errors_path)
 
 
 @app.command()
