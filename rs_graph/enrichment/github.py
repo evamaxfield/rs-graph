@@ -376,6 +376,7 @@ def get_github_repos_for_developer(
 
         developer_repos = []
         for page in repo_pager:
+            time.sleep(0.85)  # Sleep to avoid API limits
             developer_repos.extend(page)
 
         return developer_repos

@@ -16,6 +16,7 @@ import coiled
 import pandas as pd
 import typer
 import yaml
+from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
 from gh_tokens_loader import GitHubTokensCycler
 from prefect import Task, flow, task, unmapped
@@ -39,16 +40,62 @@ DEFAULT_GITHUB_TOKENS_FILE = ".github-tokens.yml"
 DEFAULT_OPEN_ALEX_EMAILS_FILE = ".open-alex-emails.yml"
 DEFAULT_ELSEVIER_API_KEYS_FILE = ".elsevier-api-keys.yml"
 
-###############################################################################
+
+def _get_open_alex_cluster_config(
+    n_open_alex_emails: int,
+    use_coiled: bool,
+    coiled_region: str,
+) -> dict:
+    return {
+        "keepalive": "15m",
+        "vm_type": "t4g.small",
+        "n_workers": 2,
+        "threads_per_worker": n_open_alex_emails,
+        "spot_policy": "spot_with_fallback",
+        "local": not use_coiled,
+        "region": coiled_region,
+    }
 
 
-SOURCE_MAP: dict[str, proto.DatasetRetrievalFunction] = {
+def _get_github_cluster_config(
+    n_github_tokens: int,
+    use_coiled: bool,
+    coiled_region: str,
+) -> dict:
+    return {
+        "keepalive": "15m",
+        "vm_type": "t4g.small",
+        "n_workers": 1,
+        "threads_per_worker": n_github_tokens,
+        "spot_policy": "spot_with_fallback",
+        "local": not use_coiled,
+        "region": coiled_region,
+    }
+
+
+def _get_basic_gpu_cluster_config(
+    use_coiled: bool,
+    coiled_region: str,
+) -> dict:
+    return {
+        "keepalive": "15m",
+        "vm_type": "g4dn.xlarge",
+        "n_workers": [2, 3],
+        "spot_policy": "spot_with_fallback",
+        "local": not use_coiled,
+        "region": coiled_region,
+    }
+
+
+PRELINKED_INGESTION_SOURCE_MAP: dict[str, proto.DatasetRetrievalFunction] = {
     "joss": joss.get_dataset,
     "plos": plos.get_dataset,
     "softwarex": softwarex.get_dataset,
     "pwc": pwc.get_dataset,
     "softcite-2025": softcite_2025.get_dataset,
 }
+
+###############################################################################
 
 
 def _wrap_func_with_coiled_prefect_task(
@@ -218,7 +265,7 @@ def _prelinked_dataset_ingestion_flow(
     print("-" * 80)
 
     # Get dataset
-    source_func = SOURCE_MAP[source]
+    source_func = PRELINKED_INGESTION_SOURCE_MAP[source]
     print("Getting dataset...")
     source_results = source_func(
         github_tokens=cycled_github_tokens._gh_tokens,
@@ -226,34 +273,6 @@ def _prelinked_dataset_ingestion_flow(
         semantic_scholar_api_key=semantic_scholar_api_key,
         open_alex_emails=open_alex_emails,
     )
-
-    # Construct different cluster parameters
-    article_processing_cluster_config = {
-        "keepalive": "15m",
-        "vm_type": "t4g.small",
-        "n_workers": 2,
-        "threads_per_worker": n_open_alex_emails,
-        "spot_policy": "spot_with_fallback",
-        "local": not use_coiled,
-        "region": coiled_region,
-    }
-    github_cluster_config = {
-        "keepalive": "15m",
-        "vm_type": "t4g.small",
-        "n_workers": 1,
-        "threads_per_worker": n_github_tokens,
-        "spot_policy": "spot_with_fallback",
-        "local": not use_coiled,
-        "region": coiled_region,
-    }
-    gpu_cluster_config = {
-        "keepalive": "15m",
-        "vm_type": "g4dn.xlarge",
-        "n_workers": [2, 3],
-        "spot_policy": "spot_with_fallback",
-        "local": not use_coiled,
-        "region": coiled_region,
-    }
 
     # Filter dataset
     code_filtered_results = code_host_parsing.filter_repo_paper_pairs(
@@ -289,7 +308,11 @@ def _prelinked_dataset_ingestion_flow(
             # Process open alex
             process_article_wrapped_task = _wrap_func_with_coiled_prefect_task(
                 article.process_article_task,
-                coiled_kwargs=article_processing_cluster_config,
+                coiled_kwargs=_get_open_alex_cluster_config(
+                    n_open_alex_emails=n_open_alex_emails,
+                    use_coiled=use_coiled,
+                    coiled_region=coiled_region,
+                ),
             )
             article_processing_futures = process_article_wrapped_task.map(
                 pair=chunk,
@@ -301,7 +324,11 @@ def _prelinked_dataset_ingestion_flow(
             # Process github
             process_github_wrapped_task = _wrap_func_with_coiled_prefect_task(
                 github.process_github_repo_task,
-                coiled_kwargs=github_cluster_config,
+                coiled_kwargs=_get_github_cluster_config(
+                    n_github_tokens=n_github_tokens,
+                    use_coiled=use_coiled,
+                    coiled_region=coiled_region,
+                ),
             )
             github_futures = process_github_wrapped_task.map(
                 pair=article_processing_futures,
@@ -319,7 +346,10 @@ def _prelinked_dataset_ingestion_flow(
             # Match devs and researchers
             match_devs_and_researchers_wrapped_task = _wrap_func_with_coiled_prefect_task(
                 entity_matching.match_devs_and_researchers,
-                coiled_kwargs=gpu_cluster_config,
+                coiled_kwargs=_get_basic_gpu_cluster_config(
+                    use_coiled=use_coiled,
+                    coiled_region=coiled_region,
+                ),
             )
             dev_researcher_futures = match_devs_and_researchers_wrapped_task.map(
                 pair=stored_futures,
@@ -501,7 +531,7 @@ def get_random_sample_of_prelinked_source_data(
 
     # Iter over sources, take random samples of their "get_dataset" function results
     results = []
-    for source, source_func in SOURCE_MAP.items():
+    for source, source_func in PRELINKED_INGESTION_SOURCE_MAP.items():
         print("Working on source:", source)
         source_results = source_func()
 
@@ -538,46 +568,44 @@ def get_random_sample_of_prelinked_source_data(
     df.to_csv(outfile_path, index=False)
 
 
-@flow(
-    log_prints=True,
-)
-def _author_developer_article_repository_discovery_flow(
+@dataclass
+class PerAuthorDeveloperDiscoveryPairEstimate(DataClassJsonMixin):
+    article_repo_timedelta_allowance: str
+    total_pair_combinations: int
+    possible_pairs_given_filter: int
+
+
+def _author_developer_discovery_estimation(
     researcher_open_alex_id: str,
     developer_account_username: str,
     allowed_datetime_difference: str,
-    use_prod: bool = False,
-    use_coiled: bool = False,
-    coiled_region: str = "us-west-2",
-    github_tokens_file: str = DEFAULT_GITHUB_TOKENS_FILE,
-    open_alex_emails_file: str = DEFAULT_OPEN_ALEX_EMAILS_FILE,
-) -> None:
-    # Load environment variables
-    load_dotenv()
-
-    # Get open alex emails
-    open_alex_emails = _load_open_alex_emails(open_alex_emails_file)
-
-    # Get gh tokens
-    cycled_github_tokens = GitHubTokensCycler(gh_tokens_file=github_tokens_file)
-
-    # TODO: make all of these tasks that run in parallel
-
+    github_token: str,
+    open_alex_email: str,
+    open_alex_email_count: int,
+) -> PerAuthorDeveloperDiscoveryPairEstimate | types.ErrorResult:
     # Get all papers from OpenAlex for the researcher
     author_works = article.get_articles_for_researcher(
         researcher_open_alex_id=researcher_open_alex_id,
-        open_alex_email=next(cycled_github_tokens),
-        open_alex_email_count=len(open_alex_emails),
+        open_alex_email=open_alex_email,
+        open_alex_email_count=open_alex_email_count,
     )
+
+    # Handle error
+    if isinstance(author_works, types.ErrorResult):
+        return author_works
 
     # Get all repositories for the developer account
     developer_repos = github.get_github_repos_for_developer(
         username=developer_account_username,
-        github_api_key=next(cycled_github_tokens),
+        github_api_key=github_token,
     )
+
+    # Handle error
+    if isinstance(developer_repos, types.ErrorResult):
+        return developer_repos
 
     # Calculate total possible pairs
     total_possible_pairs = len(author_works) * len(developer_repos)
-    print(f"Total possible pairs: {total_possible_pairs}")
 
     # Get possible article-repository pairs for matching
     possible_pairs = entity_matching.get_possible_article_repository_pairs_for_matching(
@@ -586,25 +614,183 @@ def _author_developer_article_repository_discovery_flow(
         max_datetime_difference=parse_timedelta(allowed_datetime_difference),
     )
 
-    # Print possible pairs
-    print(f"Possible pairs: {len(possible_pairs)}")
+    return PerAuthorDeveloperDiscoveryPairEstimate(
+        article_repo_timedelta_allowance=allowed_datetime_difference,
+        total_pair_combinations=total_possible_pairs,
+        possible_pairs_given_filter=len(possible_pairs),
+    )
 
-    # Print top 5 pairs title, doi, and repo url
-    print("Top 5 possible pairs:")
-    for possible_pair in possible_pairs[:5]:
-        print(
-            f"Title: {possible_pair.work['title']}, DOI: {possible_pair.work['doi']}, "
-            f"Repo URL: https://github.com/{possible_pair.repository['full_name']}"
+
+@flow(
+    log_prints=True,
+)
+def _author_developer_article_repository_discovery_flow(
+    author_developer_links_filter_datetime_difference: str,
+    article_repository_allowed_datetime_difference_list: list[str],
+    process_n: int,
+    author_developer_links_filter_confidence_threshold: float,
+    use_prod: bool,
+    use_coiled: bool,
+    coiled_region: str,
+    github_tokens_file: str,
+    open_alex_emails: list[str],
+) -> None:
+    # Get an infinite cycle of github tokens
+    cycled_github_tokens = GitHubTokensCycler(gh_tokens_file=github_tokens_file)
+
+    # Workers is the number of github tokens
+    n_github_tokens = len(cycled_github_tokens)
+
+    # Get an infinite cycle of open alex emails
+    cycled_open_alex_emails = itertools.cycle(open_alex_emails)
+
+    # Get the number of open alex emails
+    n_open_alex_emails = len(open_alex_emails)
+
+    # Print dataset and coiled status
+    print("-" * 80)
+    print("Pipeline Options:")
+    print(
+        f"Skip Author Developer Links Processed Within Last: "
+        f"{author_developer_links_filter_datetime_difference}"
+    )
+    print(
+        f"Article Repository Allowed Datetime Difference: "
+        f"{article_repository_allowed_datetime_difference_list}"
+    )
+    print(f"Process N: {process_n}")
+    print(
+        f"Author Developer Links Filter Confidence Threshold: "
+        f"{author_developer_links_filter_confidence_threshold}"
+    )
+    print(f"Use Prod Database: {use_prod}")
+    print(f"Use Coiled: {use_coiled}")
+    print(f"Coiled Region: {coiled_region}")
+    print(f"GitHub Token Count: {n_github_tokens}")
+    print(f"Open Alex Email Count: {n_open_alex_emails}")
+    print("-" * 80)
+
+    # Get author-developer-account links from the database
+    print("Getting author-developer-account links from the database...")
+    hydrated_author_developer_links = db_utils.get_hydrated_author_developer_links(
+        use_prod=use_prod,
+        filter_datetime_difference=author_developer_links_filter_datetime_difference,
+        filter_confidence_threshold=author_developer_links_filter_confidence_threshold,
+        n=process_n,
+    )
+
+    # Basic steps of the flow:
+    # 3. For each pair, get the author's articles from OpenAlex and
+    #    repositories from GitHub
+    # 4. Create possible article-repository pairs by creating pairs of each
+    #    article and repository in which each pair is within
+    #    article_repository_allowed_datetime_difference of each other
+    # 5. Use the article-repository matching model to predict which pairs are
+    #    likely to be valid
+    # 6. Process the pairs using the standard processing flow
+    #    (we can skip this for now, just note how many pairs would be processed)
+
+    # Wrap the estimation function with coiled and prefect
+    estimate_pairs_wrapped_task = _wrap_func_with_coiled_prefect_task(
+        _author_developer_discovery_estimation,
+        coiled_kwargs=_get_github_cluster_config(
+            n_github_tokens=n_github_tokens,
+            use_coiled=use_coiled,
+            coiled_region=coiled_region,
+        ),
+    )
+
+    # Estimates store path
+    estimates_storage_dir = DEFAULT_RESULTS_DIR / "author-developer-discovery-estimates"
+    estimates_storage_dir.mkdir(exist_ok=True, parents=True)
+
+    # Estimate pairs for each author-developer link in batches
+    batch_size = 20
+    for article_repository_allowed_datetime_difference in tqdm(
+        article_repository_allowed_datetime_difference_list,
+        desc="Article-Repository Allowed Datetime Differences",
+    ):
+        # Create storage paths
+        this_delta_store_path = (
+            estimates_storage_dir / f"{article_repository_allowed_datetime_difference}.parquet"
+        )
+        this_delta_errors_path = (
+            estimates_storage_dir
+            / f"{article_repository_allowed_datetime_difference}-errors.parquet"
         )
 
-    print()
-    print()
+        # Remove prior file
+        if this_delta_store_path.exists():
+            print(f"Removing prior estimates file at {this_delta_store_path}")
+            this_delta_store_path.unlink()
+
+        for i in tqdm(
+            range(0, len(hydrated_author_developer_links), batch_size),
+            desc="Estimating Pairs",
+            total=math.ceil(len(hydrated_author_developer_links) / batch_size),
+            leave=False,
+        ):
+            batch = hydrated_author_developer_links[i : i + batch_size]
+            estimates_futures = estimate_pairs_wrapped_task.map(
+                researcher_open_alex_id=[link.researcher_open_alex_id for link in batch],
+                developer_account_username=[link.developer_account_username for link in batch],
+                allowed_datetime_difference=[
+                    article_repository_allowed_datetime_difference for _ in batch
+                ],
+                github_token=[next(cycled_github_tokens) for _ in batch],
+                open_alex_email=[next(cycled_open_alex_emails) for _ in batch],
+                open_alex_email_count=[n_open_alex_emails for _ in batch],
+            )
+
+            # Wait for all futures to complete
+            this_batch_results: list[PerAuthorDeveloperDiscoveryPairEstimate] = [
+                f.result() for f in estimates_futures
+            ]
+
+            # Filter estimates
+            this_batch_estimates = [
+                e
+                for e in this_batch_results
+                if isinstance(e, PerAuthorDeveloperDiscoveryPairEstimate)
+            ]
+            # Filter errors
+            this_batch_errors = [
+                e for e in this_batch_results if isinstance(e, types.ErrorResult)
+            ]
+
+            # Read in prior estimates and estimates for this batch
+            if this_delta_store_path.exists():
+                prior_estimates_df = pd.read_parquet(this_delta_store_path)
+            else:
+                prior_estimates_df = pd.DataFrame()
+
+            if this_delta_errors_path.exists():
+                prior_errors_df = pd.read_parquet(this_delta_errors_path)
+            else:
+                prior_errors_df = pd.DataFrame()
+
+            # Create DataFrame for this batch estimates
+            this_batch_estimates_df = pd.DataFrame([e.to_dict() for e in this_batch_estimates])
+            this_batch_errors_df = pd.DataFrame([e.to_dict() for e in this_batch_errors])
+
+            # Append to prior estimates
+            updated_estimates_df = pd.concat(
+                [prior_estimates_df, this_batch_estimates_df],
+                ignore_index=True,
+            )
+            updated_errors_df = pd.concat(
+                [prior_errors_df, this_batch_errors_df],
+                ignore_index=True,
+            )
+
+            # Store estimates and errors
+            updated_estimates_df.to_parquet(this_delta_store_path)
+            updated_errors_df.to_parquet(this_delta_errors_path)
 
 
 @app.command()
 def snowball_sampling_discovery(
     author_developer_links_filter_datetime_difference: str = "2 years",
-    article_repository_allowed_datetime_difference: str = "2 years",
     process_n: int = 20,
     author_developer_links_filter_confidence_threshold: float = 0.97,
     use_prod: bool = False,
@@ -621,67 +807,34 @@ def snowball_sampling_discovery(
     and their repositories, use our article-repository matching model
     to predict new pairs, and then conduct standard processing.
     """
-    # Create current datetime without microseconds
-    current_datetime = datetime.now().replace(microsecond=0)
-    # Convert to isoformat and replace colons with dashes
-    current_datetime_str = current_datetime.isoformat().replace(":", "-")
+    # Load environment variables
+    load_dotenv()
 
-    # Create dir for this datetime
-    current_datetime_dir = DEFAULT_RESULTS_DIR / current_datetime_str
-    # Create "results" dir
-    current_datetime_dir.mkdir(exist_ok=True, parents=True)
-    current_datetime_dir / "snowball-sampling-discovery-errored.parquet"
+    # Get open alex emails
+    _load_open_alex_emails(open_alex_emails_file)
 
-    # Each flow should process a single author-developer-account pair
+    # Ignore prefect task introspection warnings
+    os.environ["PREFECT_TASK_INTROSPECTION_WARN_THRESHOLD"] = "0"
 
-    # Basic steps of the flow:
-    # 3. For each pair, get the author's articles from OpenAlex and
-    #    repositories from GitHub
-    # 4. Create possible article-repository pairs by creating pairs of each
-    #    article and repository in which each pair is within
-    #    article_repository_allowed_datetime_difference of each other
-    # 5. Use the article-repository matching model to predict which pairs are
-    #    likely to be valid
-    # 6. Process the pairs using the standard processing flow
-    #    (we can skip this for now, just note how many pairs would be processed)
+    article_repository_allowed_datetime_difference_list = [
+        "180 days",
+        "1 year",
+        "2 years",
+        "3 years",
+    ]
 
-    # Get author-developer-account links from the database
-    print("Getting author-developer-account links from the database...")
-    hydrated_author_developer_links = db_utils.get_hydrated_author_developer_links(
+    # Start the flow
+    _author_developer_article_repository_discovery_flow(
+        author_developer_links_filter_datetime_difference=author_developer_links_filter_datetime_difference,
+        article_repository_allowed_datetime_difference_list=article_repository_allowed_datetime_difference_list,
+        process_n=process_n,
+        author_developer_links_filter_confidence_threshold=author_developer_links_filter_confidence_threshold,
         use_prod=use_prod,
-        filter_datetime_difference=author_developer_links_filter_datetime_difference,
-        filter_confidence_threshold=author_developer_links_filter_confidence_threshold,
-        n=process_n,
+        use_coiled=use_coiled,
+        coiled_region=coiled_region,
+        github_tokens_file=github_tokens_file,
+        open_alex_emails=_load_open_alex_emails(open_alex_emails_file),
     )
-
-    # For now, let's just log what we would process and mark as processed
-    processed_link_ids = []
-    for link in hydrated_author_developer_links:
-        print(
-            f"Would process: Researcher {link.researcher.name} "
-            f"(ID: {link.researcher.id}, {link.researcher.open_alex_id}) "
-            f"<-> Developer {link.developer_account.username} (ID: {link.developer_account.id})"
-        )
-        _author_developer_article_repository_discovery_flow(
-            researcher_open_alex_id=link.researcher.open_alex_id,
-            developer_account_username=link.developer_account.username,
-            allowed_datetime_difference=article_repository_allowed_datetime_difference,
-            use_prod=use_prod,
-            use_coiled=use_coiled,
-            coiled_region=coiled_region,
-            github_tokens_file=github_tokens_file,
-            open_alex_emails_file=open_alex_emails_file,
-        )
-        processed_link_ids.append(link.id)
-
-    # Mark these links as processed
-    if processed_link_ids:
-        print(f"Marking {len(processed_link_ids)} links as processed...")
-        # db_utils.update_snowball_processed_datetime(
-        #     link_ids=processed_link_ids,
-        #     use_prod=use_prod,
-        # )
-        print("Successfully updated processed timestamps")
 
 
 ###############################################################################

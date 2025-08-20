@@ -612,8 +612,8 @@ def filter_stored_pairs(
 @dataclass
 class HydratedAuthorDeveloperLink:
     id: int
-    researcher: db_models.Researcher
-    developer_account: db_models.DeveloperAccount
+    researcher_open_alex_id: str
+    developer_account_username: str
     last_snowball_processed_datetime: datetime | None
 
 
@@ -689,8 +689,8 @@ def get_hydrated_author_developer_links(
             hydrated_links.append(
                 HydratedAuthorDeveloperLink(
                     id=link.id,
-                    researcher=researcher,
-                    developer_account=developer_account,
+                    researcher_open_alex_id=researcher.open_alex_id,
+                    developer_account_username=developer_account.username,
                     last_snowball_processed_datetime=link.last_snowball_processed_datetime,
                 )
             )
