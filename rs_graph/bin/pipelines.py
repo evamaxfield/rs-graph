@@ -793,7 +793,7 @@ def _author_developer_article_repository_discovery_flow(
 @app.command()
 def snowball_sampling_discovery(
     author_developer_links_filter_datetime_difference: str = "2 years",
-    process_n: int = 20,
+    process_n: int = 500,
     author_developer_links_filter_confidence_threshold: float = 0.97,
     use_prod: bool = False,
     use_coiled: bool = False,
@@ -823,6 +823,8 @@ def snowball_sampling_discovery(
         "1 year",
         "2 years",
         "3 years",
+        "4 years",
+        "5 years",
     ]
 
     # Start the flow
