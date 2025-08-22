@@ -24,6 +24,7 @@ from tqdm import tqdm
 from .. import types
 from ..utils.dt_and_td import parse_timedelta
 from . import models as db_models
+from .constants import V2_DATABASE_PATHS
 
 ###############################################################################
 
@@ -32,11 +33,11 @@ def get_engine(use_prod: bool = False) -> Engine:
     db_path = Path(__file__).parent.parent / "data" / "files"
 
     if use_prod:
-        db_path = db_path / "rs-graph-v2-prod.db"
+        db_path = db_path / V2_DATABASE_PATHS.prod.name
 
         return create_engine(f"sqlite:///{db_path}")
     else:
-        db_path = db_path / "rs-graph-v2-dev.db"
+        db_path = db_path / V2_DATABASE_PATHS.dev.name
 
         return create_engine(f"sqlite:///{db_path}")
 
