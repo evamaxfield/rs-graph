@@ -11,8 +11,6 @@ from functools import partial
 
 import backoff
 import requests
-from cachetools import LRUCache, cached
-from cachetools.keys import hashkey
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
 from fastcore.net import HTTP403ForbiddenError
@@ -50,7 +48,6 @@ def _setup_gh_api(github_api_key: str | None = None) -> GhApi:
         api = GhApi()
 
     return api
-
 
 
 # @cached(  # type: ignore[misc]
