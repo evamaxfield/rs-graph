@@ -700,6 +700,7 @@ def get_hydrated_author_developer_links(
 
 def check_article_repository_pair_already_in_db(
     article_doi: str,
+    article_title: str,
     code_host: str,
     repo_owner: str,
     repo_name: str,
@@ -737,6 +738,13 @@ def check_article_repository_pair_already_in_db(
                     db_models.Document.id == document_alternate_doi_model.document_id
                 )
                 document_model = session.exec(document_stmt).first()
+
+        # Now try and match on title if we still don't have a document model
+        if document_model is None:
+            document_stmt = select(db_models.Document).where(
+                db_models.Document.title == article_title.strip()
+            )
+            document_model = session.exec(document_stmt).first()
 
         # Fast fail
         if document_model is None:

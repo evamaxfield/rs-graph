@@ -20,6 +20,7 @@ repos:
           - "types-requests"
           - "types-tabulate"
           - "types-PyYAML"
+          - "types-cachetools"
 
   # Notebooks
   - repo: https://github.com/nbQA-dev/nbQA

@@ -578,13 +578,14 @@ class AuthorDeveloperPossiblePairs(DataClassJsonMixin):
     article_repository_allowed_datetime_difference: str
     total_combinations_count: int
     possible_pairs_count: int
-    possible_pairs: list[entity_matching.PossibleArticleRepositoryPair]
+    possible_pairs: list[entity_matching.SimplePossibleArticleRepositoryPair]
 
 
 @dataclass
 class PossibleArticleRepositoryPair(DataClassJsonMixin):
     source_researcher_open_alex_id: str
     source_developer_account_username: str
+    article_title: str
     article_doi: str
     open_alex_work: "pyalex.Work"
     repo_owner: str
@@ -649,6 +650,7 @@ def _author_developer_article_repository_discovery_flow(
     article_repository_allowed_datetime_difference: str,
     author_developer_links_filter_confidence_threshold: float,
     author_developer_links_filter_datetime_difference: str,
+    one_to_one_only: bool,
     use_prod: bool,
     use_coiled: bool,
     coiled_region: str,
@@ -733,7 +735,7 @@ def _author_developer_article_repository_discovery_flow(
         leave=False,
     ):
         batch = hydrated_author_developer_links[i : i + author_developer_batch_size]
-        possible_pairs_futures = get_possible_pairs_wrapped_task.map(
+        simple_possible_pairs_futures = get_possible_pairs_wrapped_task.map(
             researcher_open_alex_id=[link.researcher_open_alex_id for link in batch],
             developer_account_username=[link.developer_account_username for link in batch],
             article_repository_allowed_datetime_difference=[
@@ -746,7 +748,7 @@ def _author_developer_article_repository_discovery_flow(
 
         # Wait for all futures to complete
         this_batch_results: list[AuthorDeveloperPossiblePairs | types.ErrorResult] = [
-            f.result() for f in possible_pairs_futures
+            f.result() for f in simple_possible_pairs_futures
         ]
 
         # Filter estimates
@@ -759,47 +761,120 @@ def _author_developer_article_repository_discovery_flow(
         # Convert all possible pairs to a flat list in the form of
         # PossibleArticleRepositoryPair
         flat_possible_pairs: list[PossibleArticleRepositoryPair] = []
-        for per_author_possible_pairs in this_batch_possible_pairs:
-            for pair in per_author_possible_pairs.possible_pairs:
+        for author_developer_possible_pairs in this_batch_possible_pairs:
+            for simple_possible_pair in author_developer_possible_pairs.possible_pairs:
                 flat_possible_pairs.append(
                     PossibleArticleRepositoryPair(
-                        source_researcher_open_alex_id=per_author_possible_pairs.researcher_open_alex_id,
-                        source_developer_account_username=per_author_possible_pairs.developer_account_username,
-                        article_doi=pair.work["doi"],
-                        open_alex_work=pair.work,
-                        repo_owner=pair.repository["owner"]["login"],
-                        repo_name=pair.repository["name"],
-                        github_repository=pair.repository,
+                        source_researcher_open_alex_id=author_developer_possible_pairs.researcher_open_alex_id,
+                        source_developer_account_username=author_developer_possible_pairs.developer_account_username,
+                        article_doi=simple_possible_pair.work["doi"]
+                        .lower()
+                        .replace("https://doi.org/", "")
+                        .strip(),
+                        article_title=simple_possible_pair.work["title"],
+                        open_alex_work=simple_possible_pair.work,
+                        repo_owner=simple_possible_pair.repository["owner"]["login"],
+                        repo_name=simple_possible_pair.repository["name"],
+                        github_repository=simple_possible_pair.repository,
                     )
                 )
+
+        flat_possible_pairs_dicts = [
+            expanded_possible_pair.to_dict() for expanded_possible_pair in flat_possible_pairs
+        ]
+        # remove the repo and the work
+        for d in flat_possible_pairs_dicts:
+            d.pop("open_alex_work", None)
+            d.pop("github_repository", None)
+
+        # Store this batch's possible pairs
+        flat_possible_pairs_df = pd.DataFrame(flat_possible_pairs_dicts)
+        flat_possible_pairs_df.to_csv(
+            "possible_pairs_for_initial_author_developer_set.csv",
+            index=False,
+        )
 
         # Drop any possible pairs that are already in the db
         print("Filtering out already stored article-repository pairs...")
         print(f"Starting count: {len(flat_possible_pairs)}")
-        filtered_flat_possible_pairs: list[PossibleArticleRepositoryPair] = []
-        for pair in tqdm(
+        simple_filtered_flat_possible_pairs = []
+        known_articles = []
+        known_repos = []
+        for expanded_possible_article_repo_pair in tqdm(
             flat_possible_pairs,
             desc="Filtering Stored Pairs",
             leave=False,
         ):
             if not db_utils.check_article_repository_pair_already_in_db(
-                article_doi=pair.article_doi,
+                article_doi=expanded_possible_article_repo_pair.article_doi,
+                article_title=expanded_possible_article_repo_pair.article_title,
                 code_host="github",
-                repo_owner=pair.repo_owner,
-                repo_name=pair.repo_name,
+                repo_owner=expanded_possible_article_repo_pair.repo_owner,
+                repo_name=expanded_possible_article_repo_pair.repo_name,
                 use_prod=use_prod,
             ):
-                filtered_flat_possible_pairs.append(pair)
+                simple_filtered_flat_possible_pairs.append(expanded_possible_article_repo_pair)
+            else:
+                known_articles.append(expanded_possible_article_repo_pair.article_doi)
+                known_repos.append(
+                    f"{expanded_possible_article_repo_pair.repo_owner}/{expanded_possible_article_repo_pair.repo_name}"
+                )
 
-        print(f"Filtered count: {len(filtered_flat_possible_pairs)}")
+        print(f"Simple Filtered count: {len(simple_filtered_flat_possible_pairs)}")
+
+        # Further filter pairs to ensure one-to-one mapping if specified
+        if one_to_one_only:
+            print("Applying one-to-one filtering...")
+            filtered_flat_possible_pairs = []
+            for expanded_possible_article_repo_pair in simple_filtered_flat_possible_pairs:
+                article_key = expanded_possible_article_repo_pair.article_doi
+                repo_key = (
+                    f"{expanded_possible_article_repo_pair.repo_owner}/"
+                    f"{expanded_possible_article_repo_pair.repo_name}"
+                )
+                if article_key not in known_articles and repo_key not in known_repos:
+                    filtered_flat_possible_pairs.append(expanded_possible_article_repo_pair)
+
+            print(f"One-to-One Filtered count: {len(filtered_flat_possible_pairs)}")
+
+        else:
+            filtered_flat_possible_pairs = simple_filtered_flat_possible_pairs
 
         # For each unique repository, get the README and the contributor details
         # First get the unique repos
         unique_repos = {
-            (pair.repo_owner, pair.repo_name): pair.github_repository
-            for pair in filtered_flat_possible_pairs
+            (
+                expanded_possible_article_repo_pair.repo_owner,
+                expanded_possible_article_repo_pair.repo_name,
+            ): expanded_possible_article_repo_pair.github_repository
+            for expanded_possible_article_repo_pair in filtered_flat_possible_pairs
         }
         print(f"Unique repositories to process: {len(unique_repos)}")
+
+        # Get README and contributors for each unique repo
+        print("Getting README and contributors for each unique repository...")
+        get_github_repo_readme_and_contribs_task = _wrap_func_with_coiled_prefect_task(
+            github.get_repo_readme_and_contributor_details,
+            coiled_kwargs=_get_github_cluster_config(
+                n_github_tokens=n_github_tokens,
+                use_coiled=use_coiled,
+                coiled_region=coiled_region,
+            ),
+        )
+        github_readme_and_contribs_futures = get_github_repo_readme_and_contribs_task.map(
+            repo_owner=[owner for owner, _ in unique_repos.keys()],
+            repo_name=[name for _, name in unique_repos.keys()],
+            github_api_key=[next(cycled_github_tokens) for _ in unique_repos],
+        )
+        [
+            f.result()
+            for f in tqdm(
+                github_readme_and_contribs_futures,
+                desc="Getting README and Contributors",
+                leave=False,
+                total=len(unique_repos),
+            )
+        ]
 
 
 @app.command()
@@ -808,6 +883,7 @@ def snowball_sampling_discovery(
     article_repository_allowed_datetime_difference: str = "3 years",
     author_developer_links_filter_confidence_threshold: float = 0.97,
     author_developer_links_filter_datetime_difference: str = "2 years",
+    one_to_one_only: bool = True,
     use_prod: bool = False,
     use_coiled: bool = False,
     coiled_region: str = "us-west-2",
@@ -837,6 +913,7 @@ def snowball_sampling_discovery(
         article_repository_allowed_datetime_difference=article_repository_allowed_datetime_difference,
         author_developer_links_filter_confidence_threshold=author_developer_links_filter_confidence_threshold,
         author_developer_links_filter_datetime_difference=author_developer_links_filter_datetime_difference,
+        one_to_one_only=one_to_one_only,
         use_prod=use_prod,
         use_coiled=use_coiled,
         coiled_region=coiled_region,

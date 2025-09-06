@@ -96,7 +96,7 @@ def match_devs_and_researchers(
 
 
 @dataclass
-class PossibleArticleRepositoryPair:
+class SimplePossibleArticleRepositoryPair:
     """A possible article-repository pair for matching."""
 
     work: pyalex.Work
@@ -107,7 +107,7 @@ def get_possible_article_repository_pairs_for_matching(
     works: list[pyalex.Work],
     repos: list[dict],
     max_datetime_difference: timedelta,
-) -> list[PossibleArticleRepositoryPair]:
+) -> list[SimplePossibleArticleRepositoryPair]:
     """Get possible article-repository pairs for matching."""
     # Create possible article-repository pairs by filtering pairs so that each pair
     # has an article publication date and the repository creation date
@@ -128,7 +128,9 @@ def get_possible_article_repository_pairs_for_matching(
                         repo_created_at = repo_created_at.replace(tzinfo=None)
 
                     if abs(work_published_date - repo_created_at) <= max_datetime_difference:
-                        pairs.append(PossibleArticleRepositoryPair(work=work, repository=repo))
+                        pairs.append(
+                            SimplePossibleArticleRepositoryPair(work=work, repository=repo)
+                        )
 
                 except Exception as e:
                     print("error", e)
@@ -137,16 +139,3 @@ def get_possible_article_repository_pairs_for_matching(
                     print(repo)
 
     return pairs
-
-
-def match_articles_and_repositories(
-    possible_pairs: PossibleArticleRepositoryPair,
-) -> None:
-    # TODO: realized that I need to also get all of the data
-    # I need for matching before this
-    # That means that there are a lot of API calls
-    # needed to GitHub (OpenAlex data is mostly processed)
-    # We shouldn't store that data in the DB, but we do need it for matching
-    # So largely that is a "use the existing pipeline to
-    # get all of the data but don't store them"
-    pass

@@ -73,6 +73,7 @@ pipeline = [
   "allofplos>=1,<2",
   "backoff>=2,<3",
   "bokeh>=3,<4",
+  "cachetools>=6,<7",
   "coiled>=1,<2",
   "dataclasses-json>=0.6,<0.7",
   "gcsfs>=2023.10.0",

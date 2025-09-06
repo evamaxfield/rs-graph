@@ -11,6 +11,8 @@ from functools import partial
 
 import backoff
 import requests
+from cachetools import LRUCache, cached
+from cachetools.keys import hashkey
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
 from fastcore.net import HTTP403ForbiddenError
@@ -24,6 +26,13 @@ from ..db import models as db_models
 
 @dataclass
 class RepoContributorInfo(DataClassJsonMixin):
+    username: str
+    name: str | None
+    email: str | None
+
+
+@dataclass
+class PairedRepoContributorInfo(DataClassJsonMixin):
     pair: types.ExpandedRepositoryDocumentPair
     username: str
     name: str | None
@@ -43,6 +52,11 @@ def _setup_gh_api(github_api_key: str | None = None) -> GhApi:
     return api
 
 
+
+# @cached(  # type: ignore[misc]
+#     cache=LRUCache(maxsize=2 * 16),  # Cache up to 32k results
+#     key=lambda login, **kwargs: hashkey(login),  # Only cache by login
+# )
 @backoff.on_exception(
     backoff.expo,
     (HTTP403ForbiddenError),
@@ -50,9 +64,8 @@ def _setup_gh_api(github_api_key: str | None = None) -> GhApi:
 )
 def _get_user_info_from_login(
     login: str,
-    pair: types.ExpandedRepositoryDocumentPair,
     github_api_key: str | None = None,
-) -> list[RepoContributorInfo]:
+) -> RepoContributorInfo:
     # Setup API
     api = _setup_gh_api(github_api_key)
 
@@ -64,7 +77,6 @@ def _get_user_info_from_login(
 
     # Store info
     return RepoContributorInfo(
-        pair=pair,
         username=login,
         name=user_info["name"],
         email=user_info["email"],
@@ -80,7 +92,7 @@ def get_repo_contributors(
     pair: types.ExpandedRepositoryDocumentPair,
     github_api_key: str | None = None,
     top_n: int = 30,
-) -> list[RepoContributorInfo]:
+) -> list[PairedRepoContributorInfo]:
     # Setup API
     api = _setup_gh_api(github_api_key)
 
@@ -100,11 +112,24 @@ def get_repo_contributors(
     # Get user infos
     _get_user_partial = partial(
         _get_user_info_from_login,
-        pair=pair,
         github_api_key=github_api_key,
     )
 
-    return [_get_user_partial(login=contrib["login"]) for contrib in contributors]
+    # Get expanding contributor info
+    user_expanded_infos = [
+        _get_user_partial(login=contrib["login"]) for contrib in contributors
+    ]
+
+    # Store with pair details
+    return [
+        PairedRepoContributorInfo(
+            pair=pair,
+            username=user_info.username,
+            name=user_info.name,
+            email=user_info.email,
+        )
+        for user_info in user_expanded_infos
+    ]
 
 
 def process_github_repo(  # noqa: C901
@@ -399,3 +424,85 @@ def get_github_repos_for_developer(
             error=str(e),
             traceback=traceback.format_exc(),
         )
+
+
+@dataclass
+class RepoReadmeAndContributorInfo(DataClassJsonMixin):
+    repo_owner: str
+    repo_name: str
+    readme: str | None
+    contributor_infos: list[RepoContributorInfo]
+
+
+@backoff.on_exception(
+    backoff.expo,
+    (HTTP403ForbiddenError),
+    max_time=16,
+)
+def get_repo_readme_and_contributor_details(
+    repo_owner: str,
+    repo_name: str,
+    github_api_key: str | None = None,
+    top_n: int = 30,
+) -> RepoReadmeAndContributorInfo:
+    """Get the README and top contributors for a GitHub repository."""
+    # Setup API
+    api = _setup_gh_api(github_api_key)
+
+    # Initialize variables
+    readme_content = None
+
+    try:
+        # Get repo README
+        try:
+            repo_readme_response = api.repos.get_readme(
+                owner=repo_owner,
+                repo=repo_name,
+            )
+
+            # Decode the content
+            readme_content = base64.b64decode(repo_readme_response["content"]).decode("utf-8")
+
+        except Exception:
+            readme_content = None
+
+        finally:
+            # Sleep to avoid API limits
+            time.sleep(0.85)
+
+        # Get contributors
+        partial_contributors = api.repos.list_contributors(
+            owner=repo_owner,
+            repo=repo_name,
+            per_page=top_n,
+        )
+
+        # Sleep to avoid API limits
+        time.sleep(0.85)
+
+        # Get user infos
+        _get_user_partial = partial(
+            _get_user_info_from_login,
+            github_api_key=github_api_key,
+        )
+
+        # Get expanding contributor info
+        contributor_infos = [
+            _get_user_partial(login=contrib["login"]) for contrib in partial_contributors
+        ]
+
+    except Exception as e:
+        if "Bad credentials" in str(e):
+            print(
+                f"!!! GitHub API Error: Bad credentials. "
+                f"Please check your API key. '{github_api_key}'!!!"
+            )
+        print(f"Error fetching data for {repo_owner}/{repo_name}: {e}")
+        raise e
+
+    return RepoReadmeAndContributorInfo(
+        repo_owner=repo_owner,
+        repo_name=repo_name,
+        readme=readme_content,
+        contributor_infos=contributor_infos,
+    )
