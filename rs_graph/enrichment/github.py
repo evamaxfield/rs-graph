@@ -320,6 +320,11 @@ def process_github_repo(  # noqa: C901
         return pair
 
     except Exception as e:
+        if "Bad credentials" in str(e):
+            print(
+                f"!!! GitHub API Error: Bad credentials. "
+                f"Please check your API key. '{github_api_key}'!!!"
+            )
         return types.ErrorResult(
             source=pair.source,
             step="github-repo-contributors",
@@ -382,6 +387,11 @@ def get_github_repos_for_developer(
         return developer_repos
 
     except Exception as e:
+        if "Bad credentials" in str(e):
+            print(
+                f"!!! GitHub API Error: Bad credentials. "
+                f"Please check your API key. '{github_api_key}'!!!"
+            )
         return types.ErrorResult(
             source="snowball-sampling-discovery",
             step="github-repos-for-developer",

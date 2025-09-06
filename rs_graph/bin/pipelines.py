@@ -10,7 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import coiled
 import pandas as pd
@@ -30,6 +30,9 @@ from rs_graph.enrichment import article, entity_matching, github
 from rs_graph.sources import joss, plos, proto, pwc, softcite_2025, softwarex
 from rs_graph.utils import code_host_parsing
 from rs_graph.utils.dt_and_td import parse_timedelta
+
+if TYPE_CHECKING:
+    import pyalex
 
 ###############################################################################
 
@@ -569,20 +572,34 @@ def get_random_sample_of_prelinked_source_data(
 
 
 @dataclass
-class PerAuthorDeveloperDiscoveryPairEstimate(DataClassJsonMixin):
-    article_repo_timedelta_allowance: str
-    total_pair_combinations: int
-    possible_pairs_given_filter: int
+class AuthorDeveloperPossiblePairs(DataClassJsonMixin):
+    researcher_open_alex_id: str
+    developer_account_username: str
+    article_repository_allowed_datetime_difference: str
+    total_combinations_count: int
+    possible_pairs_count: int
+    possible_pairs: list[entity_matching.PossibleArticleRepositoryPair]
 
 
-def _author_developer_discovery_estimation(
+@dataclass
+class PossibleArticleRepositoryPair(DataClassJsonMixin):
+    source_researcher_open_alex_id: str
+    source_developer_account_username: str
+    article_doi: str
+    open_alex_work: "pyalex.Work"
+    repo_owner: str
+    repo_name: str
+    github_repository: dict
+
+
+def _get_possible_article_repo_pairs_for_author_developer_pair(
     researcher_open_alex_id: str,
     developer_account_username: str,
-    allowed_datetime_difference: str,
+    article_repository_allowed_datetime_difference: str,
     github_token: str,
     open_alex_email: str,
     open_alex_email_count: int,
-) -> PerAuthorDeveloperDiscoveryPairEstimate | types.ErrorResult:
+) -> AuthorDeveloperPossiblePairs | types.ErrorResult:
     # Get all papers from OpenAlex for the researcher
     author_works = article.get_articles_for_researcher(
         researcher_open_alex_id=researcher_open_alex_id,
@@ -611,13 +628,16 @@ def _author_developer_discovery_estimation(
     possible_pairs = entity_matching.get_possible_article_repository_pairs_for_matching(
         works=author_works,
         repos=developer_repos,
-        max_datetime_difference=parse_timedelta(allowed_datetime_difference),
+        max_datetime_difference=parse_timedelta(article_repository_allowed_datetime_difference),
     )
 
-    return PerAuthorDeveloperDiscoveryPairEstimate(
-        article_repo_timedelta_allowance=allowed_datetime_difference,
-        total_pair_combinations=total_possible_pairs,
-        possible_pairs_given_filter=len(possible_pairs),
+    return AuthorDeveloperPossiblePairs(
+        researcher_open_alex_id=researcher_open_alex_id,
+        developer_account_username=developer_account_username,
+        article_repository_allowed_datetime_difference=article_repository_allowed_datetime_difference,
+        total_combinations_count=total_possible_pairs,
+        possible_pairs_count=len(possible_pairs),
+        possible_pairs=list(possible_pairs),
     )
 
 
@@ -625,10 +645,10 @@ def _author_developer_discovery_estimation(
     log_prints=True,
 )
 def _author_developer_article_repository_discovery_flow(
-    author_developer_links_filter_datetime_difference: str,
-    article_repository_allowed_datetime_difference_list: list[str],
     process_n: int,
+    article_repository_allowed_datetime_difference: str,
     author_developer_links_filter_confidence_threshold: float,
+    author_developer_links_filter_datetime_difference: str,
     use_prod: bool,
     use_coiled: bool,
     coiled_region: str,
@@ -650,18 +670,18 @@ def _author_developer_article_repository_discovery_flow(
     # Print dataset and coiled status
     print("-" * 80)
     print("Pipeline Options:")
-    print(
-        f"Skip Author Developer Links Processed Within Last: "
-        f"{author_developer_links_filter_datetime_difference}"
-    )
+    print(f"Process N: {process_n}")
     print(
         f"Article Repository Allowed Datetime Difference: "
-        f"{article_repository_allowed_datetime_difference_list}"
+        f"{article_repository_allowed_datetime_difference}"
     )
-    print(f"Process N: {process_n}")
     print(
         f"Author Developer Links Filter Confidence Threshold: "
         f"{author_developer_links_filter_confidence_threshold}"
+    )
+    print(
+        f"Skip Author Developer Links Processed Within Last: "
+        f"{author_developer_links_filter_datetime_difference}"
     )
     print(f"Use Prod Database: {use_prod}")
     print(f"Use Coiled: {use_coiled}")
@@ -691,8 +711,8 @@ def _author_developer_article_repository_discovery_flow(
     #    (we can skip this for now, just note how many pairs would be processed)
 
     # Wrap the estimation function with coiled and prefect
-    estimate_pairs_wrapped_task = _wrap_func_with_coiled_prefect_task(
-        _author_developer_discovery_estimation,
+    get_possible_pairs_wrapped_task = _wrap_func_with_coiled_prefect_task(
+        _get_possible_article_repo_pairs_for_author_developer_pair,
         coiled_kwargs=_get_github_cluster_config(
             n_github_tokens=n_github_tokens,
             use_coiled=use_coiled,
@@ -700,101 +720,94 @@ def _author_developer_article_repository_discovery_flow(
         ),
     )
 
-    # Estimates store path
-    estimates_storage_dir = DEFAULT_RESULTS_DIR / "author-developer-discovery-estimates"
-    estimates_storage_dir.mkdir(exist_ok=True, parents=True)
+    # Discovery pipeline store path
+    discovery_pipeline_storage_dir = DEFAULT_RESULTS_DIR / "article-repository-discovery"
+    discovery_pipeline_storage_dir.mkdir(exist_ok=True, parents=True)
 
     # Estimate pairs for each author-developer link in batches
-    batch_size = 20
-    for article_repository_allowed_datetime_difference in tqdm(
-        article_repository_allowed_datetime_difference_list,
-        desc="Article-Repository Allowed Datetime Differences",
+    author_developer_batch_size = 20
+    for i in tqdm(
+        range(0, len(hydrated_author_developer_links), author_developer_batch_size),
+        desc="Estimating Pairs",
+        total=math.ceil(len(hydrated_author_developer_links) / author_developer_batch_size),
+        leave=False,
     ):
-        # Create storage paths
-        this_delta_store_path = (
-            estimates_storage_dir / f"{article_repository_allowed_datetime_difference}.parquet"
-        )
-        this_delta_errors_path = (
-            estimates_storage_dir
-            / f"{article_repository_allowed_datetime_difference}-errors.parquet"
+        batch = hydrated_author_developer_links[i : i + author_developer_batch_size]
+        possible_pairs_futures = get_possible_pairs_wrapped_task.map(
+            researcher_open_alex_id=[link.researcher_open_alex_id for link in batch],
+            developer_account_username=[link.developer_account_username for link in batch],
+            article_repository_allowed_datetime_difference=[
+                article_repository_allowed_datetime_difference for _ in batch
+            ],
+            github_token=[next(cycled_github_tokens) for _ in batch],
+            open_alex_email=[next(cycled_open_alex_emails) for _ in batch],
+            open_alex_email_count=[n_open_alex_emails for _ in batch],
         )
 
-        # Remove prior file
-        if this_delta_store_path.exists():
-            print(f"Removing prior estimates file at {this_delta_store_path}")
-            this_delta_store_path.unlink()
+        # Wait for all futures to complete
+        this_batch_results: list[AuthorDeveloperPossiblePairs | types.ErrorResult] = [
+            f.result() for f in possible_pairs_futures
+        ]
 
-        for i in tqdm(
-            range(0, len(hydrated_author_developer_links), batch_size),
-            desc="Estimating Pairs",
-            total=math.ceil(len(hydrated_author_developer_links) / batch_size),
+        # Filter estimates
+        this_batch_possible_pairs = [
+            e
+            for e in this_batch_results
+            if isinstance(e, AuthorDeveloperPossiblePairs) and len(e.possible_pairs) > 0
+        ]
+
+        # Convert all possible pairs to a flat list in the form of
+        # PossibleArticleRepositoryPair
+        flat_possible_pairs: list[PossibleArticleRepositoryPair] = []
+        for per_author_possible_pairs in this_batch_possible_pairs:
+            for pair in per_author_possible_pairs.possible_pairs:
+                flat_possible_pairs.append(
+                    PossibleArticleRepositoryPair(
+                        source_researcher_open_alex_id=per_author_possible_pairs.researcher_open_alex_id,
+                        source_developer_account_username=per_author_possible_pairs.developer_account_username,
+                        article_doi=pair.work["doi"],
+                        open_alex_work=pair.work,
+                        repo_owner=pair.repository["owner"]["login"],
+                        repo_name=pair.repository["name"],
+                        github_repository=pair.repository,
+                    )
+                )
+
+        # Drop any possible pairs that are already in the db
+        print("Filtering out already stored article-repository pairs...")
+        print(f"Starting count: {len(flat_possible_pairs)}")
+        filtered_flat_possible_pairs: list[PossibleArticleRepositoryPair] = []
+        for pair in tqdm(
+            flat_possible_pairs,
+            desc="Filtering Stored Pairs",
             leave=False,
         ):
-            batch = hydrated_author_developer_links[i : i + batch_size]
-            estimates_futures = estimate_pairs_wrapped_task.map(
-                researcher_open_alex_id=[link.researcher_open_alex_id for link in batch],
-                developer_account_username=[link.developer_account_username for link in batch],
-                allowed_datetime_difference=[
-                    article_repository_allowed_datetime_difference for _ in batch
-                ],
-                github_token=[next(cycled_github_tokens) for _ in batch],
-                open_alex_email=[next(cycled_open_alex_emails) for _ in batch],
-                open_alex_email_count=[n_open_alex_emails for _ in batch],
-            )
+            if not db_utils.check_article_repository_pair_already_in_db(
+                article_doi=pair.article_doi,
+                code_host="github",
+                repo_owner=pair.repo_owner,
+                repo_name=pair.repo_name,
+                use_prod=use_prod,
+            ):
+                filtered_flat_possible_pairs.append(pair)
 
-            # Wait for all futures to complete
-            this_batch_results: list[PerAuthorDeveloperDiscoveryPairEstimate] = [
-                f.result() for f in estimates_futures
-            ]
+        print(f"Filtered count: {len(filtered_flat_possible_pairs)}")
 
-            # Filter estimates
-            this_batch_estimates = [
-                e
-                for e in this_batch_results
-                if isinstance(e, PerAuthorDeveloperDiscoveryPairEstimate)
-            ]
-            # Filter errors
-            this_batch_errors = [
-                e for e in this_batch_results if isinstance(e, types.ErrorResult)
-            ]
-
-            # Read in prior estimates and estimates for this batch
-            if this_delta_store_path.exists():
-                prior_estimates_df = pd.read_parquet(this_delta_store_path)
-            else:
-                prior_estimates_df = pd.DataFrame()
-
-            if this_delta_errors_path.exists():
-                prior_errors_df = pd.read_parquet(this_delta_errors_path)
-            else:
-                prior_errors_df = pd.DataFrame()
-
-            # Create DataFrame for this batch estimates
-            this_batch_estimates_df = pd.DataFrame([e.to_dict() for e in this_batch_estimates])
-            this_batch_errors_df = pd.DataFrame([e.to_dict() for e in this_batch_errors])
-
-            # Append to prior estimates
-            updated_estimates_df = pd.concat(
-                [prior_estimates_df, this_batch_estimates_df],
-                ignore_index=True,
-            )
-            updated_errors_df = pd.concat(
-                [prior_errors_df, this_batch_errors_df],
-                ignore_index=True,
-            )
-
-            # Only store if there is data
-            if len(updated_estimates_df) > 0:
-                updated_estimates_df.to_parquet(this_delta_store_path)
-            if len(updated_errors_df) > 0:
-                updated_errors_df.to_parquet(this_delta_errors_path)
+        # For each unique repository, get the README and the contributor details
+        # First get the unique repos
+        unique_repos = {
+            (pair.repo_owner, pair.repo_name): pair.github_repository
+            for pair in filtered_flat_possible_pairs
+        }
+        print(f"Unique repositories to process: {len(unique_repos)}")
 
 
 @app.command()
 def snowball_sampling_discovery(
-    author_developer_links_filter_datetime_difference: str = "2 years",
-    process_n: int = 500,
+    process_n: int = 10,
+    article_repository_allowed_datetime_difference: str = "3 years",
     author_developer_links_filter_confidence_threshold: float = 0.97,
+    author_developer_links_filter_datetime_difference: str = "2 years",
     use_prod: bool = False,
     use_coiled: bool = False,
     coiled_region: str = "us-west-2",
@@ -818,21 +831,12 @@ def snowball_sampling_discovery(
     # Ignore prefect task introspection warnings
     os.environ["PREFECT_TASK_INTROSPECTION_WARN_THRESHOLD"] = "0"
 
-    article_repository_allowed_datetime_difference_list = [
-        "180 days",
-        "1 year",
-        "2 years",
-        "3 years",
-        "4 years",
-        "5 years",
-    ]
-
     # Start the flow
     _author_developer_article_repository_discovery_flow(
-        author_developer_links_filter_datetime_difference=author_developer_links_filter_datetime_difference,
-        article_repository_allowed_datetime_difference_list=article_repository_allowed_datetime_difference_list,
         process_n=process_n,
+        article_repository_allowed_datetime_difference=article_repository_allowed_datetime_difference,
         author_developer_links_filter_confidence_threshold=author_developer_links_filter_confidence_threshold,
+        author_developer_links_filter_datetime_difference=author_developer_links_filter_datetime_difference,
         use_prod=use_prod,
         use_coiled=use_coiled,
         coiled_region=coiled_region,

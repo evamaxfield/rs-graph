@@ -114,26 +114,27 @@ def get_possible_article_repository_pairs_for_matching(
     # are within the allowed datetime difference
     pairs = []
     for work in works:
-        for repo in repos:
-            try:
-                # Convert to datetimes
-                work_published_date = datetime.fromisoformat(work["publication_date"])
-                repo_created_at = datetime.fromisoformat(repo["created_at"])
+        if work["doi"] is not None:
+            for repo in repos:
+                try:
+                    # Convert to datetimes
+                    work_published_date = datetime.fromisoformat(work["publication_date"])
+                    repo_created_at = datetime.fromisoformat(repo["created_at"])
 
-                # Remove timezone info for comparison
-                if work_published_date.tzinfo is not None:
-                    work_published_date = work_published_date.replace(tzinfo=None)
-                if repo_created_at.tzinfo is not None:
-                    repo_created_at = repo_created_at.replace(tzinfo=None)
+                    # Remove timezone info for comparison
+                    if work_published_date.tzinfo is not None:
+                        work_published_date = work_published_date.replace(tzinfo=None)
+                    if repo_created_at.tzinfo is not None:
+                        repo_created_at = repo_created_at.replace(tzinfo=None)
 
-                if abs(work_published_date - repo_created_at) <= max_datetime_difference:
-                    pairs.append(PossibleArticleRepositoryPair(work=work, repository=repo))
+                    if abs(work_published_date - repo_created_at) <= max_datetime_difference:
+                        pairs.append(PossibleArticleRepositoryPair(work=work, repository=repo))
 
-            except Exception as e:
-                print("error", e)
-                print(work)
-                print()
-                print(repo)
+                except Exception as e:
+                    print("error", e)
+                    print(work)
+                    print()
+                    print(repo)
 
     return pairs
 

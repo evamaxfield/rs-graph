@@ -17,7 +17,6 @@ from sqlmodel import (
     create_engine,
     or_,
     select,
-    update,
 )
 from tqdm import tqdm
 
@@ -699,36 +698,76 @@ def get_hydrated_author_developer_links(
         return hydrated_links
 
 
-def update_snowball_processed_datetime(
-    link_ids: list[int],
-    processed_datetime: datetime | None = None,
+def check_article_repository_pair_already_in_db(
+    article_doi: str,
+    code_host: str,
+    repo_owner: str,
+    repo_name: str,
     use_prod: bool = False,
-) -> None:
-    """
-    Update the last_snowball_processed_datetime for the given link IDs.
-
-    Parameters
-    ----------
-    link_ids: list[int]
-        List of ResearcherDeveloperAccountLink IDs to update
-    processed_datetime: datetime | None
-        Datetime to set (defaults to current time)
-    use_prod: bool
-        Whether to use production database
-    """
-    if processed_datetime is None:
-        processed_datetime = datetime.now()
-
+) -> bool:
     # Get the engine
     engine = get_engine(use_prod=use_prod)
 
+    # Lowercase and strip all inputs
+    article_doi = article_doi.lower().strip()
+    code_host = code_host.lower().strip()
+    repo_owner = repo_owner.lower().strip()
+    repo_name = repo_name.lower().strip()
+
     # Create a session
     with Session(engine) as session:
-        # Update the links
-        stmt = (
-            update(db_models.ResearcherDeveloperAccountLink)
-            .where(db_models.ResearcherDeveloperAccountLink.id in link_ids)
-            .values(last_snowball_processed_datetime=processed_datetime)
+        # Document
+        document_stmt = select(db_models.Document).where(db_models.Document.doi == article_doi)
+        document_model = session.exec(document_stmt).first()
+
+        # Check for document alternate doi
+        if document_model is None:
+            document_stmt = select(db_models.DocumentAlternateDOI).where(
+                db_models.DocumentAlternateDOI.doi == article_doi
+            )
+            document_alternate_doi_model = session.exec(document_stmt).first()
+
+            # Fast fail
+            if document_alternate_doi_model is None:
+                return False
+
+            # Else get updated document model
+            else:
+                document_stmt = select(db_models.Document).where(
+                    db_models.Document.id == document_alternate_doi_model.document_id
+                )
+                document_model = session.exec(document_stmt).first()
+
+        # Fast fail
+        if document_model is None:
+            return False
+
+        # Code Host (assume GitHub for now)
+        code_host_stmt = select(db_models.CodeHost).where(db_models.CodeHost.name == code_host)
+        code_host_model = session.exec(code_host_stmt).first()
+
+        # Fast fail
+        if code_host_model is None:
+            return False
+
+        # Repository
+        repository_stmt = select(db_models.Repository).where(
+            db_models.Repository.code_host_id == code_host_model.id,
+            db_models.Repository.owner == repo_owner,
+            db_models.Repository.name == repo_name,
         )
-        session.exec(stmt)
-        session.commit()
+        repository_model = session.exec(repository_stmt).first()
+
+        # Fast fail
+        if repository_model is None:
+            return False
+
+        # Link
+        link_stmt = select(db_models.DocumentRepositoryLink).where(
+            db_models.DocumentRepositoryLink.document_id == document_model.id,
+            db_models.DocumentRepositoryLink.repository_id == repository_model.id,
+        )
+        link_model = session.exec(link_stmt).first()
+
+        # Final check
+        return link_model is not None

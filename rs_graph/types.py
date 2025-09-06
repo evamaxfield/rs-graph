@@ -8,6 +8,7 @@ from dataclasses_json import DataClassJsonMixin
 from .db import models as db_models
 
 ###############################################################################
+# General Types
 
 
 @dataclass
@@ -23,6 +24,10 @@ class ErrorResult(DataClassJsonMixin):
 class SuccessAndErroredResults:
     successful_results: pd.DataFrame
     errored_results: pd.DataFrame
+
+
+###############################################################################
+# Prelinked Ingestion Pipeline Types
 
 
 @dataclass
