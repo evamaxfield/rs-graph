@@ -15,6 +15,8 @@ from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
 from fastcore.net import HTTP403ForbiddenError
 from ghapi.all import GhApi, paged
+from cachetools import cached, LRUCache
+from cachetools.keys import hashkey
 
 from .. import types
 from ..db import models as db_models
@@ -50,14 +52,14 @@ def _setup_gh_api(github_api_key: str | None = None) -> GhApi:
     return api
 
 
-# @cached(  # type: ignore[misc]
-#     cache=LRUCache(maxsize=2 * 16),  # Cache up to 32k results
-#     key=lambda login, **kwargs: hashkey(login),  # Only cache by login
-# )
 @backoff.on_exception(
     backoff.expo,
     (HTTP403ForbiddenError),
     max_time=16,
+)
+@cached(  # type: ignore[misc]
+    cache=LRUCache(maxsize=2 * 16),  # Cache up to 32k results
+    key=lambda login, **kwargs: hashkey(login),  # Only cache by login
 )
 def _get_user_info_from_login(
     login: str,
@@ -441,7 +443,7 @@ def get_repo_readme_and_contributor_details(
     repo_name: str,
     github_api_key: str | None = None,
     top_n: int = 30,
-) -> RepoReadmeAndContributorInfo:
+) -> RepoReadmeAndContributorInfo | types.ErrorResult:
     """Get the README and top contributors for a GitHub repository."""
     # Setup API
     api = _setup_gh_api(github_api_key)
@@ -495,7 +497,13 @@ def get_repo_readme_and_contributor_details(
                 f"Please check your API key. '{github_api_key}'!!!"
             )
         print(f"Error fetching data for {repo_owner}/{repo_name}: {e}")
-        raise e
+        return types.ErrorResult(
+            source="snowball-sampling-discovery",
+            step="github-repo-readme-and-contributors",
+            identifier=f"{repo_owner}/{repo_name}",
+            error=str(e),
+            traceback=traceback.format_exc(),
+        )
 
     return RepoReadmeAndContributorInfo(
         repo_owner=repo_owner,

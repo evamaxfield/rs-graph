@@ -593,6 +593,20 @@ class PossibleArticleRepositoryPair(DataClassJsonMixin):
     github_repository: dict
 
 
+@dataclass
+class EntityMatchingReadyPossibleArticleRepositoryPair(DataClassJsonMixin):
+    source_researcher_open_alex_id: str
+    source_developer_account_username: str
+    article_title: str
+    article_doi: str
+    open_alex_work: "pyalex.Work"
+    repo_owner: str
+    repo_name: str
+    github_repository: dict
+    github_readme: str | None
+    github_contributors: list[github.RepoContributorInfo]
+
+
 def _get_possible_article_repo_pairs_for_author_developer_pair(
     researcher_open_alex_id: str,
     developer_account_username: str,
@@ -728,13 +742,13 @@ def _author_developer_article_repository_discovery_flow(
 
     # Estimate pairs for each author-developer link in batches
     author_developer_batch_size = 20
-    for i in tqdm(
+    for author_developer_index in tqdm(
         range(0, len(hydrated_author_developer_links), author_developer_batch_size),
         desc="Estimating Pairs",
         total=math.ceil(len(hydrated_author_developer_links) / author_developer_batch_size),
         leave=False,
     ):
-        batch = hydrated_author_developer_links[i : i + author_developer_batch_size]
+        batch = hydrated_author_developer_links[author_developer_index : author_developer_index + author_developer_batch_size]
         simple_possible_pairs_futures = get_possible_pairs_wrapped_task.map(
             researcher_open_alex_id=[link.researcher_open_alex_id for link in batch],
             developer_account_username=[link.developer_account_username for link in batch],
@@ -797,7 +811,7 @@ def _author_developer_article_repository_discovery_flow(
         # Drop any possible pairs that are already in the db
         print("Filtering out already stored article-repository pairs...")
         print(f"Starting count: {len(flat_possible_pairs)}")
-        simple_filtered_flat_possible_pairs = []
+        simple_filtered_flat_possible_pairs: list[PossibleArticleRepositoryPair] = []
         known_articles = []
         known_repos = []
         for expanded_possible_article_repo_pair in tqdm(
@@ -840,15 +854,24 @@ def _author_developer_article_repository_discovery_flow(
         else:
             filtered_flat_possible_pairs = simple_filtered_flat_possible_pairs
 
+        # Take sample for testing
+        print("Taking sample of filtered possible pairs for testing...")
+        filtered_flat_possible_pairs = random.sample(
+            filtered_flat_possible_pairs,
+            k=min(10, len(filtered_flat_possible_pairs)),
+        )
+
         # For each unique repository, get the README and the contributor details
         # First get the unique repos
-        unique_repos = {
-            (
+        unique_repos: list[tuple[str, str]] = []
+        for expanded_possible_article_repo_pair in filtered_flat_possible_pairs:
+            repo_key = (
                 expanded_possible_article_repo_pair.repo_owner,
                 expanded_possible_article_repo_pair.repo_name,
-            ): expanded_possible_article_repo_pair.github_repository
-            for expanded_possible_article_repo_pair in filtered_flat_possible_pairs
-        }
+            )
+            if repo_key not in unique_repos:
+                unique_repos.append(repo_key)
+    
         print(f"Unique repositories to process: {len(unique_repos)}")
 
         # Get README and contributors for each unique repo
@@ -861,20 +884,67 @@ def _author_developer_article_repository_discovery_flow(
                 coiled_region=coiled_region,
             ),
         )
-        github_readme_and_contribs_futures = get_github_repo_readme_and_contribs_task.map(
-            repo_owner=[owner for owner, _ in unique_repos.keys()],
-            repo_name=[name for _, name in unique_repos.keys()],
-            github_api_key=[next(cycled_github_tokens) for _ in unique_repos],
-        )
-        [
-            f.result()
-            for f in tqdm(
-                github_readme_and_contribs_futures,
-                desc="Getting README and Contributors",
-                leave=False,
-                total=len(unique_repos),
+
+        # Process in batches to avoid overloading
+        readme_and_contributor_batch_size = 10
+        repo_readme_and_contributor_results: list[github.RepoReadmeAndContributorInfo | types.ErrorResult] = []
+        for repo_index in tqdm(
+            range(0, len(unique_repos), readme_and_contributor_batch_size),
+            desc="Getting README and Contributors",
+            total=math.ceil(len(unique_repos) / readme_and_contributor_batch_size),
+            leave=False,
+        ):
+            repo_batch = unique_repos[repo_index : repo_index + readme_and_contributor_batch_size]
+            readme_and_contributor_futures = get_github_repo_readme_and_contribs_task.map(
+                repo_owner=[owner for owner, _ in repo_batch],
+                repo_name=[name for _, name in repo_batch],
+                github_api_key=[next(cycled_github_tokens) for _ in repo_batch],
             )
+            repo_readme_and_contributor_results.extend(
+                [f.result() for f in readme_and_contributor_futures]
+            )
+
+        # Filter out errors
+        repo_readme_and_contributor_details = [
+            result
+            for result in repo_readme_and_contributor_results
+            if isinstance(result, github.RepoReadmeAndContributorInfo)
         ]
+
+        print(f"Successfully retrieved README and contributors for {len(repo_readme_and_contributor_details)} repositories.")
+
+        # Create a map of (owner, name) to readme and contributors
+        repo_to_readme_and_contributors = {
+            (result.repo_owner, result.repo_name): result
+            for result in repo_readme_and_contributor_details
+        }
+
+        # Create EntityMatchingReadyPossibleArticleRepositoryPair objects
+        entity_matching_ready_possible_pairs: list[EntityMatchingReadyPossibleArticleRepositoryPair] = []
+        for expanded_possible_article_repo_pair in filtered_flat_possible_pairs:
+            repo_key = (
+                expanded_possible_article_repo_pair.repo_owner,
+                expanded_possible_article_repo_pair.repo_name,
+            )
+            readme_and_contributors = repo_to_readme_and_contributors.get(repo_key)
+            if readme_and_contributors:
+                entity_matching_ready_possible_pairs.append(
+                    EntityMatchingReadyPossibleArticleRepositoryPair(
+                        source_researcher_open_alex_id=expanded_possible_article_repo_pair.source_researcher_open_alex_id,
+                        source_developer_account_username=expanded_possible_article_repo_pair.source_developer_account_username,
+                        article_doi=expanded_possible_article_repo_pair.article_doi,
+                        article_title=expanded_possible_article_repo_pair.article_title,
+                        open_alex_work=expanded_possible_article_repo_pair.open_alex_work,
+                        repo_owner=expanded_possible_article_repo_pair.repo_owner,
+                        repo_name=expanded_possible_article_repo_pair.repo_name,
+                        github_repository=expanded_possible_article_repo_pair.github_repository,
+                        github_readme=readme_and_contributors.readme,
+                        github_contributors=readme_and_contributors.contributor_infos,
+                    )
+                )
+
+        print(f"Prepared {len(entity_matching_ready_possible_pairs)} pairs for entity matching.")
+        
 
 
 @app.command()

@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from sci_soft_models import dev_author_em
+import sci_soft_models.binary_article_repo_em.main as binary_article_repo_em
 
 from .. import types
 from ..db import models as db_models
@@ -139,3 +140,49 @@ def get_possible_article_repository_pairs_for_matching(
                     print(repo)
 
     return pairs
+
+@dataclass
+class InferredArticleRepositoryMatch:
+    source_researcher_open_alex_id: str
+    source_developer_account_username: str
+    article_doi: str
+    repo_owner: str
+    repo_name: str
+    model_details: binary_article_repo_em.ModelDetails
+    predicted_label: bool
+    prediction_confidence: float
+
+# TODO: Change the input type to already be a prepped article and repository details
+# with accompanying tracking metadata
+# We want to process multiple at a time so we can batch the model load/inference calls
+
+def match_article_and_repository(
+    source_researcher_open_alex_id: str,
+    source_developer_account_username: str,
+    article_doi: str,
+    repo_owner: str,
+    repo_name: str,
+    article_details: binary_article_repo_em.ArticleDetails,
+    repository_details: binary_article_repo_em.RepositoryDetails,
+) -> InferredArticleRepositoryMatch | types.ErrorResult:
+    try:
+        # Get the model details
+        model_details = binary_article_repo_em.get_model_details()
+
+        # Predict match
+        matches = binary_article_repo_em.match_articles_and_repositories(
+            article=article_details,
+            repository=repository_details,
+        )
+
+        return matches[0]
+
+    except Exception as e:
+        return types.ErrorResult(
+            source="snowball-sampling-discovery",
+            step="article-repository-matching",
+            identifier=f"{article_doi} <-> {repo_owner}/{repo_name}",
+            error=str(e),
+            traceback=traceback.format_exc(),
+        )
+    
