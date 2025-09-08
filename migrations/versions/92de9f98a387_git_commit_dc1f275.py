@@ -1,10 +1,11 @@
 """Git Commit: dc1f275.
 
 Revision ID: 92de9f98a387
-Revises: 
+Revises:
 Create Date: 2025-07-02 08:08:44.405584
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa

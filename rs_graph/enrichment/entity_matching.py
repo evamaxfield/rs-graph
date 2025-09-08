@@ -8,14 +8,18 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
+import sci_soft_models.binary_article_repo_em as binary_article_repo_em
+from dataclasses_json import DataClassJsonMixin
 from sci_soft_models import dev_author_em
-import sci_soft_models.binary_article_repo_em.main as binary_article_repo_em
 
 from .. import types
 from ..db import models as db_models
+from . import article
 
 if TYPE_CHECKING:
     import pyalex
+
+    from . import github
 
 ###############################################################################
 
@@ -116,6 +120,10 @@ def get_possible_article_repository_pairs_for_matching(
     pairs = []
     for work in works:
         if work["doi"] is not None:
+            # Skip if "zenodo" or "figshare" in DOI
+            if any(x in work["doi"].lower() for x in ["zenodo", "figshare"]):
+                continue
+
             for repo in repos:
                 try:
                     # Convert to datetimes
@@ -141,48 +149,117 @@ def get_possible_article_repository_pairs_for_matching(
 
     return pairs
 
+
 @dataclass
-class InferredArticleRepositoryMatch:
+class PossibleArticleRepositoryPair(DataClassJsonMixin):
     source_researcher_open_alex_id: str
     source_developer_account_username: str
+    article_title: str
     article_doi: str
+    open_alex_work: pyalex.Work
     repo_owner: str
     repo_name: str
-    model_details: binary_article_repo_em.ModelDetails
-    predicted_label: bool
-    prediction_confidence: float
+    github_repository: dict
 
-# TODO: Change the input type to already be a prepped article and repository details
-# with accompanying tracking metadata
-# We want to process multiple at a time so we can batch the model load/inference calls
 
-def match_article_and_repository(
-    source_researcher_open_alex_id: str,
-    source_developer_account_username: str,
-    article_doi: str,
-    repo_owner: str,
-    repo_name: str,
-    article_details: binary_article_repo_em.ArticleDetails,
-    repository_details: binary_article_repo_em.RepositoryDetails,
-) -> InferredArticleRepositoryMatch | types.ErrorResult:
+def _prep_for_article_repository_matching(
+    possible_pair: PossibleArticleRepositoryPair,
+    repository_readme_and_contributors: github.RepoReadmeAndContributorInfo,
+) -> binary_article_repo_em.InferenceReadyArticleRepositoryPair | types.ErrorResult:
     try:
-        # Get the model details
-        model_details = binary_article_repo_em.get_model_details()
-
-        # Predict match
-        matches = binary_article_repo_em.match_articles_and_repositories(
-            article=article_details,
-            repository=repository_details,
+        # Create article details
+        article_details = binary_article_repo_em.ArticleDetails(
+            title=possible_pair.article_title.strip(),
+            doi=possible_pair.article_doi.lower().strip(),
+            publication_date=possible_pair.open_alex_work["publication_date"],
+            topic_unique_domains=list(
+                {
+                    topic["domain"]["display_name"].strip()
+                    for topic in possible_pair.open_alex_work["topics"]
+                }
+            ),
+            topic_unique_fields=list(
+                {
+                    topic["field"]["display_name"].strip()
+                    for topic in possible_pair.open_alex_work["topics"]
+                }
+            ),
+            document_type=possible_pair.open_alex_work["type"].strip(),
+            authors_list=[
+                authorship["author"]["display_name"].strip()
+                for authorship in possible_pair.open_alex_work["authorships"]
+            ],
+            abstract_content=article.convert_from_inverted_index_abstract(
+                abstract=possible_pair.open_alex_work["abstract_inverted_index"]
+            ),
         )
 
-        return matches[0]
+        # Create repository details
+        repository_details = binary_article_repo_em.RepositoryDetails(
+            owner=possible_pair.repo_owner.strip(),
+            name=possible_pair.repo_name.strip(),
+            description=possible_pair.github_repository["description"],
+            primary_language=possible_pair.github_repository["language"],
+            is_fork=possible_pair.github_repository["fork"],
+            creation_datetime=possible_pair.github_repository["created_at"],
+            last_pushed_datetime=possible_pair.github_repository["pushed_at"],
+            stargazers_count=possible_pair.github_repository["stargazers_count"],
+            forks_count=possible_pair.github_repository["forks_count"],
+            open_issues_count=possible_pair.github_repository["open_issues_count"],
+            commits_count=None,
+            size_kb=possible_pair.github_repository["size"],
+            topics=list(possible_pair.github_repository["topics"]),
+            contributors_list=[
+                binary_article_repo_em.RepositoryContributorDetails(
+                    username=contributor_info.username,
+                    name=contributor_info.name,
+                    email=contributor_info.email,
+                )
+                for contributor_info in repository_readme_and_contributors.contributor_infos
+            ],
+            tree=None,
+            readme_content=(
+                repository_readme_and_contributors.readme.strip()
+                if repository_readme_and_contributors.readme
+                else None
+            ),
+        )
+
+        return binary_article_repo_em.InferenceReadyArticleRepositoryPair(
+            article_details=article_details,
+            repository_details=repository_details,
+        )
+
+    except Exception as e:
+        return types.ErrorResult(
+            source="author-developer-article-repo-discovery",
+            step="prep-article-repo-matching",
+            identifier=(
+                f"{possible_pair.source_researcher_open_alex_id}-"
+                f"{possible_pair.source_developer_account_username}-"
+                f"{possible_pair.article_doi}-"
+                f"{possible_pair.repo_owner}/{possible_pair.repo_name}"
+            ),
+            error=str(e),
+            traceback=traceback.format_exc(),
+        )
+
+
+def match_articles_and_repositorys(
+    inference_ready_article_repository_pairs: list[binary_article_repo_em.InferenceReadyArticleRepositoryPair],
+) -> list[binary_article_repo_em.MatchedArticleRepository] | types.ErrorResult:
+    try:
+        # Predict match
+        return binary_article_repo_em.match_articles_and_repositories(
+            inference_ready_article_repository_pairs=inference_ready_article_repository_pairs,
+            model_choice="optimized",
+        )
 
     except Exception as e:
         return types.ErrorResult(
             source="snowball-sampling-discovery",
             step="article-repository-matching",
-            identifier=f"{article_doi} <-> {repo_owner}/{repo_name}",
+            identifier="",
             error=str(e),
             traceback=traceback.format_exc(),
         )
-    

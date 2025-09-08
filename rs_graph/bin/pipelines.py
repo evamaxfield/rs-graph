@@ -10,7 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import coiled
 import pandas as pd
@@ -31,12 +31,9 @@ from rs_graph.sources import joss, plos, proto, pwc, softcite_2025, softwarex
 from rs_graph.utils import code_host_parsing
 from rs_graph.utils.dt_and_td import parse_timedelta
 
-if TYPE_CHECKING:
-    import pyalex
-
 ###############################################################################
 
-app = typer.Typer()
+app = typer.Typer(rich_markup_mode=None, pretty_exceptions_enable=False)
 
 DEFAULT_RESULTS_DIR = Path("processing-results")
 DEFAULT_GITHUB_TOKENS_FILE = ".github-tokens.yml"
@@ -581,32 +578,6 @@ class AuthorDeveloperPossiblePairs(DataClassJsonMixin):
     possible_pairs: list[entity_matching.SimplePossibleArticleRepositoryPair]
 
 
-@dataclass
-class PossibleArticleRepositoryPair(DataClassJsonMixin):
-    source_researcher_open_alex_id: str
-    source_developer_account_username: str
-    article_title: str
-    article_doi: str
-    open_alex_work: "pyalex.Work"
-    repo_owner: str
-    repo_name: str
-    github_repository: dict
-
-
-@dataclass
-class EntityMatchingReadyPossibleArticleRepositoryPair(DataClassJsonMixin):
-    source_researcher_open_alex_id: str
-    source_developer_account_username: str
-    article_title: str
-    article_doi: str
-    open_alex_work: "pyalex.Work"
-    repo_owner: str
-    repo_name: str
-    github_repository: dict
-    github_readme: str | None
-    github_contributors: list[github.RepoContributorInfo]
-
-
 def _get_possible_article_repo_pairs_for_author_developer_pair(
     researcher_open_alex_id: str,
     developer_account_username: str,
@@ -644,7 +615,7 @@ def _get_possible_article_repo_pairs_for_author_developer_pair(
         works=author_works,
         repos=developer_repos,
         max_datetime_difference=parse_timedelta(article_repository_allowed_datetime_difference),
-    )
+    )    
 
     return AuthorDeveloperPossiblePairs(
         researcher_open_alex_id=researcher_open_alex_id,
@@ -659,7 +630,7 @@ def _get_possible_article_repo_pairs_for_author_developer_pair(
 @flow(
     log_prints=True,
 )
-def _author_developer_article_repository_discovery_flow(
+def _author_developer_article_repository_discovery_flow(  # noqa: C901
     process_n: int,
     article_repository_allowed_datetime_difference: str,
     author_developer_links_filter_confidence_threshold: float,
@@ -748,7 +719,9 @@ def _author_developer_article_repository_discovery_flow(
         total=math.ceil(len(hydrated_author_developer_links) / author_developer_batch_size),
         leave=False,
     ):
-        batch = hydrated_author_developer_links[author_developer_index : author_developer_index + author_developer_batch_size]
+        batch = hydrated_author_developer_links[
+            author_developer_index : author_developer_index + author_developer_batch_size
+        ]
         simple_possible_pairs_futures = get_possible_pairs_wrapped_task.map(
             researcher_open_alex_id=[link.researcher_open_alex_id for link in batch],
             developer_account_username=[link.developer_account_username for link in batch],
@@ -774,11 +747,11 @@ def _author_developer_article_repository_discovery_flow(
 
         # Convert all possible pairs to a flat list in the form of
         # PossibleArticleRepositoryPair
-        flat_possible_pairs: list[PossibleArticleRepositoryPair] = []
+        flat_possible_pairs: list[entity_matching.PossibleArticleRepositoryPair] = []
         for author_developer_possible_pairs in this_batch_possible_pairs:
             for simple_possible_pair in author_developer_possible_pairs.possible_pairs:
                 flat_possible_pairs.append(
-                    PossibleArticleRepositoryPair(
+                    entity_matching.PossibleArticleRepositoryPair(
                         source_researcher_open_alex_id=author_developer_possible_pairs.researcher_open_alex_id,
                         source_developer_account_username=author_developer_possible_pairs.developer_account_username,
                         article_doi=simple_possible_pair.work["doi"]
@@ -811,7 +784,9 @@ def _author_developer_article_repository_discovery_flow(
         # Drop any possible pairs that are already in the db
         print("Filtering out already stored article-repository pairs...")
         print(f"Starting count: {len(flat_possible_pairs)}")
-        simple_filtered_flat_possible_pairs: list[PossibleArticleRepositoryPair] = []
+        simple_filtered_flat_possible_pairs: list[
+            entity_matching.PossibleArticleRepositoryPair
+        ] = []
         known_articles = []
         known_repos = []
         for expanded_possible_article_repo_pair in tqdm(
@@ -831,7 +806,10 @@ def _author_developer_article_repository_discovery_flow(
             else:
                 known_articles.append(expanded_possible_article_repo_pair.article_doi)
                 known_repos.append(
-                    f"{expanded_possible_article_repo_pair.repo_owner}/{expanded_possible_article_repo_pair.repo_name}"
+                    (
+                        expanded_possible_article_repo_pair.repo_owner,
+                        expanded_possible_article_repo_pair.repo_name,
+                    )
                 )
 
         print(f"Simple Filtered count: {len(simple_filtered_flat_possible_pairs)}")
@@ -843,8 +821,8 @@ def _author_developer_article_repository_discovery_flow(
             for expanded_possible_article_repo_pair in simple_filtered_flat_possible_pairs:
                 article_key = expanded_possible_article_repo_pair.article_doi
                 repo_key = (
-                    f"{expanded_possible_article_repo_pair.repo_owner}/"
-                    f"{expanded_possible_article_repo_pair.repo_name}"
+                    expanded_possible_article_repo_pair.repo_owner,
+                    expanded_possible_article_repo_pair.repo_name,
                 )
                 if article_key not in known_articles and repo_key not in known_repos:
                     filtered_flat_possible_pairs.append(expanded_possible_article_repo_pair)
@@ -858,7 +836,7 @@ def _author_developer_article_repository_discovery_flow(
         print("Taking sample of filtered possible pairs for testing...")
         filtered_flat_possible_pairs = random.sample(
             filtered_flat_possible_pairs,
-            k=min(10, len(filtered_flat_possible_pairs)),
+            k=min(50, len(filtered_flat_possible_pairs)),
         )
 
         # For each unique repository, get the README and the contributor details
@@ -871,7 +849,7 @@ def _author_developer_article_repository_discovery_flow(
             )
             if repo_key not in unique_repos:
                 unique_repos.append(repo_key)
-    
+
         print(f"Unique repositories to process: {len(unique_repos)}")
 
         # Get README and contributors for each unique repo
@@ -887,14 +865,18 @@ def _author_developer_article_repository_discovery_flow(
 
         # Process in batches to avoid overloading
         readme_and_contributor_batch_size = 10
-        repo_readme_and_contributor_results: list[github.RepoReadmeAndContributorInfo | types.ErrorResult] = []
+        repo_readme_and_contributor_results: list[
+            github.RepoReadmeAndContributorInfo | types.ErrorResult
+        ] = []
         for repo_index in tqdm(
             range(0, len(unique_repos), readme_and_contributor_batch_size),
             desc="Getting README and Contributors",
             total=math.ceil(len(unique_repos) / readme_and_contributor_batch_size),
             leave=False,
         ):
-            repo_batch = unique_repos[repo_index : repo_index + readme_and_contributor_batch_size]
+            repo_batch = unique_repos[
+                repo_index : repo_index + readme_and_contributor_batch_size
+            ]
             readme_and_contributor_futures = get_github_repo_readme_and_contribs_task.map(
                 repo_owner=[owner for owner, _ in repo_batch],
                 repo_name=[name for _, name in repo_batch],
@@ -911,7 +893,10 @@ def _author_developer_article_repository_discovery_flow(
             if isinstance(result, github.RepoReadmeAndContributorInfo)
         ]
 
-        print(f"Successfully retrieved README and contributors for {len(repo_readme_and_contributor_details)} repositories.")
+        print(
+            f"Successfully retrieved README and contributors for "
+            f"{len(repo_readme_and_contributor_details)} repositories."
+        )
 
         # Create a map of (owner, name) to readme and contributors
         repo_to_readme_and_contributors = {
@@ -919,8 +904,10 @@ def _author_developer_article_repository_discovery_flow(
             for result in repo_readme_and_contributor_details
         }
 
-        # Create EntityMatchingReadyPossibleArticleRepositoryPair objects
-        entity_matching_ready_possible_pairs: list[EntityMatchingReadyPossibleArticleRepositoryPair] = []
+        # Create InferenceReadyPossibleArticleRepositoryPair for each possible pair
+        entity_matching_ready_possible_pairs: list[
+            entity_matching.binary_article_repo_em.InferenceReadyArticleRepositoryPair
+        ] = []
         for expanded_possible_article_repo_pair in filtered_flat_possible_pairs:
             repo_key = (
                 expanded_possible_article_repo_pair.repo_owner,
@@ -929,22 +916,56 @@ def _author_developer_article_repository_discovery_flow(
             readme_and_contributors = repo_to_readme_and_contributors.get(repo_key)
             if readme_and_contributors:
                 entity_matching_ready_possible_pairs.append(
-                    EntityMatchingReadyPossibleArticleRepositoryPair(
-                        source_researcher_open_alex_id=expanded_possible_article_repo_pair.source_researcher_open_alex_id,
-                        source_developer_account_username=expanded_possible_article_repo_pair.source_developer_account_username,
-                        article_doi=expanded_possible_article_repo_pair.article_doi,
-                        article_title=expanded_possible_article_repo_pair.article_title,
-                        open_alex_work=expanded_possible_article_repo_pair.open_alex_work,
-                        repo_owner=expanded_possible_article_repo_pair.repo_owner,
-                        repo_name=expanded_possible_article_repo_pair.repo_name,
-                        github_repository=expanded_possible_article_repo_pair.github_repository,
-                        github_readme=readme_and_contributors.readme,
-                        github_contributors=readme_and_contributors.contributor_infos,
+                    entity_matching._prep_for_article_repository_matching(
+                        possible_pair=expanded_possible_article_repo_pair,
+                        repository_readme_and_contributors=readme_and_contributors,
                     )
                 )
 
-        print(f"Prepared {len(entity_matching_ready_possible_pairs)} pairs for entity matching.")
-        
+        print(
+            f"Prepared {len(entity_matching_ready_possible_pairs)} pairs for entity matching."
+        )
+
+        # Filter out errored prep results
+        entity_matching_ready_possible_pairs = [
+            pair
+            for pair in entity_matching_ready_possible_pairs
+            if isinstance(pair, entity_matching.binary_article_repo_em.InferenceReadyArticleRepositoryPair)
+        ]
+
+        # Print the errors
+        prep_errors = [
+            pair
+            for pair in filtered_flat_possible_pairs
+            if isinstance(pair, types.ErrorResult)
+        ]
+        print(f"Preparation Errors: {len(prep_errors)}")
+        for error in prep_errors:
+            print(error)
+            print(error.traceback)
+            print()
+            print()
+            print("-" * 80)
+
+        # Pass to inference
+        print("Running entity matching inference...")
+        predicted_matches_or_err = entity_matching.match_articles_and_repositorys(
+            entity_matching_ready_possible_pairs
+        )
+
+        if isinstance(predicted_matches_or_err, types.ErrorResult):
+            print("Error during entity matching inference:", predicted_matches_or_err)
+            raise ValueError()
+
+        else:
+            print(f"Predicted Matches: {len(predicted_matches_or_err)}")
+            print("-" * 80)
+            for match in predicted_matches_or_err:
+                print(f"https://doi.org/{match.article_details.doi}")
+                print(f"https://github.com/{match.repository_details.owner}/{match.repository_details.name}")
+                print(f"Confidence: {match.confidence}")
+                print()
+                print("-" * 40)
 
 
 @app.command()

@@ -11,12 +11,12 @@ from functools import partial
 
 import backoff
 import requests
+from cachetools import LRUCache, cached
+from cachetools.keys import hashkey
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
 from fastcore.net import HTTP403ForbiddenError
 from ghapi.all import GhApi, paged
-from cachetools import cached, LRUCache
-from cachetools.keys import hashkey
 
 from .. import types
 from ..db import models as db_models
@@ -203,9 +203,9 @@ def process_github_repo(  # noqa: C901
                 response = requests.get(
                     f"https://api.github.com/repos/{pair.repo_parts.owner}/{pair.repo_parts.name}/commits",
                     params={"sha": default_branch, "per_page": 1, "page": 1},
-                    headers={"Authorization": f"Bearer {github_api_key}"}
-                    if github_api_key
-                    else {},
+                    headers=(
+                        {"Authorization": f"Bearer {github_api_key}"} if github_api_key else {}
+                    ),
                 )
 
                 # Raise for status

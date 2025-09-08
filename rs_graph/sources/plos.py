@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import traceback
 from pathlib import Path
-from xml.etree import ElementTree as ET  # noqa: N817
+from xml.etree import ElementTree as ET
 
 from allofplos.corpus.plos_corpus import get_corpus_dir
 from allofplos.update import main as get_latest_plos_corpus
