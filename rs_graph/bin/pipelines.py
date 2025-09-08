@@ -615,7 +615,7 @@ def _get_possible_article_repo_pairs_for_author_developer_pair(
         works=author_works,
         repos=developer_repos,
         max_datetime_difference=parse_timedelta(article_repository_allowed_datetime_difference),
-    )    
+    )
 
     return AuthorDeveloperPossiblePairs(
         researcher_open_alex_id=researcher_open_alex_id,
@@ -930,14 +930,14 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
         entity_matching_ready_possible_pairs = [
             pair
             for pair in entity_matching_ready_possible_pairs
-            if isinstance(pair, entity_matching.binary_article_repo_em.InferenceReadyArticleRepositoryPair)
+            if isinstance(
+                pair, entity_matching.binary_article_repo_em.InferenceReadyArticleRepositoryPair
+            )
         ]
 
         # Print the errors
         prep_errors = [
-            pair
-            for pair in filtered_flat_possible_pairs
-            if isinstance(pair, types.ErrorResult)
+            pair for pair in filtered_flat_possible_pairs if isinstance(pair, types.ErrorResult)
         ]
         print(f"Preparation Errors: {len(prep_errors)}")
         for error in prep_errors:
@@ -962,7 +962,9 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
             print("-" * 80)
             for match in predicted_matches_or_err:
                 print(f"https://doi.org/{match.article_details.doi}")
-                print(f"https://github.com/{match.repository_details.owner}/{match.repository_details.name}")
+                print(
+                    f"https://github.com/{match.repository_details.owner}/{match.repository_details.name}"
+                )
                 print(f"Confidence: {match.confidence}")
                 print()
                 print("-" * 40)

@@ -246,7 +246,9 @@ def _prep_for_article_repository_matching(
 
 
 def match_articles_and_repositorys(
-    inference_ready_article_repository_pairs: list[binary_article_repo_em.InferenceReadyArticleRepositoryPair],
+    inference_ready_article_repository_pairs: list[
+        binary_article_repo_em.InferenceReadyArticleRepositoryPair
+    ],
 ) -> list[binary_article_repo_em.MatchedArticleRepository] | types.ErrorResult:
     try:
         # Predict match
