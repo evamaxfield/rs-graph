@@ -964,7 +964,6 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
             entity_matching.binary_article_repo_em.MatchedArticleRepository
         ] = []
         for result in mapped_inference_results:
-            print(result)
             if isinstance(result, types.ErrorResult):
                 print(f"Error during inference: {result}")
             else:
@@ -972,7 +971,6 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
 
         # Double check that these predicted matches aren't in the database
         print("Filtering out already stored predicted matches...")
-        print(f"Predicted Matches Before Filtering: {len(predicted_matches)}")
         predicted_matches = [
             match
             for match in predicted_matches
@@ -985,7 +983,6 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
                 use_prod=use_prod,
             )
         ]
-        print(f"Predicted Matches After Filtering: {len(predicted_matches)}")
 
         # Add to total matches found
         total_matches_found += len(predicted_matches)
@@ -1076,7 +1073,7 @@ def snowball_sampling_discovery(
     author_developer_links_filter_confidence_threshold: float = 0.97,
     author_developer_links_filter_datetime_difference: str = "2 years",
     one_to_one_only: bool = True,
-    author_developer_batch_size: int = 1,
+    author_developer_batch_size: int = 5,
     github_extended_details_batch_size: int = 20,
     article_respository_matching_batch_size: int = 16,
     use_prod: bool = False,
