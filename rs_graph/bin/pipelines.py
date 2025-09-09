@@ -1010,9 +1010,12 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
             by="model_confidence", ascending=False
         ).reset_index(drop=True)
 
-        # Drop duplicates on document_doi and repository_full_name keeping first
+        # Drop duplicates on document_doi
+        # Theoretically we could have multiple repos for one article
+        # but for now, just take the highest confidence one
+        # TODO: consider relaxing this in the future
         this_batch_df = this_batch_df.drop_duplicates(
-            subset=["document_doi", "repository_full_name"], keep="first"
+            subset=["document_doi"], keep="first"
         ).reset_index(drop=True)
 
         # Add to total matches found
