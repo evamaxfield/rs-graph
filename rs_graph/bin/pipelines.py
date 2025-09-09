@@ -65,8 +65,13 @@ def _get_github_cluster_config(
     return {
         "keepalive": "15m",
         "vm_type": "t4g.small",
-        "n_workers": 1,
-        "threads_per_worker": n_github_tokens,
+        # One worker per token to avoid rate limiting
+        # This isn't deterministic, that is,
+        # a single token might be used by multiple workers,
+        # but this does spread the load out a bit
+        # and should help avoid rate limiting
+        "n_workers": n_github_tokens,
+        "threads_per_worker": 1,
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
         "region": coiled_region,
@@ -102,6 +107,7 @@ def _wrap_func_with_coiled_prefect_task(
     func: Callable,
     prefect_kwargs: dict[str, Any] | None = None,
     coiled_kwargs: dict[str, Any] | None = None,
+    environ: dict[str, str] | None = None,
 ) -> Task:
     if coiled_kwargs is None:
         coiled_kwargs = {}
@@ -117,6 +123,7 @@ def _wrap_func_with_coiled_prefect_task(
     @coiled.function(
         **coiled_kwargs,
         name=func.__name__,
+        environ=environ,
     )
     def wrapped_func(*args, **kwargs):  # type: ignore
         return func(*args, **kwargs)
@@ -631,11 +638,14 @@ def _get_possible_article_repo_pairs_for_author_developer_pair(
     log_prints=True,
 )
 def _author_developer_article_repository_discovery_flow(  # noqa: C901
-    process_n: int,
+    process_n_author_developer_pairs: int,
     article_repository_allowed_datetime_difference: str,
     author_developer_links_filter_confidence_threshold: float,
     author_developer_links_filter_datetime_difference: str,
     one_to_one_only: bool,
+    author_developer_batch_size: int,
+    github_extended_details_batch_size: int,
+    article_repository_matching_batch_size: int,
     use_prod: bool,
     use_coiled: bool,
     coiled_region: str,
@@ -657,7 +667,7 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
     # Print dataset and coiled status
     print("-" * 80)
     print("Pipeline Options:")
-    print(f"Process N: {process_n}")
+    print(f"Process N Author-Developer Pairs: {process_n_author_developer_pairs}")
     print(
         f"Article Repository Allowed Datetime Difference: "
         f"{article_repository_allowed_datetime_difference}"
@@ -683,21 +693,14 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
         use_prod=use_prod,
         filter_datetime_difference=author_developer_links_filter_datetime_difference,
         filter_confidence_threshold=author_developer_links_filter_confidence_threshold,
-        n=process_n,
+        n=process_n_author_developer_pairs,
     )
 
-    # Basic steps of the flow:
-    # 3. For each pair, get the author's articles from OpenAlex and
-    #    repositories from GitHub
-    # 4. Create possible article-repository pairs by creating pairs of each
-    #    article and repository in which each pair is within
-    #    article_repository_allowed_datetime_difference of each other
-    # 5. Use the article-repository matching model to predict which pairs are
-    #    likely to be valid
-    # 6. Process the pairs using the standard processing flow
-    #    (we can skip this for now, just note how many pairs would be processed)
+    # TODO: consider splitting out the open alex calls and github calls
+    # into separate coiled tasks to better parallelize
+    # that is a pretty minor optimization though
 
-    # Wrap the estimation function with coiled and prefect
+    # Wrap the possible pairs function with coiled
     get_possible_pairs_wrapped_task = _wrap_func_with_coiled_prefect_task(
         _get_possible_article_repo_pairs_for_author_developer_pair,
         coiled_kwargs=_get_github_cluster_config(
@@ -707,15 +710,17 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
         ),
     )
 
-    # Discovery pipeline store path
-    discovery_pipeline_storage_dir = DEFAULT_RESULTS_DIR / "article-repository-discovery"
-    discovery_pipeline_storage_dir.mkdir(exist_ok=True, parents=True)
-
-    # Estimate pairs for each author-developer link in batches
-    author_developer_batch_size = 20
+    # Process pairs for each author-developer link in batches
+    batch_start_time = time.time()
+    total_possible_combinations = 0
+    total_possible_pairs = 0
+    total_possible_pairs_after_filtering = 0
+    total_possible_pairs_for_inference = 0
+    total_matches_found = 0
+    possible_results = []
     for author_developer_index in tqdm(
         range(0, len(hydrated_author_developer_links), author_developer_batch_size),
-        desc="Estimating Pairs",
+        desc="Getting Possible Pairs",
         total=math.ceil(len(hydrated_author_developer_links) / author_developer_batch_size),
         leave=False,
     ):
@@ -738,12 +743,21 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
             f.result() for f in simple_possible_pairs_futures
         ]
 
-        # Filter estimates
+        # Filter to only those with possible pairs
         this_batch_possible_pairs = [
-            e
-            for e in this_batch_results
-            if isinstance(e, AuthorDeveloperPossiblePairs) and len(e.possible_pairs) > 0
+            result
+            for result in this_batch_results
+            if (
+                isinstance(result, AuthorDeveloperPossiblePairs)
+                and len(result.possible_pairs) > 0
+            )
         ]
+
+        # Add to total possible pairs and combinations
+        total_possible_combinations += sum(
+            r.total_combinations_count for r in this_batch_possible_pairs
+        )
+        total_possible_pairs += sum(r.possible_pairs_count for r in this_batch_possible_pairs)
 
         # Convert all possible pairs to a flat list in the form of
         # PossibleArticleRepositoryPair
@@ -766,24 +780,8 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
                     )
                 )
 
-        flat_possible_pairs_dicts = [
-            expanded_possible_pair.to_dict() for expanded_possible_pair in flat_possible_pairs
-        ]
-        # remove the repo and the work
-        for d in flat_possible_pairs_dicts:
-            d.pop("open_alex_work", None)
-            d.pop("github_repository", None)
-
-        # Store this batch's possible pairs
-        flat_possible_pairs_df = pd.DataFrame(flat_possible_pairs_dicts)
-        flat_possible_pairs_df.to_csv(
-            "possible_pairs_for_initial_author_developer_set.csv",
-            index=False,
-        )
-
         # Drop any possible pairs that are already in the db
         print("Filtering out already stored article-repository pairs...")
-        print(f"Starting count: {len(flat_possible_pairs)}")
         simple_filtered_flat_possible_pairs: list[
             entity_matching.PossibleArticleRepositoryPair
         ] = []
@@ -812,8 +810,6 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
                     )
                 )
 
-        print(f"Simple Filtered count: {len(simple_filtered_flat_possible_pairs)}")
-
         # Further filter pairs to ensure one-to-one mapping if specified
         if one_to_one_only:
             print("Applying one-to-one filtering...")
@@ -827,17 +823,11 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
                 if article_key not in known_articles and repo_key not in known_repos:
                     filtered_flat_possible_pairs.append(expanded_possible_article_repo_pair)
 
-            print(f"One-to-One Filtered count: {len(filtered_flat_possible_pairs)}")
-
         else:
             filtered_flat_possible_pairs = simple_filtered_flat_possible_pairs
 
-        # Take sample for testing
-        print("Taking sample of filtered possible pairs for testing...")
-        filtered_flat_possible_pairs = random.sample(
-            filtered_flat_possible_pairs,
-            k=min(50, len(filtered_flat_possible_pairs)),
-        )
+        # Add to total possible pairs after filtering
+        total_possible_pairs_after_filtering += len(filtered_flat_possible_pairs)
 
         # For each unique repository, get the README and the contributor details
         # First get the unique repos
@@ -864,18 +854,17 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
         )
 
         # Process in batches to avoid overloading
-        readme_and_contributor_batch_size = 10
         repo_readme_and_contributor_results: list[
             github.RepoReadmeAndContributorInfo | types.ErrorResult
         ] = []
         for repo_index in tqdm(
-            range(0, len(unique_repos), readme_and_contributor_batch_size),
+            range(0, len(unique_repos), github_extended_details_batch_size),
             desc="Getting README and Contributors",
-            total=math.ceil(len(unique_repos) / readme_and_contributor_batch_size),
+            total=math.ceil(len(unique_repos) / github_extended_details_batch_size),
             leave=False,
         ):
             repo_batch = unique_repos[
-                repo_index : repo_index + readme_and_contributor_batch_size
+                repo_index : repo_index + github_extended_details_batch_size
             ]
             readme_and_contributor_futures = get_github_repo_readme_and_contribs_task.map(
                 repo_owner=[owner for owner, _ in repo_batch],
@@ -922,10 +911,6 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
                     )
                 )
 
-        print(
-            f"Prepared {len(entity_matching_ready_possible_pairs)} pairs for entity matching."
-        )
-
         # Filter out errored prep results
         entity_matching_ready_possible_pairs = [
             pair
@@ -935,48 +920,165 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
             )
         ]
 
-        # Print the errors
-        prep_errors = [
-            pair for pair in filtered_flat_possible_pairs if isinstance(pair, types.ErrorResult)
-        ]
-        print(f"Preparation Errors: {len(prep_errors)}")
-        for error in prep_errors:
-            print(error)
-            print(error.traceback)
-            print()
-            print()
-            print("-" * 80)
+        print(
+            f"Prepared {len(entity_matching_ready_possible_pairs)} pairs for entity matching."
+        )
+        total_possible_pairs_for_inference += len(entity_matching_ready_possible_pairs)
+
+        # Get a wrapped function for article-repository matching
+        match_articles_and_repositories_wrapped_task = _wrap_func_with_coiled_prefect_task(
+            entity_matching.match_articles_and_repositories,
+            coiled_kwargs=_get_basic_gpu_cluster_config(
+                use_coiled=use_coiled,
+                coiled_region=coiled_region,
+            ),
+            environ={
+                # TODO: this model should be public soon
+                "HF_TOKEN": os.environ["HF_TOKEN"],
+            },
+        )
 
         # Pass to inference
         print("Running entity matching inference...")
-        predicted_matches_or_err = entity_matching.match_articles_and_repositorys(
-            entity_matching_ready_possible_pairs
+
+        # Create batches of prepped pairs to map across
+        inference_batches = [
+            entity_matching_ready_possible_pairs[i : i + article_repository_matching_batch_size]
+            for i in range(
+                0,
+                len(entity_matching_ready_possible_pairs),
+                article_repository_matching_batch_size,
+            )
+        ]
+
+        # Map across batches
+        inference_futures = match_articles_and_repositories_wrapped_task.map(
+            inference_ready_article_repository_pairs=inference_batches,
         )
 
-        if isinstance(predicted_matches_or_err, types.ErrorResult):
-            print("Error during entity matching inference:", predicted_matches_or_err)
-            raise ValueError()
+        # Collect results
+        mapped_inference_results = [f.result() for f in inference_futures]
 
-        else:
-            print(f"Predicted Matches: {len(predicted_matches_or_err)}")
-            print("-" * 80)
-            for match in predicted_matches_or_err:
-                print(f"https://doi.org/{match.article_details.doi}")
-                print(
-                    f"https://github.com/{match.repository_details.owner}/{match.repository_details.name}"
-                )
-                print(f"Confidence: {match.confidence}")
-                print()
-                print("-" * 40)
+        # These can be either lists of predictions or ErrorResult
+        predicted_matches: list[
+            entity_matching.binary_article_repo_em.MatchedArticleRepository
+        ] = []
+        for result in mapped_inference_results:
+            print(result)
+            if isinstance(result, types.ErrorResult):
+                print(f"Error during inference: {result}")
+            else:
+                predicted_matches.extend(result)
+
+        # Double check that these predicted matches aren't in the database
+        print("Filtering out already stored predicted matches...")
+        print(f"Predicted Matches Before Filtering: {len(predicted_matches)}")
+        predicted_matches = [
+            match
+            for match in predicted_matches
+            if not db_utils.check_article_repository_pair_already_in_db(
+                article_doi=match.article_details.doi,
+                article_title=match.article_details.title,
+                code_host="github",
+                repo_owner=match.repository_details.owner,
+                repo_name=match.repository_details.name,
+                use_prod=use_prod,
+            )
+        ]
+        print(f"Predicted Matches After Filtering: {len(predicted_matches)}")
+
+        # Add to total matches found
+        total_matches_found += len(predicted_matches)
+
+        # Create dataframe of results to annotate / evaluate later
+        possible_results.extend(
+            [
+                {
+                    "document_doi": match.article_details.doi,
+                    "document_url": f"https://doi.org/{match.article_details.doi}",
+                    "repository_full_name": (
+                        f"{match.repository_details.owner}/{match.repository_details.name}"
+                    ),
+                    "repository_url": (
+                        f"https://github.com/"
+                        f"{match.repository_details.owner}/{match.repository_details.name}"
+                    ),
+                    "model_confidence": match.confidence,
+                }
+                for match in predicted_matches
+            ]
+        )
+        pd.DataFrame(possible_results).to_csv(
+            "snowball-sampling-predicted-article-repo-pairs.csv",
+            index=False,
+        )
+
+        # Print throughput stats
+        print("Throughput Stats So Far:")
+        print(f"Total Possible Combinations: {total_possible_combinations}")
+        print(f"Total Possible Pairs: {total_possible_pairs}")
+        print(f"Total Possible Pairs After Filtering: {total_possible_pairs_after_filtering}")
+        print(f"Total Possible Pairs For Inference: {total_possible_pairs_for_inference}")
+        print(f"Total Matches Found: {total_matches_found}")
+        print()
+
+        # Now, normalized by total author-developer links processed
+        n_author_developer_links_processed = author_developer_index + len(batch)
+        print("Normalized By Author-Developer Links Processed:")
+        print(f"Author-Developer Links Processed: {n_author_developer_links_processed}")
+        print(
+            f"Possible Combinations Per Link: "
+            f"{total_possible_combinations / n_author_developer_links_processed:.2f}"
+        )
+        print(
+            f"Possible Pairs Per Link: "
+            f"{total_possible_pairs / n_author_developer_links_processed:.2f}"
+        )
+        print(
+            f"Possible Pairs After Filtering Per Link: "
+            f"{total_possible_pairs_after_filtering / n_author_developer_links_processed:.2f}"
+        )
+        print(
+            f"Possible Pairs For Inference Per Link: "
+            f"{total_possible_pairs_for_inference / n_author_developer_links_processed:.2f}"
+        )
+        print(
+            f"Matches Found Per Link: "
+            f"{total_matches_found / n_author_developer_links_processed:.2f}"
+        )
+        print()
+
+        # Get batch end time and normalize by duration
+        batch_end_time = time.time()
+        batch_duration = batch_end_time - batch_start_time
+        print(f"Batch Duration: {batch_duration:.2f} seconds")
+        print(
+            f"Author-Developer Links Processed Per Second: "
+            f"{n_author_developer_links_processed / batch_duration:.2f}"
+        )
+        print(
+            f"Possible Pairs For Inference Per Second: "
+            f"{total_possible_pairs_for_inference / batch_duration:.2f}"
+        )
+        print(f"Matches Found Per Second: " f"{total_matches_found / batch_duration:.2f}")
+        print()
+
+        # Reset batch start time
+        batch_start_time = time.time()
+        print("-" * 80)
+        print()
 
 
 @app.command()
 def snowball_sampling_discovery(
-    process_n: int = 10,
+    process_n_author_developer_pairs: int = 200,
     article_repository_allowed_datetime_difference: str = "3 years",
     author_developer_links_filter_confidence_threshold: float = 0.97,
     author_developer_links_filter_datetime_difference: str = "2 years",
     one_to_one_only: bool = True,
+    author_developer_batch_size: int = 1,
+    github_extended_details_batch_size: int = 20,
+    article_respository_matching_batch_size: int = 16,
     use_prod: bool = False,
     use_coiled: bool = False,
     coiled_region: str = "us-west-2",
@@ -1002,11 +1104,14 @@ def snowball_sampling_discovery(
 
     # Start the flow
     _author_developer_article_repository_discovery_flow(
-        process_n=process_n,
+        process_n_author_developer_pairs=process_n_author_developer_pairs,
         article_repository_allowed_datetime_difference=article_repository_allowed_datetime_difference,
         author_developer_links_filter_confidence_threshold=author_developer_links_filter_confidence_threshold,
         author_developer_links_filter_datetime_difference=author_developer_links_filter_datetime_difference,
         one_to_one_only=one_to_one_only,
+        author_developer_batch_size=author_developer_batch_size,
+        github_extended_details_batch_size=github_extended_details_batch_size,
+        article_repository_matching_batch_size=article_respository_matching_batch_size,
         use_prod=use_prod,
         use_coiled=use_coiled,
         coiled_region=coiled_region,
