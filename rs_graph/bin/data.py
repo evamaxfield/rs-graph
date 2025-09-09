@@ -145,8 +145,7 @@ def _dataverse_download(dataverse_token: str | None = None) -> None:
 
     # Download all files
     log.info(
-        f"Downloading all files from "
-        f"{DATAVERSE_RS_GRAPH_V1_DATASET_DOI} to {DATA_FILES_DIR}"
+        f"Downloading all files from {DATAVERSE_RS_GRAPH_V1_DATASET_DOI} to {DATA_FILES_DIR}"
     )
     dv.load_dataset(
         pid=f"doi:{DATAVERSE_RS_GRAPH_V1_DATASET_DOI}",

@@ -112,6 +112,7 @@ def get_possible_article_repository_pairs_for_matching(
     works: list[pyalex.Work],
     repos: list[dict],
     max_datetime_difference: timedelta,
+    skip_forks: bool = True,
 ) -> list[SimplePossibleArticleRepositoryPair]:
     """Get possible article-repository pairs for matching."""
     # Create possible article-repository pairs by filtering pairs so that each pair
@@ -125,6 +126,10 @@ def get_possible_article_repository_pairs_for_matching(
                 continue
 
             for repo in repos:
+                # Skip if repo is a fork
+                if repo["fork"] and skip_forks:
+                    continue
+
                 try:
                     # Convert to datetimes
                     work_published_date = datetime.fromisoformat(work["publication_date"])

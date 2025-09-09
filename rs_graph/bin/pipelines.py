@@ -986,18 +986,15 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
             )
         ]
 
-        # Add to total matches found
-        total_matches_found += len(predicted_matches)
-
-        # Create dataframe of results to annotate / evaluate later
-        possible_results.extend(
+        # Create a dataframe of the predicted matches
+        this_batch_df = pd.DataFrame(
             [
                 {
                     "document_doi": match.article_details.doi,
-                    "document_url": f"https://doi.org/{match.article_details.doi}",
                     "repository_full_name": (
                         f"{match.repository_details.owner}/{match.repository_details.name}"
                     ),
+                    "document_url": f"https://doi.org/{match.article_details.doi}",
                     "repository_url": (
                         f"https://github.com/"
                         f"{match.repository_details.owner}/{match.repository_details.name}"
@@ -1007,6 +1004,22 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
                 for match in predicted_matches
             ]
         )
+
+        # Sort by model confidence descending
+        this_batch_df = this_batch_df.sort_values(
+            by="model_confidence", ascending=False
+        ).reset_index(drop=True)
+
+        # Drop duplicates on document_doi and repository_full_name keeping first
+        this_batch_df = this_batch_df.drop_duplicates(
+            subset=["document_doi", "repository_full_name"], keep="first"
+        ).reset_index(drop=True)
+
+        # Add to total matches found
+        total_matches_found += len(this_batch_df)
+
+        # Create dataframe of results to annotate / evaluate later
+        possible_results.extend(this_batch_df.to_dict(orient="records"))
         pd.DataFrame(possible_results).to_csv(
             "snowball-sampling-predicted-article-repo-pairs.csv",
             index=False,
@@ -1059,7 +1072,7 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
             f"Possible Pairs For Inference Per Second: "
             f"{total_possible_pairs_for_inference / batch_duration:.2f}"
         )
-        print(f"Matches Found Per Second: " f"{total_matches_found / batch_duration:.2f}")
+        print(f"Matches Found Per Second: {total_matches_found / batch_duration:.2f}")
         print()
 
         # Reset batch start time
