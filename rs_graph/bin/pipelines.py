@@ -85,7 +85,7 @@ def _get_basic_gpu_cluster_config(
     return {
         "keepalive": "15m",
         "vm_type": "g4dn.xlarge",
-        "n_workers": [1, 2],
+        "n_workers": [1, 4],
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
         "region": coiled_region,
@@ -108,6 +108,7 @@ def _wrap_func_with_coiled_prefect_task(
     prefect_kwargs: dict[str, Any] | None = None,
     coiled_kwargs: dict[str, Any] | None = None,
     environ: dict[str, str] | None = None,
+    timeout_seconds: int = 600,  # 10 minutes
 ) -> Task:
     if coiled_kwargs is None:
         coiled_kwargs = {}
@@ -118,7 +119,7 @@ def _wrap_func_with_coiled_prefect_task(
         **prefect_kwargs,
         name=func.__name__,
         log_prints=True,
-        timeout_seconds=600,  # 10 minutes
+        timeout_seconds=timeout_seconds,
     )
     @coiled.function(
         **coiled_kwargs,
@@ -936,6 +937,7 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
                 # TODO: this model should be public soon
                 "HF_TOKEN": os.environ["HF_TOKEN"],
             },
+            timeout_seconds=3600,  # 1 hour timeout, there can be _a lot_ of pairs here
         )
 
         # Pass to inference
