@@ -1018,6 +1018,11 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
             subset=["document_doi"], keep="first"
         ).reset_index(drop=True)
 
+        # Drop duplicates on repository_full_name
+        this_batch_df = this_batch_df.drop_duplicates(
+            subset=["repository_full_name"], keep="first"
+        ).reset_index(drop=True)
+
         # Add to total matches found
         total_matches_found += len(this_batch_df)
 
