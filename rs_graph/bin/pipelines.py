@@ -712,7 +712,7 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
     )
 
     # Process pairs for each author-developer link in batches
-    batch_start_time = time.time()
+    start_time = time.time()
     total_possible_combinations = 0
     total_possible_pairs = 0
     total_possible_pairs_after_filtering = 0
@@ -1018,7 +1018,7 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
             subset=["document_doi"], keep="first"
         ).reset_index(drop=True)
 
-        # Drop duplicates on repository_full_name
+        # # Drop duplicates on repository_full_name
         this_batch_df = this_batch_df.drop_duplicates(
             subset=["repository_full_name"], keep="first"
         ).reset_index(drop=True)
@@ -1028,7 +1028,9 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
 
         # Create dataframe of results to annotate / evaluate later
         possible_results.extend(this_batch_df.to_dict(orient="records"))
-        pd.DataFrame(possible_results).to_csv(
+        pd.DataFrame(possible_results).sort_values(
+            by="model_confidence", ascending=False
+        ).to_csv(
             "snowball-sampling-predicted-article-repo-pairs.csv",
             index=False,
         )
@@ -1047,51 +1049,46 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
         print("Normalized By Author-Developer Links Processed:")
         print(f"Author-Developer Links Processed: {n_author_developer_links_processed}")
         print(
-            f"Possible Combinations Per Link: "
+            f"Possible Combinations Per Author-Developer Link: "
             f"{total_possible_combinations / n_author_developer_links_processed:.2f}"
         )
         print(
-            f"Possible Pairs Per Link: "
+            f"Possible Pairs Per Author-Developer Link: "
             f"{total_possible_pairs / n_author_developer_links_processed:.2f}"
         )
         print(
-            f"Possible Pairs After Filtering Per Link: "
+            f"Possible Pairs After Filtering Per Author-Developer Link: "
             f"{total_possible_pairs_after_filtering / n_author_developer_links_processed:.2f}"
         )
         print(
-            f"Possible Pairs For Inference Per Link: "
+            f"Possible Pairs For Inference Per Author-Developer Link: "
             f"{total_possible_pairs_for_inference / n_author_developer_links_processed:.2f}"
         )
         print(
-            f"Matches Found Per Link: "
+            f"Matches Found Per Author-Developer Link: "
             f"{total_matches_found / n_author_developer_links_processed:.2f}"
         )
         print()
 
         # Get batch end time and normalize by duration
         batch_end_time = time.time()
-        batch_duration = batch_end_time - batch_start_time
-        print(f"Batch Duration: {batch_duration:.2f} seconds")
+        total_duration = batch_end_time - start_time
+        print("Normalized By Processing Time:")
+        print(f"Total Duration: {total_duration:.2f} seconds")
         print(
             f"Author-Developer Links Processed Per Second: "
-            f"{n_author_developer_links_processed / batch_duration:.2f}"
+            f"{n_author_developer_links_processed / total_duration:.2f}"
         )
-        print(
-            f"Possible Pairs For Inference Per Second: "
-            f"{total_possible_pairs_for_inference / batch_duration:.2f}"
-        )
-        print(f"Matches Found Per Second: {total_matches_found / batch_duration:.2f}")
+        print(f"Matches Found Per Second: {total_matches_found / total_duration:.2f}")
         print()
 
-        # Reset batch start time
-        batch_start_time = time.time()
         print("-" * 80)
         print()
 
 
 @app.command()
 def snowball_sampling_discovery(
-    process_n_author_developer_pairs: int = 200,
+    process_n_author_developer_pairs: int = 2000,
     article_repository_allowed_datetime_difference: str = "3 years",
     author_developer_links_filter_confidence_threshold: float = 0.97,
     author_developer_links_filter_datetime_difference: str = "2 years",
