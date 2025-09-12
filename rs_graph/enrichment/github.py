@@ -32,8 +32,8 @@ class RepoContributorInfo(DataClassJsonMixin):
 
 
 @dataclass
-class PairedRepoContributorInfo(DataClassJsonMixin):
-    pair: types.ExpandedRepositoryDocumentPair
+class RepoContributorInfo(DataClassJsonMixin):
+    repo_parts: types.RepoParts
     username: str
     name: str | None
     email: str | None
@@ -88,20 +88,18 @@ def _get_user_info_from_login(
     max_time=16,
 )
 def get_repo_contributors(
-    pair: types.ExpandedRepositoryDocumentPair,
+    repo_parts: types.RepoParts | None,
     github_api_key: str | None = None,
     top_n: int = 30,
-) -> list[PairedRepoContributorInfo]:
+) -> list[RepoContributorInfo]:
     # Setup API
     api = _setup_gh_api(github_api_key)
-
-    # Assert RepoParts is not None
-    assert pair.repo_parts is not None
+    assert repo_parts is not None
 
     # Get contributors
     contributors = api.repos.list_contributors(
-        owner=pair.repo_parts.owner,
-        repo=pair.repo_parts.name,
+        owner=repo_parts.owner,
+        repo=repo_parts.name,
         per_page=top_n,
     )
 
@@ -121,8 +119,8 @@ def get_repo_contributors(
 
     # Store with pair details
     return [
-        PairedRepoContributorInfo(
-            pair=pair,
+        RepoContributorInfo(
+            repo_parts=repo_parts,
             username=user_info.username,
             name=user_info.name,
             email=user_info.email,
@@ -132,68 +130,110 @@ def get_repo_contributors(
 
 
 def process_github_repo(  # noqa: C901
-    pair: types.ExpandedRepositoryDocumentPair,
+    source: str,
+    repo_parts: types.RepoParts | None,
     github_api_key: str | None = None,
     top_n: int = 30,
-) -> types.ExpandedRepositoryDocumentPair | types.ErrorResult:
+    fetch_repo_data: bool = True,
+    fetch_repo_languages: bool = True,
+    fetch_repo_readme: bool = True,
+    fetch_repo_contributors: bool = True,
+    fetch_repo_commits_count: bool = True,
+    fetch_repo_files: bool = True,
+    existing_github_results: types.GitHubResultModels | None = None,
+) -> types.GitHubResultModels | types.ErrorResult:
     """Get repo contributors and add them to database."""
-    # Assert repo parts is not None
-    assert pair.repo_parts is not None
+    assert repo_parts is not None
 
     try:
         # Setup API
         api = _setup_gh_api(github_api_key)
 
+        # Create the code host
+        code_host = db_models.CodeHost(
+            name=repo_parts.host,
+        )
+
         # Get repo info
-        repo_info = api.repos.get(
-            owner=pair.repo_parts.owner,
-            repo=pair.repo_parts.name,
-        )
-
-        # Sleep to avoid API limits
-        time.sleep(0.85)
-
-        # Get repo languages
-        repo_languages = api.repos.list_languages(
-            owner=pair.repo_parts.owner,
-            repo=pair.repo_parts.name,
-        )
-
-        # Sleep to avoid API limits
-        time.sleep(0.85)
-
-        # Get repo README
-        try:
-            repo_readme_response = api.repos.get_readme(
-                owner=pair.repo_parts.owner,
-                repo=pair.repo_parts.name,
+        if fetch_repo_data:
+            repo_info = api.repos.get(
+                owner=repo_parts.owner,
+                repo=repo_parts.name,
             )
 
-            # Decode the content
-            repo_readme = base64.b64decode(repo_readme_response["content"]).decode("utf-8")
-
-        except Exception:
-            repo_readme = None
-
-        finally:
             # Sleep to avoid API limits
             time.sleep(0.85)
 
-        # Get repo contributors
-        repo_contributors = get_repo_contributors(
-            pair=pair,
-            github_api_key=github_api_key,
-            top_n=top_n,
-        )
+        else:
+            repo_info = None
 
-        # Create the code host
-        code_host = db_models.CodeHost(
-            name=pair.repo_parts.host,
-        )
+        # Get repo languages
+        if fetch_repo_languages:
+            repo_languages = api.repos.list_languages(
+                owner=repo_parts.owner,
+                repo=repo_parts.name,
+            )
+
+            # Sleep to avoid API limits
+            time.sleep(0.85)
+
+             # For each language, create a repository language
+            repo_language_models = []
+            for language, bytes_of_code in repo_languages.items():
+                repo_language_models.append(
+                    db_models.RepositoryLanguage(
+                        language=language,
+                        bytes_of_code=bytes_of_code,
+                    )
+                )
+        else:
+            repo_language_models = None
+
+        # Get repo README
+        if fetch_repo_readme:
+            try:
+                repo_readme_response = api.repos.get_readme(
+                    owner=repo_parts.owner,
+                    repo=repo_parts.name,
+                )
+
+                # Decode the content
+                repo_readme = base64.b64decode(repo_readme_response["content"]).decode("utf-8")
+
+            except Exception:
+                repo_readme = None
+
+            finally:
+                # Sleep to avoid API limits
+                time.sleep(0.85)
+
+                # Create model
+                repo_readme_model = db_models.RepositoryReadme(
+                    content=repo_readme,
+                )
+        else:
+            repo_readme_model = None
+
+        # Get repo contributors
+        if fetch_repo_contributors:
+            repo_contributors = get_repo_contributors(
+                repo_parts=repo_parts,
+                github_api_key=github_api_key,
+                top_n=top_n,
+            )
+        else:
+            repo_contributors = None
+
+        # Get default branch from new or existing repo model
+        if existing_github_results and existing_github_results.repository_model:
+            default_branch = existing_github_results.repository_model.default_branch
+        elif repo_info:
+            default_branch = repo_info.get("default_branch", None)
+        else:
+            default_branch = None
 
         # Get the default branch as it is needed for commit count and file lists
-        default_branch = repo_info.get("default_branch", None)
-        if default_branch is not None:
+        if fetch_repo_commits_count and default_branch is not None:
             # Get the commit count for the default branch via checking
             # header response for the page count after rel="last"
             # https://stackoverflow.com/a/70610670
@@ -201,7 +241,8 @@ def process_github_repo(  # noqa: C901
                 # Use raw requests lib rather than GhApi
                 # As we need the headers
                 response = requests.get(
-                    f"https://api.github.com/repos/{pair.repo_parts.owner}/{pair.repo_parts.name}/commits",
+                    f"https://api.github.com/repos/"
+                    f"{repo_parts.owner}/{repo_parts.name}/commits",
                     params={"sha": default_branch, "per_page": 1, "page": 1},
                     headers=(
                         {"Authorization": f"Bearer {github_api_key}"} if github_api_key else {}
@@ -234,58 +275,61 @@ def process_github_repo(  # noqa: C901
                 # Sleep to avoid API limits
                 time.sleep(0.85)
         else:
+            processed_at_sha = None
             commits_count = None
 
         # Create the repository
-        repo = db_models.Repository(
-            code_host_id=code_host.id,
-            owner=pair.repo_parts.owner,
-            name=pair.repo_parts.name,
-            description=repo_info["description"],
-            is_fork=repo_info["fork"],
-            forks_count=repo_info["forks_count"],
-            stargazers_count=repo_info["stargazers_count"],
-            watchers_count=repo_info["watchers_count"],
-            open_issues_count=repo_info["open_issues_count"],
-            commits_count=commits_count,
-            size_kb=repo_info["size"],
-            topics=";".join(repo_info["topics"]) if repo_info["topics"] else None,
-            primary_language=repo_info["language"],
-            default_branch=default_branch,
-            license=repo_info["license"]["name"] if repo_info["license"] else None,
-            processed_at_sha=processed_at_sha,
-            creation_datetime=datetime.fromisoformat(repo_info["created_at"]),
-            last_pushed_datetime=datetime.fromisoformat(repo_info["pushed_at"]),
-        )
+        if repo_info:
+            # Create repo model
+            repo_model = db_models.Repository(
+                code_host_id=code_host.id,
+                owner=repo_parts.owner,
+                name=repo_parts.name,
+                description=repo_info["description"],
+                is_fork=repo_info["fork"],
+                forks_count=repo_info["forks_count"],
+                stargazers_count=repo_info["stargazers_count"],
+                watchers_count=repo_info["watchers_count"],
+                open_issues_count=repo_info["open_issues_count"],
+                commits_count=commits_count,
+                size_kb=repo_info["size"],
+                topics=";".join(repo_info["topics"]) if repo_info["topics"] else None,
+                primary_language=repo_info["language"],
+                default_branch=repo_info["default_branch"],
+                license=repo_info["license"]["name"] if repo_info["license"] else None,
+                processed_at_sha=processed_at_sha,
+                creation_datetime=datetime.fromisoformat(repo_info["created_at"]),
+                last_pushed_datetime=datetime.fromisoformat(repo_info["pushed_at"]),
+            )
 
-        # For each language, create a repository language
-        all_repo_languages = []
-        for language, bytes_of_code in repo_languages.items():
-            all_repo_languages.append(
-                db_models.RepositoryLanguage(
-                    repository_id=repo.id,
-                    language=language,
-                    bytes_of_code=bytes_of_code,
-                )
+        else:
+            repo_model = db_models.Repository(
+                code_host_id=code_host.id,
+                owner=repo_parts.owner,
+                name=repo_parts.name,
+                size_kb=0,
+                commits_count=commits_count,
+                default_branch=default_branch,
+                processed_at_sha=processed_at_sha,
             )
 
         # Get repository files
-        all_repo_files = []
-        if default_branch:
+        repo_file_models: list[db_models.RepositoryFile] | None
+        if fetch_repo_files and default_branch:
+            repo_file_models = []
             try:
                 # Use the git trees API to get the files in the repository
                 tree_results = api.git.get_tree(
-                    owner=pair.repo_parts.owner,
-                    repo=pair.repo_parts.name,
+                    owner=repo_parts.owner,
+                    repo=repo_parts.name,
                     tree_sha=default_branch,
                     recursive=True,
                 )
 
                 # Iterate through the tree and create RepositoryFile models
                 for file in tree_results["tree"]:
-                    all_repo_files.append(
+                    repo_file_models.append(
                         db_models.RepositoryFile(
-                            repository_id=repo.id,
                             path=file["path"],
                             tree_type=file["type"],
                             bytes_of_code=file.get("size", 0),
@@ -294,54 +338,101 @@ def process_github_repo(  # noqa: C901
 
             except Exception as e:
                 # Ignore the error if the tree cannot be fetched
-                all_repo_files = []
                 print(f"Error fetching repository files: {e}")
 
             finally:
                 # Sleep to avoid API limits
                 time.sleep(0.85)
+        else:
+            repo_file_models = None
 
         # For each contributor, create a developer account
         # and then link the dev account to the repo
         # as a repository contributor
-        all_repo_contributors = []
-        for contributor in repo_contributors:
-            # Create the developer account
-            dev_account = db_models.DeveloperAccount(
-                code_host_id=code_host.id,
-                username=contributor.username,
-                name=contributor.name,
-                email=contributor.email,
-            )
-
-            # Create the repository contributor
-            repo_contributor = db_models.RepositoryContributor(
-                repository_id=repo.id,
-                developer_account_id=dev_account.id,
-            )
-
-            # Store the pair
-            all_repo_contributors.append(
-                types.RepositoryContributorDetails(
-                    developer_account_model=dev_account,
-                    repository_contributor_model=repo_contributor,
+        repo_contributor_models: list[types.RepositoryContributorDetails] | None
+        if repo_contributors:
+            repo_contributor_models = []
+            for contributor in repo_contributors:
+                # Create the developer account
+                dev_account = db_models.DeveloperAccount(
+                    code_host_id=code_host.id,
+                    username=contributor.username,
+                    name=contributor.name,
+                    email=contributor.email,
                 )
-            )
+
+                # Create the repository contributor
+                repo_contributor = db_models.RepositoryContributor(
+                    developer_account_id=dev_account.id,
+                )
+
+                # Store the pair
+                repo_contributor_models.append(
+                    types.RepositoryContributorDetails(
+                        developer_account_model=dev_account,
+                        repository_contributor_model=repo_contributor,
+                    )
+                )
+        else:
+            repo_contributor_models = None
 
         # Attach the results to the pair
-        pair.github_results = types.GitHubResultModels(
-            code_host_model=code_host,
-            repository_model=repo,
-            repository_readme_model=db_models.RepositoryReadme(
-                repository_id=repo.id,
-                content=repo_readme,
+        github_results = types.GitHubResultModels(
+            code_host_model=(
+                existing_github_results.code_host_model
+                if existing_github_results 
+                else code_host
             ),
-            repository_language_models=all_repo_languages,
-            repository_contributor_details=all_repo_contributors,
-            repository_file_models=all_repo_files,
+            repository_model=(
+                existing_github_results.repository_model
+                if existing_github_results 
+                else repo_model
+            ),
+            repository_readme_model=(
+                existing_github_results.repository_readme_model
+                if existing_github_results and existing_github_results.repository_readme_model
+                else repo_readme_model
+            ),
+            repository_language_models=(
+                existing_github_results.repository_language_models
+                if existing_github_results and existing_github_results.repository_language_models
+                else repo_language_models
+            ),
+            repository_contributor_details=(
+                existing_github_results.repository_contributor_details
+                if existing_github_results and existing_github_results.repository_contributor_details
+                else repo_contributor_models
+            ),
+            repository_file_models=(
+                existing_github_results.repository_file_models
+                if existing_github_results and existing_github_results.repository_file_models
+                else repo_file_models
+            ),
         )
 
-        return pair
+        # Final cases where we want to update existing model fields
+        # Commits Count
+        if (
+            github_results.repository_model.commits_count is None
+            and commits_count is not None
+        ):
+            github_results.repository_model.commits_count = commits_count
+        
+        # Default Branch
+        if (
+            github_results.repository_model.default_branch is None
+            and default_branch is not None
+        ):
+            github_results.repository_model.default_branch = default_branch
+        
+        # Processed At SHA
+        if (
+            github_results.repository_model.processed_at_sha is None
+            and processed_at_sha is not None
+        ):
+            github_results.repository_model.processed_at_sha = processed_at_sha
+
+        return github_results
 
     except Exception as e:
         if "Bad credentials" in str(e):
@@ -350,9 +441,9 @@ def process_github_repo(  # noqa: C901
                 f"Please check your API key. '{github_api_key}'!!!"
             )
         return types.ErrorResult(
-            source=pair.source,
-            step="github-repo-contributors",
-            identifier=pair.paper_doi,
+            source=source,
+            step="process-github-repo",
+            identifier=f"{repo_parts.host}:{repo_parts.owner}/{repo_parts.name}",
             error=str(e),
             traceback=traceback.format_exc(),
         )
@@ -379,11 +470,14 @@ def process_github_repo_task(
     # Get end time
     end_time = time.perf_counter()
 
-    # Attach processing time if successful
-    if isinstance(result, types.ExpandedRepositoryDocumentPair):
-        result.github_processing_time_seconds = end_time - start_time
+    if isinstance(result, types.ErrorResult):
+        return result
 
-    return result
+    # Attach processing time if successful
+    pair.github_results = result
+    pair.github_processing_time_seconds = end_time - start_time
+
+    return pair
 
 
 def get_github_repos_for_developer(
@@ -510,4 +604,145 @@ def get_repo_readme_and_contributor_details(
         repo_name=repo_name,
         readme=readme_content,
         contributor_infos=contributor_infos,
+    )
+
+@dataclass
+class RepoTreeCommitsAndLanguages(DataClassJsonMixin):
+    repo_owner: str
+    repo_name: str
+    commits_count: int | None
+    repo_files: list[db_models.RepositoryFile]
+    repo_languages: list[db_models.RepositoryLanguage]
+
+
+def get_repo_tree_commits_and_languages(
+    repo_owner: str,
+    repo_name: str,
+    github_api_key: str | None = None,
+    default_branch: str | None = None,
+) -> RepoTreeCommitsAndLanguages | types.ErrorResult:
+    """Get the repository tree, commit count, and languages for a GitHub repository."""
+    # Setup API
+    api = _setup_gh_api(github_api_key)
+
+    # Initialize variables
+    commits_count = None
+    repo_files: list[db_models.RepositoryFile] = []
+    repo_languages: list[db_models.RepositoryLanguage] = []
+
+    # Get additional repo items
+    try:
+        if default_branch is not None:
+            # Get the commit count for the default branch via checking
+            # header response for the page count after rel="last"
+            # https://stackoverflow.com/a/70610670
+            try:
+                # Use raw requests lib rather than GhApi
+                # As we need the headers
+                response = requests.get(
+                    f"https://api.github.com/repos/{repo_owner}/{repo_name}/commits",
+                    params={"sha": default_branch, "per_page": 1, "page": 1},
+                    headers=(
+                        {"Authorization": f"Bearer {github_api_key}"} if github_api_key else {}
+                    ),
+                )
+
+                # Raise for status
+                response.raise_for_status()
+
+                # Parse the Link header
+                # We want the page right before rel="last"
+                link_header = response.headers.get("Link", "")
+                if link_header:
+                    # Split by comma to get each part
+                    _, last_page = link_header.split(", ")
+                    # Extract the page number from the last page
+                    last_page_url = last_page.split(";")[0].strip("<>")
+                    commits_count = int(last_page_url.split("page=")[-1])
+                else:
+                    commits_count = None
+
+            except Exception:
+                commits_count = None
+
+            finally:
+                # Sleep to avoid API limits
+                time.sleep(0.85)
+
+            # Get repository files
+            try:
+                # Use the git trees API to get the files in the repository
+                tree_results = api.git.get_tree(
+                    owner=repo_owner,
+                    repo=repo_name,
+                    tree_sha=default_branch,
+                    recursive=True,
+                )
+
+                # Iterate through the tree and create RepositoryFile models
+                for file in tree_results["tree"]:
+                    repo_files.append(
+                        db_models.RepositoryFile(
+                            repository_id=0,  # Placeholder, to be set when saving to DB
+                            path=file["path"],
+                            tree_type=file["type"],
+                            bytes_of_code=file.get("size", 0),
+                        )
+                    )
+            
+            except Exception as e:
+                # Ignore the error if the tree cannot be fetched
+                repo_files = []
+                print(f"Error fetching repository files: {e}")
+            
+            finally:
+                # Sleep to avoid API limits
+                time.sleep(0.85)
+        
+        # Get repo languages
+        try:
+            repo_languages_response = api.repos.list_languages(
+                owner=repo_owner,
+                repo=repo_name,
+            )
+
+            # Convert to RepositoryLanguage models
+            for language, bytes_of_code in repo_languages_response.items():
+                repo_languages.append(
+                    db_models.RepositoryLanguage(
+                        repository_id=0,  # Placeholder, to be set when saving to DB
+                        language=language,
+                        bytes_of_code=bytes_of_code,
+                    )
+                )
+
+        except Exception as e:
+            repo_languages = []
+            print(f"Error fetching repository languages: {e}")
+        
+        finally:
+            # Sleep to avoid API limits
+            time.sleep(0.85)
+    
+    except Exception as e:
+        if "Bad credentials" in str(e):
+            print(
+                f"!!! GitHub API Error: Bad credentials. "
+                f"Please check your API key. '{github_api_key}'!!!"
+            )
+        print(f"Error fetching data for {repo_owner}/{repo_name}: {e}")
+        return types.ErrorResult(
+            source="snowball-sampling-discovery",
+            step="github-repo-tree-commits-languages",
+            identifier=f"{repo_owner}/{repo_name}",
+            error=str(e),
+            traceback=traceback.format_exc(),
+        )
+    
+    return RepoTreeAndCommitsCount(
+        repo_owner=repo_owner,
+        repo_name=repo_name,
+        commits_count=commits_count,
+        repo_files=repo_files,
+        repo_languages=repo_languages,
     )

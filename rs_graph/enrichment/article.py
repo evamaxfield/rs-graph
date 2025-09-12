@@ -216,33 +216,45 @@ def get_open_alex_author_from_id(
 
 
 def process_article(  # noqa: C901
-    pair: types.ExpandedRepositoryDocumentPair,
+    paper_doi: str,
+    source: str,
     open_alex_email: str,
     open_alex_email_count: int,
     semantic_scholar_api_key: str,
-) -> types.ExpandedRepositoryDocumentPair | types.ErrorResult:
+    existing_pyalex_work: pyalex.Work | None = None,
+) -> types.OpenAlexResultModels | types.ErrorResult:
     try:
         # Check for updated DOI
         updated_doi = get_updated_doi_from_semantic_scholar(
-            doi=pair.paper_doi,
+            doi=paper_doi,
             semantic_scholar_api_key=semantic_scholar_api_key,
         )
 
         # Handle "Alternate DOI" case
         alternate_dois: list[str] = []
-        if updated_doi != pair.paper_doi:
+        if updated_doi != paper_doi:
             # Store the original DOI as an alternate DOI
             # as we have resolved a more recent version
             alternate_dois.append(
-                pair.paper_doi,
+                paper_doi,
             )
 
-        # Get the OpenAlex work
-        open_alex_work = get_open_alex_work_from_doi(
-            open_alex_email=open_alex_email,
-            open_alex_email_count=open_alex_email_count,
-            doi=updated_doi,
-        )
+            # Get the OpenAlex work
+            open_alex_work = get_open_alex_work_from_doi(
+                open_alex_email=open_alex_email,
+                open_alex_email_count=open_alex_email_count,
+                doi=updated_doi,
+            )
+        
+        else:
+            if existing_pyalex_work is not None:
+                open_alex_work = existing_pyalex_work
+            else:
+                open_alex_work = get_open_alex_work_from_doi(
+                    open_alex_email=open_alex_email,
+                    open_alex_email_count=open_alex_email_count,
+                    doi=paper_doi,
+                )
 
         # Convert inverted index abstract to string
         if open_alex_work["abstract_inverted_index"] is None:
@@ -330,7 +342,7 @@ def process_article(  # noqa: C901
             best_oa_location = None
 
         # Create DatasetSource
-        dataset_source = db_models.DatasetSource(name=pair.source)
+        dataset_source = db_models.DatasetSource(name=source)
 
         # Check for citation_normalized_percentile
         if open_alex_work["citation_normalized_percentile"] is not None:
@@ -474,7 +486,7 @@ def process_article(  # noqa: C901
             )
 
         # Attach everything back to the pair
-        pair.open_alex_results = types.OpenAlexResultModels(
+        return types.OpenAlexResultModels(
             dataset_source_model=dataset_source,
             primary_document_source_model=primary_document_source,
             primary_location_model=primary_location,
@@ -488,13 +500,11 @@ def process_article(  # noqa: C901
             funding_instance_details=all_funding_instance_details,
         )
 
-        return pair
-
     except Exception as e:
         return types.ErrorResult(
-            source=pair.source,
+            source=source,
             step="open-alex-processing",
-            identifier=pair.paper_doi,
+            identifier=paper_doi,
             error=str(e),
             traceback=traceback.format_exc(),
         )
@@ -514,8 +524,9 @@ def process_article_task(
     start_time = time.perf_counter()
 
     # Process article
-    result = process_article(
-        pair=pair,
+    open_alex_results = process_article(
+        paper_doi=pair.paper_doi,
+        source=pair.source,
         open_alex_email=open_alex_email,
         open_alex_email_count=open_alex_email_count,
         semantic_scholar_api_key=semantic_scholar_api_key,
@@ -524,18 +535,22 @@ def process_article_task(
     # Get end time
     end_time = time.perf_counter()
 
-    # Attach processing time if successful
-    if isinstance(result, types.ExpandedRepositoryDocumentPair):
-        result.open_alex_processing_time_seconds = end_time - start_time
+    if isinstance(open_alex_results, types.ErrorResult):
+        return open_alex_results
 
-    return result
+    # Attach processing time if successful
+    pair.open_alex_results = open_alex_results
+    pair.open_alex_processing_time_seconds = end_time - start_time
+
+    return pair
 
 
 def get_articles_for_researcher(
     researcher_open_alex_id: str,
     open_alex_email: str,
     open_alex_email_count: int,
-) -> list[pyalex.Work] | types.ErrorResult:
+    semantic_scholar_api_key: str,
+) -> list[types.OpenAlexResultModels | types.ErrorResult] | types.ErrorResult:
     """Get articles for a researcher."""
     try:
         # Setup OpenAlex API
@@ -557,7 +572,34 @@ def get_articles_for_researcher(
             _increment_call_count_and_check(open_alex_email_count=open_alex_email_count)
             author_works.extend(page)
 
-        return author_works
+        # Convert author works to list of OpenAlexResultModels
+        all_results = []
+        for work in author_works:
+            all_results.append(
+                process_article(
+                    paper_doi=work["doi"],
+                    source="snowball-sampling-discovery",
+                    open_alex_email=open_alex_email,
+                    open_alex_email_count=open_alex_email_count,
+                    semantic_scholar_api_key=semantic_scholar_api_key,
+                    existing_pyalex_work=work,
+                )
+            )
+
+        # Deduplicate based on DOI
+        # This can happen if open alex has multiple versions of the same paper
+        # listed separately and SemanticScholar correctly points to the same DOI
+        known_dois = []
+        deduplicated_results = []
+        for result in all_results:
+            if isinstance(result, types.OpenAlexResultModels):
+                if result.document_model.doi not in known_dois:
+                    known_dois.append(result.document_model.doi)
+                    deduplicated_results.append(result)
+            else:
+                deduplicated_results.append(result)
+
+        return deduplicated_results
 
     except Exception as e:
         return types.ErrorResult(

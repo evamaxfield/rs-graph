@@ -593,12 +593,14 @@ def _get_possible_article_repo_pairs_for_author_developer_pair(
     github_token: str,
     open_alex_email: str,
     open_alex_email_count: int,
+    semantic_scholar_api_key: str,
 ) -> AuthorDeveloperPossiblePairs | types.ErrorResult:
     # Get all papers from OpenAlex for the researcher
     author_works = article.get_articles_for_researcher(
         researcher_open_alex_id=researcher_open_alex_id,
         open_alex_email=open_alex_email,
         open_alex_email_count=open_alex_email_count,
+        semantic_scholar_api_key=semantic_scholar_api_key,
     )
 
     # Handle error
@@ -634,6 +636,14 @@ def _get_possible_article_repo_pairs_for_author_developer_pair(
         possible_pairs=list(possible_pairs),
     )
 
+@dataclass
+class RepositoryFullDataFromPartials(DataClassJsonMixin):
+    repo_owner: str
+    repo_name: str
+    repository_full_data: dict
+    readme_and_contributor_info: github.RepoReadmeAndContributorInfo
+    repo_tree_commits_and_languages: github.RepoTreeCommitsAndLanguages | None
+
 
 @flow(
     log_prints=True,
@@ -643,7 +653,6 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
     article_repository_allowed_datetime_difference: str,
     author_developer_links_filter_confidence_threshold: float,
     author_developer_links_filter_datetime_difference: str,
-    one_to_one_only: bool,
     author_developer_batch_size: int,
     github_extended_details_batch_size: int,
     article_repository_matching_batch_size: int,
@@ -696,10 +705,6 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
         filter_confidence_threshold=author_developer_links_filter_confidence_threshold,
         n=process_n_author_developer_pairs,
     )
-
-    # TODO: consider splitting out the open alex calls and github calls
-    # into separate coiled tasks to better parallelize
-    # that is a pretty minor optimization though
 
     # Wrap the possible pairs function with coiled
     get_possible_pairs_wrapped_task = _wrap_func_with_coiled_prefect_task(
@@ -775,8 +780,8 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
                         .strip(),
                         article_title=simple_possible_pair.work["title"],
                         open_alex_work=simple_possible_pair.work,
-                        repo_owner=simple_possible_pair.repository["owner"]["login"],
-                        repo_name=simple_possible_pair.repository["name"],
+                        repo_owner=simple_possible_pair.repository["owner"]["login"].lower(),
+                        repo_name=simple_possible_pair.repository["name"].lower(),
                         github_repository=simple_possible_pair.repository,
                     )
                 )
@@ -793,7 +798,7 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
             desc="Filtering Stored Pairs",
             leave=False,
         ):
-            if not db_utils.check_article_repository_pair_already_in_db(
+            if not db_utils.check_article_or_repository_in_db(
                 article_doi=expanded_possible_article_repo_pair.article_doi,
                 article_title=expanded_possible_article_repo_pair.article_title,
                 code_host="github",
@@ -811,21 +816,16 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
                     )
                 )
 
-        # Further filter pairs to ensure one-to-one mapping if specified
-        if one_to_one_only:
-            print("Applying one-to-one filtering...")
-            filtered_flat_possible_pairs = []
-            for expanded_possible_article_repo_pair in simple_filtered_flat_possible_pairs:
-                article_key = expanded_possible_article_repo_pair.article_doi
-                repo_key = (
-                    expanded_possible_article_repo_pair.repo_owner,
-                    expanded_possible_article_repo_pair.repo_name,
-                )
-                if article_key not in known_articles and repo_key not in known_repos:
-                    filtered_flat_possible_pairs.append(expanded_possible_article_repo_pair)
-
-        else:
-            filtered_flat_possible_pairs = simple_filtered_flat_possible_pairs
+        print("Applying one-to-one filtering...")
+        filtered_flat_possible_pairs = []
+        for expanded_possible_article_repo_pair in simple_filtered_flat_possible_pairs:
+            article_key = expanded_possible_article_repo_pair.article_doi
+            repo_key = (
+                expanded_possible_article_repo_pair.repo_owner,
+                expanded_possible_article_repo_pair.repo_name,
+            )
+            if article_key not in known_articles and repo_key not in known_repos:
+                filtered_flat_possible_pairs.append(expanded_possible_article_repo_pair)
 
         # Add to total possible pairs after filtering
         total_possible_pairs_after_filtering += len(filtered_flat_possible_pairs)
@@ -971,29 +971,117 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
             else:
                 predicted_matches.extend(result)
 
-        # Double check that these predicted matches aren't in the database
-        print("Filtering out already stored predicted matches...")
-        predicted_matches = [
-            match
-            for match in predicted_matches
-            if not db_utils.check_article_repository_pair_already_in_db(
-                article_doi=match.article_details.doi,
-                article_title=match.article_details.title,
-                code_host="github",
-                repo_owner=match.repository_details.owner,
-                repo_name=match.repository_details.name,
-                use_prod=use_prod,
+        if len(predicted_matches) == 0:
+            print("No predicted matches in this batch, continuing...")
+            print("-" * 80)
+            print()
+            continue
+
+        # Create RepositoryFullDataFromPartials for each unique repo in the predicted matches
+        repo_full_data_from_partials: dict[tuple[str, str], RepositoryFullDataFromPartials] = {}
+        for match in predicted_matches:
+            repo_key = (
+                match.repository_details.owner,
+                match.repository_details.name,
             )
+            if repo_key not in repo_full_data_from_partials:
+                # Find the full repository data by looking up in the possible pairs
+                # Use simple_filtered_flat_possible_pairs
+                found_repository_full_data = False
+                for possible_pair in simple_filtered_flat_possible_pairs:
+                    if (
+                        possible_pair.repo_owner == match.repository_details.owner
+                        and possible_pair.repo_name == match.repository_details.name
+                    ):
+                        match.repository_details.github_repository = possible_pair.github_repository
+                        found_repository_full_data = True
+                        break
+
+                # Get the readme and contributor info from the list we already have
+                found_readme_and_contributors = False
+                for repo_readme_and_contributor in repo_readme_and_contributor_details:
+                    if (
+                        repo_readme_and_contributor.repo_owner == match.repository_details.owner
+                        and repo_readme_and_contributor.repo_name == match.repository_details.name
+                    ):
+                        found_readme_and_contributors = True
+                        break
+
+                # Assert we found it
+                if not found_repository_full_data:
+                    print(
+                        f"Warning: Did not find full repository data for "
+                        f"{match.repository_details.owner}/{match.repository_details.name}"
+                    )
+                if not found_readme_and_contributors:
+                    print(
+                        f"Warning: Did not find readme and contributors for "
+                        f"{match.repository_details.owner}/{match.repository_details.name}"
+                    )
+
+                repo_full_data_from_partials[repo_key] = RepositoryFullDataFromPartials(
+                    repo_owner=match.repository_details.owner,
+                    repo_name=match.repository_details.name,
+                    default_branch=match.repository_details["default_branch"],
+                    repository_full_data=match.repository_details.github_repository,
+                    readme_and_contributor_info=repo_to_readme_and_contributors.get(repo_key),
+                    repo_tree_commits_and_languages=None,  # to be filled in later
+                )
+
+        # Get wrapped missing repository data fetch function
+        wrapped_get_repo_tree_commits_and_languages_task = _wrap_func_with_coiled_prefect_task(
+            github.get_repo_tree_commits_and_languages,
+            coiled_kwargs=_get_github_cluster_config(
+                n_github_tokens=n_github_tokens,
+                use_coiled=use_coiled,
+                coiled_region=coiled_region,
+            ),
+        )
+
+        # Get the missing repository data for each match from the possible pairs
+        # Reuse the github_extended_details_batch_size here
+        print("Getting additional repository data for matched pairs...")
+        repo_extended_details_results: list[
+            github.RepoTreeCommitsAndLanguages | types.ErrorResult
+        ] = []
+        for repo_index in tqdm(
+            range(0, len(predicted_matches), github_extended_details_batch_size),
+            desc="Getting Extended Repo Details",
+            total=math.ceil(len(predicted_matches) / github_extended_details_batch_size),
+            leave=False,
+        ):
+            repo_batch = predicted_matches[
+                repo_index : repo_index + github_extended_details_batch_size
+            ]
+            repo_extended_details_futures = wrapped_get_repo_tree_commits_and_languages_task.map(
+                repo_owner=[
+                    match.repository_details.owner for match in repo_batch
+                ],
+                repo_name=[
+                    match.repository_details.name for match in repo_batch
+                ],
+                github_api_key=[next(cycled_github_tokens) for _ in repo_batch],
+                default_branch=
+            )
+            repo_extended_details_results.extend(
+                [f.result() for f in repo_extended_details_futures]
+            )
+
+        # Remove errors
+        repo_extended_details = [
+            result
+            for result in repo_extended_details_results
+            if isinstance(result, github.RepoTreeCommitsAndLanguages)
         ]
 
         # Create a dataframe of the predicted matches
         this_batch_df = pd.DataFrame(
             [
                 {
-                    "document_doi": match.article_details.doi,
+                    "document_doi": match.article_details.doi.lower(),
                     "repository_full_name": (
                         f"{match.repository_details.owner}/{match.repository_details.name}"
-                    ),
+                    ).lower(),
                     "document_url": f"https://doi.org/{match.article_details.doi}",
                     "repository_url": (
                         f"https://github.com/"
@@ -1018,7 +1106,7 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
             subset=["document_doi"], keep="first"
         ).reset_index(drop=True)
 
-        # # Drop duplicates on repository_full_name
+        # Drop duplicates on repository_full_name
         this_batch_df = this_batch_df.drop_duplicates(
             subset=["repository_full_name"], keep="first"
         ).reset_index(drop=True)
@@ -1079,7 +1167,12 @@ def _author_developer_article_repository_discovery_flow(  # noqa: C901
             f"Author-Developer Links Processed Per Second: "
             f"{n_author_developer_links_processed / total_duration:.2f}"
         )
+        print(
+            f"Seconds per Author-Developer Link: "
+            f"{total_duration / n_author_developer_links_processed:.2f}"
+        )
         print(f"Matches Found Per Second: {total_matches_found / total_duration:.2f}")
+        print(f"Seconds per Match Found: {total_duration / total_matches_found:.2f}")
         print()
 
         print("-" * 80)
@@ -1092,7 +1185,6 @@ def snowball_sampling_discovery(
     article_repository_allowed_datetime_difference: str = "3 years",
     author_developer_links_filter_confidence_threshold: float = 0.97,
     author_developer_links_filter_datetime_difference: str = "2 years",
-    one_to_one_only: bool = True,
     author_developer_batch_size: int = 5,
     github_extended_details_batch_size: int = 20,
     article_respository_matching_batch_size: int = 16,
@@ -1125,7 +1217,6 @@ def snowball_sampling_discovery(
         article_repository_allowed_datetime_difference=article_repository_allowed_datetime_difference,
         author_developer_links_filter_confidence_threshold=author_developer_links_filter_confidence_threshold,
         author_developer_links_filter_datetime_difference=author_developer_links_filter_datetime_difference,
-        one_to_one_only=one_to_one_only,
         author_developer_batch_size=author_developer_batch_size,
         github_extended_details_batch_size=github_extended_details_batch_size,
         article_repository_matching_batch_size=article_respository_matching_batch_size,

@@ -698,7 +698,7 @@ def get_hydrated_author_developer_links(
         return hydrated_links
 
 
-def check_article_repository_pair_already_in_db(
+def check_article_or_repository_in_db(
     article_doi: str,
     article_title: str,
     code_host: str,
@@ -716,6 +716,8 @@ def check_article_repository_pair_already_in_db(
     repo_name = repo_name.lower().strip()
 
     # Create a session
+    document_found = False
+    repository_found = False
     with Session(engine) as session:
         # Document
         document_stmt = select(db_models.Document).where(db_models.Document.doi == article_doi)
@@ -728,54 +730,37 @@ def check_article_repository_pair_already_in_db(
             )
             document_alternate_doi_model = session.exec(document_stmt).first()
 
-            # Fast fail
-            if document_alternate_doi_model is None:
-                return False
-
-            # Else get updated document model
-            else:
-                document_stmt = select(db_models.Document).where(
-                    db_models.Document.id == document_alternate_doi_model.document_id
-                )
-                document_model = session.exec(document_stmt).first()
+            # True if we found a match via alternate doi
+            # False if we didn't
+            document_found = document_alternate_doi_model is not None
 
         # Now try and match on title if we still don't have a document model
-        if document_model is None:
+        if not document_found:
             document_stmt = select(db_models.Document).where(
                 db_models.Document.title == article_title.strip()
             )
             document_model = session.exec(document_stmt).first()
 
-        # Fast fail
-        if document_model is None:
-            return False
+            # True if we found a match via title
+            # False if we didn't
+            document_found = document_model is not None
 
         # Code Host (assume GitHub for now)
         code_host_stmt = select(db_models.CodeHost).where(db_models.CodeHost.name == code_host)
         code_host_model = session.exec(code_host_stmt).first()
 
-        # Fast fail
-        if code_host_model is None:
-            return False
+        if code_host_model is not None:
+            # Repository
+            repository_stmt = select(db_models.Repository).where(
+                db_models.Repository.code_host_id == code_host_model.id,
+                db_models.Repository.owner == repo_owner,
+                db_models.Repository.name == repo_name,
+            )
+            repository_model = session.exec(repository_stmt).first()
 
-        # Repository
-        repository_stmt = select(db_models.Repository).where(
-            db_models.Repository.code_host_id == code_host_model.id,
-            db_models.Repository.owner == repo_owner,
-            db_models.Repository.name == repo_name,
-        )
-        repository_model = session.exec(repository_stmt).first()
+            # True if we found a match
+            # False if we didn't
+            repository_found = repository_model is not None
 
-        # Fast fail
-        if repository_model is None:
-            return False
+    return document_found or repository_found
 
-        # Link
-        link_stmt = select(db_models.DocumentRepositoryLink).where(
-            db_models.DocumentRepositoryLink.document_id == document_model.id,
-            db_models.DocumentRepositoryLink.repository_id == repository_model.id,
-        )
-        link_model = session.exec(link_stmt).first()
-
-        # Final check
-        return link_model is not None

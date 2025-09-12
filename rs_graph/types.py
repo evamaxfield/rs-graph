@@ -96,10 +96,10 @@ class RepositoryContributorDetails(DataClassJsonMixin):
 class GitHubResultModels(DataClassJsonMixin):
     code_host_model: db_models.CodeHost
     repository_model: db_models.Repository
-    repository_readme_model: db_models.RepositoryReadme
-    repository_language_models: list[db_models.RepositoryLanguage]
-    repository_contributor_details: list[RepositoryContributorDetails]
-    repository_file_models: list[db_models.RepositoryFile]
+    repository_readme_model: db_models.RepositoryReadme | None
+    repository_language_models: list[db_models.RepositoryLanguage] | None
+    repository_contributor_details: list[RepositoryContributorDetails] | None
+    repository_file_models: list[db_models.RepositoryFile] | None
 
 
 @dataclass
