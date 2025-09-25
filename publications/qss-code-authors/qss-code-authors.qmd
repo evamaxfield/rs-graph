@@ -47,36 +47,6 @@ format:
     execute:
       echo: false
       warning: false
-  
-  elsevier-pdf:
-    toc: false
-    execute:
-      echo: false
-      warning: false
-    include-in-header:  
-      - text: |
-          \usepackage{booktabs}    % For professional-looking tables
-          \usepackage{multirow}    % For merged cells
-          \usepackage{siunitx}     % For number alignment
-          \usepackage[table]{xcolor}  % The 'table' option is crucial for \rowcolors to work
-          \usepackage{float}
-          \floatplacement{table}{H}
-          \usepackage{lineno}
-          \linenumbers
-        
-    journal:
-      cite-style: authoryear
-      name: "in-progress"
-      model: "3p"
-      layout: "onecolumn"
-
-    # Word count
-    citeproc: false
-    filters:
-      - at: pre-quarto
-        path: _extensions/andrewheiss/wordcount/citeproc.lua
-      - at: pre-quarto
-        path: _extensions/andrewheiss/wordcount/wordcount.lua
 ---
 
 # Introduction
@@ -87,6 +57,7 @@ format:
 from collections import OrderedDict
 from datetime import datetime
 from io import StringIO
+import yaml
 import os
 from pathlib import Path
 
@@ -125,6 +96,9 @@ if "QSS_CODE_AUTHORSHIP_USE_SAMPLE" in os.environ:
 else:
     USE_SAMPLE = True
 # USE_SAMPLE = False
+
+# Other paths
+EXTRA_DATA_PATH = Path.cwd() / "extra-data"
 ```
 
 ```{python}
@@ -149,6 +123,9 @@ researcher_dev_links = read_table(
 document_alternate_dois = read_table(
     db_models.DocumentAlternateDOI.__tablename__
 )
+repository_programming_languages = read_table(
+    read_table(db_models.RepositoryLanguage.__tablename__)
+)
 
 # Drop all "updated_datetime" and "created_datetime" columns
 for df in [
@@ -163,8 +140,35 @@ for df in [
     document_topics,
     dataset_sources,
     researcher_dev_links,
+    repository_programming_languages,
 ]:
     df.drop(columns=["updated_datetime", "created_datetime"], inplace=True)
+
+# Read in the programming languages file
+# File acquired from:
+# https://github.com/github-linguist/linguist/blob/1d913bbdff8e31f1dcf0ba6ce482f4edb5715fc7/lib/linguist/languages.yml
+with open(EXTRA_DATA_PATH / "programming-languages.yml", "r") as open_file:
+    programming_language_data = yaml.safe_load(open_file)
+
+# Get just the programming languages (exclude data and other file types)
+programming_language_names = [
+    name
+    for name, data
+    in programming_language_data.items()
+    if data["type"] == "programming"
+]
+
+# Filter down the rows in repository_programming_languages to only include
+# repos that have code
+repository_programming_languages = repository_programming_languages[
+    repository_programming_languages["language"].isin(programming_language_names)
+]
+
+# Get the set of repository ids that have programming files
+repositories_with_code = repository_programming_languages["repository_id"].unique()
+
+# Filter down repositories to only include those ids
+repositories = repositories[repositories["id"].isin(repositories_with_code)]
 
 # Specifically drop doc_repo_links "id" column
 # It isn't used and will get in the way later when we do a lot of joins
@@ -3267,8 +3271,6 @@ We additionally calculated the absolute change for each code contributor as the 
 ### Results
 
 ```{python}
-EXTRA_DATA_PATH = Path.cwd() / "extra-data"
-
 initial_set = pd.read_csv(EXTRA_DATA_PATH / "cc-na-initial-set.csv")
 eva_set = pd.read_csv(EXTRA_DATA_PATH / "cc-na-eva.csv")
 nic_set = pd.read_csv(EXTRA_DATA_PATH / "cc-na-nic.csv")
