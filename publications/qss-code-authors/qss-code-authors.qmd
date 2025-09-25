@@ -47,6 +47,36 @@ format:
     execute:
       echo: false
       warning: false
+
+  elsevier-pdf:
+    toc: false
+    execute:
+      echo: false
+      warning: false
+    include-in-header:  
+      - text: |
+          \usepackage{booktabs}    % For professional-looking tables
+          \usepackage{multirow}    % For merged cells
+          \usepackage{siunitx}     % For number alignment
+          \usepackage[table]{xcolor}  % The 'table' option is crucial for \rowcolors to work
+          \usepackage{float}
+          \floatplacement{table}{H}
+          \usepackage{lineno}
+          \linenumbers
+        
+    journal:
+      cite-style: authoryear
+      name: "in-progress"
+      model: "3p"
+      layout: "onecolumn"
+
+    # Word count
+    citeproc: false
+    filters:
+      - at: pre-quarto
+        path: _extensions/andrewheiss/wordcount/citeproc.lua
+      - at: pre-quarto
+        path: _extensions/andrewheiss/wordcount/wordcount.lua
 ---
 
 # Introduction
@@ -169,6 +199,7 @@ repositories_with_code = repository_programming_languages["repository_id"].uniqu
 
 # Filter down repositories to only include those ids
 repositories = repositories[repositories["id"].isin(repositories_with_code)]
+doc_repo_links = doc_repo_links[doc_repo_links["repository_id"].isin(repositories_with_code)]
 
 # Specifically drop doc_repo_links "id" column
 # It isn't used and will get in the way later when we do a lot of joins
