@@ -47,7 +47,7 @@ format:
     execute:
       echo: false
       warning: false
-
+  
   elsevier-pdf:
     toc: false
     execute:
@@ -473,7 +473,7 @@ This creates a structural misalignment where contributions essential for scienti
 
 Our analysis examines the relationship between software contributions and scientific credit through a three-step process: (1) building a dataset of linked scientific articles and code repositories; (2) developing a predictive model to match article authors with developer accounts; and, (3) analyzing patterns in these relationships.
 
-Our dataset integrates article-repository pairs from four sources, each with explicit mechanisms for code sharing: the Journal of Open Source Software (JOSS) and SoftwareX require code repositories as part of publication, Papers with Code directly connects preprints from ArXiv with software implementations, and Public Library of Science (PLOS) articles include mandatory data and code availability statements that we mined for repository links. We focused exclusively on GitHub-hosted repositories, which represent the predominant platform for scientific software sharing [@Cao2023TheRO; @escamilla2022riseofgithub]. For each article in our corpus, we resolved the source DOI via Semantic Scholar to ensure we captured its latest version and then extracted publication metadata and author metrics through OpenAlex. Finally, we collected information about each repository and the repository's contributors via the GitHub API. All data was collected between October and November 2024.[^1]
+Our dataset integrates article-repository pairs from four sources, each with explicit mechanisms for code sharing: the Journal of Open Source Software (JOSS) and SoftwareX require code repositories as part of publication, Papers with Code directly connects preprints from ArXiv with software implementations, and Public Library of Science (PLOS) articles include mandatory data and code availability statements that we mined for repository links. We focused exclusively on GitHub-hosted repositories, which represent the predominant platform for scientific software sharing [@Cao2023TheRO; @escamilla2022riseofgithub]. For each article in our corpus, we resolved the source DOI via Semantic Scholar to ensure we captured its latest version and then extracted publication metadata and author metrics through OpenAlex. Finally, we collected information about each repository and the repository's contributors via the GitHub API. A data collection and processing workflow diagram is available in @fig-workflow-diagram. All data was collected between October and November 2024.[^1]
 
 [^1]: The Journal of Open Source Software (JOSS) is available at <https://joss.theoj.org/>. SoftwareX articles are available at <https://www.sciencedirect.com/journal/softwarex/> and SoftwareX repositories are available at <https://github.com/ElsevierSoftwareX/>. Public Library of Science (PLOS) is available at <https://plos.org/> and article data is available via the `allofplos` Python package (<https://github.com/PLOS/allofplos/>). Papers with Code is available at <https://paperswithcode.com/> and data for links between papers and code is available at <https://paperswithcode.com/about/>. Documentation for the Semantic Scholar API is available at <https://api.semanticscholar.org/>, documentation for the OpenAlex API is available at <https://docs.openalex.org/>, and documentation for the GitHub API is available at <https://docs.github.com/en/rest/>.
 
@@ -526,6 +526,55 @@ best_model_f1 = exp_results.loc[best_model_idx, "F1"]
 To match article authors with repository developer accounts, we developed a machine-learning approach using transformer-based architectures. Specifically, we use transformers to overcome entity matching challenges such as when exact name or email matching is insufficient due to formatting variations and incomplete information (e.g., "J. Doe" vs. "Jane Doe" in publications or use of institutional versus personal email addresses). When exact matching fails, there is typically high semantic overlap between an author's name and developer account details (i.e., username, name, and email) that transformer models can leverage. We created a gold-standard dataset of 3,000 annotated author-developer account pairs from JOSS publications, where two independent reviewers classified each pair as matching or non-matching. After systematic evaluation of three transformer architectures with various feature combinations, our optimal model (fine-tuned DeBERTa-v3-base including developer account username and display name in the training data) achieved an F1 score of `{python} float(best_model_f1)`, with `{python} float(best_model_prec)` precision and `{python} float(best_model_rec)` recall (detailed model and feature set comparison available in the Appendix).
 
 Applying our model across all article-repository pairs yielded a large-scale dataset linking scientific authors and code contributors. As shown in @tbl-rs-graph-overall-counts, our complete dataset contains 138,596 unique article-repository pairs spanning multiple domains and publication types, with 295,806 distinct authors and over 152,170 developer accounts. From these, we identified 90,086 author-developer account relationships, creating a unique resource for investigating code contribution patterns in scientific teams. This dataset enables systematic examination of how software development work relates to scientific recognition and career trajectories. Both the dataset (<https://doi.org/10.7910/DVN/KPYVI1>) and model (<https://huggingface.co/evamxb/dev-author-em-clf>) are made publicly available to support further research.
+
+```{mermaid}
+%%| label: fig-workflow-diagram
+%%| fig-cap: Data Gathering and Processing Workflow. We begin by gathering article-repository pairs from PLOS, JOSS, SoftwareX, and Papers with Code, retaining only pairs where the source code repository is hosted on GitHub. For each article-repository pair, we retrieve the DOI for the most recent version of the article via the Semantic Scholar API, then obtain the article's metadata, author information, and bibliometric data from OpenAlex. In parallel, we collect the source code repository's metadata and contributor information using the GitHub API. After retrieving both article and repository information, we apply our trained author-developer matching model across all possible combinations of article authors and repository contributors for each article-repository pair. Finally, we store all retrieved information and the matched author-developer pairs in a SQLite database.
+%%| fig-height: 7
+%%| fig-align: center
+
+flowchart TB
+
+%% sources %%
+plos[PLOS] --> unfiltered[Unfiltered Article-Repository Pairs]
+softwarex[SoftwareX] --> unfiltered
+joss[JOSS] --> unfiltered
+pwc[Papers with Code] --> unfiltered
+
+%% filtering %%
+unfiltered --> |Filter non-GitHub Article-Repository Pairs| dataset[GitHub-only Article-Repository Pairs]
+
+%% article processing %%
+dataset --> s2[DOI Resolution with Semantic Scholar]
+s2 --> openalex[Article Metadata, Author Information, and Bibliometrics Retrieved from OpenAlex]
+
+%% repo processing %%
+dataset --> gh[Repository Metadata and Contributor Information Retrieved from GitHub]
+
+%% merge %%
+openalex --> core-dataset[Metadata Enriched Article-Repository Dataset]
+gh --> core-dataset
+
+%% author-developer matching %%
+subgraph ad-matching[" "]
+    direction TB
+	
+	author1[Author] <-..-> contrib1[Code Contributor]
+	author2[Author] <--> |Match| contrib1
+	author3[Author] <-..-> contrib1
+	author4[Author] <-..-> contrib1
+	author1 <--> |Match| contrib2[Code Contributor]
+	author2 <-..-> contrib2
+	author3 <-..-> contrib2
+	author4 <-..-> contrib2
+	
+	linkStyle 11,14 stroke:green,color:green;
+end
+
+core-dataset --> |Match Authors and Developers in Each Article-Repository Pair| ad-matching
+
+ad-matching --> |Store Data for Articles, Repositories, Authors, Code Contributors, Matched Individuals| final-dataset[Final Dataset]
+```
 
 ```{python}
 # Compute stats
