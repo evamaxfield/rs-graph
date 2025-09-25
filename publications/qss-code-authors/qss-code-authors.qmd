@@ -124,7 +124,7 @@ document_alternate_dois = read_table(
     db_models.DocumentAlternateDOI.__tablename__
 )
 repository_programming_languages = read_table(
-    read_table(db_models.RepositoryLanguage.__tablename__)
+    db_models.RepositoryLanguage.__tablename__
 )
 
 # Drop all "updated_datetime" and "created_datetime" columns
