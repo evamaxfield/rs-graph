@@ -1470,7 +1470,7 @@ for control_var, control_display_name in control_vars.items():
 ::: {.content-visible when-format="html"}
 ```{python}
 #| label: tbl-team-composition-counts
-#| tbl-cap: "Mean and Standard Deviation of Non-Code-Contributing Authors (NCC-A), Code-Contributing Authors (CC-A), and Code-Contributing Non-Authors (CC-NA) Research Team Members by Domain, Article Type, and Open Access Status. Only includes research teams from article-repository pairs with a most recent commit no later than 90 days after publication and excludes research teams in the top 3% of total author sizes."
+#| tbl-cap: "Mean and Standard Deviation of Non-Code-Contributing Authors (NCC-A), Code-Contributing Authors (CC-A), and Code-Contributing Non-Authors (CC-NA) Research Team Members by Domain, Article Type, and Open Access Status. Only includes research teams from article-repository pairs with repositories that have programming language files, a most recent commit no later than 90 days after publication, and excludes research teams in the top 3% of total author sizes."
 
 # Construct multi-row span HTML table
 # Columns should be: "Authors", "Code Contributing Authors", "Non-Author Code Contributors"
@@ -1621,7 +1621,7 @@ count_piece_subsequent_row_template = """    & {color_cmd}{value_name} & {color_
 table_header = """\\begin{table}
 \\centering
 \\small
-\\caption{Mean and Standard Deviation of Non-Code-Contributing Authors (NCC-A), Code-Contributing Authors (CC-A), and Code-Contributing Non-Authors (CC-NA) Research Team Members by Domain, Article Type, and Open Access Status. Only includes research teams from article-repository pairs with a most recent commit no later than 90 days after publication and excludes research teams in the top $3\%$ of total author sizes.}
+\\caption{Mean and Standard Deviation of Non-Code-Contributing Authors (NCC-A), Code-Contributing Authors (CC-A), and Code-Contributing Non-Authors (CC-NA) Research Team Members by Domain, Article Type, and Open Access Status. Only includes research teams from article-repository pairs with repositories that have programming language files, a most recent commit no later than 90 days after publication, and excludes research teams in the top $3\%$ of total author sizes.}
 \\label{tbl-team-composition-counts}
 \\begin{tabular}{llrrrr}
 \\toprule\\textbf{Control} & \\textbf{Subset} & \\textbf{Total Authors} & \\textbf{NCC-A} & \\textbf{CC-A} & \\textbf{CC-NA} \\\\
@@ -1725,7 +1725,7 @@ When examining these patterns over time and across different team sizes (@fig-co
 
 ```{python}
 #| label: fig-contributor-type-by-time-and-size
-#| fig-cap: "Average number of contributors per article, by contribution type, along with A) the year the article was published and B) the total number of authors included in the article. Only includes research teams from article-repository pairs with a most recent commit no later than 90 days after publication and excludes research teams in the top 3% of total author sizes for publication years with 50 or more articles. Shaded areas show the 95% confidence interval for the mean."
+#| fig-cap: "Average number of contributors per article, by contribution type, along with A) the year the article was published and B) the total number of authors included in the article. Only includes research teams from article-repository pairs with repositories that have programming language files, a most recent commit no later than 90 days after publication, and excludes research teams in the top 3% of total author sizes for publication years with 50 or more articles. Shaded areas show the 95% confidence interval for the mean."
 
 # Make a copy for team size comparison
 team_comp_by_year_and_size = team_comp_no_push_after_pub.copy()
