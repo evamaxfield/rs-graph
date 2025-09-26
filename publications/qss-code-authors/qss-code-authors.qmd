@@ -197,10 +197,6 @@ repository_programming_languages = repository_programming_languages[
 # Get the set of repository ids that have programming files
 repositories_with_code = repository_programming_languages["repository_id"].unique()
 
-# Filter down repositories to only include those ids
-repositories = repositories[repositories["id"].isin(repositories_with_code)]
-doc_repo_links = doc_repo_links[doc_repo_links["repository_id"].isin(repositories_with_code)]
-
 # Specifically drop doc_repo_links "id" column
 # It isn't used and will get in the way later when we do a lot of joins
 doc_repo_links.drop(columns=["id"], inplace=True)
@@ -609,6 +605,8 @@ end
 core-dataset --> |Match Authors and Developers in Each Article-Repository Pair| ad-matching
 
 ad-matching --> |Store Data for Articles, Repositories, Authors, Code Contributors, Matched Individuals| final-dataset[Final Dataset]
+
+style ad-matching fill: lightgrey
 ```
 
 ```{python}
@@ -913,8 +911,13 @@ IPython.display.Latex(stats_table_latex)
 ## Software Development Dynamics Within Research Teams
 
 ```{python}
+# Filter down repositories to only include those ids
+repositories_subset_with_code = repositories.loc[repositories["id"].isin(repositories_with_code)]
+doc_repo_links_with_code = doc_repo_links.loc[doc_repo_links["repository_id"].isin(repositories_with_code)]
+docs_with_code = documents.loc[documents["id"].isin(doc_repo_links_with_code["document_id"])]
+
 # Create subset documents
-docs_w_1_citation = documents.loc[documents["cited_by_count"] >= 1].copy()
+docs_w_1_citation = docs_with_code.loc[docs_with_code["cited_by_count"] >= 1].copy()
 
 # Take sample?
 if USE_SAMPLE:
@@ -1335,13 +1338,15 @@ print_ready_dataset_size = "{:,}".format(len(team_comp_no_push_after_pub))
 print_ready_n_papers_w_non_auth_devs =  "{:,}".format(n_papers_w_non_auth_devs)
 ```
 
-Understanding the composition and dynamics of software development teams provides essential context for analyzing how code contributions relate to scientific recognition and impact. To ensure reliable analysis, we focus on a subset of our article-repository pairs that meet several filtering conditions. First, we require each article-repository pair to have at least one citation (to ensure the research has received a basic level of engagement from the scientific community). Next, we require that repository commit activity stop before 90 days past the article publication date. Disallowing long-term projects ensures we do not include projects that may add additional code contributors later while still allowing a grace period during which developers can update repositories with additional documentation and publication information. We then subset the data to only include article-repository pairs with research teams of typical size by removing those with fewer than three authors and more than `{python} int(n_authors_97th_percentile)` authors, the 97th percentile for research team size. Finally, we filter out any predicted author-developer pairs with an F1 lower than 0.97 in order to improve robustness of our downstream analysis [^2]. This filtering process results in a dataset of `{python} print_ready_dataset_size` article-repository pairs. A table with the counts of article-repository pairs, authors, and developers by data sources, domains, document types, and access status for this filtered dataset is shown in @tbl-team-comp-no-push-after-pub-counts.
+Understanding the composition and dynamics of software development teams provides essential context for analyzing how code contributions relate to scientific recognition and impact. To ensure reliable analysis, we focus on a subset of our article-repository pairs that meet several filtering conditions. First, to ensure that we aren't analyzing "data repositories" (i.e. GitHub repositories which only store CSV, Parquet, or other dataset related file formats), we filter out any article-repository pairs that don't have any programming language files [^2]. Next, to ensure that the research has received a basic level of engagement from the scientific community, we remove any article-repository pairs which do not have at least one citation. We then require that repository commit activity stop before 90 days past the article publication date. Disallowing long-term projects ensures we do not include projects that may add additional code contributors later while still allowing a grace period during which developers can update repositories with additional documentation and publication information. We then subset the data to only include article-repository pairs with research teams of typical size by removing those with fewer than three authors and more than `{python} int(n_authors_97th_percentile)` authors, the 97th percentile for research team size. Finally, we filter out any predicted author-developer pairs with an F1 lower than 0.97 in order to improve robustness of our downstream analysis [^3]. This filtering process results in a dataset of `{python} print_ready_dataset_size` article-repository pairs. A table with the counts of article-repository pairs, authors, and developers by data sources, domains, document types, and access status for this filtered dataset is shown in @tbl-team-comp-no-push-after-pub-counts.
 
-[^2]: @fig-dist-of-author-dev-pred-confidence shows the distribution of predictive model confidence scores for author-developer pairs to justify this threshold. We chose the 0.97 threshold to ensure that we only include high-confidence matches while retaining a large proportion of the data (87,175 author-developer pairs) as only 2,911 author-developer-account pairs have a confidence less than 0.97 in the whole unfiltered dataset.
+[^2]: We use the list of programming langauges used by the GitHub platform via the [Linguist software](https://github.com/github-linguist/linguist), and the GitHub API to retrieve the bytes of code per-language within each repository. We remove article-repository pairs which have a non-zero number of bytes of code for programming language files.
 
-Within this filtered dataset, we categorized individuals into three groups: code-contributing authors (CC-A) who both authored papers and code to associated repositories[^3], non-code-contributing authors (NCC-A) who authored papers but showed no evidence of code contributions, and code-contributing non-authors (CC-NA) who contributed code but received no authorship recognition. This categorization revealed that papers in our dataset typically have `{python} total_auths` total authors, with `{python} total_auth_devs` code-contributing authors and `{python} total_auth_non_devs` non-code-contributing authors. Beyond the author list, papers averaged `{python} total_non_auth_devs` code-contributing non-authors. @tbl-team-composition-counts details these distributions by domain, article type, and open access status.
+[^3]: @fig-dist-of-author-dev-pred-confidence shows the distribution of predictive model confidence scores for author-developer pairs to justify this threshold. We chose the 0.97 threshold to ensure that we only include high-confidence matches while retaining a large proportion of the data (87,175 author-developer pairs) as only 2,911 author-developer-account pairs have a confidence less than 0.97 in the whole unfiltered dataset.
 
-[^3]: We define code-contributing authors as those who have at least one code commit to the repository associated with the article-repository pair.
+Within this filtered dataset, we categorized individuals into three groups: code-contributing authors (CC-A) who both authored papers and code to associated repositories[^4], non-code-contributing authors (NCC-A) who authored papers but showed no evidence of code contributions, and code-contributing non-authors (CC-NA) who contributed code but received no authorship recognition. This categorization revealed that papers in our dataset typically have `{python} total_auths` total authors, with `{python} total_auth_devs` code-contributing authors and `{python} total_auth_non_devs` non-code-contributing authors. Beyond the author list, papers averaged `{python} total_non_auth_devs` code-contributing non-authors. @tbl-team-composition-counts details these distributions by domain, article type, and open access status.
+
+[^4]: We define code-contributing authors as those who have at least one code commit to the repository associated with the article-repository pair.
 
 Perhaps most striking is our finding that `{python} print_ready_n_papers_w_non_auth_devs` papers (\~`{python} pct_papers_w_non_auth_devs`%) have at least one code contributor who was not matched to any article author. Within this substantial subset of papers, we found an average of `{python} mean_non_author_devs_for_papers_w_non_auth_devs` un-matched code contributors per paper. To better understand the nature of these developers contributions, we conducted an analysis using a random sample of 200 code-contributing non-authors (see @sec-appendix-additional-cc-na-analysis for complete methodology).
 
@@ -2848,9 +2853,9 @@ Our dataset collection process leveraged four sources of linked scientific artic
 print_ready_total_doi_resolved = "{:,}".format(n_articles_with_alt_doi)
 ```
 
-We enriched these article-repository pairs with metadata from multiple sources to create a comprehensive and analyzable dataset. We utilized the Semantic Scholar API for DOI resolution to ensure we found the latest version of each article. This resolution step was particularly important when working with preprints, as journals may have published these papers since their inclusion in the Papers with Code dataset. Using Semantic Scholar, we successfully resolved \~`{python} round(overall_doi_resolution * 100, 1)`% (n=`{python} print_ready_total_doi_resolved`) of all DOIs within our dataset[^4].
+We enriched these article-repository pairs with metadata from multiple sources to create a comprehensive and analyzable dataset. We utilized the Semantic Scholar API for DOI resolution to ensure we found the latest version of each article. This resolution step was particularly important when working with preprints, as journals may have published these papers since their inclusion in the Papers with Code dataset. Using Semantic Scholar, we successfully resolved \~`{python} round(overall_doi_resolution * 100, 1)`% (n=`{python} print_ready_total_doi_resolved`) of all DOIs within our dataset[^5].
 
-[^4]: Broken out by dataset source, we resolved \~`{python} round(per_dataset_doi_resolution["plos"] * 100, 1)`% (n=`{python} print_ready_plos_doi_resolved`) of all PLOS DOIs, \~`{python} round(per_dataset_doi_resolution["joss"] * 100, 1)`% (n=`{python} print_ready_joss_doi_resolved`) of all JOSS DOIs, \~`{python} round(per_dataset_doi_resolution["softwarex"] * 100, 1)`% (n=`{python} print_ready_softwarex_doi_resolved`) of all SoftwareX DOIs, and \~`{python} round(per_dataset_doi_resolution["pwc"] * 100, 1)`% (n=`{python} print_ready_pwc_doi_resolved`) of all Papers with Code (arXiv) DOIs.
+[^5]: Broken out by dataset source, we resolved \~`{python} round(per_dataset_doi_resolution["plos"] * 100, 1)`% (n=`{python} print_ready_plos_doi_resolved`) of all PLOS DOIs, \~`{python} round(per_dataset_doi_resolution["joss"] * 100, 1)`% (n=`{python} print_ready_joss_doi_resolved`) of all JOSS DOIs, \~`{python} round(per_dataset_doi_resolution["softwarex"] * 100, 1)`% (n=`{python} print_ready_softwarex_doi_resolved`) of all SoftwareX DOIs, and \~`{python} round(per_dataset_doi_resolution["pwc"] * 100, 1)`% (n=`{python} print_ready_pwc_doi_resolved`) of all Papers with Code (arXiv) DOIs.
 
 We then utilized the OpenAlex API to gather detailed publication metadata, including:
 
