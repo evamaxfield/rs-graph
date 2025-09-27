@@ -48,35 +48,35 @@ format:
       echo: false
       warning: false
 
-  elsevier-pdf:
-    toc: false
-    execute:
-      echo: false
-      warning: false
-    include-in-header:  
-      - text: |
-          \usepackage{booktabs}    % For professional-looking tables
-          \usepackage{multirow}    % For merged cells
-          \usepackage{siunitx}     % For number alignment
-          \usepackage[table]{xcolor}  % The 'table' option is crucial for \rowcolors to work
-          \usepackage{float}
-          \floatplacement{table}{H}
-          \usepackage{lineno}
-          \linenumbers
+#   elsevier-pdf:
+#     toc: false
+#     execute:
+#       echo: false
+#       warning: false
+#     include-in-header:  
+#       - text: |
+#           \usepackage{booktabs}    % For professional-looking tables
+#           \usepackage{multirow}    % For merged cells
+#           \usepackage{siunitx}     % For number alignment
+#           \usepackage[table]{xcolor}  % The 'table' option is crucial for \rowcolors to work
+#           \usepackage{float}
+#           \floatplacement{table}{H}
+#           \usepackage{lineno}
+#           \linenumbers
         
-    journal:
-      cite-style: authoryear
-      name: "in-progress"
-      model: "3p"
-      layout: "onecolumn"
+#     journal:
+#       cite-style: authoryear
+#       name: "in-progress"
+#       model: "3p"
+#       layout: "onecolumn"
 
-    # Word count
-    citeproc: false
-    filters:
-      - at: pre-quarto
-        path: _extensions/andrewheiss/wordcount/citeproc.lua
-      - at: pre-quarto
-        path: _extensions/andrewheiss/wordcount/wordcount.lua
+#     # Word count
+#     citeproc: false
+#     filters:
+#       - at: pre-quarto
+#         path: _extensions/andrewheiss/wordcount/citeproc.lua
+#       - at: pre-quarto
+#         path: _extensions/andrewheiss/wordcount/wordcount.lua
 ---
 
 # Introduction
@@ -594,7 +594,7 @@ best_model_rec = exp_results.loc[best_model_idx, "Recall"]
 best_model_f1 = exp_results.loc[best_model_idx, "F1"]
 ```
 
-To match article authors with repository developer accounts, we developed a machine-learning approach using transformer-based architectures. Specifically, we use transformers to overcome entity matching challenges such as when exact name or email matching is insufficient due to formatting variations and incomplete information (e.g., "J. Doe" vs. "Jane Doe" in publications or use of institutional versus personal email addresses). When exact matching fails, there is typically high semantic overlap between an author's name and developer account details (i.e., username, name, and email) that transformer models can leverage. We created a gold-standard dataset of 3,000 annotated author-developer account pairs from JOSS publications, where two independent reviewers classified each pair as matching or non-matching. After systematic evaluation of three transformer architectures with various feature combinations, our optimal model (fine-tuned DeBERTa-v3-base including developer account username and display name in the training data) achieved an F1 score of `{python} float(best_model_f1)`, with `{python} float(best_model_prec)` precision and `{python} float(best_model_rec)` recall (detailed model and feature set comparison available in the Appendix).
+To match article authors with repository developer accounts, we developed a machine-learning approach using transformer-based architectures. Specifically, we use transformers to overcome entity matching challenges such as when exact name or email matching is insufficient due to formatting variations and incomplete information (e.g., "J. Doe" vs. "Jane Doe" in publications or use of institutional versus personal email addresses). When exact matching fails, there is typically high semantic overlap between an author's name and developer account details (i.e., username, name, and email) that transformer models can leverage. We created a gold-standard dataset of 3,000 annotated author-developer account pairs from JOSS publications, where two independent reviewers classified each pair as matching or non-matching. After systematic evaluation of three transformer architectures with various feature combinations, our optimal model (fine-tuned DeBERTa-v3-base including developer account username and display name in the training data) achieved an F1 score of `{python} float(best_model_f1)`, with `{python} float(best_model_prec)` precision and `{python} float(best_model_rec)` recall. A detailed comparison of models and feature sets, and an evaluation of model performance across non-JOSS author-developer pairs is made available in the Appendix.
 
 Applying our model across all article-repository pairs yielded a large-scale dataset linking scientific authors and code contributors. To ensure that each article-repository pair used in our analysis set is a one-to-one match, we filter out any documents and repositories used in multiple article-repository pairs [^2]. As shown in @tbl-rs-graph-overall-counts, our complete, one-to-one article-repository dataset contains 138,596 unique article-repository pairs spanning multiple domains and publication types, with 295,806 distinct authors and over 152,170 developer accounts. From these, we identified 90,086 author-developer account relationships, creating a unique resource for investigating code contribution patterns in scientific teams. This dataset enables systematic examination of how software development work relates to scientific recognition and career trajectories. Both the dataset (<https://doi.org/10.7910/DVN/KPYVI1>) and model (<https://huggingface.co/evamxb/dev-author-em-clf>) are made publicly available to support further research.
 
@@ -1392,7 +1392,7 @@ Within this filtered dataset, we categorized individuals into three groups: code
 
 Perhaps most striking is our finding that `{python} print_ready_n_papers_w_non_auth_devs` papers (\~`{python} pct_papers_w_non_auth_devs`%) have at least one code contributor who was not matched to any article author. Within this substantial subset of papers, we found an average of `{python} mean_non_author_devs_for_papers_w_non_auth_devs` un-matched code contributors per paper. To better understand the nature of these developers contributions, we conducted an analysis using a random sample of 200 code-contributing non-authors (see @sec-appendix-additional-cc-na-analysis for complete methodology).
 
-Our analysis revealed three distinct groups: \~39% (n=78) represent true non-authors (individuals who likely should not be matched to an author), \~30.5% (n=61) appear to be missed classifications (individuals who likely should have been matched to authors), and the remaining \~30.5% (n=61) were unclear due to limited profile information. The majority of contributors across all groups made code changes rather than just documentation updates. Among true non-authors, \~77.6% (n=59) contributed code, with the top 25th percentile of these contributors contributing \~10.7% of total repository commits and \~14.4% of absolute code changes. The unclear cases showed substantially higher contribution levels— many were repository owners with extensive engagement. Yet, even among the non-owners, the median contributor accounted for \~34.6% of repository commits and \~12.7% of absolute changes. Due to the limited size of our sample (n=200 code-contributing non-authors), we do not generalize these findings to the entire population but note that they describe the diverse nature of code contribution patterns from potentially unacknowledged contributors.
+Our analysis revealed three distinct groups: \~39% (n=78) represent true non-authors (individuals who likely should not be matched to an author), \~30.5% (n=61) appear to be missed classifications (individuals who likely should have been matched to authors), and the remaining \~30.5% (n=61) were unclear due to limited profile information. Additional qualitative error analysis was conducted across the set of 61 likely authors and our findings are available in the appendex (@sec-appendix-cc-na-error-analysis). The majority of contributors across all groups made code changes rather than just documentation updates. Among true non-authors, \~77.6% (n=59) contributed code, with the top 25th percentile of these contributors contributing \~10.7% of total repository commits and \~14.4% of absolute code changes. The unclear cases showed substantially higher contribution levels— many were repository owners with extensive engagement. Yet, even among the non-owners, the median contributor accounted for \~34.6% of repository commits and \~12.7% of absolute changes. Due to the limited size of our sample (n=200 code-contributing non-authors), we do not generalize these findings to the entire population but note that they describe the diverse nature of code contribution patterns from potentially unacknowledged contributors.
 
 These findings reveal a more complex dynamic between software development and authorship recognition than previously documented. While our finding that each paper averages only a single code-contributing author aligns with previous research showing technical tasks typically fall to first authors [@Larivire2020InvestigatingTD], the substantial contributions made by unrecognized contributors suggest systematic gaps in how scientific software development work is credited.
 
@@ -3106,6 +3106,19 @@ Analysis of each model's performance revealed that including developer display n
 
 To facilitate the reuse of our work, we have made our trained model and supporting code publicly available. Complete fine-tuning, evaluation, and inference code is available as the Python package: [sci-soft-models](https://github.com/evamaxfield/sci-soft-models), and the fine-tuned model has been released on HuggingFace ([evamxb/dev-author-em-clf](https://huggingface.co/evamxb/dev-author-em-clf)).
 
+#### Evaluation of Model Performance on Non-JOSS Author-Developer Pairs
+
+To assess our model's generalizability beyond the JOSS dataset used for training, we conducted an additional evaluation using author-developer-account pairs from the PLOS, SoftwareX, and Papers with Code datasets. We  created a dataset of all combinations of possible author-developer pairs from 20 article-repository pairs from each dataset. This resulted in 535 possible author-developer pairs for annotation across the 60 total article-repository pairs. Two independent annotators classified each of the possible author-developer pairs as either matches or non-matches. This annotation process mirrors how our complete dataset was constructed by using the trained model to predict matches from all possible author-developer pairs for a given article-repository pair. The two annotators achieved a Cohen's kappa of 0.948, or "almost perfect" agreement [@cohen1960coefficient; @mchugh2012interrater]. Annotators further discussed and resolved all disagreements.
+
+The trained author-developer matching model was then applied to this new dataset, achieving an overall binary-F1 score of 0.89, precision of 0.92 and recall of 0.87 (positive="match"). The overall macro-F1 score was 0.94, with a precision of 0.95 and recall of 0.93. Per-dataset performance is presented in @tbl-em-model-non-joss-eval. Across each of the non-JOSS datasets, the model demonstrated strong performance, with binary-F1 scores ranging from 0.88 to 0.90 and 0.94 for all macro-F1 scores.
+
+| dataset          | binary-F1 | binary-Precision | binary-Recall | macro-F1 | macro-Precision | macro-Recall |
+|------------------|-----------|------------------|---------------|----------|-----------------|--------------|
+| PLOS             | 0.88      | 0.79             | 1.00          | 0.94     | 0.89            | 0.99         |
+| SoftwareX        | 0.90      | 0.96             | 0.85          | 0.94     | 0.97            | 0.92         |
+| Papers With Code | 0.89      | 1.00             | 0.81          | 0.94     | 0.98            | 0.90         |
+: Per-dataset performance of the author-developer-account matching model on non-JOSS datasets. {#tbl-em-model-non-joss-eval}
+
 #### Model Limitations
 
 While our model demonstrates strong performance, we acknowledge certain limitations in our approach:
@@ -3520,6 +3533,17 @@ _get_stats_for_author_cls(
 Our analysis provides evidence that code-contributing non-authors represent a heterogeneous group with varying contribution levels. While defining "substantial" contribution worthy of authorship remains challenging, our findings reveal a clear mix of legitimate non-authors and potentially missed classifications, with both groups often contributing meaningful portions of repository commits and code changes.
 
 Our sample size of 200 limits generalizability to the full population of code-contributing non-authors. Additionally, the manual annotation process introduces potential subjectivity despite our established criteria, and our reliance on publicly available GitHub profiles may systematically underestimate contributions from developers with minimal profile information.
+
+#### Qualitative Error Analysis of Missed Classifications {#sec-appendix-cc-na-error-analysis}
+
+To better understand why certain code-contributing non-authors were missed classifications, we conducted a qualitative error analysis of the 61 contributors labeled as such. We identified several common themes:
+
+1. **Name Variations and Cultural Differences**: The model performed better with Anglosaxon names, while names from other cultures were more likely to be missed. This suggests a possible bias in the training data that favors certain name structures.
+2. **Additional Unrelated Text in Names**: When usernames or display names contained longer phrases or unrelated words, the model tended to classify them as no-match, even if there were strong indicators of a match. For example, a username such as "awesome_data_scientist_john_d" paired with an author name "John Doe" might be missed due to the additional text in the username.
+3. **Significant Differences Between Username and Display Name**: The model struggled when there were substantial differences between the username and author name, such as when a user chose and used an English name in their GitHub profile that differed significantly from their authorship name.
+4. **Limited Information from Text Alone**: The annotators often had to look beyond the provided text, such as visiting linked websites, to make accurate classifications. The model, however, only had access to the text features, which likely contributed to missed matches.
+
+These themes highlight areas for potential improvement in the model, such as incorporating more diverse training data and exploring additional features that could capture cultural name variations and contextual information.
 
 ## Article Citation Linear Model Results
 
