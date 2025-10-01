@@ -1416,6 +1416,7 @@ control_vars = {
     "Overall": "Overall",
 }
 control_var_tables = {}
+team_comp_table_rows = []
 for control_var, control_display_name in control_vars.items():
     if control_var == "Overall":
         mean_table = (
@@ -1434,6 +1435,19 @@ for control_var, control_display_name in control_vars.items():
             .to_frame()
             .T
         )
+
+        # For overall, we want to add a row for every row in the team_comp_no_push_after_pub_counts table
+        for _, team_comp_no_push_after_pub_counts_row in team_comp_no_push_after_pub_counts.iterrows():
+            team_comp_table_rows.append(
+                {
+                    "Control": control_display_name,
+                    "Subset": "Full Dataset",
+                    "Total Authors": team_comp_no_push_after_pub_counts_row["n_authors"],
+                    "NCC-A": team_comp_no_push_after_pub_counts_row["n_author_non_devs"],
+                    "CC-A": team_comp_no_push_after_pub_counts_row["n_author_devs"],
+                    "CC-NA": team_comp_no_push_after_pub_counts_row["n_non_author_devs"],
+                }
+            )
 
         # Merge and format to string
         count_table_rows = []
@@ -1481,6 +1495,23 @@ for control_var, control_display_name in control_vars.items():
                 }
             )
 
+        # Also add all of these rows to the team_comp_table_rows
+        control_df = team_comp_no_push_after_pub_counts.groupby(control_var)[
+            ["n_authors", "n_author_non_devs", "n_author_devs", "n_non_author_devs"]
+        ]
+        for subset_value, subset_df in control_df:
+            for _, subset_row in subset_df.iterrows():
+                team_comp_table_rows.append(
+                    {
+                        "Control": control_display_name,
+                        "Subset": subset_value,
+                        "Total Authors": subset_row['n_authors'],
+                        "NCC-A": subset_row['n_author_non_devs'],
+                        "CC-A": subset_row['n_author_devs'],
+                        "CC-NA": subset_row['n_non_author_devs'],
+                    }
+                )
+
     # Create dataframe
     count_table = pd.DataFrame(count_table_rows)
 
@@ -1505,8 +1536,19 @@ for control_var, control_display_name in control_vars.items():
     # Order alphabetically
     count_table = count_table.sort_values("Subset")
     
-    # Append
+    # Add to dictionary
     control_var_tables[control_display_name] = count_table
+
+# Convert the mean_std_team_comp_as_table_rows to a dataframe
+team_comp_table_df = pd.DataFrame(team_comp_table_rows)
+
+# We want to pivot the table so that there are four columns: "Control", "Subset", "Contributor Type", "Count"
+team_comp_table_df = team_comp_table_df.melt(
+    id_vars=["Control", "Subset"],
+    value_vars=["Total Authors", "NCC-A", "CC-A", "CC-NA"],
+    var_name="Contributor Type",
+    value_name="Count",
+)
 ```
 
 ::: {.content-visible when-format="html"}
@@ -4404,3 +4446,53 @@ However, our analysis found no evidence to support this hypothesis. When examini
 We ultimately decided to exclude this analysis for two key methodological reasons. First, our approach of using repository-level commit duration as a proxy for individual contribution patterns proved too coarse-grained. A more precise analysis would need to examine individual-level contribution durations and patterns rather than overall project length. Second, our method did not account for the varying levels of contribution that different developers make to a repository. Simply correlating overall project duration with authorship rates fails to capture the nuanced ways that sustained, meaningful technical contributions might influence authorship decisions.
 
 These limitations suggest potential directions for future work that could more rigorously examine the relationship between long-term technical engagement and scientific recognition. Such work could benefit from a more granular analysis of individual contribution patterns, incorporating measures of contribution significance and sustainability rather than just temporal duration.
+
+## TODO: PLOT IN PLACE OF TABLE 2
+
+```{python}
+
+# TODO: add label and figure text
+
+g = sns.catplot(
+    data=team_comp_table_df,
+    x="Subset",
+    y="Count",
+    hue="Contributor Type",
+    hue_order=[
+        "Total Authors",
+        "NCC-A",
+        "CC-A",
+        "CC-NA",
+    ],
+    col="Control",
+    col_wrap=2,
+    kind="bar",
+    height=3.3,
+    aspect=1,
+    sharey=True,
+    sharex=False,
+    legend=True,
+)
+
+# Rotate x labels
+for ax in g.axes.flat:
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+
+# Move legend to below the plot
+# Shift the legend down a bit with bbox_to_anchor
+sns.move_legend(
+    g,
+    loc="upper center",
+    ncol=4,
+)
+
+# Change titles
+g.set_titles("{col_name}")
+
+# Remove x label
+for ax in g.axes.flat:
+    ax.set_xlabel("")
+
+# Add space between plots
+g.fig.subplots_adjust(hspace=1, wspace=0.4)
+```
