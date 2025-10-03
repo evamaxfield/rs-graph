@@ -37,46 +37,46 @@ number-sections: true
 
 ## Specific for target format
 format:
-  html:
-    standalone: true
-    embed-resources: true
-    toc: true
-    toc-location: left
-    reference-location: margin
-    citation-location: document
-    execute:
-      echo: false
-      warning: false
-
-#   elsevier-pdf:
-#     toc: false
+#   html:
+#     standalone: true
+#     embed-resources: true
+#     toc: true
+#     toc-location: left
+#     reference-location: margin
+#     citation-location: document
 #     execute:
 #       echo: false
 #       warning: false
-#     include-in-header:  
-#       - text: |
-#           \usepackage{booktabs}    % For professional-looking tables
-#           \usepackage{multirow}    % For merged cells
-#           \usepackage{siunitx}     % For number alignment
-#           \usepackage[table]{xcolor}  % The 'table' option is crucial for \rowcolors to work
-#           \usepackage{float}
-#           \floatplacement{table}{H}
-#           \usepackage{lineno}
-#           \linenumbers
-        
-#     journal:
-#       cite-style: authoryear
-#       name: "in-progress"
-#       model: "3p"
-#       layout: "onecolumn"
 
-#     # Word count
-#     citeproc: false
-#     filters:
-#       - at: pre-quarto
-#         path: _extensions/andrewheiss/wordcount/citeproc.lua
-#       - at: pre-quarto
-#         path: _extensions/andrewheiss/wordcount/wordcount.lua
+  elsevier-pdf:
+    toc: false
+    execute:
+      echo: false
+      warning: false
+    include-in-header:  
+      - text: |
+          \usepackage{booktabs}    % For professional-looking tables
+          \usepackage{multirow}    % For merged cells
+          \usepackage{siunitx}     % For number alignment
+          \usepackage[table]{xcolor}  % The 'table' option is crucial for \rowcolors to work
+          \usepackage{float}
+          \floatplacement{table}{H}
+          \usepackage{lineno}
+          \linenumbers
+        
+    journal:
+      cite-style: authoryear
+      name: "in-progress"
+      model: "3p"
+      layout: "onecolumn"
+
+    # Word count
+    citeproc: false
+    filters:
+      - at: pre-quarto
+        path: _extensions/andrewheiss/wordcount/citeproc.lua
+      - at: pre-quarto
+        path: _extensions/andrewheiss/wordcount/wordcount.lua
 ---
 
 # Introduction
@@ -125,7 +125,7 @@ if "QSS_CODE_AUTHORSHIP_USE_SAMPLE" in os.environ:
     USE_SAMPLE = bool(int(os.environ["QSS_CODE_AUTHORSHIP_USE_SAMPLE"]))
 else:
     USE_SAMPLE = True
-# USE_SAMPLE = False
+USE_SAMPLE = False
 
 # Other paths
 EXTRA_DATA_PATH = Path.cwd() / "extra-data"
@@ -323,6 +323,7 @@ merged_repository_contributor_doc_repo_links = pd.merge(
 
 # Compute stats for data sources
 data_source_stats = []
+article_repo_pairs_per_source = {}
 for _, data_source in dataset_sources.iterrows():
     # Get total article-repo pairs
     data_source_stats.append(
@@ -341,6 +342,15 @@ for _, data_source in dataset_sources.iterrows():
             ]["developer_account_id"].nunique(),
         }
     )
+
+    # Store article-repo pairs per source for later use
+    article_repo_pairs_per_source[data_source["name"]] = len(
+        doc_repo_links[doc_repo_links["dataset_source_id"] == data_source["id"]]
+    )
+
+# Make the article_repo_pairs_per_source print-ready
+for data_source_name, count in article_repo_pairs_per_source.items():
+    article_repo_pairs_per_source[data_source_name] = "{:,}".format(count)
 
 # Create topic merged tables
 merged_doc_repo_links_topics = pd.merge(
@@ -524,9 +534,9 @@ print_ready_pwc_doi_resolved = "{:,}".format(per_dataset_doi_resolved_counts["pw
 
 Software and collaboration are two essential ingredients in contemporary science but are often investigated separately: Collaboration is typically studied using bibliometric data to understand, for example, who works with whom [@newman2014], who receives what credit [@shen2014collective], and to what effect [@ahuja2000collaboration]. Similarly, scientific software is often quantitatively studied by extracting mentions [@du2021softcite] or formal citations [@du2022understanding] that connect scientists and software to specific impact metrics (i.e., citation counts)[@park2019]. 
 
-In the following paper, we unite these two literatures to better understand how the development of software affects the allocation of credit in collaborative settings. In doing so, we take advantage of advances in natural language processing and machine learning to develop unique data sources that complement traditional bibliometric indicators. We first build a dataset of 138,596 paired research articles and code repositories — giving us a verified connection between software and the published literature that it supports. Next, we develop a predictive model that matches the authors of a research article and the developer accounts of a linked source code repository—giving us a unique way to understand the allocation of credit for software contributions. We apply the predictive model to our dataset and then use commit histories from the public software repositories' to test three hypotheses.
+In the following paper, we unite these two literatures to better understand how the development of software affects the allocation of credit in collaborative settings. In doing so, we take advantage of advances in natural language processing and machine learning to develop unique data sources that complement traditional bibliometric indicators. We first build a dataset (rs-graph-v1) of 138,596 paired research articles and code repositories — giving us a verified connection between software and the published literature that it supports. Next, we develop a predictive model that matches the authors of a research article and the developer accounts of a linked source code repository—giving us a unique way to understand the allocation of credit for software contributions. We apply the predictive model to our dataset and then use commit histories from the public software repositories' to test three hypotheses.
 
-We identify several patterns that distinguish code contributions from formal scientific recognition. We show that 28.6% (n=6,529) of articles have non-author code-contributors—individuals who may have helped create the software but received no formal authorship credit. We find that code-contributing authors are associated with a modest increase in article-level impact metrics (on average, a 4.2% increase in citations per code-contributing author), but these effects become statistically non-significant when controlling for domain, article type, and open access status. We find that first authors are significantly more likely to be code contributors than other author positions across all conditions tested. We also find a negative relationship between coding frequency and scholarly impact: authors who contribute code more frequently show progressively lower h-indices than their non-coding peers, a pattern that persists even when controlling for publication count, and author's most common author position, domain, and article type [^1].
+We identify several patterns that distinguish code contributions from formal scientific recognition. We use a filtered set of one-to-one article-repository pairs (removing outliers for research team size, repository commit duration, and having at least one citation) to show that 28.6% (n=6,529) of articles have non-author code-contributors—individuals who may have helped create the software but received no formal authorship credit. We find that code-contributing authors are associated with a modest increase in article-level impact metrics (on average, a 4.2% increase in citations per code-contributing author), but these effects become statistically non-significant when controlling for domain, article type, and open access status. We find that first authors are significantly more likely to be code contributors than other author positions across all conditions tested. We also find a negative relationship between coding frequency and scholarly impact: authors who contribute code more frequently show progressively lower h-indices than their non-coding peers, a pattern that persists even when controlling for publication count, and author's most common author position, domain, and article type [^1].
 
 [^1]: We use the phrase "most common" to mean most frequent, and in the case of a tie, their most recent. That is, if an author has been first author on four publications in our dataset, middle author on two publications, and has never been last author, they are considered a "first author" for the purposes of our analysis. We discuss the limitations of this approach in the @sec-discussion.
 
@@ -636,21 +646,21 @@ To match article authors with repository developer accounts, we developed a mach
 
 Our complete dataset, named the "Research Software Graph" (rs-graph-v1), contains `{python} print_ready_m2m_doc_repo_links_count` article-repository pairs (`{python} many_to_many_doc_repo_links_per_source["joss"]` from JOSS, `{python} many_to_many_doc_repo_links_per_source["plos"]` from PLOS, `{python} many_to_many_doc_repo_links_per_source["pwc"]` from Papers with Code, and `{python} many_to_many_doc_repo_links_per_source["softwarex"]` from SoftwareX), `{python} print_ready_m2m_unique_docs_count` unique articles (`{python} many_to_many_unique_docs_per_source["joss"]` from JOSS, `{python} many_to_many_unique_docs_per_source["plos"]` from PLOS, `{python} many_to_many_unique_docs_per_source["pwc"]` from Papers with Code, and `{python} many_to_many_unique_docs_per_source["softwarex"]` from SoftwareX), and `{python} print_ready_m2m_unique_repos_count` unique repositories (`{python} many_to_many_unique_repos_per_source["joss"]` from JOSS, `{python} many_to_many_unique_repos_per_source["plos"]` from PLOS, `{python} many_to_many_unique_repos_per_source["pwc"]` from Papers with Code, and `{python} many_to_many_unique_repos_per_source["softwarex"]` from SoftwareX). However, `{python} print_ready_m2m_to_1to1_doc_repo_links_dropped` article-repository pairs form many-to-many relationships in which the same article is linked to multiple repositories or the same repository is linked to multiple articles. The median number of repositories per article is `{python} print_ready_m2m_median_repos` (95th percentile: `{python} print_ready_m2m_95th_percentile_repos`, 97th percentile: `{python} print_ready_m2m_97th_percentile_repos`, 99th percentile: `{python} print_ready_m2m_99th_percentile_repos`). The median number of articles per repository is `{python} print_ready_m2m_median_docs` (95th percentile: `{python} print_ready_m2m_95th_percentile_docs`, 97th percentile: `{python} print_ready_m2m_97th_percentile_docs`, 99th percentile: `{python} print_ready_m2m_99th_percentile_docs`).
 
-To ensure that our analysis focuses on clear, unambiguous relationships between articles and repositories, prior to analysis we utilize a partial rs-graph-v1 dataset which filters out any articles or repositories associated to multiple article-repository pairs. This filtering step removes `{python} print_ready_m2m_to_1to1_doc_repo_links_dropped` article-repository pairs. As shown in @tbl-rs-graph-overall-counts, the complete one-to-one article-repository dataset contains 138,596 unique article-repository pairs spanning multiple domains and publication types, with 295,806 distinct authors and over 152,170 developer accounts. From these, we identified 90,086 author-developer account relationships, creating a unique resource for investigating code contribution patterns in scientific teams. This dataset enables systematic examination of how software development work relates to scientific recognition and career trajectories. Both the dataset (<https://doi.org/10.7910/DVN/KPYVI1>) and model (<https://huggingface.co/evamxb/dev-author-em-clf>) are made publicly available to support further research.
+To ensure that our analysis focuses on clear, unambiguous relationships between articles and repositories, prior to analysis we utilize a partial rs-graph-v1 dataset which filters out any articles or repositories associated to multiple article-repository pairs. This filtering step removes `{python} print_ready_m2m_to_1to1_doc_repo_links_dropped` article-repository pairs. As shown in @tbl-rs-graph-overall-counts, the complete one-to-one article-repository dataset contains 138,596 unique article-repository pairs spanning multiple domains and publication types (`{python} article_repo_pairs_per_source["joss"]` unique articles, repositories, and pairs from JOSS, `{python} article_repo_pairs_per_source["plos"]` from PLOS, `{python} article_repo_pairs_per_source["pwc"]` from Papers with Code, and `{python} article_repo_pairs_per_source["softwarex"]` from SoftwareX). Additionally the one-to-one dataset includes information for 295,806 distinct authors and 152,170 developer accounts. The one-to-one dataset includes 90,086 author-developer account relationships, creating a unique resource for investigating code contribution patterns in scientific teams. This dataset enables systematic examination of how software development work relates to scientific recognition and career trajectories. Both the complete rs-graph-v1 dataset (<https://doi.org/10.7910/DVN/KPYVI1>) and model (<https://huggingface.co/evamxb/dev-author-em-clf>) are made publicly available to support further research.
 
 ```{mermaid}
 %%| label: fig-workflow-diagram
-%%| fig-cap: Data Gathering and Processing Workflow. We begin by gathering article-repository pairs from PLOS, JOSS, SoftwareX, and Papers with Code, retaining only pairs where the source code repository is hosted on GitHub. For each article-repository pair, we retrieve the DOI for the most recent version of the article via the Semantic Scholar API, then obtain the article's metadata, author information, and bibliometric data from OpenAlex. In parallel, we collect the source code repository's metadata and contributor information using the GitHub API. After retrieving both article and repository information, we apply our trained author-developer matching model across all possible combinations of article authors and repository contributors for each article-repository pair. Finally, we store all retrieved information and the matched author-developer pairs in a SQLite database.
+%%| fig-cap: Data Gathering and Processing Workflow. We begin by gathering article-repository pairs from PLOS, JOSS, SoftwareX, and Papers with Code, retaining only pairs where the source code repository is hosted on GitHub. For each article-repository pair, we retrieve the DOI for the most recent version of the article via the Semantic Scholar API, then obtain the article's metadata, author information, and bibliometric data from OpenAlex. In parallel, we collect the source code repository's metadata and contributor information using the GitHub API. After retrieving both article and repository information, we apply our trained author-developer matching model across all possible combinations of article authors and repository contributors for each article-repository pair. Finally, we store all retrieved information and the matched author-developer pairs in a SQLite database. Article-repository pair counts are approximate because there are no snapshots of these databases at a single point in time. The estimates are based on counts from each data source taken in October 2025.
 %%| fig-height: 7
 %%| fig-align: center
 
 flowchart TB
 
 %% sources %%
-plos["PLOS (n~10,000 pairs)"] --> unfiltered[Unfiltered Article-Repository Pairs]
-softwarex["SoftwareX (n~700 pairs)"] --> unfiltered
-joss["JOSS (n~3,000 pairs)"] --> unfiltered
-pwc["Papers with Code (n~180,000 pairs)"] --> unfiltered
+plos["PLOS<br/>(n~60,000 pairs)"] --> unfiltered[Unfiltered Article-Repository Pairs]
+softwarex["SoftwareX<br/>(n~700 pairs)"] --> unfiltered
+joss["JOSS<br/>(n~3,000 pairs)"] --> unfiltered
+pwc["Papers with Code<br/>(n~180,000 pairs)"] --> unfiltered
 
 %% filtering %%
 unfiltered --> |Filter non-GitHub Article-Repository Pairs| dataset[GitHub-only Article-Repository Pairs]
@@ -3035,7 +3045,9 @@ Software development represents a form of scholarly labor that has become increa
 
 Our data collection approach introduces several methodological constraints to consider when interpreting these results. By focusing exclusively on GitHub repositories, we likely miss contributions stored on alternative platforms such as GitLab, Bitbucket, or institutional repositories, potentially skewing our understanding of contribution patterns. As @trujillo2022penumbra, @Cao2023TheRO, and @escamilla2022riseofgithub have all noted, while GitHub is the predominate host of scientific software, significant portions of research code exist on other platforms. Additionally, our reliance on public repositories means we cannot account for private repositories or code that were never publicly shared, potentially underrepresenting sensitive research areas or proprietary methods.
 
-<!-- TODO: include the difference in article-repository pairs possible from the very start of the dataset to what our final database resulted in as a solution to "github as a sole repository host" issue. Note: there will definitely be some article-repository pairs which didn't make it through the pipeline due to errors (like article not found in OpenAlex) but GitHub was a decent source of dropped pairs -->
+Further, while our data processing workflow began with ~60,000 possible article-repository pairs from PLOS, ~3,000 from JOSS, ~700 from SoftwareX, and ~180,000 from Papers with Code for a possible total of ~243,700 [^10], rs-graph-v1 contained a total of `{python} print_ready_m2m_doc_repo_links_count` article-repository pairs. Many of the possible article-repository pairs were filtered out due to the linked repository not being hosted on GitHub, GitHub repositories not being found (either private, non-existent, or moved), or SemanticScholar or OpenAlex not indexing the article.
+
+[^10]: Article-repository pair counts are approximate because there are no snapshots of these databases at a single point in time. The estimates are based on counts from each data source taken in October 2025.
 
 Our labeling of article types (software article, research article, preprint) was based on the data source (PLOS, JOSS, SoftwareX, Papers with Code) and in the case of Papers with Code articles, our DOI resolution process and the document type available from OpenAlex. This approach may misclassify certain articles, especially those from Papers with Code (arXiv). One potential alternative approach would involve classification of the repository itself following the recommendations of @researchsoftwareclassifications in breaking down repositories by their role in research (e.g., "Modeling, Simuluation, and Data Analysis", "Technology Research Software", and "Research Infrastructure Software"). This classification would allow us to investigate not only the differences of "software papers" vs "research articles" and "preprints" (which we believe would both typically be paired with "Modeling, Simulation, and Data Analysis" repositories), but the _purpose_ of the code as it relates to the research. However, there is currently no established automated method for performing this classification at scale.
 
@@ -3077,9 +3089,9 @@ Our dataset collection process leveraged four sources of linked scientific artic
 print_ready_total_doi_resolved = "{:,}".format(n_articles_with_alt_doi)
 ```
 
-We enriched these article-repository pairs with metadata from multiple sources to create a comprehensive and analyzable dataset. We utilized the Semantic Scholar API for DOI resolution to ensure we found the latest version of each article. This resolution step was particularly important when working with preprints, as journals may have published these papers since their inclusion in the Papers with Code dataset. Using Semantic Scholar, we successfully resolved \~`{python} round(overall_doi_resolution * 100, 1)`% (n=`{python} print_ready_total_doi_resolved`) of all DOIs within our dataset[^10].
+We enriched these article-repository pairs with metadata from multiple sources to create a comprehensive and analyzable dataset. We utilized the Semantic Scholar API for DOI resolution to ensure we found the latest version of each article. This resolution step was particularly important when working with preprints, as journals may have published these papers since their inclusion in the Papers with Code dataset. Using Semantic Scholar, we successfully resolved \~`{python} round(overall_doi_resolution * 100, 1)`% (n=`{python} print_ready_total_doi_resolved`) of all DOIs within our dataset[^11].
 
-[^10]: Broken out by dataset source, we resolved \~`{python} round(per_dataset_doi_resolution["plos"] * 100, 1)`% (n=`{python} print_ready_plos_doi_resolved`) of all PLOS DOIs, \~`{python} round(per_dataset_doi_resolution["joss"] * 100, 1)`% (n=`{python} print_ready_joss_doi_resolved`) of all JOSS DOIs, \~`{python} round(per_dataset_doi_resolution["softwarex"] * 100, 1)`% (n=`{python} print_ready_softwarex_doi_resolved`) of all SoftwareX DOIs, and \~`{python} round(per_dataset_doi_resolution["pwc"] * 100, 1)`% (n=`{python} print_ready_pwc_doi_resolved`) of all Papers with Code (arXiv) DOIs.
+[^11]: Broken out by dataset source, we resolved \~`{python} round(per_dataset_doi_resolution["plos"] * 100, 1)`% (n=`{python} print_ready_plos_doi_resolved`) of all PLOS DOIs, \~`{python} round(per_dataset_doi_resolution["joss"] * 100, 1)`% (n=`{python} print_ready_joss_doi_resolved`) of all JOSS DOIs, \~`{python} round(per_dataset_doi_resolution["softwarex"] * 100, 1)`% (n=`{python} print_ready_softwarex_doi_resolved`) of all SoftwareX DOIs, and \~`{python} round(per_dataset_doi_resolution["pwc"] * 100, 1)`% (n=`{python} print_ready_pwc_doi_resolved`) of all Papers with Code (arXiv) DOIs.
 
 We then utilized the OpenAlex API to gather detailed publication metadata, including:
 
