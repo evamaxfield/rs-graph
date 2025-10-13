@@ -536,7 +536,7 @@ Software and collaboration are two essential ingredients in contemporary science
 
 In the following paper, we unite these two literatures to better understand how the development of software affects the allocation of credit in collaborative settings. In doing so, we take advantage of advances in natural language processing and machine learning to develop unique data sources that complement traditional bibliometric indicators. We first build a dataset (`rs-graph-v1`) of 138,596 paired research articles and code repositories — giving us a verified connection between software and the published literature that it supports. Next, we develop a predictive model that matches the authors of a research article and the developer accounts of a linked source code repository—giving us a unique way to understand the allocation of credit for software contributions. We apply the predictive model to our dataset and then use commit histories from the public software repositories' to test three hypotheses.
 
-We identify several patterns that distinguish code contributions from formal scientific recognition. We use a filtered set of one-to-one article-repository pairs (removing outliers for research team size, repository commit duration, and having at least one citation) to show that 28.6% (n=6,529) of articles have non-author code-contributors—individuals who may have helped create the software but received no formal authorship credit. We find that code-contributing authors are associated with a modest increase in article-level impact metrics (on average, a 4.2% increase in citations per code-contributing author), but these effects become statistically non-significant when controlling for domain, article type, and open access status. We find that first authors are significantly more likely to be code contributors than other author positions across all conditions tested. We also find a negative relationship between coding frequency and scholarly impact: authors who contribute code more frequently show progressively lower h-indices than their non-coding peers, a pattern that persists even when controlling for publication count, and author's most common author position, domain, and article type [^1].
+We identify several patterns that distinguish code contributions from formal scientific recognition. We use a filtered set of one-to-one article-repository pairs (removing outliers for research team size, repository commit duration, and having at least one citation) to show that 28.6% (n=6,529) of articles have non-author code-contributors—individuals who may have helped create the software but received no formal authorship credit. We find that code-contributing authors are associated with a modest increase in article-level impact metrics (on average, a 4.2% increase in citations per code-contributing author), but these effects become statistically non-significant when controlling for domain, article type, and open access status. We find that first authors are significantly more likely to be code contributors than other author positions across all conditions tested. We also find a negative relationship between coding frequency and scholarly impact: authors who contribute code more frequently show progressively lower h-indices than their non-coding peers, a pattern that persists even when controlling for publication count, and author's most common author position (first, middle, or last), domain (Physical Sciences, Health Sciences, Life Sciences, or Social Sciences), and article type (preprint, research article, or software article) [^1].
 
 [^1]: We use the phrase "most common" to mean most frequent, and in the case of a tie, their most recent. That is, if an author has been first author on four publications in our dataset, middle author on two publications, and has never been last author, they are considered a "first author" for the purposes of our analysis. We discuss the limitations of this approach in the @sec-discussion.
 
@@ -1522,11 +1522,11 @@ Understanding the composition and dynamics of software development teams provide
 
 [^6]: @fig-dist-of-author-dev-pred-confidence shows the distribution of predictive model confidence scores for author-developer pairs to justify this threshold. We chose the 0.97 threshold to ensure that we only include high-confidence matches while retaining a large proportion of the data (87,175 author-developer pairs) as only 2,911 author-developer-account pairs have a confidence less than 0.97 in the whole unfiltered dataset.
 
-Within this filtered dataset, we categorized individuals into three groups: code-contributing authors (CC-A) who both authored papers and code to associated repositories[^7], non-code-contributing authors (NCC-A) who authored papers but showed no evidence of code contributions, and code-contributing non-authors (CC-NA) who contributed code but received no authorship recognition. This categorization revealed that papers in our dataset typically have `{python} total_auths` total authors, with `{python} total_auth_devs` code-contributing authors and `{python} total_auth_non_devs` non-code-contributing authors. Beyond the author list, papers averaged `{python} total_non_auth_devs` code-contributing non-authors. @tbl-team-composition-counts details these distributions by domain, article type, and open access status [^8].
+Within this filtered dataset, we categorized individuals into three groups: code-contributing authors (CC-A) who both authored papers and code to associated repositories[^7], non-code-contributing authors (NCC-A) who authored papers but showed no evidence of code contributions, and code-contributing non-authors (CC-NA) who contributed code but received no authorship recognition. This categorization revealed that papers in our dataset typically have `{python} total_auths` total authors, with `{python} total_auth_devs` code-contributing authors and `{python} total_auth_non_devs` non-code-contributing authors. Beyond the author list, papers averaged `{python} total_non_auth_devs` code-contributing non-authors. @fig-team-composition details these distributions by domain, article type, and open access status, as well as overall across filtered analysis set [^8].
 
 [^7]: We define code-contributing authors as those who have at least one code commit to the repository associated with the article-repository pair.
 
-[^8]: A visual representation of the means and standard deviations in team compositions across different domains, article types, and open access status is provided in the appendix in @fig-team-composition.
+[^8]: A table with the means and standard deviations for each distribution and subset of team composition is provided in the appendix in @tbl-team-composition-counts.
 
 Perhaps most striking is our finding that `{python} print_ready_n_papers_w_non_auth_devs` papers (\~`{python} pct_papers_w_non_auth_devs`%) have at least one code contributor who was not matched to any article author. Within this substantial subset of papers, we found an average of `{python} mean_non_author_devs_for_papers_w_non_auth_devs` un-matched code contributors per paper. To better understand the nature of these developers contributions, we conducted an analysis using a random sample of 200 code-contributing non-authors (see @sec-appendix-additional-cc-na-analysis for complete methodology).
 
@@ -1581,7 +1581,7 @@ for control_var, control_display_name in control_vars.items():
             team_comp_table_rows.append(
                 {
                     "Control": control_display_name,
-                    "Subset": "Full Dataset",
+                    "Subset": "",
                     "Total Authors": team_comp_no_push_after_pub_counts_row["n_authors"],
                     "NCC-A": team_comp_no_push_after_pub_counts_row["n_author_non_devs"],
                     "CC-A": team_comp_no_push_after_pub_counts_row["n_author_devs"],
@@ -1691,259 +1691,58 @@ team_comp_table_df = team_comp_table_df.melt(
 )
 ```
 
-::: {.content-visible when-format="html"}
 ```{python}
-#| label: tbl-team-composition-counts
-#| tbl-cap: "Mean and Standard Deviation of Non-Code-Contributing Authors (NCC-A), Code-Contributing Authors (CC-A), and Code-Contributing Non-Authors (CC-NA) Research Team Members by Domain, Article Type, and Open Access Status. Only includes research teams from article-repository pairs with repositories that have programming language files, a most recent commit no later than 90 days after publication, and excludes research teams in the top 3% of total author sizes."
+#| label: fig-team-composition
+#| fig-cap: Mean of Non-Code-Contributing Authors (NCC-A), Code-Contributing Authors (CC-A), and Code-Contributing Non-Authors (CC-NA) Research Team Members by Domain, Article Type, and Open Access Status. Only includes research teams from article-repository pairs with repositories that have programming language files, a most recent commit no later than 90 days after publication, and excludes research teams in the top 3% of total author sizes.
 
-# Construct multi-row span HTML table
-# Columns should be: "Authors", "Code Contributing Authors", "Non-Author Code Contributors"
-# Rows should be:
-# "Open Access Status", "Domain", "Article Type"
+g = sns.catplot(
+    data=team_comp_table_df,
+    x="Subset",
+    y="Count",
+    hue="Contributor Type",
+    hue_order=[
+        "Total Authors",
+        "NCC-A",
+        "CC-A",
+        "CC-NA",
+    ],
+    col="Control",
+    col_wrap=2,
+    kind="bar",
+    height=3.3,
+    aspect=1,
+    sharey=True,
+    sharex=False,
+    legend=True,
+)
 
-# HTML templates
-count_piece_inital_row_template = """
-<tr>
-  <td rowspan="{n_rows}">{row_name}</td>
-  <td>{value_name}</td>
-  <td>{n_authors}</td>
-  <td>{n_author_non_devs}</td>
-  <td>{n_author_devs}</td>
-  <td>{n_non_author_devs}</td>
-</tr>
-""".strip()
+# Rotate x labels
+for ax in g.axes.flat:
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
 
-count_piece_bolded_row_template = """
-<tr>
-  <td rowspan="{n_rows}"><b>{row_name}</b></td>
-  <td><b>{value_name}</b></td>
-  <td><b>{n_authors}</b></td>
-  <td><b>{n_author_non_devs}</b></td>
-  <td><b>{n_author_devs}</b></td>
-  <td><b>{n_non_author_devs}</b></td>
-</tr>
-""".strip()
+# Move legend to below the plot
+sns.move_legend(
+    g,
+    bbox_to_anchor=(0.4, -0.06),
+    loc="upper center",
+    ncol=4,
+    fontsize=12,
+    title_fontsize=14,
+)
 
-count_piece_subsequent_row_template = """
-<tr>
-  <td>{value_name}</td>
-  <td>{n_authors}</td>
-  <td>{n_author_non_devs}</td>
-  <td>{n_author_devs}</td>
-  <td>{n_non_author_devs}</td>
-</tr>
-""".strip()
+# Change titles
+g.set_titles("{col_name}")
 
-# Iter over stats portions (and total)
-count_portions_html = []
-for key, count_table in control_var_tables.items():
-    count_portion_html = []
-    for i, control_value in enumerate(count_table["Subset"].unique()):
-        if i == 0:
-            if control_value == "":  # empty control value is for the "Overall" table
-                count_portion_html.append(
-                    count_piece_bolded_row_template.format(
-                        n_rows=len(count_table),
-                        row_name=key,
-                        value_name=control_value,
-                        n_authors=count_table.loc[
-                            count_table["Subset"] == control_value,
-                            "Total Authors",
-                        ].iloc[0],
-                        n_author_non_devs=count_table.loc[
-                            count_table["Subset"] == control_value,
-                            "NCC-A",
-                        ].iloc[0],
-                        n_author_devs=count_table.loc[
-                            count_table["Subset"] == control_value,
-                            "CC-A",
-                        ].iloc[0],
-                        n_non_author_devs=count_table.loc[
-                            count_table["Subset"] == control_value,
-                            "CC-NA",
-                        ].iloc[0],
-                    )
-                )
-            else:
-                count_portion_html.append(
-                    count_piece_inital_row_template.format(
-                        n_rows=len(count_table),
-                        row_name=key,
-                        value_name=control_value,
-                        n_authors=count_table.loc[
-                            count_table["Subset"] == control_value,
-                            "Total Authors",
-                        ].iloc[0],
-                        n_author_non_devs=count_table.loc[
-                            count_table["Subset"] == control_value,
-                            "NCC-A",
-                        ].iloc[0],
-                        n_author_devs=count_table.loc[
-                            count_table["Subset"] == control_value,
-                            "CC-A",
-                        ].iloc[0],
-                        n_non_author_devs=count_table.loc[
-                            count_table["Subset"] == control_value,
-                            "CC-NA",
-                        ].iloc[0],
-                    )
-                )
-        else:
-            count_portion_html.append(
-                count_piece_subsequent_row_template.format(
-                    value_name=control_value,
-                    n_authors=count_table.loc[
-                        count_table["Subset"] == control_value,
-                        "Total Authors",
-                    ].iloc[0],
-                    n_author_non_devs=count_table.loc[
-                        count_table["Subset"] == control_value,
-                        "NCC-A",
-                    ].iloc[0],
-                    n_author_devs=count_table.loc[
-                        count_table["Subset"] == control_value,
-                        "CC-A",
-                    ].iloc[0],
-                    n_non_author_devs=count_table.loc[
-                        count_table["Subset"] == control_value,
-                        "CC-NA",
-                    ].iloc[0],
-                )
-            )
+# Remove x label
+for ax in g.axes.flat:
+    ax.set_xlabel("")
 
-    count_portions_html.append("\n".join(count_portion_html))
+# Add y axis label
+g.set_ylabels("Mean Count")
 
-# Concat and wrap in table
-count_table_html = f"""
-<table>
-  <tr>
-    <th><b>Control</b></th>
-    <th><b>Subset</b></th>
-    <th><b>Total Authors</b></th>
-    <th><b>NCC-A</b></th>
-    <th><b>CC-A</b></th>
-    <th><b>CC-NA</b></th>
-  </tr>
-  {" ".join(count_portions_html)}
-</table>
-""".strip()
-
-IPython.display.HTML(count_table_html)
+# Add space between plots
+g.fig.subplots_adjust(hspace=1.2, wspace=0.5)
 ```
-:::
-
-::: {.content-visible when-format="pdf"}
-```{python}
-# LaTeX templates
-count_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\cellcolor{{gray!10}}{value_name} & \\cellcolor{{gray!10}}{n_authors} & \\cellcolor{{gray!10}}{n_author_non_devs} & \\cellcolor{{gray!10}}{n_author_devs} & \\cellcolor{{gray!10}}{n_non_author_devs} \\\\"""
-
-count_piece_bolded_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\textbf{{{value_name}}} & \\textbf{{{n_authors}}} & \\textbf{{{n_author_non_devs}}} & \\textbf{{{n_author_devs}}} & \\textbf{{{n_non_author_devs}}} \\\\"""
-
-count_piece_subsequent_row_template = """    & {color_cmd}{value_name} & {color_cmd}{n_authors} & {color_cmd}{n_author_non_devs} & {color_cmd}{n_author_devs} & {color_cmd}{n_non_author_devs} \\\\"""
-
-# Table header and footer templates
-table_header = """\\begin{table}
-\\centering
-\\small
-\\caption{Mean and Standard Deviation of Non-Code-Contributing Authors (NCC-A), Code-Contributing Authors (CC-A), and Code-Contributing Non-Authors (CC-NA) Research Team Members by Domain, Article Type, and Open Access Status. Only includes research teams from article-repository pairs with repositories that have programming language files, a most recent commit no later than 90 days after publication, and excludes research teams in the top $3\%$ of total author sizes.}
-\\label{tbl-team-composition-counts}
-\\begin{tabular}{llrrrr}
-\\toprule\\textbf{Control} & \\textbf{Subset} & \\textbf{Total Authors} & \\textbf{NCC-A} & \\textbf{CC-A} & \\textbf{CC-NA} \\\\
-\\midrule"""
-
-table_footer = """\\bottomrule
-\\end{tabular}
-\\end{table}"""
-
-# Generate table content
-count_portions_latex = []
-for key, count_table in control_var_tables.items():
-    count_portion_latex = []
-    
-    # Get unique control values
-    control_values = count_table["Subset"].unique()
-
-    # Handle overall
-    if key == "Overall":
-        count_portion_latex.append(
-            count_piece_bolded_row_template.format(
-                n_rows=1,
-                row_name=key,
-                value_name="",
-                n_authors=total_auths,
-                n_author_non_devs=total_auth_non_devs,
-                n_author_devs=total_auth_devs,
-                n_non_author_devs=total_non_auth_devs,
-            ).rstrip()
-        )
-    
-    else:
-        # First row with category label
-        first_value = control_values[0]
-        count_portion_latex.append(
-            count_piece_initial_row_template.format(
-                n_rows=len(control_values),
-                row_name=key,
-                value_name=first_value,
-                n_authors=count_table.loc[
-                    count_table["Subset"] == first_value,
-                    "Total Authors",
-                ].iloc[0],
-                n_author_non_devs=count_table.loc[
-                    count_table["Subset"] == first_value,
-                    "NCC-A",
-                ].iloc[0],
-                n_author_devs=count_table.loc[
-                    count_table["Subset"] == first_value,
-                    "CC-A",
-                ].iloc[0],
-                n_non_author_devs=count_table.loc[
-                    count_table["Subset"] == first_value,
-                    "CC-NA",
-                ].iloc[0],
-            ).rstrip()
-        )
-        
-        # Subsequent rows with alternating colors
-        for i, control_value in enumerate(control_values[1:]):
-            color_cmd = "\\cellcolor{gray!10}" if i % 2 == 1 else ""
-            count_portion_latex.append(
-                count_piece_subsequent_row_template.format(
-                    color_cmd=color_cmd,
-                    value_name=control_value,
-                    n_authors=count_table.loc[
-                        count_table["Subset"] == control_value,
-                        "Total Authors",
-                    ].iloc[0],
-                    n_author_non_devs=count_table.loc[
-                        count_table["Subset"] == control_value,
-                        "NCC-A",
-                    ].iloc[0],
-                    n_author_devs=count_table.loc[
-                        count_table["Subset"] == control_value,
-                        "CC-A",
-                    ].iloc[0],
-                    n_non_author_devs=count_table.loc[
-                        count_table["Subset"] == control_value,
-                        "CC-NA",
-                    ].iloc[0],
-                ).rstrip()
-            )
-
-    section_latex = "\n".join(count_portion_latex)
-    
-    if key != list(control_var_tables.keys())[-1]:  # Don't add midrule after last section
-        section_latex += "\\midrule"
-    count_portions_latex.append(section_latex)
-
-# Combine all parts
-count_table_latex = f"""{table_header}
-{"\n".join(count_portions_latex)}
-{table_footer}"""
-
-IPython.display.Latex(count_table_latex)
-```
-:::
 
 When examining these patterns over time and across different team sizes (@fig-contributor-type-by-time-and-size), we found that the number of code-contributing authors and unrecognized contributors has remained relatively stable. This suggests that while the exclusion of code contributors from authorship is not worsening, it represents a persistent feature of scientific software development rather than a historical artifact or transition period in research practices. Similarly, the number of code-contributing non-authors remains constant even as team size grows, indicating that larger research teams do not necessarily adopt more inclusive authorship practices for code contributors despite representing broader collaborative efforts.
 
@@ -3055,7 +2854,7 @@ Our labeling of article types (software article, research article, preprint) was
 
 Similarly, our simplification of author positions, domains, and article types to each author's "most common" (most frequent, with ties broken by most recent) introduces potential biases. This reduction may obscure the diversity of an author's contributions across different contexts, particularly for interdisciplinary researchers or those with varied roles in different projects. Further, these labels are created from metadata for articles only within our dataset. That is, even though a researcher may have dozens of articles, their "most common" author position, domain, and article type was determined with data for article-repository pairs. This inherently biases the dataset towards research teams who, as a collective, frequently create and share software and code as a part of their research process. While this approach was necessary for managing the complexity of our analysis, it may not fully capture the nuances of individual research careers.
 
-Our predictive modeling approach for matching authors with developer accounts presents additional limitations. The model's performance can be affected by shorter names where less textual information is available for matching, potentially creating biases against researchers from cultures with shorter naming conventions. Organization accounts used for project management pose particular challenges for accurate matching, and while we implemented filtering mechanisms to minimize their impact, some misclassifications may persist. Furthermore, our approach may not capture all code contributors if multiple individuals developed code but only one uploaded it to a repository—creating attribution artifacts that may systematically underrepresent specific contributors, particularly junior researchers or technical staff who may not have direct repository access. However, as discussed in the Appendix (@sec-appendix-dataset-char), our dataset is relatively diverse, with the median preprint-repository pair having a commit duration (the number of days between the repository's creation and the repository's most recent commit) of 47 days, research article-repository pairs having a median commit duration of 104 days, and software article-repository pairs having a median commit duration of 247 days. This diversity in commit durations suggests that our dataset contains a range of development practices, including both some "code dumps," and year (and multi-year) long projects.
+Our predictive modeling approach for matching authors with developer accounts presents additional limitations. The model's performance can be affected by shorter names where less textual information is available for matching, potentially creating biases against researchers from cultures with shorter naming conventions. Organization accounts used for project management pose particular challenges for accurate matching, and while we implemented filtering mechanisms to minimize their impact, some misclassifications may persist. Furthermore, our approach may not capture all code contributors if multiple individuals developed code but only one uploaded it to a repository—creating attribution artifacts that may systematically underrepresent specific contributors, particularly junior researchers or technical staff who may not have direct repository access. However, as discussed further in the Appendix (@sec-appendix-dataset-char), our dataset is relatively diverse, with the median preprint-repository pair having a commit duration (the number of days between the repository's creation and the repository's most recent commit) of 53 days, research article-repository pairs having a median commit duration of 114 days, and software article-repository pairs having a median commit duration of 282 days. This diversity in commit durations suggests that our dataset contains a range of development practices, including both some "code dumps," and year (and multi-year) long projects.
 
 Our analytical approach required substantial data filtering to ensure reliable results, introducing potential selection biases in our sample. By focusing on article-repository pairs with commit activity no later than 90 days past the date of article publication and at least three authors and less than `{python} int(n_authors_97th_percentile)` authors, we may have systematically excluded certain types of research projects, particularly those with extended development timelines or extensive collaborations. Our categorization of coding status (non-coder, any coding, majority coding, always coding) necessarily simplifies complex contribution patterns. It does not account for code contributions' quality, complexity, or significance. Additionally, our reliance on OpenAlex metadata introduces certain limitations to our analysis. While OpenAlex provides good overall coverage, it lags behind proprietary databases in indexing references and citations. The lag in OpenAlex data may affect our citation-based analyses and the completeness of author metadata used in our study [@alperin2024analysis].
 
@@ -3328,9 +3127,9 @@ Additional limitations are discussed in a qualitative error analysis conducted a
 
 Our compiled dataset appears to contain a mix of repository types, varying from analysis script repositories to software tools and likely some "code dumps" (where code is copied to a new repository immediately before publication). This diversity is reflected in the commit duration patterns across different publication types. The median commit duration for repositories in our analysis is:
 
-- 47 days for preprints
-- 104 days for research articles
-- 247 days for software articles
+- 53 days for preprints
+- 114 days for research articles
+- 282 days for software articles
 
 Complete statistics on commit durations, including count, mean, and quantile details, are available in @tbl-commit-duration-distributions.
 
@@ -3517,57 +3316,261 @@ IPython.display.Latex(team_comp_no_push_after_pub_counts_latex)
 
 ### Distributions of Team Composition
 
-@tbl-team-composition-counts provides detailed statistics on the composition of research teams across different domains, article types, and open access statuses. @fig-team-composition provides a visual representation of the mean and standard deviation of the count of team members by contributor type, providing clearer visual comparison across categories.
+@tbl-team-composition-counts provides detailed statistics on the composition of research teams across different domains, article types, and open access statuses.
 
+::: {.content-visible when-format="html"}
 ```{python}
-#| label: fig-team-composition
-#| fig-cap: Mean and Standard Deviation of Non-Code-Contributing Authors (NCC-A), Code-Contributing Authors (CC-A), and Code-Contributing Non-Authors (CC-NA) Research Team Members by Domain, Article Type, and Open Access Status. Only includes research teams from article-repository pairs with repositories that have programming language files, a most recent commit no later than 90 days after publication, and excludes research teams in the top 3% of total author sizes.
+#| label: tbl-team-composition-counts
+#| tbl-cap: "Mean and Standard Deviation of Non-Code-Contributing Authors (NCC-A), Code-Contributing Authors (CC-A), and Code-Contributing Non-Authors (CC-NA) Research Team Members by Domain, Article Type, and Open Access Status. Only includes research teams from article-repository pairs with repositories that have programming language files, a most recent commit no later than 90 days after publication, and excludes research teams in the top 3% of total author sizes."
 
-g = sns.catplot(
-    data=team_comp_table_df,
-    x="Subset",
-    y="Count",
-    hue="Contributor Type",
-    hue_order=[
-        "Total Authors",
-        "NCC-A",
-        "CC-A",
-        "CC-NA",
-    ],
-    col="Control",
-    col_wrap=2,
-    kind="bar",
-    height=3.3,
-    aspect=1,
-    sharey=True,
-    sharex=False,
-    legend=True,
-)
+# Construct multi-row span HTML table
+# Columns should be: "Authors", "Code Contributing Authors", "Non-Author Code Contributors"
+# Rows should be:
+# "Open Access Status", "Domain", "Article Type"
 
-# Rotate x labels
-for ax in g.axes.flat:
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+# HTML templates
+count_piece_inital_row_template = """
+<tr>
+  <td rowspan="{n_rows}">{row_name}</td>
+  <td>{value_name}</td>
+  <td>{n_authors}</td>
+  <td>{n_author_non_devs}</td>
+  <td>{n_author_devs}</td>
+  <td>{n_non_author_devs}</td>
+</tr>
+""".strip()
 
-# Move legend to below the plot
-sns.move_legend(
-    g,
-    bbox_to_anchor=(0.4, -0.06),
-    loc="upper center",
-    ncol=4,
-    fontsize=12,
-    title_fontsize=14,
-)
+count_piece_bolded_row_template = """
+<tr>
+  <td rowspan="{n_rows}"><b>{row_name}</b></td>
+  <td><b>{value_name}</b></td>
+  <td><b>{n_authors}</b></td>
+  <td><b>{n_author_non_devs}</b></td>
+  <td><b>{n_author_devs}</b></td>
+  <td><b>{n_non_author_devs}</b></td>
+</tr>
+""".strip()
 
-# Change titles
-g.set_titles("{col_name}")
+count_piece_subsequent_row_template = """
+<tr>
+  <td>{value_name}</td>
+  <td>{n_authors}</td>
+  <td>{n_author_non_devs}</td>
+  <td>{n_author_devs}</td>
+  <td>{n_non_author_devs}</td>
+</tr>
+""".strip()
 
-# Remove x label
-for ax in g.axes.flat:
-    ax.set_xlabel("")
+# Iter over stats portions (and total)
+count_portions_html = []
+for key, count_table in control_var_tables.items():
+    count_portion_html = []
+    for i, control_value in enumerate(count_table["Subset"].unique()):
+        if i == 0:
+            if control_value == "":  # empty control value is for the "Overall" table
+                count_portion_html.append(
+                    count_piece_bolded_row_template.format(
+                        n_rows=len(count_table),
+                        row_name=key,
+                        value_name=control_value,
+                        n_authors=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "Total Authors",
+                        ].iloc[0],
+                        n_author_non_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "NCC-A",
+                        ].iloc[0],
+                        n_author_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "CC-A",
+                        ].iloc[0],
+                        n_non_author_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "CC-NA",
+                        ].iloc[0],
+                    )
+                )
+            else:
+                count_portion_html.append(
+                    count_piece_inital_row_template.format(
+                        n_rows=len(count_table),
+                        row_name=key,
+                        value_name=control_value,
+                        n_authors=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "Total Authors",
+                        ].iloc[0],
+                        n_author_non_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "NCC-A",
+                        ].iloc[0],
+                        n_author_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "CC-A",
+                        ].iloc[0],
+                        n_non_author_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "CC-NA",
+                        ].iloc[0],
+                    )
+                )
+        else:
+            count_portion_html.append(
+                count_piece_subsequent_row_template.format(
+                    value_name=control_value,
+                    n_authors=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "Total Authors",
+                    ].iloc[0],
+                    n_author_non_devs=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "NCC-A",
+                    ].iloc[0],
+                    n_author_devs=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "CC-A",
+                    ].iloc[0],
+                    n_non_author_devs=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "CC-NA",
+                    ].iloc[0],
+                )
+            )
 
-# Add space between plots
-g.fig.subplots_adjust(hspace=1.2, wspace=0.5)
+    count_portions_html.append("\n".join(count_portion_html))
+
+# Concat and wrap in table
+count_table_html = f"""
+<table>
+  <tr>
+    <th><b>Control</b></th>
+    <th><b>Subset</b></th>
+    <th><b>Total Authors</b></th>
+    <th><b>NCC-A</b></th>
+    <th><b>CC-A</b></th>
+    <th><b>CC-NA</b></th>
+  </tr>
+  {" ".join(count_portions_html)}
+</table>
+""".strip()
+
+IPython.display.HTML(count_table_html)
 ```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{python}
+# LaTeX templates
+count_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\cellcolor{{gray!10}}{value_name} & \\cellcolor{{gray!10}}{n_authors} & \\cellcolor{{gray!10}}{n_author_non_devs} & \\cellcolor{{gray!10}}{n_author_devs} & \\cellcolor{{gray!10}}{n_non_author_devs} \\\\"""
+
+count_piece_bolded_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\textbf{{{value_name}}} & \\textbf{{{n_authors}}} & \\textbf{{{n_author_non_devs}}} & \\textbf{{{n_author_devs}}} & \\textbf{{{n_non_author_devs}}} \\\\"""
+
+count_piece_subsequent_row_template = """    & {color_cmd}{value_name} & {color_cmd}{n_authors} & {color_cmd}{n_author_non_devs} & {color_cmd}{n_author_devs} & {color_cmd}{n_non_author_devs} \\\\"""
+
+# Table header and footer templates
+table_header = """\\begin{table}
+\\centering
+\\small
+\\caption{Mean and Standard Deviation of Non-Code-Contributing Authors (NCC-A), Code-Contributing Authors (CC-A), and Code-Contributing Non-Authors (CC-NA) Research Team Members by Domain, Article Type, and Open Access Status. Only includes research teams from article-repository pairs with repositories that have programming language files, a most recent commit no later than 90 days after publication, and excludes research teams in the top $3\%$ of total author sizes.}
+\\label{tbl-team-composition-counts}
+\\begin{tabular}{llrrrr}
+\\toprule\\textbf{Control} & \\textbf{Subset} & \\textbf{Total Authors} & \\textbf{NCC-A} & \\textbf{CC-A} & \\textbf{CC-NA} \\\\
+\\midrule"""
+
+table_footer = """\\bottomrule
+\\end{tabular}
+\\end{table}"""
+
+# Generate table content
+count_portions_latex = []
+for key, count_table in control_var_tables.items():
+    count_portion_latex = []
+    
+    # Get unique control values
+    control_values = count_table["Subset"].unique()
+
+    # Handle overall
+    if key == "Overall":
+        count_portion_latex.append(
+            count_piece_bolded_row_template.format(
+                n_rows=1,
+                row_name=key,
+                value_name="",
+                n_authors=total_auths,
+                n_author_non_devs=total_auth_non_devs,
+                n_author_devs=total_auth_devs,
+                n_non_author_devs=total_non_auth_devs,
+            ).rstrip()
+        )
+    
+    else:
+        # First row with category label
+        first_value = control_values[0]
+        count_portion_latex.append(
+            count_piece_initial_row_template.format(
+                n_rows=len(control_values),
+                row_name=key,
+                value_name=first_value,
+                n_authors=count_table.loc[
+                    count_table["Subset"] == first_value,
+                    "Total Authors",
+                ].iloc[0],
+                n_author_non_devs=count_table.loc[
+                    count_table["Subset"] == first_value,
+                    "NCC-A",
+                ].iloc[0],
+                n_author_devs=count_table.loc[
+                    count_table["Subset"] == first_value,
+                    "CC-A",
+                ].iloc[0],
+                n_non_author_devs=count_table.loc[
+                    count_table["Subset"] == first_value,
+                    "CC-NA",
+                ].iloc[0],
+            ).rstrip()
+        )
+        
+        # Subsequent rows with alternating colors
+        for i, control_value in enumerate(control_values[1:]):
+            color_cmd = "\\cellcolor{gray!10}" if i % 2 == 1 else ""
+            count_portion_latex.append(
+                count_piece_subsequent_row_template.format(
+                    color_cmd=color_cmd,
+                    value_name=control_value,
+                    n_authors=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "Total Authors",
+                    ].iloc[0],
+                    n_author_non_devs=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "NCC-A",
+                    ].iloc[0],
+                    n_author_devs=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "CC-A",
+                    ].iloc[0],
+                    n_non_author_devs=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "CC-NA",
+                    ].iloc[0],
+                ).rstrip()
+            )
+
+    section_latex = "\n".join(count_portion_latex)
+    
+    if key != list(control_var_tables.keys())[-1]:  # Don't add midrule after last section
+        section_latex += "\\midrule"
+    count_portions_latex.append(section_latex)
+
+# Combine all parts
+count_table_latex = f"""{table_header}
+{"\n".join(count_portions_latex)}
+{table_footer}"""
+
+IPython.display.Latex(count_table_latex)
+```
+:::
 
 ## Additional Analysis of Code-Contributing Non-Authors {#sec-appendix-additional-cc-na-analysis}
 
@@ -3614,7 +3617,7 @@ We additionally calculated the absolute change for each code contributor as the 
 ### Results
 
 ```{python}
-initial_set = pd.read_csv(EXTRA_DATA_PATH / "cc-na-initial-set.csv")
+initial_set = pd.read_csv(EXTRA_DATA_PATH / "cc-na-initial-resolved-set.csv")
 eva_set = pd.read_csv(EXTRA_DATA_PATH / "cc-na-eva.csv")
 nic_set = pd.read_csv(EXTRA_DATA_PATH / "cc-na-nic.csv")
 nic_set["is_bot_account"] = "no"
@@ -3793,7 +3796,7 @@ To better understand why certain code-contributing non-authors were missed class
 1. **Limited Information from Text Alone**: The original dataset for model training and evaluation was constructed using only text-based features from author names and developer information. However, for this extended examination, annotators utilized the full code-contributor profile, including linked websites or linked ORCID profiles. This was done because we wanted to understand the nature of missed classifications (with more time and information to make a classification) rather than strictly replicating the model's text-only approach. From text alone, many of these missed classifications would have been very challenging to identify. This highlights a limitation in our current model, and a potential area for future work, such as incorporating details from linked websites or other contextual information to improve matching performance.
 2. **Name Variations and Cultural Differences**: The model performed better with Anglosaxon names, while names from other cultures were more likely to be missed. This suggests possible bias in the training data and a clear area for future work.
 3. **Additional Unrelated Text in Names**: When usernames or display names contained longer phrases or unrelated words, the model tended to classify them as no-match, even if there were strong indicators of a match. For example, a username such as "awesome_computational_biologist_john_d" paired with an author name "John Doe" might be missed due to the additional text in the username.
-4. **Significant Differences Between Username and Display Name**: The model struggled when there were substantial differences between the username and author name, such as when an individual provides a chosen name in their GitHub profile that differed significantly from their authorship name. Most commonly this occurred when an individual used a chosen "English" name in their GitHub profile that was very different from their authorship name.
+4. **Significant Differences Between Username and Author Name**: The model struggled when there were substantial differences between the username and author name, such as when an individual provides a chosen name in their GitHub profile that differed significantly from their authorship name. Most commonly this occurred when an individual used a chosen "English" name in their GitHub profile that was very different from their authorship name.
 
 These themes highlight areas for potential improvement in the model, such as incorporating more diverse training data and exploring additional features that could capture cultural name variations and contextual information.
 
