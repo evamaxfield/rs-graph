@@ -44,7 +44,7 @@ jobs:
       uses: quarto-dev/quarto-actions/publish@v2
       with:
         target: gh-pages
-        path: publications/qss-code-authors/
+        path: publications/qss-code-authors/qss-code-authors.qmd
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         QSS_CODE_AUTHORSHIP_USE_SAMPLE: 0
