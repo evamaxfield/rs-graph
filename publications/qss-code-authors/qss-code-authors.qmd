@@ -37,16 +37,16 @@ number-sections: true
 
 ## Specific for target format
 format:
-#   html:
-#     standalone: true
-#     embed-resources: true
-#     toc: true
-#     toc-location: left
-#     reference-location: margin
-#     citation-location: document
-#     execute:
-#       echo: false
-#       warning: false
+  html:
+    standalone: true
+    embed-resources: true
+    toc: true
+    toc-location: left
+    reference-location: margin
+    citation-location: document
+    execute:
+      echo: false
+      warning: false
 
   elsevier-pdf:
     toc: false
@@ -125,7 +125,7 @@ if "QSS_CODE_AUTHORSHIP_USE_SAMPLE" in os.environ:
     USE_SAMPLE = bool(int(os.environ["QSS_CODE_AUTHORSHIP_USE_SAMPLE"]))
 else:
     USE_SAMPLE = True
-USE_SAMPLE = False
+# USE_SAMPLE = False
 
 # Other paths
 EXTRA_DATA_PATH = Path.cwd() / "extra-data"
