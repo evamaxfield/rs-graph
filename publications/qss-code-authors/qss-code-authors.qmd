@@ -1733,12 +1733,10 @@ sns.move_legend(
 # Change titles
 g.set_titles("{col_name}")
 
-# Remove x label
+# Remove x label and set y label
 for ax in g.axes.flat:
     ax.set_xlabel("")
-
-# Add y axis label
-g.set_ylabels("Mean Count")
+    ax.set_ylabel("Mean Count")
 
 # Add space between plots
 g.fig.subplots_adjust(hspace=1.2, wspace=0.5)
