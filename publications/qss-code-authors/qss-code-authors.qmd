@@ -37,22 +37,25 @@ number-sections: true
 
 ## Specific for target format
 format:
-  html:
-    standalone: true
-    embed-resources: true
-    toc: true
-    toc-location: left
-    reference-location: margin
-    citation-location: document
-    execute:
-      echo: false
-      warning: false
+  #html:
+  #  standalone: true
+  #  embed-resources: true
+  #  toc: true
+  #  toc-location: left
+  #  reference-location: margin
+  #  citation-location: document
+  #  execute:
+  #    echo: false
+  #    warning: false
 
   elsevier-pdf:
     toc: false
     execute:
       echo: false
       warning: false
+
+    #\usepackage{lineno}
+    #\linenumbers
     include-in-header:  
       - text: |
           \usepackage{booktabs}    % For professional-looking tables
@@ -61,8 +64,6 @@ format:
           \usepackage[table]{xcolor}  % The 'table' option is crucial for \rowcolors to work
           \usepackage{float}
           \floatplacement{table}{H}
-          \usepackage{lineno}
-          \linenumbers
         
     journal:
       cite-style: authoryear
@@ -125,7 +126,7 @@ if "QSS_CODE_AUTHORSHIP_USE_SAMPLE" in os.environ:
     USE_SAMPLE = bool(int(os.environ["QSS_CODE_AUTHORSHIP_USE_SAMPLE"]))
 else:
     USE_SAMPLE = True
-# USE_SAMPLE = False
+USE_SAMPLE = False
 
 # Other paths
 EXTRA_DATA_PATH = Path.cwd() / "extra-data"
@@ -2836,6 +2837,10 @@ Future technical improvements may enhance our understanding of the relationship 
 Our findings point to several directions for future research on the changing nature of scientific labor and recognition. Longitudinal studies tracking how code contribution patterns affect career trajectories would provide valuable insights into the long-term impacts of the observed h-index disparities and whether these effects vary across career stages. Comparative analyses across different scientific domains could reveal discipline-specific norms and practices around software recognition, potentially identifying models that more equitably credit technical contributions. Qualitative studies examining how research teams make authorship decisions regarding code contributors would complement our quantitative findings by illuminating the social and organizational factors influencing recognition practices. Additionally, to better understand corresponding authors' role in maintaining research artifacts, future work could remove the 90-day post-publication commit activity filter to examine long-term sustainability actions. However, this approach must address introducing contributors unrelated to the original paper.
 
 Despite their growing importance, the persistent underrecognition of software contributions suggests a need for structural interventions in how we conceptualize and reward scientific work. Building upon efforts like CRediT [@brand2015beyond], future work should investigate potential policy changes to better align institutional incentives with the diverse spectrum of contributions that drive modern scientific progress. However, as the example of CRediT demonstrates, even well-intentioned taxonomies may reproduce existing hierarchies or create new forms of inequality if they fail to address underlying power dynamics in scientific communities. The challenge is not merely technical but social: creating recognition systems that simultaneously support innovation, ensure appropriate credit, maintain research integrity, and foster equitable participation in an increasingly computational scientific enterprise.
+
+# Acknowledgments
+
+This research was supported by grants from the National Science Foundation's (NSF) Office of Advanced Cyberinfrastructure (OAC-2211275) and the Sloan Foundation (G-2022-19347). We thank our anonymous reviewers for their helpful feedback. We especially thank Molly Blank, Shahan Ali Memnon, David Farr, and Jevin West for their valuable insights at multiple stages of this research.
 
 # References
 
