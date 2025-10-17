@@ -1672,7 +1672,7 @@ team_comp_table_df = team_comp_table_df.melt(
 #| fig-cap: Mean of Non-Code-Contributing Authors (NCC-A), Code-Contributing Authors (CC-A), and Code-Contributing Non-Authors (CC-NA) Research Team Members by Domain, Article Type, and Open Access Status. Only includes research teams from article-repository pairs with repositories that have programming language files, a most recent commit no later than 90 days after publication, and excludes research teams in the top 3% of total author sizes.
 
 g = sns.catplot(
-    data=team_comp_table_df.rename(columns={"Count", "Mean Count"}),
+    data=team_comp_table_df.rename(columns={"Count": "Mean Count"}),
     x="Subset",
     y="Mean Count",
     hue="Contributor Type",
