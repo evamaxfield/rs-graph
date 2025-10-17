@@ -37,16 +37,16 @@ number-sections: true
 
 ## Specific for target format
 format:
-  #html:
-  #  standalone: true
-  #  embed-resources: true
-  #  toc: true
-  #  toc-location: left
-  #  reference-location: margin
-  #  citation-location: document
-  #  execute:
-  #    echo: false
-  #    warning: false
+  html:
+   standalone: true
+   embed-resources: true
+   toc: true
+   toc-location: left
+   reference-location: margin
+   citation-location: document
+   execute:
+     echo: false
+     warning: false
 
   elsevier-pdf:
     toc: false
@@ -54,8 +54,6 @@ format:
       echo: false
       warning: false
 
-    #\usepackage{lineno}
-    #\linenumbers
     include-in-header:  
       - text: |
           \usepackage{booktabs}    % For professional-looking tables
@@ -64,6 +62,8 @@ format:
           \usepackage[table]{xcolor}  % The 'table' option is crucial for \rowcolors to work
           \usepackage{float}
           \floatplacement{table}{H}
+          \usepackage{lineno}
+          \linenumbers
         
     journal:
       cite-style: authoryear
@@ -1997,7 +1997,6 @@ def convert_model_results_to_printable_pdf_ready(
 \\centering
 \\caption{{{tbl_cap}}}
 \\label{{{tbl_label}}}
-\\label{{tbl-reg-results}}
 {model_results_table_header}
 {chr(10).join(rows_latex)}
 {model_results_table_footer}
