@@ -4,51 +4,39 @@ from __future__ import annotations
 
 import gzip
 import json
-import shutil
 import traceback
 from pathlib import Path
 
-import requests
 from tqdm import tqdm
 
 from .. import types
 
+CURRENT_DIR = Path(__file__).parent.resolve()
+PAPERS_WITH_CODE_SNAPSHOT_PATH = CURRENT_DIR / "links-between-papers-and-code.json.gz"
+
 ###############################################################################
 
-DOWNLOAD_URL = (
-    "https://production-media.paperswithcode.com/"
-    "about/links-between-papers-and-code.json.gz"
-)
+# Papers with Code was sunset in August 2025 and
+# the dataset has no clear replacement on HuggingFace.
+# Thankfully, the dataset was snapshot on Internet Archive on July 28, 2025.
+# Download the snapshot and place it in the `rs_graph/sources/` directory.
+
+# Snapshot URL:
+# https://web.archive.org/web/20250000000000*/https://production-media.paperswithcode.com/about/links-between-papers-and-code.json.gz
+
+DOWNLOAD_URL = "https://web.archive.org/web/20250728234509/https://production-media.paperswithcode.com/about/links-between-papers-and-code.json.gz"
 
 ###############################################################################
 
 
 def _get_raw_data() -> list[dict]:
     try:
-        # Remove any existing files
-        Path("pwc.json.gz").unlink(missing_ok=True)
-
-        # Download the JSON and store to gz file
-        with open("pwc.json.gz", "wb") as f:
-            with requests.get(DOWNLOAD_URL, stream=True) as r:
-                shutil.copyfileobj(r.raw, f)
-
         # Load the JSON
-        with gzip.open("pwc.json.gz") as f:
+        with gzip.open(PAPERS_WITH_CODE_SNAPSHOT_PATH) as f:
             return json.load(f)
 
     except Exception as e:
-        return types.ErrorResult(
-            source="pwc",
-            step="pwc-json-download",
-            identifier="n/a",
-            error=str(e),
-            traceback=traceback.format_exc(),
-        )
-
-    finally:
-        # Remove archive and JSON
-        Path("pwc.json.gz").unlink(missing_ok=True)
+        raise e
 
 
 def _process_item(

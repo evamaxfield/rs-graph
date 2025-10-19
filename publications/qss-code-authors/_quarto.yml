@@ -1,3 +1,7 @@
 project:
   type: website
   output-dir: _build
+  render:
+    - "qss-code-authors.qmd"
+    - "!extra-notebooks/"
+    - "!extra-data/"

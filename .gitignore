@@ -145,6 +145,7 @@ processing-results/
 elsarticle-harv.bst
 elsarticle.cls
 qss-code-authors.spl
+qss-code-authors.tex
 
 # Ignore all files in the data/files/ directory
 rs_graph/data/files/*
@@ -160,3 +161,5 @@ scratch.py
 dev-author-em-clf
 all-model-results.csv
 random-sample-prelinked-sources.csv
+softcite-2025-prepped.parquet
+links-between-papers-and-code.json.gz

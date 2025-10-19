@@ -1,3 +1,4 @@
 /.quarto/
 rs-graph-temp.db
 qss-code-authors_files/*
+**/*.quarto_ipynb
