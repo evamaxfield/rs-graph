@@ -48,36 +48,42 @@ format:
 #      echo: false
 #      warning: false
 
-  elsevier-pdf:
-    toc: false
-    execute:
-      echo: false
-      warning: false
+#   elsevier-pdf:
+#     toc: false
+#     execute:
+#       echo: false
+#       warning: false
 
-    include-in-header:  
-      - text: |
-          \usepackage{booktabs}    % For professional-looking tables
-          \usepackage{multirow}    % For merged cells
-          \usepackage{siunitx}     % For number alignment
-          \usepackage[table]{xcolor}  % The 'table' option is crucial for \rowcolors to work
-          \usepackage{float}
-          \floatplacement{table}{H}
-          \usepackage{lineno}
-          \linenumbers
+#     include-in-header:  
+#       - text: |
+#           \usepackage{booktabs}    % For professional-looking tables
+#           \usepackage{multirow}    % For merged cells
+#           \usepackage{siunitx}     % For number alignment
+#           \usepackage[table]{xcolor}  % The 'table' option is crucial for \rowcolors to work
+#           \usepackage{float}
+#           \floatplacement{table}{H}
+#           \usepackage{lineno}
+#           \linenumbers
         
-    journal:
-      cite-style: authoryear
-      name: "in-progress"
-      model: "3p"
-      layout: "onecolumn"
+#     journal:
+#       cite-style: authoryear
+#       name: "in-progress"
+#       model: "3p"
+#       layout: "onecolumn"
 
-    # Word count
-    citeproc: false
-    filters:
-      - at: pre-quarto
-        path: _extensions/andrewheiss/wordcount/citeproc.lua
-      - at: pre-quarto
-        path: _extensions/andrewheiss/wordcount/wordcount.lua
+#     # Word count
+#     citeproc: false
+#     filters:
+#       - at: pre-quarto
+#         path: _extensions/andrewheiss/wordcount/citeproc.lua
+#       - at: pre-quarto
+#         path: _extensions/andrewheiss/wordcount/wordcount.lua
+
+    docx:
+      toc: false
+      execute:
+        echo: false
+        warning: false
 ---
 
 # Introduction
@@ -126,7 +132,7 @@ if "QSS_CODE_AUTHORSHIP_USE_SAMPLE" in os.environ:
     USE_SAMPLE = bool(int(os.environ["QSS_CODE_AUTHORSHIP_USE_SAMPLE"]))
 else:
     USE_SAMPLE = True
-# USE_SAMPLE = False
+USE_SAMPLE = False
 
 # Other paths
 EXTRA_DATA_PATH = Path.cwd() / "extra-data"
@@ -2840,6 +2846,14 @@ Despite their growing importance, the persistent underrecognition of software co
 # Acknowledgments
 
 This research was supported by grants from the National Science Foundation's (NSF) Office of Advanced Cyberinfrastructure (OAC-2211275) and the Sloan Foundation (G-2022-19347). We thank our anonymous reviewers for their helpful feedback. We especially thank Molly Blank, Shahan Ali Memnon, David Farr, and Jevin West for their valuable insights at multiple stages of this research.
+
+# Author Contributions
+
+# Competing Interests
+
+# Funding Information
+
+# Data Availability
 
 # References
 
