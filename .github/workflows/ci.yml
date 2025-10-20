@@ -38,6 +38,32 @@ jobs:
     - name: Lint
       run: just lint
 
+  # Publish to PyPI
+  publish:
+    needs: [lint]
+    if: success() && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Build
+        run: |
+          python -m pip install build
+          python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
   # Build docker
   # docker-build:
   #   runs-on: ubuntu-latest
