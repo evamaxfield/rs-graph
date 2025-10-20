@@ -1,6 +1,6 @@
 ---
 title: "Code Contribution and Credit in Science"
-authors:
+author:
   - name: "Eva Maxfield Brown"
     email: evamxb@uw.edu
     orcid: 0000-0003-2564-0373
@@ -132,7 +132,7 @@ if "QSS_CODE_AUTHORSHIP_USE_SAMPLE" in os.environ:
     USE_SAMPLE = bool(int(os.environ["QSS_CODE_AUTHORSHIP_USE_SAMPLE"]))
 else:
     USE_SAMPLE = True
-USE_SAMPLE = False
+# USE_SAMPLE = False
 
 # Other paths
 EXTRA_DATA_PATH = Path.cwd() / "extra-data"
@@ -2845,15 +2845,27 @@ Despite their growing importance, the persistent underrecognition of software co
 
 # Acknowledgments
 
-This research was supported by grants from the National Science Foundation's (NSF) Office of Advanced Cyberinfrastructure (OAC-2211275) and the Sloan Foundation (G-2022-19347). We thank our anonymous reviewers for their helpful feedback. We especially thank Molly Blank, Shahan Ali Memnon, David Farr, and Jevin West for their valuable insights at multiple stages of this research.
+We thank our anonymous reviewers for their helpful feedback. We especially thank Molly Blank, Shahan Ali Memnon, David Farr, and Jevin West for their valuable insights at multiple stages of this research.
 
 # Author Contributions
 
+Eva Maxfield Brown: Conceptualization, Data Curation, Formal Analysis, Investigation, Methodology, Software, Validation, Visualization, Writing - original draft, Writing - review & editing.
+
+Isaac Slaughter: Formal Analysis, Visualization, Writing - review & editing.
+
+Nicholas Weber: Conceptualization, Data Curation, Formal Analysis, Funding Acquisition, Investigation, Methodology, Project Administration, Resources, Supervision, Writing - original draft, Writing - review & editing.
+
 # Competing Interests
+
+The authors have no competing interests.
 
 # Funding Information
 
+This research was supported by grants from the National Science Foundation's (NSF) Office of Advanced Cyberinfrastructure (OAC-2211275) and the Sloan Foundation (G-2022-19347).
+
 # Data Availability
+
+The software and code used to train, evaluate, and apply the author-developer account matching model is available at: <https://github.com/evamaxfield/sci-soft-models> (<https://doi.org/10.5281/zenodo.17401863>). The software and code used to gather, process, and analyze the dataset of linked scientific articles and code repositories and their associated contributors and metadata is available at: <https://github.com/evamaxfield/rs-graph> (TODO). The compiled rs-graph-v1 dataset, as well as data required for model training and evaluation, is available at: <https://doi.org/10.7910/DVN/KPYVI1>. Certain portions of the dataset contain linked personal data (e.g., author names, developer account usernames) and are only available by request.
 
 # References
 
