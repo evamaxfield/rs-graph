@@ -2865,7 +2865,7 @@ This research was supported by grants from the National Science Foundation's (NS
 
 # Data Availability
 
-The software and code used to train, evaluate, and apply the author-developer account matching model is available at: <https://github.com/evamaxfield/sci-soft-models> (<https://doi.org/10.5281/zenodo.17401863>). The software and code used to gather, process, and analyze the dataset of linked scientific articles and code repositories and their associated contributors and metadata is available at: <https://github.com/evamaxfield/rs-graph> (TODO). The compiled rs-graph-v1 dataset, as well as data required for model training and evaluation, is available at: <https://doi.org/10.7910/DVN/KPYVI1>. Certain portions of the dataset contain linked personal data (e.g., author names, developer account usernames) and are only available by request.
+The software and code used to train, evaluate, and apply the author-developer account matching model is available at: <https://github.com/evamaxfield/sci-soft-models> (<https://doi.org/10.5281/zenodo.17401863>). The software and code used to gather, process, and analyze the dataset of linked scientific articles and code repositories and their associated contributors and metadata is available at: <https://github.com/evamaxfield/rs-graph> (<https://doi.org/10.5281/zenodo.17401960>). The compiled rs-graph-v1 dataset, as well as data required for model training and evaluation, is available at: <https://doi.org/10.7910/DVN/KPYVI1>. Certain portions of the compiled rs-graph-v1 dataset, and the model training and evaluation datasets contain linked personal data (e.g., author names, developer account usernames) and are only available by request.
 
 # References
 
