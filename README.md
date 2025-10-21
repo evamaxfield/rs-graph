@@ -1,5 +1,7 @@
 # Research Software Graph
 
+[![DOI](https://zenodo.org/badge/699484922.svg)](https://doi.org/10.5281/zenodo.17401959)
+
 Research Software Graph (rs-graph) is a software repository which contains the following:
 
 1. A Python library for collecting, processing, and standardizing scientific publication and associated research software/code from multiple sources.
