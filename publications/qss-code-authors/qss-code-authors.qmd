@@ -539,7 +539,7 @@ The challenge of measuring software's role in science stems, in part, from the h
 
 In the following paper, we overcome this challenge by constructing a dataset (`rs-graph-v1`) of 138,596 research articles and their associated code repositories. Using this data we then develop a machine learning model to match article authors with repository contributor accounts. By connecting papers to repositories, and authors to developers, we are able to observe both the presence and effect of code contributions across different authorship positions and examine how coding activity relates to both article-level citations and career-level productivity metrics (e.g., h-index). This approach enables us to address fundamental questions about the scientific reward system: How do software contributions correspond to authorship positions? Does coding effort translate into citation impact? How do patterns of code contribution relate to long-term career trajectories?
 
-In analyzing a filtered subset of the `rs-graph-v1` dataset, we identify three patterns that distinguish code contributions from other forms of scientific recognition. First, we show that 28.6% (n=6,529) of articles have non-author code-contributors, or individuals who may have helped create the software but received no formal authorship credit. We also show that code-contributing authors are associated with a modest increase in article-level impact metrics (on average, a 4.2% increase in citations per code-contributing author), but these effects become statistically non-significant when controlling for domain, article type, and open access status. Second, we find that first authors are significantly more likely to be code contributors than other author positions across all conditions tested. Third, we find a negative relationship between coding frequency and scholarly impact: Authors who contribute code more frequently show progressively lower h-indices than their non-coding peers, a pattern that persists even when controlling for publication count, and author's most common author position (first, middle, or last), domain (Physical Sciences, Health Sciences, Life Sciences, or Social Sciences), and article type (preprint, research article, or software article)[^1].
+In analyzing a filtered subset of the `rs-graph-v1` dataset, we identify three patterns that distinguish code contributions from other forms of scientific recognition. First, we show that 28.6% (n=5,694) of articles have non-author code-contributors, or individuals who may have helped create the software but received no formal authorship credit. We also show that code-contributing authors are associated with a modest increase in article-level impact metrics (on average, a 4.2% increase in citations per code-contributing author), but these effects become statistically non-significant when controlling for domain, article type, and open access status. Second, we find that first authors are significantly more likely to be code contributors than other author positions across all conditions tested. Third, we find a negative relationship between coding frequency and scholarly impact: Authors who contribute code more frequently show progressively lower h-indices than their non-coding peers, a pattern that persists even when controlling for publication count, and author's most common author position (first, middle, or last), domain (Physical Sciences, Health Sciences, Life Sciences, or Social Sciences), and article type (preprint, research article, or software article)[^1].
 
 [^1]: We use the phrase "most common" to mean most frequent, and in the case of a tie, their most recent. That is, if an author has been first author on four publications in our dataset, middle author on two publications, and has never been last author, they are considered a "first author" for the purposes of our analysis. We discuss the limitations of this approach in the @sec-discussion.
 
@@ -1713,6 +1713,7 @@ g.set_titles("{col_name}")
 # Remove x label and set y label
 for ax in g.axes.flat:
     ax.set_xlabel("")
+    ax.set_ylabel("Mean Count")
 
 # Add space between plots
 g.fig.subplots_adjust(hspace=1.2, wspace=0.5)
@@ -2805,7 +2806,7 @@ Based on these findings, we ***fail to reject*** our hypothesis (*H3*) that "the
 
 # Discussion {#sec-discussion}
 
-Our analysis reveals significant disparities in the recognition of software contributions to scientific research, with \~28.6% (n=6,529) of articles having code-contributors not matched to any article author, partially representing unrecognized code contribution. This persistent pattern over time and team size suggests a systemic disconnect between software development and scientific recognition systems, reflecting challenges in how scientific contributions are valued and credited. This exclusion reflects what @shapin1989invisible observed about scientific authority—the selective attribution of technical work as either genuine knowledge or mere skill significantly impacts who receives formal recognition. These findings further support previous surveys @olivier_philippe_2019_2585783 and @Carver2022ASO where scientists report the relegation of software contributors to either acknowledgment sections or receiving no credit at all. The stability of this pattern over time indicates that this phenomenon has embedded itself in scientific software development rather than representing a transitional phase, raising questions about scientific labor and how reward structures integrate technical contributions.
+Our analysis reveals significant disparities in the recognition of software contributions to scientific research, with \~28.6% (n=5,694) of articles having code-contributors not matched to any article author, partially representing unrecognized code contribution. This persistent pattern over time and team size suggests a systemic disconnect between software development and scientific recognition systems, reflecting challenges in how scientific contributions are valued and credited. This exclusion reflects what @shapin1989invisible observed about scientific authority—the selective attribution of technical work as either genuine knowledge or mere skill significantly impacts who receives formal recognition. These findings further support previous surveys @olivier_philippe_2019_2585783 and @Carver2022ASO where scientists report the relegation of software contributors to either acknowledgment sections or receiving no credit at all. The stability of this pattern over time indicates that this phenomenon has embedded itself in scientific software development rather than representing a transitional phase, raising questions about scientific labor and how reward structures integrate technical contributions.
 
 Our finding that, on average, article-repository pairs have only a single code contributor mirrors prior work from @farber2020analyzingGithubPapers. Further, the distribution of code contributions across author positions provides context to the hierarchical organization of scientific work. First authors are significantly more likely to contribute code with `{python} percent_first_authors_code_contributors_str` of all first authors in our dataset contributing code. Middle and last authors, meanwhile, were statistically significantly less likely to contribute code, with only `{python} percent_middle_authors_code_contributors_str` of middle authors and `{python} percent_last_authors_code_contributors_str` of last authors acting as code-contributing members of the research team. Corresponding authors were similarly less likely than expected to be code contributors, as we found that within our dataset, corresponding authors were code contributors `{python} percent_corresponding_authors_code_contributors_str` of the time. These patterns align with traditional scientific labor distribution where first authors might be expected to handle technical aspects of research while middle and last authors are likely specialist contributors or provide guidance and oversight [@Larivire2020InvestigatingTD; @sauermann2017authorship]. However, our data did not support our initial hypothesis that corresponding authors would also be more likely to contribute code due to their shared responsibility for the long-term maintenance of research artifacts. This finding suggests a potential strict division between project management responsibilities and direct technical engagement with software development. 
 
@@ -2839,7 +2840,27 @@ Despite their growing importance, the persistent underrecognition of software co
 
 # Acknowledgments
 
-This research was supported by grants from the National Science Foundation's (NSF) Office of Advanced Cyberinfrastructure (OAC-2211275) and the Sloan Foundation (G-2022-19347). We thank our anonymous reviewers for their helpful feedback. We especially thank Molly Blank, Shahan Ali Memnon, David Farr, and Jevin West for their valuable insights at multiple stages of this research.
+We thank our anonymous reviewers for their helpful feedback. We especially thank Molly Blank, Shahan Ali Memnon, David Farr, and Jevin West for their valuable insights at multiple stages of this research.
+
+# Author Contributions
+
+Eva Maxfield Brown: Conceptualization, Data Curation, Formal Analysis, Investigation, Methodology, Software, Validation, Visualization, Writing - original draft, Writing - review & editing.
+
+Isaac Slaughter: Formal Analysis, Visualization, Writing - review & editing.
+
+Nicholas Weber: Conceptualization, Data Curation, Formal Analysis, Funding Acquisition, Investigation, Methodology, Project Administration, Resources, Supervision, Writing - original draft, Writing - review & editing.
+
+# Competing Interests
+
+The authors have no competing interests.
+
+# Funding Information
+
+This research was supported by grants from the National Science Foundation's (NSF) Office of Advanced Cyberinfrastructure (OAC-2211275) and the Sloan Foundation (G-2022-19347).
+
+# Data Availability
+
+The software and code used to train, evaluate, and apply the author-developer account matching model is available at: <https://github.com/evamaxfield/sci-soft-models> (<https://doi.org/10.5281/zenodo.17401863>). The software and code used to gather, process, and analyze the dataset of linked scientific articles and code repositories and their associated contributors and metadata is available at: <https://github.com/evamaxfield/rs-graph> (<https://doi.org/10.5281/zenodo.17401960>). The compiled rs-graph-v1 dataset, as well as data required for model training and evaluation, is available at: <https://doi.org/10.7910/DVN/KPYVI1>. Certain portions of the compiled rs-graph-v1 dataset, and the model training and evaluation datasets contain linked personal data (e.g., author names, developer account usernames) and are only available by request.
 
 # References
 
