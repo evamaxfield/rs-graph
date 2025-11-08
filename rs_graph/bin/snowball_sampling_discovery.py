@@ -341,8 +341,7 @@ def _enrich_repository_with_data_required_for_matching(
     developer_repository: DeveloperRepositoryDetails,
     github_api_key: str,
 ) -> DeveloperRepositoryDetails | types.ErrorResult:
-    # Enrich the repository
-    return github.process_github_repo(
+    result = github.process_github_repo(
         source="snowball-sampling-discovery",
         repo_parts=types.RepoParts(
             host=developer_repository.github_result_models.code_host_model.name,
@@ -357,6 +356,16 @@ def _enrich_repository_with_data_required_for_matching(
         fetch_repo_commits_count=True,
         fetch_repo_files=False,
         existing_github_results=developer_repository.github_result_models,
+    )
+
+    if isinstance(result, types.ErrorResult):
+        return result
+
+    # Enrich the repository
+    return DeveloperRepositoryDetails(
+        author_developer_link_id=developer_repository.author_developer_link_id,
+        developer_account_username=developer_repository.developer_account_username,
+        github_result_models=result,
     )
 
 
