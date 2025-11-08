@@ -1,0 +1,410 @@
+#!/usr/bin/env python
+
+import itertools
+import math
+import os
+import time
+from collections import deque
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
+import typer
+from dotenv import load_dotenv
+from gh_tokens_loader import GitHubTokensCycler
+from prefect import flow, unmapped
+from tqdm import tqdm
+
+from rs_graph import types
+from rs_graph.bin.data import download as download_rs_graph_data_files
+from rs_graph.bin.data import upload as upload_rs_graph_data_files
+from rs_graph.db import utils as db_utils
+from rs_graph.enrichment import article, entity_matching, github
+from rs_graph.sources import joss, plos, proto, pwc, softcite_2025, softwarex
+from rs_graph.utils import code_host_parsing
+
+from rs_graph.bin.pipeline_utils import (
+    _get_github_cluster_config,
+    _get_open_alex_cluster_config,
+    _get_basic_gpu_cluster_config,
+    _wrap_func_with_coiled_prefect_task,
+    _load_elsevier_api_keys,
+    _load_open_alex_emails,
+    DEFAULT_ELSEVIER_API_KEYS_FILE,
+    DEFAULT_GITHUB_TOKENS_FILE,
+    DEFAULT_OPEN_ALEX_EMAILS_FILE,
+    DEFAULT_RESULTS_DIR,
+)
+
+###############################################################################
+
+app = typer.Typer(rich_markup_mode=None, pretty_exceptions_enable=False)
+
+PRELINKED_INGESTION_SOURCE_MAP: dict[str, proto.DatasetRetrievalFunction] = {
+    "joss": joss.get_dataset,
+    "plos": plos.get_dataset,
+    "softwarex": softwarex.get_dataset,
+    "pwc": pwc.get_dataset,
+    "softcite-2025": softcite_2025.get_dataset,
+}
+
+###############################################################################
+
+
+@flow(
+    log_prints=True,
+)
+def _prelinked_dataset_ingestion_flow(
+    source: str,
+    use_prod: bool,
+    github_tokens_file: str,
+    open_alex_emails: list[str],
+    semantic_scholar_api_key: str,
+    elsevier_api_keys: list[str],
+    use_coiled: bool,
+    coiled_region: str,
+    batch_size: int,
+    errored_store_path: Path,
+) -> None:
+    # Get an infinite cycle of github tokens
+    cycled_github_tokens = GitHubTokensCycler(gh_tokens_file=github_tokens_file)
+
+    # Workers is the number of github tokens
+    n_github_tokens = len(cycled_github_tokens)
+
+    # Get an infinite cycle of open alex emails
+    cycled_open_alex_emails = itertools.cycle(open_alex_emails)
+
+    # Get the number of open alex emails
+    n_open_alex_emails = len(open_alex_emails)
+
+    # Print dataset and coiled status
+    print("-" * 80)
+    print("Pipeline Options:")
+    print(f"Source: {source}")
+    print(f"Use Prod Database: {use_prod}")
+    print(f"Use Coiled: {use_coiled}")
+    print(f"Coiled Region: {coiled_region}")
+    print(f"Batch Size: {batch_size}")
+    print(f"GitHub Token Count: {n_github_tokens}")
+    print(f"Open Alex Email Count: {n_open_alex_emails}")
+    print(f"Elsevier API Key Count: {len(elsevier_api_keys)}")
+    print("-" * 80)
+
+    # Get dataset
+    source_func = PRELINKED_INGESTION_SOURCE_MAP[source]
+    print("Getting dataset...")
+    source_results = source_func(
+        github_tokens=cycled_github_tokens._gh_tokens,
+        elsevier_api_keys=elsevier_api_keys,
+        semantic_scholar_api_key=semantic_scholar_api_key,
+        open_alex_emails=open_alex_emails,
+    )
+
+    # Filter dataset
+    code_filtered_results = code_host_parsing.filter_repo_paper_pairs(
+        source_results.successful_results,
+    )
+
+    # Filter out already processed pairs
+    stored_filtered_results = db_utils.filter_stored_pairs(
+        code_filtered_results.successful_results,
+        use_prod=use_prod,
+    )
+
+    # Keep track of processing times
+    processing_times = ProcessingTimes(
+        open_alex_processing_times=deque(maxlen=1024),
+        github_processing_times=deque(maxlen=1024),
+        store_article_and_repository_times=deque(maxlen=1024),
+        author_developer_matching_times=deque(maxlen=1024),
+        store_author_developer_links_times=deque(maxlen=1024),
+    )
+
+    # Create chunks of batch_size of the results to process
+    n_batches = math.ceil(len(stored_filtered_results) / batch_size)
+    for i in tqdm(
+        range(0, len(stored_filtered_results), batch_size),
+        desc="Batches",
+        total=n_batches,
+    ):
+        chunk = stored_filtered_results[i : i + batch_size]
+
+        # Handle any timeouts and such
+        try:
+            # Process open alex
+            process_article_wrapped_task = _wrap_func_with_coiled_prefect_task(
+                article.process_article_task,
+                coiled_kwargs=_get_open_alex_cluster_config(
+                    n_open_alex_emails=n_open_alex_emails,
+                    use_coiled=use_coiled,
+                    coiled_region=coiled_region,
+                ),
+            )
+            article_processing_futures = process_article_wrapped_task.map(
+                pair=chunk,
+                open_alex_email=[next(cycled_open_alex_emails) for _ in range(len(chunk))],
+                open_alex_email_count=unmapped(n_open_alex_emails),
+                semantic_scholar_api_key=unmapped(semantic_scholar_api_key),
+            )
+
+            # Process github
+            process_github_wrapped_task = _wrap_func_with_coiled_prefect_task(
+                github.process_github_repo_task,
+                coiled_kwargs=_get_github_cluster_config(
+                    n_github_tokens=n_github_tokens,
+                    use_coiled=use_coiled,
+                    coiled_region=coiled_region,
+                ),
+            )
+            github_futures = process_github_wrapped_task.map(
+                pair=article_processing_futures,
+                github_api_key=[
+                    next(cycled_github_tokens) for _ in range(len(article_processing_futures))
+                ],
+            )
+
+            # Store everything
+            stored_futures = db_utils.store_full_details_task.map(
+                pair=github_futures,
+                use_prod=unmapped(use_prod),
+            )
+
+            # Match devs and researchers
+            match_devs_and_researchers_wrapped_task = _wrap_func_with_coiled_prefect_task(
+                entity_matching.match_devs_and_researchers,
+                coiled_kwargs=_get_basic_gpu_cluster_config(
+                    use_coiled=use_coiled,
+                    coiled_region=coiled_region,
+                ),
+            )
+            dev_researcher_futures = match_devs_and_researchers_wrapped_task.map(
+                pair=stored_futures,
+            )
+
+            # Store the dev-researcher links
+            stored_dev_researcher_futures = db_utils.store_dev_researcher_em_links_task.map(
+                pair=dev_researcher_futures,
+                use_prod=unmapped(use_prod),
+            )
+
+            # Store this batch's errored results
+            # Update errored store path with batch index
+            this_batch_store_path = errored_store_path.with_name(
+                errored_store_path.stem + f"-{i // batch_size}.parquet"
+            )
+            processing_times = _store_batch_results(
+                results=[f.result() for f in stored_dev_researcher_futures],
+                store_path=this_batch_store_path,
+                processing_times=processing_times,
+            )
+
+            # Log "{median} ({mean} +- {std})" for each processing time
+            open_alex_processing_times_described = pd.Series(
+                processing_times.open_alex_processing_times
+            ).describe()
+            github_processing_times_described = pd.Series(
+                processing_times.github_processing_times
+            ).describe()
+            store_article_and_repository_times_described = pd.Series(
+                processing_times.store_article_and_repository_times
+            ).describe()
+            author_developer_matching_times_described = pd.Series(
+                processing_times.author_developer_matching_times
+            ).describe()
+            store_author_developer_links_times_described = pd.Series(
+                processing_times.store_author_developer_links_times
+            ).describe()
+
+            # Log with two decimal places
+            print("Processing Times (ignoring retries):")
+            print(
+                f"Open Alex: {open_alex_processing_times_described['50%']:.2f} "
+                f"({open_alex_processing_times_described['mean']:.2f} "
+                f"+- {open_alex_processing_times_described['std']:.2f})"
+            )
+            print(
+                f"GitHub: {github_processing_times_described['50%']:.2f} "
+                f"({github_processing_times_described['mean']:.2f} "
+                f"+- {github_processing_times_described['std']:.2f})"
+            )
+            print(
+                f"Store Article and Repository: "
+                f"{store_article_and_repository_times_described['50%']:.2f} "
+                f"({store_article_and_repository_times_described['mean']:.2f} "
+                f"+- {store_article_and_repository_times_described['std']:.2f})"
+            )
+            print(
+                f"Author Developer Matching: "
+                f"{author_developer_matching_times_described['50%']:.2f} "
+                f"({author_developer_matching_times_described['mean']:.2f} "
+                f"+- {author_developer_matching_times_described['std']:.2f})"
+            )
+            print(
+                f"Store Author Developer Links: "
+                f"{store_author_developer_links_times_described['50%']:.2f} "
+                f"({store_author_developer_links_times_described['mean']:.2f} "
+                f"+- {store_author_developer_links_times_described['std']:.2f})"
+            )
+
+        except Exception as e:
+            print("Error processing chunk, skipping storage of errors...")
+            print(f"Error: {e}")
+
+        # Sleep for a second before next chunk
+        time.sleep(1)
+
+    # Cooldown
+    time.sleep(3)
+
+
+@dataclass
+class ProcessingTimes:
+    open_alex_processing_times: deque[float]
+    github_processing_times: deque[float]
+    store_article_and_repository_times: deque[float]
+    author_developer_matching_times: deque[float]
+    store_author_developer_links_times: deque[float]
+
+
+def _store_batch_results(
+    results: list[types.StoredRepositoryDocumentPair | types.ErrorResult],
+    store_path: Path,
+    processing_times: ProcessingTimes,
+) -> ProcessingTimes:
+    print("Storing batch results...")
+
+    # Get only errors
+    errored_results = [result for result in results if isinstance(result, types.ErrorResult)]
+
+    # Log this batch counts
+    print(f"This Batch Success: {len(results) - len(errored_results)}")
+    print(f"This Batch Errored: {len(errored_results)}")
+
+    # Store errored results
+    errored_df = pd.DataFrame(errored_results)
+    errored_df.to_parquet(store_path)
+
+    # Update processing times
+    for result in results:
+        if isinstance(result, types.StoredRepositoryDocumentPair):
+            if result.open_alex_processing_time_seconds is not None:
+                processing_times.open_alex_processing_times.append(
+                    result.open_alex_processing_time_seconds
+                )
+            if result.github_processing_time_seconds is not None:
+                processing_times.github_processing_times.append(
+                    result.github_processing_time_seconds
+                )
+            if result.store_article_and_repository_time_seconds is not None:
+                processing_times.store_article_and_repository_times.append(
+                    result.store_article_and_repository_time_seconds
+                )
+            if result.author_developer_matching_time_seconds is not None:
+                processing_times.author_developer_matching_times.append(
+                    result.author_developer_matching_time_seconds
+                )
+            if result.store_author_developer_links_time_seconds is not None:
+                processing_times.store_author_developer_links_times.append(
+                    result.store_author_developer_links_time_seconds
+                )
+
+    return processing_times
+
+
+
+@app.command()
+def prelinked_dataset_ingestion(
+    source: str,
+    use_prod: bool = False,
+    use_coiled: bool = False,
+    coiled_region: str = "us-west-2",
+    github_tokens_file: str = DEFAULT_GITHUB_TOKENS_FILE,
+    open_alex_emails_file: str = DEFAULT_OPEN_ALEX_EMAILS_FILE,
+    elsevier_api_keys_file: str = DEFAULT_ELSEVIER_API_KEYS_FILE,
+    batch_size: int = 50,
+) -> None:
+    """
+    Process and ingest a stored pre-linked dataset of
+    scientific articles and source code repositories.
+    """
+    # Create current datetime without microseconds
+    current_datetime = datetime.now().replace(microsecond=0)
+    # Convert to isoformat and replace colons with dashes
+    current_datetime_str = current_datetime.isoformat().replace(":", "-")
+
+    # Create dir for this datetime
+    current_datetime_dir = DEFAULT_RESULTS_DIR / current_datetime_str
+    # Create "results" dir
+    current_datetime_dir.mkdir(exist_ok=True, parents=True)
+    errored_store_path = current_datetime_dir / f"process-results-{source}-errored.parquet"
+
+    # Download latest if prod
+    if use_prod:
+        print("Downloading latest data files...")
+        download_rs_graph_data_files(force=True)
+
+    # Keep track of duration
+    start_dt = datetime.now()
+    start_dt = start_dt.replace(microsecond=0)
+
+    # Load environment variables
+    load_dotenv()
+
+    # Get semantic scholar API key
+    try:
+        semantic_scholar_api_key = os.environ["SEMANTIC_SCHOLAR_API_KEY"]
+    except KeyError as e:
+        raise KeyError("Please set the SEMANTIC_SCHOLAR_API_KEY environment variable.") from e
+
+    # Ignore prefect task introspection warnings
+    os.environ["PREFECT_TASK_INTROSPECTION_WARN_THRESHOLD"] = "0"
+
+    # Load Open Alex emails
+    open_alex_emails = _load_open_alex_emails(open_alex_emails_file)
+
+    # Load Elsevier API keys
+    elsevier_api_keys = _load_elsevier_api_keys(elsevier_api_keys_file)
+
+    # Start the flow
+    _prelinked_dataset_ingestion_flow(
+        source=source,
+        use_prod=use_prod,
+        github_tokens_file=github_tokens_file,
+        open_alex_emails=open_alex_emails,
+        semantic_scholar_api_key=semantic_scholar_api_key,
+        elsevier_api_keys=elsevier_api_keys,
+        use_coiled=use_coiled,
+        coiled_region=coiled_region,
+        batch_size=batch_size,
+        errored_store_path=errored_store_path,
+    )
+
+    # End duration
+    end_dt = datetime.now()
+    end_dt = end_dt.replace(microsecond=0)
+
+    # Upload latest if prod
+    if use_prod:
+        upload_rs_graph_data_files()
+
+    # Sum errors
+    errored_df = pd.concat(
+        [pd.read_parquet(path) for path in current_datetime_dir.glob("*.parquet")]
+    )
+    print(f"Total Errored: {len(errored_df)}")
+
+    # Log time taken
+    print(f"Total Processing Duration: {end_dt - start_dt}")
+
+
+###############################################################################
+
+
+def main() -> None:
+    app()
+
+
+if __name__ == "__main__":
+    app()

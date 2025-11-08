@@ -611,7 +611,7 @@ def filter_stored_pairs(
 
 @dataclass
 class HydratedAuthorDeveloperLink:
-    id: int
+    author_developer_link_id: int
     researcher_open_alex_id: str
     developer_account_username: str
     last_snowball_processed_datetime: datetime | None
@@ -688,7 +688,7 @@ def get_hydrated_author_developer_links(
         for link, researcher, developer_account in results:
             hydrated_links.append(
                 HydratedAuthorDeveloperLink(
-                    id=link.id,
+                    author_developer_link_id=link.id,
                     researcher_open_alex_id=researcher.open_alex_id,
                     developer_account_username=developer_account.username,
                     last_snowball_processed_datetime=link.last_snowball_processed_datetime,
@@ -696,14 +696,11 @@ def get_hydrated_author_developer_links(
             )
 
         return hydrated_links
+    
 
-
-def check_article_or_repository_in_db(
+def check_article_in_db(
     article_doi: str,
     article_title: str,
-    code_host: str,
-    repo_owner: str,
-    repo_name: str,
     use_prod: bool = False,
 ) -> bool:
     # Get the engine
@@ -711,13 +708,9 @@ def check_article_or_repository_in_db(
 
     # Lowercase and strip all inputs
     article_doi = article_doi.lower().strip()
-    code_host = code_host.lower().strip()
-    repo_owner = repo_owner.lower().strip()
-    repo_name = repo_name.lower().strip()
 
     # Create a session
     document_found = False
-    repository_found = False
     with Session(engine) as session:
         # Document
         document_stmt = select(db_models.Document).where(db_models.Document.doi == article_doi)
@@ -745,6 +738,26 @@ def check_article_or_repository_in_db(
             # False if we didn't
             document_found = document_model is not None
 
+    return document_found
+
+
+def check_repository_in_db(
+    code_host: str,
+    repo_owner: str,
+    repo_name: str,
+    use_prod: bool = False,
+) -> bool:
+    # Get the engine
+    engine = get_engine(use_prod=use_prod)
+
+    # Lowercase and strip all inputs
+    code_host = code_host.lower().strip()
+    repo_owner = repo_owner.lower().strip()
+    repo_name = repo_name.lower().strip()
+
+    # Create a session
+    repository_found = False
+    with Session(engine) as session:
         # Code Host (assume GitHub for now)
         code_host_stmt = select(db_models.CodeHost).where(db_models.CodeHost.name == code_host)
         code_host_model = session.exec(code_host_stmt).first()
@@ -762,5 +775,4 @@ def check_article_or_repository_in_db(
             # False if we didn't
             repository_found = repository_model is not None
 
-    return document_found or repository_found
-
+    return repository_found

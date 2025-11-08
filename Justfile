@@ -22,6 +22,11 @@ install:
 	pip install uv
 	uv pip install -e ".[dev,lint,modeling,data,pipeline]"
 
+# install with pipeline deps
+install-pipeline:
+	pip install uv
+	uv pip install -e ".[dev,lint,pipeline]"
+
 # lint, format, and check all files
 lint:
 	pre-commit run --all-files

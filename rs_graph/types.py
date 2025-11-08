@@ -82,8 +82,8 @@ class OpenAlexResultModels(DataClassJsonMixin):
     document_abstract_model: db_models.DocumentAbstract
     document_alternate_dois: list[str]
     topic_details: list[TopicDetails]
-    researcher_details: list[ResearcherDetails]
-    funding_instance_details: list[FundingInstanceDetails]
+    researcher_details: list[ResearcherDetails] | None
+    funding_instance_details: list[FundingInstanceDetails] | None
 
 
 @dataclass

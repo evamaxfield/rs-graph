@@ -140,6 +140,7 @@ def process_github_repo(  # noqa: C901
     fetch_repo_contributors: bool = True,
     fetch_repo_commits_count: bool = True,
     fetch_repo_files: bool = True,
+    existing_repo_data: dict | None = None,
     existing_github_results: types.GitHubResultModels | None = None,
 ) -> types.GitHubResultModels | types.ErrorResult:
     """Get repo contributors and add them to database."""
@@ -164,8 +165,15 @@ def process_github_repo(  # noqa: C901
             # Sleep to avoid API limits
             time.sleep(0.85)
 
+            if existing_repo_data:
+                # Update existing repo data with new info
+                repo_info = {**existing_repo_data, **repo_info}
+
         else:
-            repo_info = None
+            if existing_repo_data:
+                repo_info = existing_repo_data
+            else:
+                repo_info = None
 
         # Get repo languages
         if fetch_repo_languages:
@@ -483,7 +491,7 @@ def process_github_repo_task(
 def get_github_repos_for_developer(
     username: str,
     github_api_key: str | None = None,
-) -> list[dict] | types.ErrorResult:
+) -> list[types.GitHubResultModels | types.ErrorResult] | types.ErrorResult:
     """Get all GitHub repositories for a developer account."""
     # Setup API
     api = _setup_gh_api(github_api_key)
@@ -502,7 +510,26 @@ def get_github_repos_for_developer(
             time.sleep(0.85)  # Sleep to avoid API limits
             developer_repos.extend(page)
 
-        return developer_repos
+        # Get the GitHub response object
+        return [
+            process_github_repo(
+                source="snowball-sampling-discovery",
+                repo_parts=types.RepoParts(
+                    host="github",
+                    owner=username,
+                    name=repo["name"].lower(),
+                ),
+                github_api_key=github_api_key,
+                fetch_repo_data=False,
+                fetch_repo_languages=False,
+                fetch_repo_readme=False,
+                fetch_repo_contributors=False,
+                fetch_repo_commits_count=False,
+                fetch_repo_files=False,
+                existing_repo_data=repo,
+            )
+            for repo in developer_repos
+        ]
 
     except Exception as e:
         if "Bad credentials" in str(e):
@@ -517,232 +544,3 @@ def get_github_repos_for_developer(
             error=str(e),
             traceback=traceback.format_exc(),
         )
-
-
-@dataclass
-class RepoReadmeAndContributorInfo(DataClassJsonMixin):
-    repo_owner: str
-    repo_name: str
-    readme: str | None
-    contributor_infos: list[RepoContributorInfo]
-
-
-@backoff.on_exception(
-    backoff.expo,
-    (HTTP403ForbiddenError),
-    max_time=16,
-)
-def get_repo_readme_and_contributor_details(
-    repo_owner: str,
-    repo_name: str,
-    github_api_key: str | None = None,
-    top_n: int = 30,
-) -> RepoReadmeAndContributorInfo | types.ErrorResult:
-    """Get the README and top contributors for a GitHub repository."""
-    # Setup API
-    api = _setup_gh_api(github_api_key)
-
-    # Initialize variables
-    readme_content = None
-
-    try:
-        # Get repo README
-        try:
-            repo_readme_response = api.repos.get_readme(
-                owner=repo_owner,
-                repo=repo_name,
-            )
-
-            # Decode the content
-            readme_content = base64.b64decode(repo_readme_response["content"]).decode("utf-8")
-
-        except Exception:
-            readme_content = None
-
-        finally:
-            # Sleep to avoid API limits
-            time.sleep(0.85)
-
-        # Get contributors
-        partial_contributors = api.repos.list_contributors(
-            owner=repo_owner,
-            repo=repo_name,
-            per_page=top_n,
-        )
-
-        # Sleep to avoid API limits
-        time.sleep(0.85)
-
-        # Get user infos
-        _get_user_partial = partial(
-            _get_user_info_from_login,
-            github_api_key=github_api_key,
-        )
-
-        # Get expanding contributor info
-        contributor_infos = [
-            _get_user_partial(login=contrib["login"]) for contrib in partial_contributors
-        ]
-
-    except Exception as e:
-        if "Bad credentials" in str(e):
-            print(
-                f"!!! GitHub API Error: Bad credentials. "
-                f"Please check your API key. '{github_api_key}'!!!"
-            )
-        print(f"Error fetching data for {repo_owner}/{repo_name}: {e}")
-        return types.ErrorResult(
-            source="snowball-sampling-discovery",
-            step="github-repo-readme-and-contributors",
-            identifier=f"{repo_owner}/{repo_name}",
-            error=str(e),
-            traceback=traceback.format_exc(),
-        )
-
-    return RepoReadmeAndContributorInfo(
-        repo_owner=repo_owner,
-        repo_name=repo_name,
-        readme=readme_content,
-        contributor_infos=contributor_infos,
-    )
-
-@dataclass
-class RepoTreeCommitsAndLanguages(DataClassJsonMixin):
-    repo_owner: str
-    repo_name: str
-    commits_count: int | None
-    repo_files: list[db_models.RepositoryFile]
-    repo_languages: list[db_models.RepositoryLanguage]
-
-
-def get_repo_tree_commits_and_languages(
-    repo_owner: str,
-    repo_name: str,
-    github_api_key: str | None = None,
-    default_branch: str | None = None,
-) -> RepoTreeCommitsAndLanguages | types.ErrorResult:
-    """Get the repository tree, commit count, and languages for a GitHub repository."""
-    # Setup API
-    api = _setup_gh_api(github_api_key)
-
-    # Initialize variables
-    commits_count = None
-    repo_files: list[db_models.RepositoryFile] = []
-    repo_languages: list[db_models.RepositoryLanguage] = []
-
-    # Get additional repo items
-    try:
-        if default_branch is not None:
-            # Get the commit count for the default branch via checking
-            # header response for the page count after rel="last"
-            # https://stackoverflow.com/a/70610670
-            try:
-                # Use raw requests lib rather than GhApi
-                # As we need the headers
-                response = requests.get(
-                    f"https://api.github.com/repos/{repo_owner}/{repo_name}/commits",
-                    params={"sha": default_branch, "per_page": 1, "page": 1},
-                    headers=(
-                        {"Authorization": f"Bearer {github_api_key}"} if github_api_key else {}
-                    ),
-                )
-
-                # Raise for status
-                response.raise_for_status()
-
-                # Parse the Link header
-                # We want the page right before rel="last"
-                link_header = response.headers.get("Link", "")
-                if link_header:
-                    # Split by comma to get each part
-                    _, last_page = link_header.split(", ")
-                    # Extract the page number from the last page
-                    last_page_url = last_page.split(";")[0].strip("<>")
-                    commits_count = int(last_page_url.split("page=")[-1])
-                else:
-                    commits_count = None
-
-            except Exception:
-                commits_count = None
-
-            finally:
-                # Sleep to avoid API limits
-                time.sleep(0.85)
-
-            # Get repository files
-            try:
-                # Use the git trees API to get the files in the repository
-                tree_results = api.git.get_tree(
-                    owner=repo_owner,
-                    repo=repo_name,
-                    tree_sha=default_branch,
-                    recursive=True,
-                )
-
-                # Iterate through the tree and create RepositoryFile models
-                for file in tree_results["tree"]:
-                    repo_files.append(
-                        db_models.RepositoryFile(
-                            repository_id=0,  # Placeholder, to be set when saving to DB
-                            path=file["path"],
-                            tree_type=file["type"],
-                            bytes_of_code=file.get("size", 0),
-                        )
-                    )
-            
-            except Exception as e:
-                # Ignore the error if the tree cannot be fetched
-                repo_files = []
-                print(f"Error fetching repository files: {e}")
-            
-            finally:
-                # Sleep to avoid API limits
-                time.sleep(0.85)
-        
-        # Get repo languages
-        try:
-            repo_languages_response = api.repos.list_languages(
-                owner=repo_owner,
-                repo=repo_name,
-            )
-
-            # Convert to RepositoryLanguage models
-            for language, bytes_of_code in repo_languages_response.items():
-                repo_languages.append(
-                    db_models.RepositoryLanguage(
-                        repository_id=0,  # Placeholder, to be set when saving to DB
-                        language=language,
-                        bytes_of_code=bytes_of_code,
-                    )
-                )
-
-        except Exception as e:
-            repo_languages = []
-            print(f"Error fetching repository languages: {e}")
-        
-        finally:
-            # Sleep to avoid API limits
-            time.sleep(0.85)
-    
-    except Exception as e:
-        if "Bad credentials" in str(e):
-            print(
-                f"!!! GitHub API Error: Bad credentials. "
-                f"Please check your API key. '{github_api_key}'!!!"
-            )
-        print(f"Error fetching data for {repo_owner}/{repo_name}: {e}")
-        return types.ErrorResult(
-            source="snowball-sampling-discovery",
-            step="github-repo-tree-commits-languages",
-            identifier=f"{repo_owner}/{repo_name}",
-            error=str(e),
-            traceback=traceback.format_exc(),
-        )
-    
-    return RepoTreeAndCommitsCount(
-        repo_owner=repo_owner,
-        repo_name=repo_name,
-        commits_count=commits_count,
-        repo_files=repo_files,
-        repo_languages=repo_languages,
-    )

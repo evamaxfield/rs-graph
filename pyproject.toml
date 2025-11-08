@@ -56,7 +56,7 @@ modeling = [
   "pandas>=1,<3",
   "pyarrow>=12",
   "scipy>=1,<2",
-  "sci-soft-models @ git+https://github.com/evamaxfield/sci-soft-models.git@361fe95",
+  "sci-soft-models @ file:///Users/evamaxfield/active/sci-soft-models",
   "seaborn>=0.13,<0.14",
   "skops>=0.11,<0.12",
   "statsmodels>=0.14,<0.15",
@@ -91,7 +91,7 @@ pipeline = [
   "python-dotenv>=1,<2",
   "pyyaml>=6,<7",
   "requests>=2,<3",
-  "sci-soft-models @ git+https://github.com/evamaxfield/sci-soft-models.git@361fe95",
+  "sci-soft-models @ file:///Users/evamaxfield/active/sci-soft-models",
   "semanticscholar>=0.10,<0.11",
   "tqdm>=4,<5",
   "typer>=0.15",
@@ -101,7 +101,8 @@ pipeline = [
 # https://peps.python.org/pep-0621/#entry-points
 [project.entry-points."console_scripts"]
 rs-graph-data = "rs_graph.bin.data:main"
-rs-graph-pipelines = "rs_graph.bin.pipelines:main"
+rs-graph-prelinked-dataset-ingestion = "rs_graph.bin.prelinked_dataset_ingestion:main"
+rs-graph-snowball-sampling-discovery = "rs_graph.bin.snowball_sampling_discovery:main"
 
 # build settings
 # https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html
