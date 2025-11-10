@@ -25,7 +25,7 @@ from ..db import models as db_models
 
 
 @dataclass
-class RepoContributorInfo(DataClassJsonMixin):
+class RepoContributorInfoSimple(DataClassJsonMixin):
     username: str
     name: str | None
     email: str | None
@@ -64,7 +64,7 @@ def _setup_gh_api(github_api_key: str | None = None) -> GhApi:
 def _get_user_info_from_login(
     login: str,
     github_api_key: str | None = None,
-) -> RepoContributorInfo:
+) -> RepoContributorInfoSimple:
     # Setup API
     api = _setup_gh_api(github_api_key)
 
@@ -75,7 +75,7 @@ def _get_user_info_from_login(
     time.sleep(0.85)
 
     # Store info
-    return RepoContributorInfo(
+    return RepoContributorInfoSimple(
         username=login,
         name=user_info["name"],
         email=user_info["email"],
@@ -185,7 +185,7 @@ def process_github_repo(  # noqa: C901
             # Sleep to avoid API limits
             time.sleep(0.85)
 
-             # For each language, create a repository language
+            # For each language, create a repository language
             repo_language_models = []
             for language, bytes_of_code in repo_languages.items():
                 repo_language_models.append(
@@ -208,7 +208,10 @@ def process_github_repo(  # noqa: C901
                 # Decode the content
                 repo_readme = base64.b64decode(repo_readme_response["content"]).decode("utf-8")
 
-            except Exception:
+            except Exception as e:
+                print(f"something went wrong with README fetch for repo: {repo_parts.owner}/{repo_parts.name}")
+                print("error", str(e))
+                print(traceback.format_exc())
                 repo_readme = None
 
             finally:
@@ -246,12 +249,18 @@ def process_github_repo(  # noqa: C901
             # header response for the page count after rel="last"
             # https://stackoverflow.com/a/70610670
             try:
+                params: dict[str, str | None | int] = {
+                    "sha": default_branch,
+                    "per_page": 1,
+                    "page": 1,
+                }
+
                 # Use raw requests lib rather than GhApi
                 # As we need the headers
                 response = requests.get(
                     f"https://api.github.com/repos/"
                     f"{repo_parts.owner}/{repo_parts.name}/commits",
-                    params={"sha": default_branch, "per_page": 1, "page": 1},
+                    params=params,
                     headers=(
                         {"Authorization": f"Bearer {github_api_key}"} if github_api_key else {}
                     ),
@@ -388,12 +397,12 @@ def process_github_repo(  # noqa: C901
         github_results = types.GitHubResultModels(
             code_host_model=(
                 existing_github_results.code_host_model
-                if existing_github_results 
+                if existing_github_results
                 else code_host
             ),
             repository_model=(
                 existing_github_results.repository_model
-                if existing_github_results 
+                if existing_github_results
                 else repo_model
             ),
             repository_readme_model=(
@@ -403,12 +412,14 @@ def process_github_repo(  # noqa: C901
             ),
             repository_language_models=(
                 existing_github_results.repository_language_models
-                if existing_github_results and existing_github_results.repository_language_models
+                if existing_github_results
+                and existing_github_results.repository_language_models
                 else repo_language_models
             ),
             repository_contributor_details=(
                 existing_github_results.repository_contributor_details
-                if existing_github_results and existing_github_results.repository_contributor_details
+                if existing_github_results
+                and existing_github_results.repository_contributor_details
                 else repo_contributor_models
             ),
             repository_file_models=(
@@ -420,19 +431,16 @@ def process_github_repo(  # noqa: C901
 
         # Final cases where we want to update existing model fields
         # Commits Count
-        if (
-            github_results.repository_model.commits_count is None
-            and commits_count is not None
-        ):
+        if github_results.repository_model.commits_count is None and commits_count is not None:
             github_results.repository_model.commits_count = commits_count
-        
+
         # Default Branch
         if (
             github_results.repository_model.default_branch is None
             and default_branch is not None
         ):
             github_results.repository_model.default_branch = default_branch
-        
+
         # Processed At SHA
         if (
             github_results.repository_model.processed_at_sha is None
@@ -470,7 +478,8 @@ def process_github_repo_task(
 
     # Process the GitHub repo
     result = process_github_repo(
-        pair=pair,
+        source=pair.source,
+        repo_parts=pair.repo_parts,
         github_api_key=github_api_key,
         top_n=top_n,
     )
@@ -516,7 +525,7 @@ def get_github_repos_for_developer(
                 source="snowball-sampling-discovery",
                 repo_parts=types.RepoParts(
                     host="github",
-                    owner=username,
+                    owner=repo["owner"]["login"].lower(),
                     name=repo["name"].lower(),
                 ),
                 github_api_key=github_api_key,

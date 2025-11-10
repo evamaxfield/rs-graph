@@ -16,6 +16,9 @@ clean:
 	find . -name '*~' -exec rm -f {} +
 	find . -name '__pycache__' -exec rm -fr {} +
 	rm -fr .mypy_cache
+	rm -fr .pytest_cache
+	rm -fr .ruff_cache
+	rm -fr build
 
 # install with all deps
 install:

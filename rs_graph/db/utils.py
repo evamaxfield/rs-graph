@@ -218,63 +218,65 @@ def store_full_details(  # noqa: C901
                 assert topic_detail.document_topic_model.id is not None
 
             # Researcher details
-            for researcher_detail in pair.open_alex_results.researcher_details:
-                # Researcher model
-                researcher_detail.researcher_model = _get_or_add_and_flush(
-                    model=researcher_detail.researcher_model, session=session
-                )
-                assert researcher_detail.researcher_model.id is not None
-
-                # Document contributor model
-                researcher_detail.document_contributor_model.document_id = (
-                    pair.open_alex_results.document_model.id
-                )
-                researcher_detail.document_contributor_model.researcher_id = (
-                    researcher_detail.researcher_model.id
-                )
-                researcher_detail.document_contributor_model = _get_or_add_and_flush(
-                    model=researcher_detail.document_contributor_model, session=session
-                )
-                assert researcher_detail.document_contributor_model.id is not None
-
-                # Institution models
-                for institution_model in researcher_detail.institution_models:
-                    institution_model = _get_or_add_and_flush(
-                        model=institution_model, session=session
+            if pair.open_alex_results.researcher_details is not None:
+                for researcher_detail in pair.open_alex_results.researcher_details:
+                    # Researcher model
+                    researcher_detail.researcher_model = _get_or_add_and_flush(
+                        model=researcher_detail.researcher_model, session=session
                     )
-                    assert institution_model.id is not None
+                    assert researcher_detail.researcher_model.id is not None
 
-                    # Create all of the researcher document institution models
-                    r_d_i = db_models.DocumentContributorInstitution(
-                        document_contributor_id=researcher_detail.document_contributor_model.id,
-                        institution_id=institution_model.id,
+                    # Document contributor model
+                    researcher_detail.document_contributor_model.document_id = (
+                        pair.open_alex_results.document_model.id
                     )
-                    _get_or_add_and_flush(model=r_d_i, session=session)
+                    researcher_detail.document_contributor_model.researcher_id = (
+                        researcher_detail.researcher_model.id
+                    )
+                    researcher_detail.document_contributor_model = _get_or_add_and_flush(
+                        model=researcher_detail.document_contributor_model, session=session
+                    )
+                    assert researcher_detail.document_contributor_model.id is not None
+
+                    # Institution models
+                    for institution_model in researcher_detail.institution_models:
+                        institution_model = _get_or_add_and_flush(
+                            model=institution_model, session=session
+                        )
+                        assert institution_model.id is not None
+
+                        # Create all of the researcher document institution models
+                        r_d_i = db_models.DocumentContributorInstitution(
+                            document_contributor_id=researcher_detail.document_contributor_model.id,
+                            institution_id=institution_model.id,
+                        )
+                        _get_or_add_and_flush(model=r_d_i, session=session)
 
             # Funding instance details
-            for funding_instance_detail in pair.open_alex_results.funding_instance_details:
-                # Funder model
-                funding_instance_detail.funder_model = _get_or_add_and_flush(
-                    model=funding_instance_detail.funder_model, session=session
-                )
-                assert funding_instance_detail.funder_model.id is not None
+            if pair.open_alex_results.funding_instance_details is not None:
+                for funding_instance_detail in pair.open_alex_results.funding_instance_details:
+                    # Funder model
+                    funding_instance_detail.funder_model = _get_or_add_and_flush(
+                        model=funding_instance_detail.funder_model, session=session
+                    )
+                    assert funding_instance_detail.funder_model.id is not None
 
-                # Funding instance model
-                funding_instance_detail.funding_instance_model.funder_id = (
-                    funding_instance_detail.funder_model.id
-                )
-                funding_instance_detail.funding_instance_model = _get_or_add_and_flush(
-                    model=funding_instance_detail.funding_instance_model,
-                    session=session,
-                )
-                assert funding_instance_detail.funding_instance_model.id is not None
+                    # Funding instance model
+                    funding_instance_detail.funding_instance_model.funder_id = (
+                        funding_instance_detail.funder_model.id
+                    )
+                    funding_instance_detail.funding_instance_model = _get_or_add_and_flush(
+                        model=funding_instance_detail.funding_instance_model,
+                        session=session,
+                    )
+                    assert funding_instance_detail.funding_instance_model.id is not None
 
-                # Create the document funding instance models
-                d_f_i = db_models.DocumentFundingInstance(
-                    document_id=pair.open_alex_results.document_model.id,
-                    funding_instance_id=funding_instance_detail.funding_instance_model.id,
-                )
-                _get_or_add_and_flush(model=d_f_i, session=session)
+                    # Create the document funding instance models
+                    d_f_i = db_models.DocumentFundingInstance(
+                        document_id=pair.open_alex_results.document_model.id,
+                        funding_instance_id=funding_instance_detail.funding_instance_model.id,
+                    )
+                    _get_or_add_and_flush(model=d_f_i, session=session)
 
             # Code host
             pair.github_results.code_host_model = _get_or_add_and_flush(
@@ -292,46 +294,52 @@ def store_full_details(  # noqa: C901
             assert pair.github_results.repository_model.id is not None
 
             # Store the README
-            pair.github_results.repository_readme_model.repository_id = (
-                pair.github_results.repository_model.id
-            )
-            pair.github_results.repository_readme_model = _get_or_add_and_flush(
-                model=pair.github_results.repository_readme_model, session=session
-            )
-
-            # Repository languages
-            for repo_language in pair.github_results.repository_language_models:
-                repo_language.repository_id = pair.github_results.repository_model.id
-                repo_language = _get_or_add_and_flush(model=repo_language, session=session)
-
-            # Store the repository file models
-            for repo_file in pair.github_results.repository_file_models:
-                repo_file.repository_id = pair.github_results.repository_model.id
-                repo_file = _get_or_add_and_flush(model=repo_file, session=session)
-
-            # Repository contributor details
-            for repo_contributor_detail in pair.github_results.repository_contributor_details:
-                # Developer account
-                repo_contributor_detail.developer_account_model.code_host_id = (
-                    pair.github_results.code_host_model.id
-                )
-                repo_contributor_detail.developer_account_model = _get_or_add_and_flush(
-                    model=repo_contributor_detail.developer_account_model,
-                    session=session,
-                )
-                assert repo_contributor_detail.developer_account_model.id is not None
-
-                # Repository contributor
-                repo_contributor_detail.repository_contributor_model.repository_id = (
+            if pair.github_results.repository_readme_model is not None:
+                pair.github_results.repository_readme_model.repository_id = (
                     pair.github_results.repository_model.id
                 )
-                repo_contributor_detail.repository_contributor_model.developer_account_id = (
-                    repo_contributor_detail.developer_account_model.id
+                pair.github_results.repository_readme_model = _get_or_add_and_flush(
+                    model=pair.github_results.repository_readme_model, session=session
                 )
-                repo_contributor_detail.repository_contributor_model = _get_or_add_and_flush(
-                    model=repo_contributor_detail.repository_contributor_model,
-                    session=session,
-                )
+
+            # Repository languages
+            if pair.github_results.repository_language_models is not None:
+                for repo_language in pair.github_results.repository_language_models:
+                    repo_language.repository_id = pair.github_results.repository_model.id
+                    repo_language = _get_or_add_and_flush(model=repo_language, session=session)
+
+            # Store the repository file models
+            if pair.github_results.repository_file_models is not None:
+                for repo_file in pair.github_results.repository_file_models:
+                    repo_file.repository_id = pair.github_results.repository_model.id
+                    repo_file = _get_or_add_and_flush(model=repo_file, session=session)
+
+            # Repository contributor details
+            if pair.github_results.repository_contributor_details is not None:
+                for (
+                    repo_contributor_detail
+                ) in pair.github_results.repository_contributor_details:
+                    # Developer account
+                    repo_contributor_detail.developer_account_model.code_host_id = (
+                        pair.github_results.code_host_model.id
+                    )
+                    repo_contributor_detail.developer_account_model = _get_or_add_and_flush(
+                        model=repo_contributor_detail.developer_account_model,
+                        session=session,
+                    )
+                    assert repo_contributor_detail.developer_account_model.id is not None
+
+                    # Repository contributor
+                    repo_contributor_detail.repository_contributor_model.repository_id = (
+                        pair.github_results.repository_model.id
+                    )
+                    repo_contributor_detail.repository_contributor_model.developer_account_id = repo_contributor_detail.developer_account_model.id
+                    repo_contributor_detail.repository_contributor_model = (
+                        _get_or_add_and_flush(
+                            model=repo_contributor_detail.repository_contributor_model,
+                            session=session,
+                        )
+                    )
 
             # Create a connection between the document and the repository
             d_r = db_models.DocumentRepositoryLink(
@@ -345,16 +353,18 @@ def store_full_details(  # noqa: C901
             dataset_source_id = pair.open_alex_results.dataset_source_model.id
             document_model_id = pair.open_alex_results.document_model.id
             repository_model_id = pair.github_results.repository_model.id
-            developer_account_model_ids = [
-                repo_contributor_detail.developer_account_model.id
-                for repo_contributor_detail in (
-                    pair.github_results.repository_contributor_details
-                )
-            ]
-            researcher_model_ids = [
-                researcher_detail.researcher_model.id
-                for researcher_detail in pair.open_alex_results.researcher_details
-            ]
+            if pair.github_results.repository_contributor_details is not None:
+                developer_account_model_ids = [
+                    repo_contributor_detail.developer_account_model.id
+                    for repo_contributor_detail in (
+                        pair.github_results.repository_contributor_details
+                    )
+                ]
+            if pair.open_alex_results.researcher_details is not None:
+                researcher_model_ids = [
+                    researcher_detail.researcher_model.id
+                    for researcher_detail in pair.open_alex_results.researcher_details
+                ]
 
             session.commit()
 
@@ -696,7 +706,7 @@ def get_hydrated_author_developer_links(
             )
 
         return hydrated_links
-    
+
 
 def check_article_in_db(
     article_doi: str,

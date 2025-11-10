@@ -12,7 +12,6 @@ import backoff
 import msgspec
 import pyalex
 from semanticscholar import SemanticScholar
-from tqdm import tqdm
 
 from .. import types
 from ..db import models as db_models
@@ -250,7 +249,7 @@ def process_article(  # noqa: C901
                     open_alex_email_count=open_alex_email_count,
                     doi=updated_doi,
                 )
-            
+
             else:
                 if existing_pyalex_work is not None:
                     open_alex_work = existing_pyalex_work
@@ -279,9 +278,9 @@ def process_article(  # noqa: C901
                         host_organization_name=open_alex_work["primary_location"]["source"][
                             "host_organization_name"
                         ],
-                        host_organization_open_alex_id=open_alex_work["primary_location"]["source"][
-                            "host_organization"
-                        ],
+                        host_organization_open_alex_id=open_alex_work["primary_location"][
+                            "source"
+                        ]["host_organization"],
                     )
 
                     primary_location = db_models.Location(
@@ -318,9 +317,9 @@ def process_article(  # noqa: C901
                         host_organization_name=open_alex_work["best_oa_location"]["source"][
                             "host_organization_name"
                         ],
-                        host_organization_open_alex_id=open_alex_work["best_oa_location"]["source"][
-                            "host_organization"
-                        ],
+                        host_organization_open_alex_id=open_alex_work["best_oa_location"][
+                            "source"
+                        ]["host_organization"],
                     )
                     best_oa_location = db_models.Location(
                         is_open_access=open_alex_work["best_oa_location"]["is_oa"],
@@ -351,9 +350,9 @@ def process_article(  # noqa: C901
 
             # Check for citation_normalized_percentile
             if open_alex_work["citation_normalized_percentile"] is not None:
-                citation_normalized_percentile = open_alex_work["citation_normalized_percentile"][
-                    "value"
-                ]
+                citation_normalized_percentile = open_alex_work[
+                    "citation_normalized_percentile"
+                ]["value"]
             else:
                 citation_normalized_percentile = None
 
@@ -429,7 +428,9 @@ def process_article(  # noqa: C901
                     cited_by_count=open_alex_author["cited_by_count"],
                     h_index=open_alex_author["summary_stats"]["h_index"],
                     i10_index=open_alex_author["summary_stats"]["i10_index"],
-                    two_year_mean_citedness=open_alex_author["summary_stats"]["2yr_mean_citedness"],
+                    two_year_mean_citedness=open_alex_author["summary_stats"][
+                        "2yr_mean_citedness"
+                    ],
                 )
 
                 # Create the connection between researcher and document

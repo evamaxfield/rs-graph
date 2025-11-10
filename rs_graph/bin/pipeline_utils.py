@@ -1,13 +1,12 @@
 #!/usr/bin/env python
 
 from collections.abc import Callable
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 import coiled
 import yaml
 from prefect import Task, task
-
 
 ###############################################################################
 
@@ -136,6 +135,6 @@ def _load_coiled_software_envs(
 
         return envs_file["envs"]
 
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         print(f"Coiled software envs file not found at path: {coiled_software_envs_file}")
         return None

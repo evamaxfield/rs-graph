@@ -19,23 +19,22 @@ from tqdm import tqdm
 from rs_graph import types
 from rs_graph.bin.data import download as download_rs_graph_data_files
 from rs_graph.bin.data import upload as upload_rs_graph_data_files
-from rs_graph.db import utils as db_utils
-from rs_graph.enrichment import article, entity_matching, github
-from rs_graph.sources import joss, plos, proto, pwc, softcite_2025, softwarex
-from rs_graph.utils import code_host_parsing
-
 from rs_graph.bin.pipeline_utils import (
-    _get_github_cluster_config,
-    _get_open_alex_cluster_config,
-    _get_basic_gpu_cluster_config,
-    _wrap_func_with_coiled_prefect_task,
-    _load_elsevier_api_keys,
-    _load_open_alex_emails,
     DEFAULT_ELSEVIER_API_KEYS_FILE,
     DEFAULT_GITHUB_TOKENS_FILE,
     DEFAULT_OPEN_ALEX_EMAILS_FILE,
     DEFAULT_RESULTS_DIR,
+    _get_basic_gpu_cluster_config,
+    _get_github_cluster_config,
+    _get_open_alex_cluster_config,
+    _load_elsevier_api_keys,
+    _load_open_alex_emails,
+    _wrap_func_with_coiled_prefect_task,
 )
+from rs_graph.db import utils as db_utils
+from rs_graph.enrichment import article, entity_matching, github
+from rs_graph.sources import joss, plos, proto, pwc, softcite_2025, softwarex
+from rs_graph.utils import code_host_parsing
 
 ###############################################################################
 
@@ -311,7 +310,6 @@ def _store_batch_results(
                 )
 
     return processing_times
-
 
 
 @app.command()

@@ -4,22 +4,15 @@ from __future__ import annotations
 
 import time
 import traceback
-from dataclasses import dataclass
-from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-import sci_soft_models.binary_article_repo_em as binary_article_repo_em
-from dataclasses_json import DataClassJsonMixin
 from sci_soft_models import dev_author_em
 
 from .. import types
 from ..db import models as db_models
-from . import article
 
 if TYPE_CHECKING:
-    import pyalex
-
-    from . import github
+    pass
 
 ###############################################################################
 
@@ -98,8 +91,6 @@ def match_devs_and_researchers(
             error=str(e),
             traceback=traceback.format_exc(),
         )
-
-
 
 
 # def _prep_for_article_repository_matching(
