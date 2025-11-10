@@ -333,7 +333,7 @@ def store_full_details(  # noqa: C901
                     repo_contributor_detail.repository_contributor_model.repository_id = (
                         pair.github_results.repository_model.id
                     )
-                    repo_contributor_detail.repository_contributor_model.developer_account_id = repo_contributor_detail.developer_account_model.id
+                    repo_contributor_detail.repository_contributor_model.developer_account_id = repo_contributor_detail.developer_account_model.id  # noqa: E501
                     repo_contributor_detail.repository_contributor_model = (
                         _get_or_add_and_flush(
                             model=repo_contributor_detail.repository_contributor_model,

@@ -25,8 +25,7 @@ from rs_graph.bin.pipeline_utils import (
     DEFAULT_OPEN_ALEX_EMAILS_FILE,
     DEFAULT_RESULTS_DIR,
     _get_basic_gpu_cluster_config,
-    _get_github_cluster_config,
-    _get_open_alex_cluster_config,
+    _get_small_cpu_api_cluster,
     _load_elsevier_api_keys,
     _load_open_alex_emails,
     _wrap_func_with_coiled_prefect_task,
@@ -135,8 +134,8 @@ def _prelinked_dataset_ingestion_flow(
             # Process open alex
             process_article_wrapped_task = _wrap_func_with_coiled_prefect_task(
                 article.process_article_task,
-                coiled_kwargs=_get_open_alex_cluster_config(
-                    n_open_alex_emails=n_open_alex_emails,
+                coiled_kwargs=_get_small_cpu_api_cluster(
+                    n_workers=n_open_alex_emails,
                     use_coiled=use_coiled,
                     coiled_region=coiled_region,
                 ),
@@ -151,8 +150,8 @@ def _prelinked_dataset_ingestion_flow(
             # Process github
             process_github_wrapped_task = _wrap_func_with_coiled_prefect_task(
                 github.process_github_repo_task,
-                coiled_kwargs=_get_github_cluster_config(
-                    n_github_tokens=n_github_tokens,
+                coiled_kwargs=_get_small_cpu_api_cluster(
+                    n_workers=n_github_tokens,
                     use_coiled=use_coiled,
                     coiled_region=coiled_region,
                 ),

@@ -1,11 +1,6 @@
 repos:
 
   # Standard Python Files
-  - repo: https://github.com/psf/black
-    rev: 25.1.0
-    hooks:
-      - id: black
-
   - repo: https://github.com/charliermarsh/ruff-pre-commit
     rev: v0.12.12
     hooks:

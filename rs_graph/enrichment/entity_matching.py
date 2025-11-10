@@ -4,15 +4,11 @@ from __future__ import annotations
 
 import time
 import traceback
-from typing import TYPE_CHECKING
 
-from sci_soft_models import dev_author_em
+from sci_soft_models import binary_article_repo_em, dev_author_em
 
 from .. import types
 from ..db import models as db_models
-
-if TYPE_CHECKING:
-    pass
 
 ###############################################################################
 
@@ -93,106 +89,119 @@ def match_devs_and_researchers(
         )
 
 
-# def _prep_for_article_repository_matching(
-#     possible_pair: PossibleArticleRepositoryPair,
-#     repository_readme_and_contributors: github.RepoReadmeAndContributorInfo,
-# ) -> binary_article_repo_em.InferenceReadyArticleRepositoryPair | types.ErrorResult:
-#     try:
-#         # Create article details
-#         article_details = binary_article_repo_em.ArticleDetails(
-#             title=possible_pair.article_title.strip(),
-#             doi=possible_pair.article_doi.lower().strip(),
-#             publication_date=possible_pair.open_alex_work["publication_date"],
-#             topic_unique_domains=list(
-#                 {
-#                     topic["domain"]["display_name"].strip()
-#                     for topic in possible_pair.open_alex_work["topics"]
-#                 }
-#             ),
-#             topic_unique_fields=list(
-#                 {
-#                     topic["field"]["display_name"].strip()
-#                     for topic in possible_pair.open_alex_work["topics"]
-#                 }
-#             ),
-#             document_type=possible_pair.open_alex_work["type"].strip(),
-#             authors_list=[
-#                 authorship["author"]["display_name"].strip()
-#                 for authorship in possible_pair.open_alex_work["authorships"]
-#             ],
-#             abstract_content=article.convert_from_inverted_index_abstract(
-#                 abstract=possible_pair.open_alex_work["abstract_inverted_index"]
-#             ),
-#         )
+def _prep_for_article_repository_matching(
+    unchecked_possible_pair: types.UncheckedPossibleAuthorArticleAndDeveloperRepositoryPair,
+) -> types.AuthorArticleAndDeveloperRepositoryPairPreppedForMatching | types.ErrorResult:
+    try:
+        # Create article details
+        article_details = binary_article_repo_em.ArticleDetails(
+            title=unchecked_possible_pair.author_article.open_alex_results_models.document_model.title,
+            doi=unchecked_possible_pair.author_article.open_alex_results_models.document_model.doi,
+            publication_date=unchecked_possible_pair.author_article.open_alex_results_models.document_model.publication_date,
+            abstract_content=unchecked_possible_pair.author_article.open_alex_results_models.document_abstract_model.content,
+        )
 
-#         # Create repository details
-#         repository_details = binary_article_repo_em.RepositoryDetails(
-#             owner=possible_pair.repo_owner.strip(),
-#             name=possible_pair.repo_name.strip(),
-#             description=possible_pair.github_repository["description"],
-#             primary_language=possible_pair.github_repository["language"],
-#             is_fork=possible_pair.github_repository["fork"],
-#             creation_datetime=possible_pair.github_repository["created_at"],
-#             last_pushed_datetime=possible_pair.github_repository["pushed_at"],
-#             stargazers_count=possible_pair.github_repository["stargazers_count"],
-#             forks_count=possible_pair.github_repository["forks_count"],
-#             open_issues_count=possible_pair.github_repository["open_issues_count"],
-#             commits_count=None,
-#             size_kb=possible_pair.github_repository["size"],
-#             topics=list(possible_pair.github_repository["topics"]),
-#             contributors_list=[
-#                 binary_article_repo_em.RepositoryContributorDetails(
-#                     username=contributor_info.username,
-#                     name=contributor_info.name,
-#                     email=contributor_info.email,
-#                 )
-#                 for contributor_info in repository_readme_and_contributors.contributor_infos
-#             ],
-#             tree=None,
-#             readme_content=(
-#                 repository_readme_and_contributors.readme.strip()
-#                 if repository_readme_and_contributors.readme
-#                 else None
-#             ),
-#         )
+        # Create repository details
+        repository_details = binary_article_repo_em.RepositoryDetails(
+            owner=unchecked_possible_pair.developer_repository.github_result_models.repository_model.owner,
+            name=unchecked_possible_pair.developer_repository.github_result_models.repository_model.name,
+            description=unchecked_possible_pair.developer_repository.github_result_models.repository_model.description,
+            primary_language=unchecked_possible_pair.developer_repository.github_result_models.repository_model.primary_language,
+            is_fork=unchecked_possible_pair.developer_repository.github_result_models.repository_model.is_fork,
+            creation_datetime=unchecked_possible_pair.developer_repository.github_result_models.repository_model.creation_datetime,
+            last_pushed_datetime=unchecked_possible_pair.developer_repository.github_result_models.repository_model.last_pushed_datetime,
+            stargazers_count=unchecked_possible_pair.developer_repository.github_result_models.repository_model.stargazers_count,
+            forks_count=unchecked_possible_pair.developer_repository.github_result_models.repository_model.forks_count,
+            open_issues_count=unchecked_possible_pair.developer_repository.github_result_models.repository_model.open_issues_count,
+            commits_count=unchecked_possible_pair.developer_repository.github_result_models.repository_model.commits_count,
+            size_kb=unchecked_possible_pair.developer_repository.github_result_models.repository_model.size_kb,
+            topics=(
+                unchecked_possible_pair.developer_repository.github_result_models.repository_model.topics.split(
+                    ";"
+                )
+                if unchecked_possible_pair.developer_repository.github_result_models.repository_model.topics  # noqa: E501
+                else []
+            ),
+            readme_content=(
+                unchecked_possible_pair.developer_repository.github_result_models.repository_readme_model.content
+                if unchecked_possible_pair.developer_repository.github_result_models.repository_readme_model  # noqa: E501
+                else None
+            ),
+        )
 
-#         return binary_article_repo_em.InferenceReadyArticleRepositoryPair(
-#             article_details=article_details,
-#             repository_details=repository_details,
-#         )
+        return types.AuthorArticleAndDeveloperRepositoryPairPreppedForMatching(
+            author_developer_link_id=unchecked_possible_pair.author_developer_link_id,
+            article_doi=unchecked_possible_pair.article_doi,
+            repository_identifier=unchecked_possible_pair.repository_identifier,
+            author_article=unchecked_possible_pair.author_article,
+            developer_repository=unchecked_possible_pair.developer_repository,
+            inference_ready_pair=binary_article_repo_em.InferenceReadyArticleRepositoryPair(
+                article_details=article_details,
+                repository_details=repository_details,
+            ),
+        )
 
-#     except Exception as e:
-#         return types.ErrorResult(
-#             source="author-developer-article-repo-discovery",
-#             step="prep-article-repo-matching",
-#             identifier=(
-#                 f"{possible_pair.source_researcher_open_alex_id}-"
-#                 f"{possible_pair.source_developer_account_username}-"
-#                 f"{possible_pair.article_doi}-"
-#                 f"{possible_pair.repo_owner}/{possible_pair.repo_name}"
-#             ),
-#             error=str(e),
-#             traceback=traceback.format_exc(),
-#         )
+    except Exception as e:
+        return types.ErrorResult(
+            source="author-developer-article-repo-discovery",
+            step="prep-article-repo-matching",
+            identifier=(
+                f"{unchecked_possible_pair.author_developer_link_id}-"
+                f"{unchecked_possible_pair.article_doi}-"
+                f"{unchecked_possible_pair.repository_identifier}"
+            ),
+            error=str(e),
+            traceback=traceback.format_exc(),
+        )
 
 
-# def match_articles_and_repositories(
-#     inference_ready_article_repository_pairs: list[
-#         binary_article_repo_em.InferenceReadyArticleRepositoryPair
-#     ],
-# ) -> list[binary_article_repo_em.MatchedArticleRepository] | types.ErrorResult:
-#     try:
-#         # Predict match
-#         return binary_article_repo_em.match_articles_and_repositories(
-#             inference_ready_article_repository_pairs=inference_ready_article_repository_pairs,
-#             model_choice="optimized",
-#         )
+def match_articles_and_repositories(
+    inference_ready_article_repository_pairs: list[
+        types.AuthorArticleAndDeveloperRepositoryPairPreppedForMatching
+    ],
+) -> list[types.MatchedAuthorArticleAndDeveloperRepositoryPair] | types.ErrorResult:
+    try:
+        # Create LUT to match after prediction
+        inputs_lut = {
+            (pair.article_doi, pair.repository_identifier): pair
+            for pair in inference_ready_article_repository_pairs
+        }
 
-#     except Exception as e:
-#         return types.ErrorResult(
-#             source="snowball-sampling-discovery",
-#             step="article-repository-matching",
-#             identifier="",
-#             error=str(e),
-#             traceback=traceback.format_exc(),
-#         )
+        # Predict match
+        results = binary_article_repo_em.match_articles_and_repositories(
+            inference_ready_article_repository_pairs=[
+                pair.inference_ready_pair for pair in inference_ready_article_repository_pairs
+            ],
+            model_choice="optimized",
+        )
+
+        # Results LUT
+        results_lut = {
+            (
+                result.article_details.doi,
+                f"{result.repository_details.owner}/{result.repository_details.name}",
+            ): result
+            for result in results
+        }
+
+        # Convert to typed results
+        return [
+            types.MatchedAuthorArticleAndDeveloperRepositoryPair(
+                author_developer_link_id=inputs_lut[key].author_developer_link_id,
+                article_doi=inputs_lut[key].article_doi,
+                repository_identifier=inputs_lut[key].repository_identifier,
+                author_article=inputs_lut[key].author_article,
+                developer_repository=inputs_lut[key].developer_repository,
+                matched_details=results_lut[key],
+            )
+            for key in results_lut.keys()
+        ]
+
+    except Exception as e:
+        return types.ErrorResult(
+            source="snowball-sampling-discovery",
+            step="article-repository-matching",
+            identifier="",
+            error=str(e),
+            traceback=traceback.format_exc(),
+        )

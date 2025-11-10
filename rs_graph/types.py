@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 from dataclasses_json import DataClassJsonMixin
+from sci_soft_models import binary_article_repo_em
 
 from .db import models as db_models
 
@@ -143,3 +144,57 @@ class StoredRepositoryDocumentPair(DataClassJsonMixin):
 class SuccessAndErroredResultsLists(DataClassJsonMixin):
     successful_results: list[BasicRepositoryDocumentPair | ExpandedRepositoryDocumentPair]
     errored_results: list[ErrorResult]
+
+
+###############################################################################
+# Types for article-repository discovery
+
+
+@dataclass
+class AuthorArticleDetails(DataClassJsonMixin):
+    author_developer_link_id: int
+    researcher_open_alex_id: str
+    open_alex_results_models: OpenAlexResultModels
+
+
+@dataclass
+class DeveloperRepositoryDetails(DataClassJsonMixin):
+    author_developer_link_id: int
+    developer_account_username: str
+    github_result_models: GitHubResultModels
+
+
+@dataclass
+class FilteredResult(DataClassJsonMixin):
+    source: str
+    identifier: str
+    reason: str
+
+
+@dataclass
+class UncheckedPossibleAuthorArticleAndDeveloperRepositoryPair(DataClassJsonMixin):
+    author_developer_link_id: int
+    article_doi: str
+    repository_identifier: str
+    author_article: AuthorArticleDetails
+    developer_repository: DeveloperRepositoryDetails
+
+
+@dataclass
+class AuthorArticleAndDeveloperRepositoryPairPreppedForMatching(DataClassJsonMixin):
+    author_developer_link_id: int
+    article_doi: str
+    repository_identifier: str
+    author_article: AuthorArticleDetails
+    developer_repository: DeveloperRepositoryDetails
+    inference_ready_pair: binary_article_repo_em.InferenceReadyArticleRepositoryPair
+
+
+@dataclass
+class MatchedAuthorArticleAndDeveloperRepositoryPair(DataClassJsonMixin):
+    author_developer_link_id: int
+    article_doi: str
+    repository_identifier: str
+    author_article: AuthorArticleDetails
+    developer_repository: DeveloperRepositoryDetails
+    matched_details: binary_article_repo_em.MatchedArticleRepository

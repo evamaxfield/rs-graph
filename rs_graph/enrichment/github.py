@@ -209,7 +209,10 @@ def process_github_repo(  # noqa: C901
                 repo_readme = base64.b64decode(repo_readme_response["content"]).decode("utf-8")
 
             except Exception as e:
-                print(f"something went wrong with README fetch for repo: {repo_parts.owner}/{repo_parts.name}")
+                print(
+                    f"something went wrong with README fetch "
+                    f"for repo: {repo_parts.owner}/{repo_parts.name}"
+                )
                 print("error", str(e))
                 print(traceback.format_exc())
                 repo_readme = None
@@ -258,8 +261,7 @@ def process_github_repo(  # noqa: C901
                 # Use raw requests lib rather than GhApi
                 # As we need the headers
                 response = requests.get(
-                    f"https://api.github.com/repos/"
-                    f"{repo_parts.owner}/{repo_parts.name}/commits",
+                    f"https://api.github.com/repos/{repo_parts.owner}/{repo_parts.name}/commits",
                     params=params,
                     headers=(
                         {"Authorization": f"Bearer {github_api_key}"} if github_api_key else {}
