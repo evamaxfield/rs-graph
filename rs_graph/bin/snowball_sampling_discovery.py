@@ -2,6 +2,8 @@
 
 import itertools
 import os
+import time
+import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -9,7 +11,7 @@ import polars as pl
 import typer
 from dotenv import load_dotenv
 from gh_tokens_loader import GitHubTokensCycler
-from prefect import flow, task, unmapped
+from prefect import flow, unmapped
 from tqdm import tqdm
 
 from rs_graph import types
@@ -97,7 +99,6 @@ def _get_developer_repositories_for_developer(
     return developer_repository_details_list
 
 
-@task
 def _flatten_and_check_articles_in_db(
     all_author_articles_and_errors: list[
         list[types.AuthorArticleDetails | types.ErrorResult] | types.ErrorResult
@@ -161,7 +162,6 @@ def _flatten_and_check_articles_in_db(
     return flattened_results
 
 
-@task
 def _flatten_and_check_repositories_in_db(
     all_developer_repositories_and_errors: list[
         list[types.DeveloperRepositoryDetails | types.ErrorResult] | types.ErrorResult
@@ -224,7 +224,6 @@ def _flatten_and_check_repositories_in_db(
     return flattened_results
 
 
-@task
 def _combine_to_possible_pairs(  # noqa: C901
     author_articles: list[
         types.AuthorArticleDetails | types.FilteredResult | types.ErrorResult
@@ -310,7 +309,6 @@ def _combine_to_possible_pairs(  # noqa: C901
     return unchecked_possible_combinations
 
 
-@task
 def _get_unique_repositories(
     unchecked_possible_combinations: list[
         types.UncheckedPossibleAuthorArticleAndDeveloperRepositoryPair
@@ -359,7 +357,6 @@ def _enrich_repository_with_data_required_for_matching(
     )
 
 
-@task
 def _replace_enriched_repositories_in_possible_combinations(
     unchecked_possible_combinations: list[
         types.UncheckedPossibleAuthorArticleAndDeveloperRepositoryPair
@@ -404,7 +401,6 @@ def _replace_enriched_repositories_in_possible_combinations(
     return updated_combinations
 
 
-@task
 def _wrapped_prep_for_matching(
     unchecked_possible_pair: types.UncheckedPossibleAuthorArticleAndDeveloperRepositoryPair,
 ) -> types.AuthorArticleAndDeveloperRepositoryPairPreppedForMatching | types.ErrorResult:
@@ -413,7 +409,6 @@ def _wrapped_prep_for_matching(
     )
 
 
-@task
 def _create_batches_for_matching(
     prepped_combinations: list[
         types.AuthorArticleAndDeveloperRepositoryPairPreppedForMatching | types.ErrorResult
@@ -436,7 +431,6 @@ def _create_batches_for_matching(
     return batches
 
 
-@task
 def _filter_to_only_success_predictions(
     matched_results: list[
         list[types.MatchedAuthorArticleAndDeveloperRepositoryPair] | types.ErrorResult
@@ -469,7 +463,6 @@ def _filter_to_only_success_predictions(
     return flattened_results
 
 
-@task
 def _get_unique_and_highest_confidence_prediction_results(
     prediction_results: list[types.MatchedAuthorArticleAndDeveloperRepositoryPair],
 ) -> list[types.MatchedAuthorArticleAndDeveloperRepositoryPair]:
@@ -515,7 +508,6 @@ def _get_unique_and_highest_confidence_prediction_results(
     ]
 
 
-@task
 def _store_prediction_results(
     prediction_results: list[types.MatchedAuthorArticleAndDeveloperRepositoryPair],
 ) -> None:
@@ -550,11 +542,8 @@ def _store_prediction_results(
     log_prints=True,
 )
 def _snowball_sampling_discovery_flow(
-    process_n_author_developer_pairs: int,
+    author_developer_links: list[db_utils.HydratedAuthorDeveloperLink],
     article_repository_allowed_datetime_difference: str,
-    author_developer_links_filter_confidence_threshold: float,
-    author_developer_links_duration_since_last_process: str,
-    author_developer_links_batch_size: int,
     article_repository_matching_batch_size: int,
     ignore_forks: bool,
     ignorable_doi_spans: list[str],
@@ -579,29 +568,6 @@ def _snowball_sampling_discovery_flow(
 
     # Get the number of open alex emails
     n_open_alex_emails = len(open_alex_emails)
-
-    # Print dataset and coiled status
-    print("-" * 80)
-    print("Pipeline Options:")
-    print(f"Process N Author-Developer Pairs: {process_n_author_developer_pairs}")
-    print(
-        f"Article Repository Allowed Datetime Difference: "
-        f"{article_repository_allowed_datetime_difference}"
-    )
-    print(
-        f"Author Developer Links Filter Confidence Threshold: "
-        f"{author_developer_links_filter_confidence_threshold}"
-    )
-    print(
-        f"Skip Author Developer Links Processed Within Last: "
-        f"{author_developer_links_duration_since_last_process}"
-    )
-    print(f"Use Prod Database: {use_prod}")
-    print(f"Use Coiled: {use_coiled}")
-    print(f"Coiled Region: {coiled_region}")
-    print(f"GitHub Token Count: {n_github_tokens}")
-    print(f"Open Alex Email Count: {n_open_alex_emails}")
-    print("-" * 80)
 
     # Preconstruct all wrapped tasks
     wrapped_get_articles_for_researcher = _wrap_func_with_coiled_prefect_task(
@@ -644,155 +610,123 @@ def _snowball_sampling_discovery_flow(
         },
     )
 
-    # Get author-developer-account links from the database
-    print("Getting author-developer-account links from the database...")
-    hydrated_author_developer_links = db_utils.get_hydrated_author_developer_links(
+    # Get each authors articles
+    print("Getting each author's articles from Open Alex...")
+    author_articles = wrapped_get_articles_for_researcher.map(
+        author_developer_link_id=[
+            link.author_developer_link_id for link in author_developer_links
+        ],
+        researcher_open_alex_id=[
+            link.researcher_open_alex_id for link in author_developer_links
+        ],
+        open_alex_email=[
+            next(cycled_open_alex_emails) for _ in range(len(author_developer_links))
+        ],
+        open_alex_email_count=unmapped(n_open_alex_emails),
+        semantic_scholar_api_key=unmapped(semantic_scholar_api_key),
+    )
+
+    # Drop existing articles already stored in the database
+    print("Filtering out articles already in the database...")
+    flattened_author_articles = _flatten_and_check_articles_in_db(
+        all_author_articles_and_errors=[aa.result() for aa in author_articles],
         use_prod=use_prod,
-        filter_datetime_difference=author_developer_links_duration_since_last_process,
-        filter_confidence_threshold=author_developer_links_filter_confidence_threshold,
-        n=process_n_author_developer_pairs,
+        ignorable_doi_spans=ignorable_doi_spans,
     )
 
-    # Iter over author-developer links in batches
-    print(f"Processing {len(hydrated_author_developer_links)} author-developer links...")
-    add_remainder_batch = (
-        1 if len(hydrated_author_developer_links) % author_developer_links_batch_size > 0 else 0
+    # Get each developer's repositories
+    print("Getting each developer's repositories from GitHub...")
+    developer_repositories = wrapped_get_repositories_for_developer.map(
+        author_developer_link_id=[
+            link.author_developer_link_id for link in author_developer_links
+        ],
+        developer_account_username=[
+            link.developer_account_username for link in author_developer_links
+        ],
+        github_api_key=[next(cycled_github_tokens) for _ in range(len(author_developer_links))],
     )
-    total_n_batches = (
-        len(hydrated_author_developer_links) // author_developer_links_batch_size
-        + add_remainder_batch
+
+    # Drop existing repositories already stored in the database
+    print("Filtering out repositories already in the database...")
+    flattened_developer_repositories = _flatten_and_check_repositories_in_db(
+        all_developer_repositories_and_errors=[dr.result() for dr in developer_repositories],
+        use_prod=use_prod,
+        ignore_forks=ignore_forks,
     )
-    for author_developer_index in tqdm(
-        range(
-            0,
-            len(hydrated_author_developer_links),
-            author_developer_links_batch_size,
-        ),
-        desc="Author-Developer Link Batches",
-        total=total_n_batches,
-    ):
-        author_developer_link_batch = hydrated_author_developer_links[
-            author_developer_index : author_developer_index + author_developer_links_batch_size
-        ]
 
-        # Get each authors articles
-        print("Getting each author's articles from Open Alex...")
-        author_articles = wrapped_get_articles_for_researcher.map(
-            author_developer_link_id=[
-                link.author_developer_link_id for link in author_developer_link_batch
-            ],
-            researcher_open_alex_id=[
-                link.researcher_open_alex_id for link in author_developer_link_batch
-            ],
-            open_alex_email=[
-                next(cycled_open_alex_emails) for _ in range(len(author_developer_link_batch))
-            ],
-            open_alex_email_count=unmapped(n_open_alex_emails),
-            semantic_scholar_api_key=unmapped(semantic_scholar_api_key),
-        )
+    # TODO: handle storage of errors and filters
 
-        # Drop existing articles already stored in the database
-        print("Filtering out articles already in the database...")
-        flattened_author_articles = _flatten_and_check_articles_in_db(
-            all_author_articles_and_errors=author_articles,
-            use_prod=use_prod,
-            ignorable_doi_spans=ignorable_doi_spans,
-        )
+    # Combine back together to possible article-repository pairs
+    print("Combining to unchecked but possible article-repository pairs...")
+    unchecked_possible_combinations = _combine_to_possible_pairs(
+        author_articles=flattened_author_articles,
+        developer_repositories=flattened_developer_repositories,
+        max_datetime_difference=parse_timedelta(article_repository_allowed_datetime_difference),
+    )
 
-        # Get each developer's repositories
-        print("Getting each developer's repositories from GitHub...")
-        developer_repositories = wrapped_get_repositories_for_developer.map(
-            author_developer_link_id=[
-                link.author_developer_link_id for link in author_developer_link_batch
-            ],
-            developer_account_username=[
-                link.developer_account_username for link in author_developer_link_batch
-            ],
-            github_api_key=[
-                next(cycled_github_tokens) for _ in range(len(author_developer_link_batch))
-            ],
-        )
+    # Get the set of unique repositories for enrichment
+    print("Getting unique repositories for enrichment...")
+    unique_developer_repositories = _get_unique_repositories(
+        unchecked_possible_combinations=unchecked_possible_combinations,
+    )
 
-        # Drop existing repositories already stored in the database
-        print("Filtering out repositories already in the database...")
-        developer_repositories_filtered = _flatten_and_check_repositories_in_db(
-            all_developer_repositories_and_errors=developer_repositories,
-            use_prod=use_prod,
-            ignore_forks=ignore_forks,
-        )
+    # Enrich unique repositories
+    print("Enriching unique repositories...")
+    enriched_repositories = wrapped_enrich_repository.map(
+        developer_repository=unique_developer_repositories,
+        github_api_key=[
+            next(cycled_github_tokens) for _ in range(len(unique_developer_repositories))
+        ],
+    )
 
-        # TODO: handle storage of errors and filters
-
-        # Combine back together to possible article-repository pairs
-        print("Combining to unchecked but possible article-repository pairs...")
-        unchecked_possible_combinations = _combine_to_possible_pairs(
-            author_articles=flattened_author_articles,
-            developer_repositories=developer_repositories_filtered,
-            max_datetime_difference=parse_timedelta(
-                article_repository_allowed_datetime_difference
-            ),
-        )
-
-        # Get the set of unique repositories for enrichment
-        print("Getting unique repositories for enrichment...")
-        unique_developer_repositories = _get_unique_repositories(
+    # Replace enriched repositories back into possible combinations
+    print("Replacing enriched repositories back into possible combinations...")
+    possible_combinations_with_enriched_repos = (
+        _replace_enriched_repositories_in_possible_combinations(
             unchecked_possible_combinations=unchecked_possible_combinations,
+            enriched_repositories=[er.result() for er in enriched_repositories],
         )
+    )
 
-        # Enrich unique repositories
-        print("Enriching unique repositories...")
-        enriched_repositories = wrapped_enrich_repository.map(
-            developer_repository=unique_developer_repositories,
-            github_api_key=[
-                next(cycled_github_tokens) for _ in range(len(unique_developer_repositories))
-            ],
+    # Prep for matching
+    print("Preparing for article-repository matching...")
+    prepped_combinations_for_matching = [
+        entity_matching._prep_for_article_repository_matching(
+            unchecked_possible_pair=unchecked_possible_pair,
         )
+        for unchecked_possible_pair in possible_combinations_with_enriched_repos
+    ]
 
-        # Replace enriched repositories back into possible combinations
-        print("Replacing enriched repositories back into possible combinations...")
-        possible_combinations_with_enriched_repos = (
-            _replace_enriched_repositories_in_possible_combinations(
-                unchecked_possible_combinations=unchecked_possible_combinations,
-                enriched_repositories=enriched_repositories,
-            )
-        )
+    # Match in batches
+    print("Creating batches for article-repository matching...")
+    prepped_batches = _create_batches_for_matching(
+        prepped_combinations=prepped_combinations_for_matching,
+        batch_size=article_repository_matching_batch_size,
+    )
 
-        # Prep for matching
-        print("Preparing for article-repository matching...")
-        prepped_combinations_for_matching = _wrapped_prep_for_matching.map(
-            unchecked_possible_pair=possible_combinations_with_enriched_repos,
-        )
+    # Map and get results
+    print("Matching article-repository pairs...")
+    batched_matching_results = wrapped_match_prepped_pair.map(
+        inference_ready_article_repository_pairs=prepped_batches,
+    )
 
-        # Match in batches
-        print("Creating batches for article-repository matching...")
-        prepped_batches = _create_batches_for_matching(
-            prepped_combinations=prepped_combinations_for_matching,
-            batch_size=article_repository_matching_batch_size,
-        )
+    # Get successful predictions
+    print("Filtering to only successful predictions...")
+    prediction_results = _filter_to_only_success_predictions(
+        matched_results=[bmr.result() for bmr in batched_matching_results],
+    )
 
-        # Map and get results
-        print("Matching article-repository pairs...")
-        batched_matching_results = wrapped_match_prepped_pair.map(
-            inference_ready_article_repository_pairs=prepped_batches,
-        )
+    # Get unique prediction results
+    print("Getting unique and highest confidence prediction results...")
+    prediction_results = _get_unique_and_highest_confidence_prediction_results(
+        prediction_results=prediction_results,
+    )
 
-        # Get successful predictions
-        print("Filtering to only successful predictions...")
-        prediction_results = _filter_to_only_success_predictions(
-            matched_results=batched_matching_results,
-        )
-
-        # Get unique prediction results
-        print("Getting unique and highest confidence prediction results...")
-        prediction_results = _get_unique_and_highest_confidence_prediction_results(
-            prediction_results=prediction_results,
-        )
-
-        # Store / extend results
-        print("Storing prediction results...")
-        _store_prediction_results(
-            prediction_results=prediction_results,
-        )
+    # Store / extend results
+    print("Storing prediction results...")
+    _store_prediction_results(
+        prediction_results=prediction_results,
+    )
 
     # Get unique set of repositories
     # print("Getting unique repositories for enrichment...")
@@ -870,9 +804,8 @@ def snowball_sampling_discovery(
     article_repository_allowed_datetime_difference: str = "3 years",
     author_developer_links_filter_confidence_threshold: float = 0.97,
     author_developer_links_duration_since_last_process: str = "2 years",
-    article_repository_matching_filter_confidence_threshold: float = 0.97,
-    author_developer_links_batch_size: int = 16,
-    article_repository_matching_batch_size: int = 16,
+    author_developer_links_batch_size: int = 4,
+    article_repository_matching_batch_size: int = 24,
     ignore_forks: bool = True,
     ignorable_doi_spans: list[str] = ignorable_doi_spans_default,
     use_prod: bool = False,
@@ -896,7 +829,7 @@ def snowball_sampling_discovery(
     load_dotenv()
 
     # Get open alex emails
-    _load_open_alex_emails(open_alex_emails_file)
+    open_alex_emails = _load_open_alex_emails(open_alex_emails_file)
 
     # Load coiled software envs
     if use_cached_coiled_software_envs:
@@ -913,26 +846,99 @@ def snowball_sampling_discovery(
     # Ignore prefect task introspection warnings
     os.environ["PREFECT_TASK_INTROSPECTION_WARN_THRESHOLD"] = "0"
 
-    # Start the flow
-    _snowball_sampling_discovery_flow(
-        process_n_author_developer_pairs=process_n_author_developer_pairs,
-        article_repository_allowed_datetime_difference=article_repository_allowed_datetime_difference,
-        author_developer_links_filter_confidence_threshold=author_developer_links_filter_confidence_threshold,
-        author_developer_links_duration_since_last_process=author_developer_links_duration_since_last_process,
-        author_developer_links_batch_size=author_developer_links_batch_size,
-        article_repository_matching_batch_size=article_repository_matching_batch_size,
-        ignore_forks=ignore_forks,
-        ignorable_doi_spans=ignorable_doi_spans,
-        use_prod=use_prod,
-        use_coiled=use_coiled,
-        coiled_region=coiled_region,
-        github_tokens_file=github_tokens_file,
-        open_alex_emails=_load_open_alex_emails(open_alex_emails_file),
-        semantic_scholar_api_key=semantic_scholar_api_key,
-        coiled_software_envs=coiled_software_envs,
-        cache_coiled_software_envs=cache_coiled_software_envs,
-        coiled_software_envs_file=coiled_software_envs_file,
+    # Get an infinite cycle of github tokens
+    cycled_github_tokens = GitHubTokensCycler(gh_tokens_file=github_tokens_file)
+
+    # Workers is the number of github tokens
+    n_github_tokens = len(cycled_github_tokens)
+
+    # Get the number of open alex emails
+    n_open_alex_emails = len(open_alex_emails)
+
+    # Print dataset and coiled status
+    print("-" * 80)
+    print("Pipeline Options:")
+    print(f"Process N Author-Developer Pairs: {process_n_author_developer_pairs}")
+    print(
+        f"Article Repository Allowed Datetime Difference: "
+        f"{article_repository_allowed_datetime_difference}"
     )
+    print(
+        f"Author Developer Links Filter Confidence Threshold: "
+        f"{author_developer_links_filter_confidence_threshold}"
+    )
+    print(
+        f"Skip Author Developer Links Processed Within Last: "
+        f"{author_developer_links_duration_since_last_process}"
+    )
+    print(f"Use Prod Database: {use_prod}")
+    print(f"Use Coiled: {use_coiled}")
+    print(f"Coiled Region: {coiled_region}")
+    print(f"GitHub Token Count: {n_github_tokens}")
+    print(f"Open Alex Email Count: {n_open_alex_emails}")
+    print("-" * 80)
+
+    # Get author-developer-account links from the database
+    print("Getting author-developer-account links from the database...")
+    hydrated_author_developer_links = db_utils.get_hydrated_author_developer_links(
+        use_prod=use_prod,
+        filter_datetime_difference=author_developer_links_duration_since_last_process,
+        filter_confidence_threshold=author_developer_links_filter_confidence_threshold,
+        n=process_n_author_developer_pairs,
+    )
+
+    # Iter over author-developer links in batches
+    print(f"Processing {len(hydrated_author_developer_links)} author-developer links...")
+    add_remainder_batch = (
+        1 if len(hydrated_author_developer_links) % author_developer_links_batch_size > 0 else 0
+    )
+    total_n_batches = (
+        len(hydrated_author_developer_links) // author_developer_links_batch_size
+        + add_remainder_batch
+    )
+    for author_developer_index in tqdm(
+        range(
+            0,
+            len(hydrated_author_developer_links),
+            author_developer_links_batch_size,
+        ),
+        desc="Author-Developer Link Batches",
+        total=total_n_batches,
+    ):
+        try:
+            author_developer_link_batch = hydrated_author_developer_links[
+                author_developer_index : author_developer_index
+                + author_developer_links_batch_size
+            ]
+
+            # Start the flow
+            _snowball_sampling_discovery_flow(
+                author_developer_links=author_developer_link_batch,
+                article_repository_allowed_datetime_difference=article_repository_allowed_datetime_difference,
+                article_repository_matching_batch_size=article_repository_matching_batch_size,
+                ignore_forks=ignore_forks,
+                ignorable_doi_spans=ignorable_doi_spans,
+                use_prod=use_prod,
+                use_coiled=use_coiled,
+                coiled_region=coiled_region,
+                github_tokens_file=github_tokens_file,
+                open_alex_emails=open_alex_emails,
+                semantic_scholar_api_key=semantic_scholar_api_key,
+                coiled_software_envs=coiled_software_envs,
+                cache_coiled_software_envs=cache_coiled_software_envs,
+                coiled_software_envs_file=coiled_software_envs_file,
+            )
+
+        except Exception as e:
+            print(
+                f"Something went wrong processing author-developer link batch "
+                f"starting at index {author_developer_index}."
+            )
+            print("Error:", str(e))
+            print(traceback.format_exc())
+            continue
+
+        time.sleep(10)
 
 
 ###############################################################################
