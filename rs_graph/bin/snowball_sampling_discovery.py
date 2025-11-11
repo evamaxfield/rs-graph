@@ -231,7 +231,8 @@ def _combine_to_possible_pairs(  # noqa: C901
     developer_repositories: list[
         types.DeveloperRepositoryDetails | types.FilteredResult | types.ErrorResult
     ],
-    max_datetime_difference: timedelta,
+    negative_td: timedelta,
+    positive_td: timedelta,
 ) -> list[types.UncheckedPossibleAuthorArticleAndDeveloperRepositoryPair]:
     # Create a lookup of author_developer_link_id to list of author_articles
     author_articles_lut: dict[int, list[types.AuthorArticleDetails]] = {}
@@ -282,7 +283,7 @@ def _combine_to_possible_pairs(  # noqa: C901
                     month=article_published_date.month,
                     day=article_published_date.day,
                 )
-                repo_created_dt = (
+                repo_created_dt: datetime = (
                     developer_repository.github_result_models.repository_model.creation_datetime
                 )
 
@@ -292,7 +293,9 @@ def _combine_to_possible_pairs(  # noqa: C901
                 if repo_created_dt.tzinfo is not None:
                     repo_created_dt = repo_created_dt.replace(tzinfo=None)
 
-                if abs(article_published_dt - repo_created_dt) <= max_datetime_difference:
+                # Must be within the allowed datetime difference
+                datetime_difference = article_published_dt - repo_created_dt
+                if negative_td < datetime_difference < positive_td:
                     unchecked_possible_combinations.append(
                         types.UncheckedPossibleAuthorArticleAndDeveloperRepositoryPair(
                             author_developer_link_id=author_developer_link_id,
@@ -543,7 +546,8 @@ def _store_prediction_results(
 )
 def _snowball_sampling_discovery_flow(
     author_developer_links: list[db_utils.HydratedAuthorDeveloperLink],
-    article_repository_allowed_datetime_difference: str,
+    article_respository_allowed_datetime_difference_negative_td: timedelta,
+    article_respository_allowed_datetime_difference_positive_td: timedelta,
     article_repository_matching_batch_size: int,
     ignore_forks: bool,
     ignorable_doi_spans: list[str],
@@ -661,7 +665,8 @@ def _snowball_sampling_discovery_flow(
     unchecked_possible_combinations = _combine_to_possible_pairs(
         author_articles=flattened_author_articles,
         developer_repositories=flattened_developer_repositories,
-        max_datetime_difference=parse_timedelta(article_repository_allowed_datetime_difference),
+        negative_td=article_respository_allowed_datetime_difference_negative_td,
+        positive_td=article_respository_allowed_datetime_difference_positive_td,
     )
 
     # Get the set of unique repositories for enrichment
@@ -801,7 +806,8 @@ ignorable_doi_spans_default = typer.Option(
 @app.command()
 def snowball_sampling_discovery(
     process_n_author_developer_pairs: int = 10,
-    article_repository_allowed_datetime_difference: str = "3 years",
+    article_repository_allowed_datetime_difference_positive: str = "374 days",
+    article_repository_allowed_datetime_difference_negative: str = "326 days",
     author_developer_links_filter_confidence_threshold: float = 0.97,
     author_developer_links_duration_since_last_process: str = "2 years",
     author_developer_links_batch_size: int = 4,
@@ -855,13 +861,22 @@ def snowball_sampling_discovery(
     # Get the number of open alex emails
     n_open_alex_emails = len(open_alex_emails)
 
+    # Parse timedeltas
+    article_respository_allowed_datetime_difference_negative_td = (
+        parse_timedelta(article_repository_allowed_datetime_difference_negative) * -1
+    )
+    article_respository_allowed_datetime_difference_positive_td = parse_timedelta(
+        article_repository_allowed_datetime_difference_positive
+    )
+
     # Print dataset and coiled status
     print("-" * 80)
     print("Pipeline Options:")
     print(f"Process N Author-Developer Pairs: {process_n_author_developer_pairs}")
     print(
         f"Article Repository Allowed Datetime Difference: "
-        f"{article_repository_allowed_datetime_difference}"
+        f"{article_respository_allowed_datetime_difference_negative_td.days} to "
+        f"{article_respository_allowed_datetime_difference_positive_td.days}"
     )
     print(
         f"Author Developer Links Filter Confidence Threshold: "
@@ -914,7 +929,12 @@ def snowball_sampling_discovery(
             # Start the flow
             _snowball_sampling_discovery_flow(
                 author_developer_links=author_developer_link_batch,
-                article_repository_allowed_datetime_difference=article_repository_allowed_datetime_difference,
+                article_respository_allowed_datetime_difference_negative_td=(
+                    article_respository_allowed_datetime_difference_negative_td
+                ),
+                article_respository_allowed_datetime_difference_positive_td=(
+                    article_respository_allowed_datetime_difference_positive_td
+                ),
                 article_repository_matching_batch_size=article_repository_matching_batch_size,
                 ignore_forks=ignore_forks,
                 ignorable_doi_spans=ignorable_doi_spans,
