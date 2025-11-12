@@ -165,6 +165,7 @@ class SuccessAndErroredResultsLists(DataClassJsonMixin):
 class AuthorArticleDetails(DataClassJsonMixin):
     author_developer_link_id: int
     researcher_open_alex_id: str
+    pyalex_work: dict
     open_alex_results_models: OpenAlexResultModels
 
 
