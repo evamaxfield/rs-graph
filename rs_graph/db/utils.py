@@ -342,12 +342,23 @@ def store_full_details(  # noqa: C901
                     )
 
             # Create a connection between the document and the repository
-            d_r = db_models.DocumentRepositoryLink(
-                document_id=pair.open_alex_results.document_model.id,
-                repository_id=pair.github_results.repository_model.id,
-                dataset_source_id=pair.open_alex_results.dataset_source_model.id,
-            )
-            _get_or_add_and_flush(model=d_r, session=session)
+            if pair.document_repository_link_metadata is None:
+                d_r = db_models.DocumentRepositoryLink(
+                    document_id=pair.open_alex_results.document_model.id,
+                    repository_id=pair.github_results.repository_model.id,
+                    dataset_source_id=pair.open_alex_results.dataset_source_model.id,
+                )
+                _get_or_add_and_flush(model=d_r, session=session)
+            else:
+                d_r = db_models.DocumentRepositoryLink(
+                    document_id=pair.open_alex_results.document_model.id,
+                    repository_id=pair.github_results.repository_model.id,
+                    dataset_source_id=pair.open_alex_results.dataset_source_model.id,
+                    predictive_model_name=pair.document_repository_link_metadata.model_name,
+                    predictive_model_version=pair.document_repository_link_metadata.model_version,
+                    predictive_model_confidence=pair.document_repository_link_metadata.model_confidence,
+                )
+                _get_or_add_and_flush(model=d_r, session=session)
 
             # Get all the info needed to refresh after commit
             dataset_source_id = pair.open_alex_results.dataset_source_model.id
@@ -438,8 +449,12 @@ def store_full_details_task(
 
     # Add processing time to the pair
     if isinstance(result, types.StoredRepositoryDocumentPair):
-        result.open_alex_processing_time_seconds = end_time - start_time
-        result.github_processing_time_seconds = end_time - start_time
+        result.snowball_sampling_discovery_source_author_developer_link_id = (
+            pair.snowball_sampling_discovery_source_author_developer_link_id
+        )
+        result.document_repository_link_metadata = pair.document_repository_link_metadata
+        result.open_alex_processing_time_seconds = pair.open_alex_processing_time_seconds
+        result.github_processing_time_seconds = pair.github_processing_time_seconds
         result.store_article_and_repository_time_seconds = end_time - start_time
 
     return result
@@ -786,3 +801,55 @@ def check_repository_in_db(
             repository_found = repository_model is not None
 
     return repository_found
+
+
+@task(
+    log_prints=True,
+    retries=3,
+    retry_delay_seconds=3,
+    retry_jitter_factor=0.5,
+)
+def update_researcher_developer_account_link_with_new_process_dt(
+    pair: types.StoredRepositoryDocumentPair | types.ErrorResult,
+    use_prod: bool = False,
+) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
+    if isinstance(pair, types.ErrorResult):
+        return pair
+
+    # Researcher developer account link id in question
+    researcher_dev_account_link_id_to_update = (
+        pair.snowball_sampling_discovery_source_author_developer_link_id
+    )
+
+    # Get the engine
+    engine = get_engine(use_prod=use_prod)
+
+    # Create a session
+    with Session(engine) as session:
+        try:
+            # Get the link
+            stmt = select(db_models.ResearcherDeveloperAccountLink).where(
+                db_models.ResearcherDeveloperAccountLink.id
+                == researcher_dev_account_link_id_to_update
+            )
+            link_model = session.exec(stmt).first()
+            assert link_model is not None
+
+            # Update the last processed datetime
+            link_model.last_snowball_processed_datetime = datetime.now()
+
+            # Commit
+            session.add(link_model)
+            session.commit()
+
+            return pair
+
+        except Exception as e:
+            session.rollback()
+            return types.ErrorResult(
+                source=pair.dataset_source_model.name,
+                step="update-researcher-dev-account-link-process-dt",
+                identifier=pair.document_model.doi,
+                error=str(e),
+                traceback=traceback.format_exc(),
+            )

@@ -104,6 +104,13 @@ class GitHubResultModels(DataClassJsonMixin):
 
 
 @dataclass
+class DocumentRepositoryLinkMetadata(DataClassJsonMixin):
+    model_name: str
+    model_version: str
+    model_confidence: float
+
+
+@dataclass
 class ExpandedRepositoryDocumentPair(DataClassJsonMixin):
     # Required / Basic
     source: str
@@ -116,6 +123,8 @@ class ExpandedRepositoryDocumentPair(DataClassJsonMixin):
     github_results: GitHubResultModels | None = None
 
     # Processing metadata
+    snowball_sampling_discovery_source_author_developer_link_id: int | None = None
+    document_repository_link_metadata: DocumentRepositoryLinkMetadata | None = None
     open_alex_processing_time_seconds: float | None = None
     github_processing_time_seconds: float | None = None
 
@@ -133,6 +142,8 @@ class StoredRepositoryDocumentPair(DataClassJsonMixin):
     researcher_developer_links: list[db_models.ResearcherDeveloperAccountLink] | None = None
 
     # Processing metadata
+    snowball_sampling_discovery_source_author_developer_link_id: int | None = None
+    document_repository_link_metadata: DocumentRepositoryLinkMetadata | None = None
     open_alex_processing_time_seconds: float | None = None
     github_processing_time_seconds: float | None = None
     store_article_and_repository_time_seconds: float | None = None
