@@ -146,8 +146,6 @@ def process_github_repo(  # noqa: C901
     """Get repo contributors and add them to database."""
     assert repo_parts is not None
 
-    print("within process github repo for:", repo_parts)
-
     try:
         # Setup API
         api = _setup_gh_api(github_api_key)
@@ -179,7 +177,6 @@ def process_github_repo(  # noqa: C901
 
         # Get repo languages
         if fetch_repo_languages:
-            print("fetching repo languages for:", repo_parts)
             repo_languages = api.repos.list_languages(
                 owner=repo_parts.owner,
                 repo=repo_parts.name,
@@ -187,8 +184,6 @@ def process_github_repo(  # noqa: C901
 
             # Sleep to avoid API limits
             time.sleep(0.85)
-
-            print("before processing languages")
 
             # For each language, create a repository language
             repo_language_models = []
@@ -199,10 +194,7 @@ def process_github_repo(  # noqa: C901
                         bytes_of_code=bytes_of_code,
                     )
                 )
-
-            print("after processing languages")
         else:
-            print("skipping repo languages for:", repo_parts)
             repo_language_models = None
 
         # Get repo README
@@ -216,13 +208,7 @@ def process_github_repo(  # noqa: C901
                 # Decode the content
                 repo_readme = base64.b64decode(repo_readme_response["content"]).decode("utf-8")
 
-            except Exception as e:
-                print(
-                    f"something went wrong with README fetch "
-                    f"for repo: {repo_parts.owner}/{repo_parts.name}"
-                )
-                print("error", str(e))
-                print(traceback.format_exc())
+            except Exception:
                 repo_readme = None
 
             finally:
@@ -238,17 +224,12 @@ def process_github_repo(  # noqa: C901
 
         # Get repo contributors
         if fetch_repo_contributors:
-            print("fetching repo contributors for:", repo_parts)
-
             repo_contributors = get_repo_contributors(
                 repo_parts=repo_parts,
                 github_api_key=github_api_key,
                 top_n=top_n,
             )
-
-            print("after fetching repo contributors")
         else:
-            print("skipping repo contributors for:", repo_parts)
             repo_contributors = None
 
         # Get default branch from new or existing repo model
@@ -348,10 +329,8 @@ def process_github_repo(  # noqa: C901
         # Get repository files
         repo_file_models: list[db_models.RepositoryFile] | None
         if fetch_repo_files and default_branch:
-            print("fetching repo files for:", repo_parts)
             repo_file_models = []
             try:
-                print("before fetching repository files")
                 # Use the git trees API to get the files in the repository
                 tree_results = api.git.get_tree(
                     owner=repo_parts.owner,
@@ -361,7 +340,6 @@ def process_github_repo(  # noqa: C901
                 )
 
                 # Iterate through the tree and create RepositoryFile models
-                print("after fetching repository files")
                 for file in tree_results["tree"]:
                     repo_file_models.append(
                         db_models.RepositoryFile(
@@ -379,7 +357,6 @@ def process_github_repo(  # noqa: C901
                 # Sleep to avoid API limits
                 time.sleep(0.85)
         else:
-            print("skipping repo files for:", repo_parts)
             repo_file_models = None
 
         # For each contributor, create a developer account
@@ -387,7 +364,6 @@ def process_github_repo(  # noqa: C901
         # as a repository contributor
         repo_contributor_models: list[types.RepositoryContributorDetails] | None
         if repo_contributors:
-            print("finalizing processing contributors")
             repo_contributor_models = []
             for contributor in repo_contributors:
                 # Create the developer account
@@ -411,13 +387,10 @@ def process_github_repo(  # noqa: C901
                     )
                 )
 
-            print("after finalizing processing contributors")
         else:
-            print("no contributors to finalize for:", repo_parts)
             repo_contributor_models = None
 
         # Attach the results to the pair
-        print("preparing final github results for:", repo_parts)
         github_results = types.GitHubResultModels(
             code_host_model=(
                 existing_github_results.code_host_model
@@ -472,13 +445,9 @@ def process_github_repo(  # noqa: C901
         ):
             github_results.repository_model.processed_at_sha = processed_at_sha
 
-        print("right before return of github results for:", repo_parts)
-
         return github_results
 
     except Exception as e:
-        print("within process_github_repo, caught exception:", str(e))
-        print(traceback.format_exc())
         if "Bad credentials" in str(e):
             print(
                 f"!!! GitHub API Error: Bad credentials. "

@@ -5,12 +5,11 @@ from __future__ import annotations
 import logging
 import time
 import traceback
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from dataclasses import dataclass
 
 import backoff
-from dataclasses_json import DataClassJsonMixin
 import msgspec
 import pyalex
 from semanticscholar import SemanticScholar
@@ -229,9 +228,7 @@ def process_article(  # noqa: C901
     existing_open_alex_results: types.OpenAlexResultModels | None = None,
 ) -> types.OpenAlexResultModels | types.ErrorResult:
     try:
-        print(f"Processing article DOI: {paper_doi}")
         if existing_open_alex_results is None:
-            print("No existing OpenAlex results provided, fetching from OpenAlex.")
             # Check for updated DOI
             updated_doi = get_updated_doi_from_semantic_scholar(
                 doi=paper_doi,
@@ -430,17 +427,14 @@ def process_article(  # noqa: C901
 
         # For each author, create the Researcher
         if fetch_author_details:
-            print("Fetching author details from OpenAlex...")
             all_researcher_details = []
             for author_details in open_alex_work["authorships"]:
-                print(f"Processing author: {author_details['author']['display_name']}")
                 # Fetch extra author details
                 open_alex_author = get_open_alex_author_from_id(
                     open_alex_email=open_alex_email,
                     open_alex_email_count=open_alex_email_count,
                     author_id=author_details["author"]["id"],
                 )
-                print("Post fetched author details.")
 
                 # Create the Researcher
                 researcher = db_models.Researcher(
@@ -455,7 +449,6 @@ def process_article(  # noqa: C901
                         "2yr_mean_citedness"
                     ],
                 )
-                print("Created researcher model.")
 
                 # Create the connection between researcher and document
                 document_contributor = db_models.DocumentContributor(
@@ -464,13 +457,11 @@ def process_article(  # noqa: C901
                     position=author_details["author_position"],
                     is_corresponding=author_details["is_corresponding"],
                 )
-                print("Created document contributor model.")
 
                 # Create the Institutions
                 institution_models = []
 
                 # Create the Institution
-                print("Processing institutions for author...")
                 for institution_details in author_details["institutions"]:
                     institution = db_models.Institution(
                         open_alex_id=institution_details["id"],
@@ -480,10 +471,8 @@ def process_article(  # noqa: C901
                         ror=institution_details["ror"],
                     )
                     institution_models.append(institution)
-                print("Created institution models.")
 
                 # Add to list
-                print("Adding researcher details to list...")
                 all_researcher_details.append(
                     types.ResearcherDetails(
                         researcher_model=researcher,
@@ -491,23 +480,19 @@ def process_article(  # noqa: C901
                         institution_models=institution_models,
                     )
                 )
-                print("Done processing author.")
         else:
             all_researcher_details = None
 
         # For each grant, create the
         # Funder, FundingInstance, and DocumentFundingInstance
         if fetch_grant_details:
-            print("Fetching grant details from OpenAlex...")
             all_funding_instance_details = []
             for grant_details in open_alex_work["grants"]:
-                print(f"Processing grant: {grant_details['funder_display_name']}")
                 # Create the Funder
                 funder = db_models.Funder(
                     open_alex_id=grant_details["funder"],
                     name=grant_details["funder_display_name"],
                 )
-                print("Created funder model.")
 
                 # Create the FundingInstance
                 # TODO: Handle None award_id
@@ -515,14 +500,12 @@ def process_article(  # noqa: C901
                 if grant_details["award_id"] is None:
                     continue
 
-                print("Creating funding instance model.")
                 funding_instance = db_models.FundingInstance(
                     funder_id=funder.id,
                     award_id=grant_details["award_id"],
                 )
 
                 # Add to list
-                print("Adding funding instance details to list...")
                 all_funding_instance_details.append(
                     types.FundingInstanceDetails(
                         funder_model=funder,
@@ -532,11 +515,8 @@ def process_article(  # noqa: C901
         else:
             all_funding_instance_details = None
 
-        print("preparing final return")
-
         # Combine existing and new
         if existing_open_alex_results is None:
-            print("No existing OpenAlex results provided, creating new results object.")
             return types.OpenAlexResultModels(
                 dataset_source_model=dataset_source,
                 primary_document_source_model=primary_document_source,
@@ -551,7 +531,6 @@ def process_article(  # noqa: C901
                 funding_instance_details=all_funding_instance_details,
             )
 
-        print("Merging with existing OpenAlex results.")
         return types.OpenAlexResultModels(
             # Take existing
             dataset_source_model=existing_open_alex_results.dataset_source_model,
@@ -569,8 +548,6 @@ def process_article(  # noqa: C901
         )
 
     except Exception as e:
-        print(f"within process_article, caught exception: {e}")
-        print(traceback.format_exc())
         return types.ErrorResult(
             source=source,
             step="open-alex-processing",
@@ -649,9 +626,9 @@ def get_articles_for_researcher(
             author_works.extend(page)
 
         # Convert author works to list of OpenAlexResultModels
-        all_results = []
+        all_results: list[WorkAndOAResultModels | types.ErrorResult] = []
         for work in author_works:
-            result = process_article(
+            process_result = process_article(
                 paper_doi=work["doi"],
                 source="snowball-sampling-discovery",
                 open_alex_email=open_alex_email,
@@ -661,17 +638,16 @@ def get_articles_for_researcher(
                 fetch_grant_details=False,
                 existing_pyalex_work=work,
             )
-            
-            if isinstance(result, types.ErrorResult):
-                all_results.append(result)
+
+            if isinstance(process_result, types.ErrorResult):
+                all_results.append(process_result)
             else:
                 all_results.append(
                     WorkAndOAResultModels(
                         pyalex_work=work,
-                        open_alex_results=result,
+                        open_alex_results=process_result,
                     )
                 )
-                
 
         # Deduplicate based on DOI
         # This can happen if open alex has multiple versions of the same paper

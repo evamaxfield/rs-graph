@@ -371,11 +371,15 @@ def store_full_details(  # noqa: C901
                         pair.github_results.repository_contributor_details
                     )
                 ]
+            else:
+                developer_account_model_ids = []
             if pair.open_alex_results.researcher_details is not None:
                 researcher_model_ids = [
                     researcher_detail.researcher_model.id
                     for researcher_detail in pair.open_alex_results.researcher_details
                 ]
+            else:
+                researcher_model_ids = []
 
             session.commit()
 
@@ -410,6 +414,9 @@ def store_full_details(  # noqa: C901
                 repository_model=repository_model,
                 developer_account_models=developer_account_models,
                 researcher_models=researcher_models,
+                snowball_sampling_discovery_source_author_developer_link_id=(
+                    pair.snowball_sampling_discovery_source_author_developer_link_id
+                ),
             )
 
             return stored_pair
@@ -803,12 +810,6 @@ def check_repository_in_db(
     return repository_found
 
 
-@task(
-    log_prints=True,
-    retries=3,
-    retry_delay_seconds=3,
-    retry_jitter_factor=0.5,
-)
 def update_researcher_developer_account_link_with_new_process_dt(
     pair: types.StoredRepositoryDocumentPair | types.ErrorResult,
     use_prod: bool = False,

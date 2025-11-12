@@ -11,7 +11,7 @@ import polars as pl
 import typer
 from dotenv import load_dotenv
 from gh_tokens_loader import GitHubTokensCycler
-from prefect import flow, task, unmapped
+from prefect import flow, unmapped
 from tqdm import tqdm
 
 from rs_graph import __version__ as rs_graph_version
@@ -55,14 +55,15 @@ def _get_author_articles_for_researcher(
         return researcher_articles
 
     author_article_details_list: list[types.AuthorArticleDetails | types.ErrorResult] = []
-    for open_alex_result in researcher_articles:
-        if isinstance(open_alex_result, types.ErrorResult):
-            author_article_details_list.append(open_alex_result)
+    for work_and_oa_results in researcher_articles:
+        if isinstance(work_and_oa_results, types.ErrorResult):
+            author_article_details_list.append(work_and_oa_results)
         else:
             author_article_details = types.AuthorArticleDetails(
                 author_developer_link_id=author_developer_link_id,
                 researcher_open_alex_id=researcher_open_alex_id,
-                open_alex_results_models=open_alex_result,
+                pyalex_work=work_and_oa_results.pyalex_work,
+                open_alex_results_models=work_and_oa_results.open_alex_results,
             )
             author_article_details_list.append(author_article_details)
 
@@ -405,14 +406,6 @@ def _replace_enriched_repositories_in_possible_combinations(
     return updated_combinations
 
 
-def _wrapped_prep_for_matching(
-    unchecked_possible_pair: types.UncheckedPossibleAuthorArticleAndDeveloperRepositoryPair,
-) -> types.AuthorArticleAndDeveloperRepositoryPairPreppedForMatching | types.ErrorResult:
-    return entity_matching._prep_for_article_repository_matching(
-        unchecked_possible_pair=unchecked_possible_pair,
-    )
-
-
 def _create_batches_for_matching(
     prepped_combinations: list[
         types.AuthorArticleAndDeveloperRepositoryPairPreppedForMatching | types.ErrorResult
@@ -450,20 +443,6 @@ def _filter_to_only_success_predictions(
             for item in batch_result:
                 flattened_results.append(item)
 
-    # Store each result
-    # storage_results = []
-    # for item in flattened_results:
-    #     storage_results.append(
-    #         {
-    #             "author_developer_link_id": item.author_developer_link_id,
-    #             "article_doi": item.article_doi,
-    #             "repository_identifier": f"https://github.com/{item.repository_identifier}",
-    #             "model_name": item.matched_details.model_name,
-    #             "model_version": item.matched_details.model_version,
-    #             "confidence": item.matched_details.confidence,
-    #         }
-    #     )
-
     return flattened_results
 
 
@@ -491,6 +470,9 @@ def _get_unique_and_highest_confidence_prediction_results(
             for result in prediction_results
         ]
     )
+
+    if len(results_df) == 0:
+        return []
 
     # Sort and get unique
     results_df = (
@@ -549,13 +531,13 @@ def _process_matched_article(
     semantic_scholar_api_key: str,
 ) -> types.MatchedAuthorArticleAndDeveloperRepositoryPair | types.ErrorResult:
     # Try getting the rest of the data
-    print("Processing matched article...")
     updated_open_alex_results = article.process_article(
         paper_doi=matched_pair.article_doi,
         source=f"snowball-sampling-discovery-v{rs_graph_version}",
         open_alex_email=open_alex_email,
         open_alex_email_count=open_alex_email_count,
         semantic_scholar_api_key=semantic_scholar_api_key,
+        existing_pyalex_work=matched_pair.author_article.pyalex_work,
         existing_open_alex_results=matched_pair.author_article.open_alex_results_models,
     )
 
@@ -570,6 +552,7 @@ def _process_matched_article(
         author_article=types.AuthorArticleDetails(
             author_developer_link_id=matched_pair.author_article.author_developer_link_id,
             researcher_open_alex_id=matched_pair.author_article.researcher_open_alex_id,
+            pyalex_work=matched_pair.author_article.pyalex_work,
             open_alex_results_models=updated_open_alex_results,
         ),
         developer_repository=matched_pair.developer_repository,
@@ -621,7 +604,6 @@ def _process_matched_repository(
     )
 
 
-@task
 def _prep_updated_article_repository_details_for_storage_type(
     matched_pair: types.MatchedAuthorArticleAndDeveloperRepositoryPair,
 ) -> types.ExpandedRepositoryDocumentPair:
@@ -686,7 +668,7 @@ def _snowball_sampling_discovery_flow(
     # Preconstruct all wrapped tasks
     wrapped_get_articles_for_researcher = _wrap_func_with_coiled_prefect_task(
         _get_author_articles_for_researcher,
-        coiled_func_name="open_alex_cluster",
+        coiled_func_name="cpu_cluster",
         coiled_kwargs=_get_small_cpu_api_cluster(
             n_workers=n_open_alex_emails,
             use_coiled=use_coiled,
@@ -695,7 +677,7 @@ def _snowball_sampling_discovery_flow(
     )
     wrapped_get_repositories_for_developer = _wrap_func_with_coiled_prefect_task(
         _get_developer_repositories_for_developer,
-        coiled_func_name="github_cluster",
+        coiled_func_name="cpu_cluster",
         coiled_kwargs=_get_small_cpu_api_cluster(
             n_workers=n_github_tokens,
             use_coiled=use_coiled,
@@ -704,7 +686,7 @@ def _snowball_sampling_discovery_flow(
     )
     wrapped_enrich_repository = _wrap_func_with_coiled_prefect_task(
         _enrich_repository_with_data_required_for_matching,
-        coiled_func_name="github_cluster",
+        coiled_func_name="cpu_cluster",
         coiled_kwargs=_get_small_cpu_api_cluster(
             n_workers=n_github_tokens,
             use_coiled=use_coiled,
@@ -713,7 +695,7 @@ def _snowball_sampling_discovery_flow(
     )
     wrapped_match_prepped_pair = _wrap_func_with_coiled_prefect_task(
         entity_matching.match_articles_and_repositories,
-        coiled_func_name="entity_matching_cluster",
+        coiled_func_name="gpu_cluster",
         coiled_kwargs=_get_basic_gpu_cluster_config(
             use_coiled=use_coiled,
             coiled_region=coiled_region,
@@ -725,7 +707,7 @@ def _snowball_sampling_discovery_flow(
     )
     process_article_wrapped_task = _wrap_func_with_coiled_prefect_task(
         _process_matched_article,
-        coiled_func_name="open_alex_cluster",
+        coiled_func_name="cpu_cluster",
         coiled_kwargs=_get_small_cpu_api_cluster(
             n_workers=n_open_alex_emails,
             use_coiled=use_coiled,
@@ -734,7 +716,7 @@ def _snowball_sampling_discovery_flow(
     )
     process_github_wrapped_task = _wrap_func_with_coiled_prefect_task(
         _process_matched_repository,
-        coiled_func_name="github_cluster",
+        coiled_func_name="cpu_cluster",
         coiled_kwargs=_get_small_cpu_api_cluster(
             n_workers=n_github_tokens,
             use_coiled=use_coiled,
@@ -743,7 +725,7 @@ def _snowball_sampling_discovery_flow(
     )
     match_devs_and_researchers_wrapped_task = _wrap_func_with_coiled_prefect_task(
         entity_matching.match_devs_and_researchers,
-        coiled_func_name="entity_matching_cluster",
+        coiled_func_name="gpu_cluster",
         coiled_kwargs=_get_basic_gpu_cluster_config(
             use_coiled=use_coiled,
             coiled_region=coiled_region,
@@ -879,7 +861,7 @@ def _snowball_sampling_discovery_flow(
     # Process github
     print("Getting extended repository data for predicted pairs...")
     updated_github_futures = process_github_wrapped_task.map(
-        matched_pair=updated_article_processing_futures,
+        matched_pair=[uapf.result() for uapf in updated_article_processing_futures],
         github_api_key=[
             next(cycled_github_tokens) for _ in range(len(updated_article_processing_futures))
         ],
@@ -887,36 +869,70 @@ def _snowball_sampling_discovery_flow(
 
     # Convert to expanded pair type
     print("Preparing updated article-repository details for storage...")
-    ready_for_storage_futures = _prep_updated_article_repository_details_for_storage_type.map(
-        matched_pair=updated_github_futures,
-    )
+    ready_for_storage = [
+        _prep_updated_article_repository_details_for_storage_type(
+            matched_pair=ugf.result(),
+        )
+        for ugf in updated_github_futures
+    ]
 
     # Store everything
     print("Storing full details of article-repository pairs...")
-    stored_futures = db_utils.store_full_details_task.map(
-        pair=ready_for_storage_futures,
-        use_prod=unmapped(use_prod),
-    )
+    stored_pairs = []
+    for rfs in ready_for_storage:
+        if isinstance(rfs, types.ErrorResult):
+            print(
+                f"Error preparing article-repository pair for storage for "
+                f"author-developer link ID "
+                f"{rfs.source}: {rfs.traceback}"
+            )
+
+        else:
+            stored_pair = db_utils.store_full_details(
+                pair=rfs,
+                use_prod=use_prod,
+            )
+            stored_pairs.append(stored_pair)
+            time.sleep(0.25)
 
     # Match devs and researchers
     print("Matching developers and researchers...")
     dev_researcher_futures = match_devs_and_researchers_wrapped_task.map(
-        pair=stored_futures,
+        pair=stored_pairs,
     )
 
     # Store the dev-researcher links
     print("Storing developer-researcher links...")
-    stored_dev_researcher_futures = db_utils.store_dev_researcher_em_links_task.map(
-        pair=dev_researcher_futures,
-        use_prod=unmapped(use_prod),
-    )
+    gathered_dev_researcher_futures = [drf.result() for drf in dev_researcher_futures]
+    stored_dev_researchers = []
+    for drf in gathered_dev_researcher_futures:
+        if isinstance(drf, types.ErrorResult):
+            print(
+                f"Error matching dev-researcher link for author-developer link ID "
+                f"{drf.source}: {drf.traceback}"
+            )
+        else:
+            stored_dev_researcher = db_utils.store_dev_researcher_em_links(
+                pair=drf,
+                use_prod=use_prod,
+            )
+            stored_dev_researchers.append(stored_dev_researcher)
+            time.sleep(0.25)
 
     # Note that we have now processed this author-developer link
     print("Marking snowball source author-developer links as processed...")
-    db_utils.update_researcher_developer_account_link_with_new_process_dt.map(
-        pair=stored_dev_researcher_futures,
-        use_prod=unmapped(use_prod),
-    )
+    for sdr in stored_dev_researchers:
+        if isinstance(sdr, types.ErrorResult):
+            print(
+                f"Error storing dev-researcher link for author-developer link ID "
+                f"{sdr.source}: {sdr.traceback}"
+            )
+        else:
+            db_utils.update_researcher_developer_account_link_with_new_process_dt(
+                pair=sdr,
+                use_prod=use_prod,
+            )
+            time.sleep(0.25)
 
 
 #######################################################################################
