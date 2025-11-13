@@ -921,18 +921,12 @@ def _snowball_sampling_discovery_flow(
 
     # Note that we have now processed this author-developer link
     print("Marking snowball source author-developer links as processed...")
-    for sdr in stored_dev_researchers:
-        if isinstance(sdr, types.ErrorResult):
-            print(
-                f"Error storing dev-researcher link for author-developer link ID "
-                f"{sdr.source}: {sdr.traceback}"
-            )
-        else:
-            db_utils.update_researcher_developer_account_link_with_new_process_dt(
-                pair=sdr,
-                use_prod=use_prod,
-            )
-            time.sleep(0.25)
+    for adl in author_developer_links:
+        db_utils.update_researcher_developer_account_link_with_new_process_dt(
+            link_id=adl.author_developer_link_id,
+            use_prod=use_prod,
+        )
+        time.sleep(0.25)
 
 
 #######################################################################################

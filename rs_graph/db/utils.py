@@ -811,17 +811,9 @@ def check_repository_in_db(
 
 
 def update_researcher_developer_account_link_with_new_process_dt(
-    pair: types.StoredRepositoryDocumentPair | types.ErrorResult,
+    link_id: int,
     use_prod: bool = False,
-) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
-    if isinstance(pair, types.ErrorResult):
-        return pair
-
-    # Researcher developer account link id in question
-    researcher_dev_account_link_id_to_update = (
-        pair.snowball_sampling_discovery_source_author_developer_link_id
-    )
-
+) -> db_models.ResearcherDeveloperAccountLink | types.ErrorResult:
     # Get the engine
     engine = get_engine(use_prod=use_prod)
 
@@ -830,8 +822,7 @@ def update_researcher_developer_account_link_with_new_process_dt(
         try:
             # Get the link
             stmt = select(db_models.ResearcherDeveloperAccountLink).where(
-                db_models.ResearcherDeveloperAccountLink.id
-                == researcher_dev_account_link_id_to_update
+                db_models.ResearcherDeveloperAccountLink.id == link_id,
             )
             link_model = session.exec(stmt).first()
             assert link_model is not None
@@ -842,15 +833,16 @@ def update_researcher_developer_account_link_with_new_process_dt(
             # Commit
             session.add(link_model)
             session.commit()
+            session.refresh(link_model)
 
-            return pair
+            return link_model
 
         except Exception as e:
             session.rollback()
             return types.ErrorResult(
-                source=pair.dataset_source_model.name,
+                source="snowball-sampling-discovery",
                 step="update-researcher-dev-account-link-process-dt",
-                identifier=pair.document_model.doi,
+                identifier=f"researcher-dev-account-link-id-{link_id}",
                 error=str(e),
                 traceback=traceback.format_exc(),
             )
