@@ -668,7 +668,7 @@ def _snowball_sampling_discovery_flow(
     # Preconstruct all wrapped tasks
     wrapped_get_articles_for_researcher = _wrap_func_with_coiled_prefect_task(
         _get_author_articles_for_researcher,
-        coiled_func_name="cpu_cluster",
+        coiled_func_name="open_alex_cluster",
         coiled_kwargs=_get_small_cpu_api_cluster(
             n_workers=n_open_alex_emails,
             use_coiled=use_coiled,
@@ -677,7 +677,7 @@ def _snowball_sampling_discovery_flow(
     )
     wrapped_get_repositories_for_developer = _wrap_func_with_coiled_prefect_task(
         _get_developer_repositories_for_developer,
-        coiled_func_name="cpu_cluster",
+        coiled_func_name="github_cluster",
         coiled_kwargs=_get_small_cpu_api_cluster(
             n_workers=n_github_tokens,
             use_coiled=use_coiled,
@@ -686,7 +686,7 @@ def _snowball_sampling_discovery_flow(
     )
     wrapped_enrich_repository = _wrap_func_with_coiled_prefect_task(
         _enrich_repository_with_data_required_for_matching,
-        coiled_func_name="cpu_cluster",
+        coiled_func_name="github_cluster",
         coiled_kwargs=_get_small_cpu_api_cluster(
             n_workers=n_github_tokens,
             use_coiled=use_coiled,
@@ -707,7 +707,7 @@ def _snowball_sampling_discovery_flow(
     )
     process_article_wrapped_task = _wrap_func_with_coiled_prefect_task(
         _process_matched_article,
-        coiled_func_name="cpu_cluster",
+        coiled_func_name="open_alex_cluster",
         coiled_kwargs=_get_small_cpu_api_cluster(
             n_workers=n_open_alex_emails,
             use_coiled=use_coiled,
@@ -716,7 +716,7 @@ def _snowball_sampling_discovery_flow(
     )
     process_github_wrapped_task = _wrap_func_with_coiled_prefect_task(
         _process_matched_repository,
-        coiled_func_name="cpu_cluster",
+        coiled_func_name="github_cluster",
         coiled_kwargs=_get_small_cpu_api_cluster(
             n_workers=n_github_tokens,
             use_coiled=use_coiled,
@@ -869,11 +869,13 @@ def _snowball_sampling_discovery_flow(
 
     # Convert to expanded pair type
     print("Preparing updated article-repository details for storage...")
+    gathered_github_futures = [ugf.result() for ugf in updated_github_futures]
     ready_for_storage = [
         _prep_updated_article_repository_details_for_storage_type(
-            matched_pair=ugf.result(),
+            matched_pair=ggf,
         )
-        for ugf in updated_github_futures
+        for ggf in gathered_github_futures
+        if not isinstance(ggf, types.ErrorResult)
     ]
 
     # Store everything

@@ -760,7 +760,7 @@ def check_article_in_db(
             document_found = document_alternate_doi_model is not None
 
         # Now try and match on title if we still don't have a document model
-        if not document_found:
+        if not document_found and article_title is not None:
             document_stmt = select(db_models.Document).where(
                 db_models.Document.title == article_title.strip()
             )

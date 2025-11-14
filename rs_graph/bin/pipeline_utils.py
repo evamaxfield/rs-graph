@@ -22,11 +22,12 @@ def _get_small_cpu_api_cluster(
     n_workers: int,
     use_coiled: bool,
     coiled_region: str,
+    keepalive: str = "15m",
     software_env_name: str | None = None,
 ) -> dict:
     return {
         "software": software_env_name,
-        "keepalive": "15m",
+        "keepalive": keepalive,
         "vm_type": "t4g.small",
         # One worker per token to avoid rate limiting
         # This isn't deterministic, that is,
@@ -35,7 +36,7 @@ def _get_small_cpu_api_cluster(
         # and should help avoid rate limiting
         "n_workers": n_workers,
         "threads_per_worker": 1,
-        "spot_policy": "spot_with_fallback",
+        "spot_policy": "on-demand",
         "local": not use_coiled,
         "region": coiled_region,
     }
@@ -44,14 +45,15 @@ def _get_small_cpu_api_cluster(
 def _get_basic_gpu_cluster_config(
     use_coiled: bool,
     coiled_region: str,
+    keepalive: str = "15m",
     software_env_name: str | None = None,
 ) -> dict:
     return {
         "software": software_env_name,
-        "keepalive": "15m",
+        "keepalive": keepalive,
         "vm_type": "g4dn.xlarge",
-        "n_workers": [1, 4],
-        "spot_policy": "spot_with_fallback",
+        "n_workers": [4, 6],
+        "spot_policy": "on-demand",
         "local": not use_coiled,
         "region": coiled_region,
     }
