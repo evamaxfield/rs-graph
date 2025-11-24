@@ -117,7 +117,7 @@ def _prep_softcite_2025_data_for_annotation(data_dir: str | Path) -> None:
 
 def _train_softcite_mini_classifier_from_annotation_data(data_dir: str | Path) -> None:
     from sklearn.linear_model import LogisticRegressionCV
-    from sklearn.metrics import classification_report
+    from sklearn.metrics import ConfusionMatrixDisplay, precision_recall_fscore_support, classification_report
     from sklearn.model_selection import train_test_split
     from skops.io import dump
 
@@ -221,6 +221,23 @@ def _train_softcite_mini_classifier_from_annotation_data(data_dir: str | Path) -
             labels=["yes", "no"],
         )
     )
+    pre, rec, f1, _ = precision_recall_fscore_support(
+        y_true=test_set["label"],
+        y_pred=preds,
+        labels=["yes", "no"],
+        average="macro",
+    )
+    print(f"Overal Macro Precision: {pre:.3f}, Recall: {rec:.3f}, F1: {f1:.3f}")
+
+    matrix_plot = ConfusionMatrixDisplay.from_predictions(
+        y_true=test_set["label"],
+        y_pred=preds,
+        display_labels=["yes", "no"],
+    )
+    matrix_plot.figure_.savefig(
+        SOFTCITE_2025_FILES_DIR / "softcite-2025-mini-classifier-confusion-matrix.png"
+    )
+
 
     # Store to mini classifier path
     dump(logit, SOFTCITE_MINI_CLS_PATH)

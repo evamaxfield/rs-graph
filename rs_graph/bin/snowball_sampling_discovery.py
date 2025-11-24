@@ -646,16 +646,13 @@ def _snowball_sampling_discovery_flow(
     use_prod: bool,
     use_coiled: bool,
     coiled_region: str,
-    github_tokens_file: str,
+    cycled_github_tokens: GitHubTokensCycler,
     open_alex_emails: list[str],
     semantic_scholar_api_key: str | None,
     coiled_software_envs: dict[str, str] | None,
     cache_coiled_software_envs: bool,
     coiled_software_envs_file: str,
 ) -> None:
-    # Get an infinite cycle of github tokens
-    cycled_github_tokens = GitHubTokensCycler(gh_tokens_file=github_tokens_file)
-
     # Workers is the number of github tokens
     n_github_tokens = len(cycled_github_tokens)
 
@@ -673,6 +670,7 @@ def _snowball_sampling_discovery_flow(
             n_workers=n_open_alex_emails,
             use_coiled=use_coiled,
             coiled_region=coiled_region,
+            software_env_name="package-sync-49802be2a88402f01f48cec991bd301a",
         ),
     )
     wrapped_get_repositories_for_developer = _wrap_func_with_coiled_prefect_task(
@@ -682,6 +680,7 @@ def _snowball_sampling_discovery_flow(
             n_workers=n_github_tokens,
             use_coiled=use_coiled,
             coiled_region=coiled_region,
+            software_env_name="package-sync-49802be2a88402f01f48cec991bd301a",
         ),
     )
     wrapped_enrich_repository = _wrap_func_with_coiled_prefect_task(
@@ -691,6 +690,7 @@ def _snowball_sampling_discovery_flow(
             n_workers=n_github_tokens,
             use_coiled=use_coiled,
             coiled_region=coiled_region,
+            software_env_name="package-sync-49802be2a88402f01f48cec991bd301a",
         ),
     )
     wrapped_match_prepped_pair = _wrap_func_with_coiled_prefect_task(
@@ -699,6 +699,7 @@ def _snowball_sampling_discovery_flow(
         coiled_kwargs=_get_basic_gpu_cluster_config(
             use_coiled=use_coiled,
             coiled_region=coiled_region,
+            software_env_name="package-sync-03ee32789d90159bf532a979364b3917",
         ),
         environ={
             "HF_TOKEN": os.environ["HF_TOKEN"],
@@ -712,6 +713,7 @@ def _snowball_sampling_discovery_flow(
             n_workers=n_open_alex_emails,
             use_coiled=use_coiled,
             coiled_region=coiled_region,
+            software_env_name="package-sync-49802be2a88402f01f48cec991bd301a",
         ),
     )
     process_github_wrapped_task = _wrap_func_with_coiled_prefect_task(
@@ -721,6 +723,7 @@ def _snowball_sampling_discovery_flow(
             n_workers=n_github_tokens,
             use_coiled=use_coiled,
             coiled_region=coiled_region,
+            software_env_name="package-sync-49802be2a88402f01f48cec991bd301a",
         ),
     )
     match_devs_and_researchers_wrapped_task = _wrap_func_with_coiled_prefect_task(
@@ -729,6 +732,7 @@ def _snowball_sampling_discovery_flow(
         coiled_kwargs=_get_basic_gpu_cluster_config(
             use_coiled=use_coiled,
             coiled_region=coiled_region,
+            software_env_name="package-sync-03ee32789d90159bf532a979364b3917",
         ),
     )
 
@@ -1079,7 +1083,7 @@ def snowball_sampling_discovery(
                 use_prod=use_prod,
                 use_coiled=use_coiled,
                 coiled_region=coiled_region,
-                github_tokens_file=github_tokens_file,
+                cycled_github_tokens=cycled_github_tokens,
                 open_alex_emails=open_alex_emails,
                 semantic_scholar_api_key=semantic_scholar_api_key,
                 coiled_software_envs=coiled_software_envs,

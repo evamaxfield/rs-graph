@@ -28,7 +28,7 @@ def _get_small_cpu_api_cluster(
     return {
         "software": software_env_name,
         "keepalive": keepalive,
-        "vm_type": "t4g.small",
+        "vm_type": "t4g.large",
         # One worker per token to avoid rate limiting
         # This isn't deterministic, that is,
         # a single token might be used by multiple workers,
