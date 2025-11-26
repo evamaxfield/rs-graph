@@ -17,7 +17,9 @@ SOFTCITE_PREPPED_DATA_STORAGE_PATH = SOFTCITE_2025_FILES_DIR / "softcite-2025-pr
 SOFTCITE_MENTIONS_NAME = "mentions.pdf.parquet"
 SOFTCITE_PAPERS_NAME = "papers.parquet"
 SOFTCITE_PURPOSE_ASSESSMENTS_NAME = "purpose_assessments.pdf.parquet"
-SOFTCITE_INITIAL_SAMPLE_FOR_AGREEMENT_PATH = SOFTCITE_2025_FILES_DIR / "softcite-2025-initial-sample-for-agreement.csv"
+SOFTCITE_INITIAL_SAMPLE_FOR_AGREEMENT_PATH = (
+    SOFTCITE_2025_FILES_DIR / "softcite-2025-initial-sample-for-agreement.csv"
+)
 SOFTCITE_ANNOTATION_READY_PATH = SOFTCITE_2025_FILES_DIR / "softcite-2025-annotation-ready.csv"
 SOFTCITE_ANNOTATED_PATH = SOFTCITE_2025_FILES_DIR / "softcite-2025-annotated.csv"
 SOFTCITE_MINI_CLS_PATH = SOFTCITE_2025_FILES_DIR / "softcite-2025-mini-classifier.skops"
@@ -85,7 +87,8 @@ def _prep_softcite_2025_data_for_annotation(data_dir: str | Path) -> None:
                 .str.strip_chars_end(")")
                 .alias("url_raw"),
                 "context_full_text",
-            ).filter(
+            )
+            .filter(
                 pl.col("context_full_text").str.contains("github"),
             )
             .join(
@@ -111,7 +114,9 @@ def _prep_softcite_2025_data_for_annotation(data_dir: str | Path) -> None:
             .select(
                 pl.col("paper_id"),
                 pl.col("doi").str.strip_chars().str.to_lowercase().alias("article_doi"),
-                (pl.lit("https://doi.org/") + pl.col("doi").str.strip_chars()).alias("article_url"),
+                (pl.lit("https://doi.org/") + pl.col("doi").str.strip_chars()).alias(
+                    "article_url"
+                ),
                 pl.col("software_mention_id").str.strip_chars().alias("software_mention_id"),
                 pl.col("url_raw").alias("repository_url"),
                 pl.col("purpose").alias("mention_purpose"),
@@ -136,7 +141,9 @@ def _prep_softcite_2025_data_for_annotation(data_dir: str | Path) -> None:
 
     # Combine and store the initial sample for annotation
     initial_sample_annotation_ready: pl.DataFrame = pl.concat(initial_sample_subsets)
-    initial_sample_annotation_ready = initial_sample_annotation_ready.sample(fraction=1.0, shuffle=True)
+    initial_sample_annotation_ready = initial_sample_annotation_ready.sample(
+        fraction=1.0, shuffle=True
+    )
     initial_sample_annotation_ready.write_csv(SOFTCITE_INITIAL_SAMPLE_FOR_AGREEMENT_PATH)
 
     # Combine and store the full annotation ready data
@@ -147,7 +154,11 @@ def _prep_softcite_2025_data_for_annotation(data_dir: str | Path) -> None:
 
 def _train_softcite_mini_classifier_from_annotation_data(data_dir: str | Path) -> None:
     from sklearn.linear_model import LogisticRegressionCV
-    from sklearn.metrics import ConfusionMatrixDisplay, precision_recall_fscore_support, classification_report
+    from sklearn.metrics import (
+        ConfusionMatrixDisplay,
+        classification_report,
+        precision_recall_fscore_support,
+    )
     from sklearn.model_selection import train_test_split
     from skops.io import dump
 
@@ -267,7 +278,6 @@ def _train_softcite_mini_classifier_from_annotation_data(data_dir: str | Path) -
     matrix_plot.figure_.savefig(
         SOFTCITE_2025_FILES_DIR / "softcite-2025-mini-classifier-confusion-matrix.png"
     )
-
 
     # Store to mini classifier path
     dump(logit, SOFTCITE_MINI_CLS_PATH)
