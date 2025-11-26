@@ -17,6 +17,7 @@ SOFTCITE_PREPPED_DATA_STORAGE_PATH = SOFTCITE_2025_FILES_DIR / "softcite-2025-pr
 SOFTCITE_MENTIONS_NAME = "mentions.pdf.parquet"
 SOFTCITE_PAPERS_NAME = "papers.parquet"
 SOFTCITE_PURPOSE_ASSESSMENTS_NAME = "purpose_assessments.pdf.parquet"
+SOFTCITE_INITIAL_SAMPLE_FOR_AGREEMENT_PATH = SOFTCITE_2025_FILES_DIR / "softcite-2025-initial-sample-for-agreement.csv"
 SOFTCITE_ANNOTATION_READY_PATH = SOFTCITE_2025_FILES_DIR / "softcite-2025-annotation-ready.csv"
 SOFTCITE_ANNOTATED_PATH = SOFTCITE_2025_FILES_DIR / "softcite-2025-annotated.csv"
 SOFTCITE_MINI_CLS_PATH = SOFTCITE_2025_FILES_DIR / "softcite-2025-mini-classifier.skops"
@@ -50,69 +51,98 @@ def _prep_softcite_2025_data_for_annotation(data_dir: str | Path) -> None:
     # Read the data
     mentions = pl.scan_parquet(data_dir_path / SOFTCITE_MENTIONS_NAME)
     papers = pl.scan_parquet(data_dir_path / SOFTCITE_PAPERS_NAME)
-    purpose_assessments = pl.read_parquet(data_dir_path / SOFTCITE_PURPOSE_ASSESSMENTS_NAME)
+    purpose_assessments = pl.scan_parquet(data_dir_path / SOFTCITE_PURPOSE_ASSESSMENTS_NAME)
 
-    # Filter for high confidence "created" and "shared" mentions
-    created_and_shared = (
-        purpose_assessments.filter(
-            pl.col("scope") == "document",
-            pl.col("purpose").is_in(["created", "shared"]),
-            pl.col("certainty_score") >= 0.5,
+    # We want to get 400 of each high confidence "created", "shared", and "used"
+    # Additionally create a subset of 10 from each for initial annotation
+    full_subsets = []
+    initial_sample_subsets = []
+    for purpose in ["created", "shared", "used"]:
+        # Filter for high confidence "created" and "shared" mentions
+        purpose_selection = (
+            purpose_assessments.filter(
+                pl.col("scope") == "document",
+                pl.col("purpose") == purpose,
+                pl.col("certainty_score") >= 0.5,
+            )
+            .select(
+                "software_mention_id",
+                "purpose",
+                "certainty_score",
+            )
+            .sort("certainty_score", descending=True)
+            .unique(subset=["software_mention_id"])
         )
-        .select(
-            "software_mention_id",
-            "purpose",
-            "certainty_score",
-        )
-        .sort("certainty_score", descending=True)
-        .unique(subset=["software_mention_id"])
-    )
 
-    # Get the unique GitHub URLs from the mentions
-    created_github_urls = (
-        mentions.select(
-            "software_mention_id",
-            "paper_id",
-            pl.col("url_raw")
-            .str.to_lowercase()
-            .str.replace_all(r"\s+", "")
-            .str.strip_chars_end(")")
-            .alias("url_raw"),
-        )
-        .join(
-            created_and_shared,
-            on="software_mention_id",
-            how="inner",
-        )
-        .unique(
-            subset=["software_mention_id", "url_raw"],
-        )
-        .filter(pl.col("url_raw").str.contains("github"))
-        .join(
-            papers.select(
+        # Get the unique GitHub URLs from the mentions
+        purpose_selection_with_github_urls = (
+            mentions.select(
+                "software_mention_id",
                 "paper_id",
-                "doi",
-            ),
-            on="paper_id",
-            how="left",
+                pl.col("url_raw")
+                .str.to_lowercase()
+                .str.replace_all(r"\s+", "")
+                .str.strip_chars_end(")")
+                .alias("url_raw"),
+                "context_full_text",
+            ).filter(
+                pl.col("context_full_text").str.contains("github"),
+            )
+            .join(
+                purpose_selection,
+                on="software_mention_id",
+                how="inner",
+            )
+            .unique(
+                subset=["software_mention_id", "url_raw"],
+            )
+            .filter(
+                pl.col("context_full_text").str.contains("github"),
+            )
+            .filter(pl.col("url_raw").str.contains("github"))
+            .join(
+                papers.select(
+                    "paper_id",
+                    "doi",
+                ),
+                on="paper_id",
+                how="left",
+            )
+            .select(
+                pl.col("paper_id"),
+                pl.col("doi").str.strip_chars().str.to_lowercase().alias("article_doi"),
+                (pl.lit("https://doi.org/") + pl.col("doi").str.strip_chars()).alias("article_url"),
+                pl.col("software_mention_id").str.strip_chars().alias("software_mention_id"),
+                pl.col("url_raw").alias("repository_url"),
+                pl.col("purpose").alias("mention_purpose"),
+                pl.col("certainty_score").alias("mention_purpose_certainty"),
+                pl.col("context_full_text").alias("mention_context"),
+            )
+            .unique(
+                subset=["article_doi", "repository_url"],
+            )
+            .collect()
         )
-        .select(
-            pl.col("paper_id"),
-            pl.col("doi").str.strip_chars().str.to_lowercase().alias("doi"),
-            (pl.lit("https://doi.org/") + pl.col("doi").str.strip_chars()).alias("doi_url"),
-            pl.col("software_mention_id").str.strip_chars().alias("software_mention_id"),
-            pl.col("url_raw"),
-            pl.col("certainty_score"),
-            pl.col("purpose"),
-        )
-        .unique(
-            subset=["doi", "url_raw"],
-        )
-        .collect()
-    )
 
-    # Take sample of 200 and store to CSV for annotation
-    created_github_urls.sample(n=200).write_csv(SOFTCITE_ANNOTATION_READY_PATH)
+        # Take sample of 410 and store to CSV for annotation
+        sample_selection = purpose_selection_with_github_urls.sample(
+            n=410,
+            seed=12,
+        )
+        initial_sample = sample_selection.head(10)
+        remaining_sample = sample_selection.tail(400)
+        initial_sample_subsets.append(initial_sample)
+        full_subsets.append(remaining_sample)
+
+    # Combine and store the initial sample for annotation
+    initial_sample_annotation_ready: pl.DataFrame = pl.concat(initial_sample_subsets)
+    initial_sample_annotation_ready = initial_sample_annotation_ready.sample(fraction=1.0, shuffle=True)
+    initial_sample_annotation_ready.write_csv(SOFTCITE_INITIAL_SAMPLE_FOR_AGREEMENT_PATH)
+
+    # Combine and store the full annotation ready data
+    full_annotation_ready: pl.DataFrame = pl.concat(full_subsets)
+    full_annotation_ready = full_annotation_ready.sample(fraction=1.0, shuffle=True)
+    full_annotation_ready.write_csv(SOFTCITE_ANNOTATION_READY_PATH)
 
 
 def _train_softcite_mini_classifier_from_annotation_data(data_dir: str | Path) -> None:
