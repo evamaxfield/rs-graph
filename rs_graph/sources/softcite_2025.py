@@ -78,18 +78,27 @@ def _prep_softcite_2025_data_for_annotation(data_dir: str | Path) -> None:
 
         # Get the unique GitHub URLs from the mentions
         purpose_selection_with_github_urls = (
-            mentions.select(
+            mentions.filter(
+                pl.col("url_raw").str.len_chars() > 0,
+                pl.col("context_full_text").str.contains(pl.col("url_raw"), literal=True),
+            )
+            .select(
                 "software_mention_id",
                 "paper_id",
+                "url_raw",
                 pl.col("url_raw")
                 .str.to_lowercase()
                 .str.replace_all(r"\s+", "")
                 .str.strip_chars_end(")")
-                .alias("url_raw"),
+                .alias("url_cleaned"),
                 "context_full_text",
+                pl.col("context_full_text")
+                .str.to_lowercase()
+                .alias("context_full_text_cleaned"),
             )
             .filter(
-                pl.col("context_full_text").str.contains("github"),
+                pl.col("url_cleaned").str.contains("github"),
+                pl.col("url_cleaned") != pl.lit("github"),
             )
             .join(
                 purpose_selection,
@@ -97,12 +106,8 @@ def _prep_softcite_2025_data_for_annotation(data_dir: str | Path) -> None:
                 how="inner",
             )
             .unique(
-                subset=["software_mention_id", "url_raw"],
+                subset=["software_mention_id", "url_cleaned"],
             )
-            .filter(
-                pl.col("context_full_text").str.contains("github"),
-            )
-            .filter(pl.col("url_raw").str.contains("github"))
             .join(
                 papers.select(
                     "paper_id",
@@ -118,7 +123,7 @@ def _prep_softcite_2025_data_for_annotation(data_dir: str | Path) -> None:
                     "article_url"
                 ),
                 pl.col("software_mention_id").str.strip_chars().alias("software_mention_id"),
-                pl.col("url_raw").alias("repository_url"),
+                pl.col("url_cleaned").alias("repository_url"),
                 pl.col("purpose").alias("mention_purpose"),
                 pl.col("certainty_score").alias("mention_purpose_certainty"),
                 pl.col("context_full_text").alias("mention_context"),
@@ -130,12 +135,14 @@ def _prep_softcite_2025_data_for_annotation(data_dir: str | Path) -> None:
         )
 
         # Take sample of 410 and store to CSV for annotation
+        sample_n_or_max = min(410, len(purpose_selection_with_github_urls))
         sample_selection = purpose_selection_with_github_urls.sample(
-            n=410,
+            n=sample_n_or_max,
             seed=12,
         )
         initial_sample = sample_selection.head(10)
-        remaining_sample = sample_selection.tail(400)
+        remaining_sample_n = max(0, sample_n_or_max - 10)
+        remaining_sample = sample_selection.tail(remaining_sample_n)
         initial_sample_subsets.append(initial_sample)
         full_subsets.append(remaining_sample)
 
