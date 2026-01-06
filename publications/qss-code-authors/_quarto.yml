@@ -5,3 +5,4 @@ project:
     - "qss-code-authors.qmd"
     - "!extra-notebooks/"
     - "!extra-data/"
+    - "!arxiv-qss-code-authors.tex"
