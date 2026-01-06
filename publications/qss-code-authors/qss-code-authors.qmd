@@ -1,18 +1,18 @@
 ---
 title: "Code Contribution and Credit in Science"
 authors:
-  - name: "Eva Maxfield Brown"
+  - name: "Eva Maxfield Brown (0000-0003-2564-0373)"
     email: evamxb@uw.edu
     orcid: 0000-0003-2564-0373
     affiliations:
       - ref: 1
     attributes:
         corresponding: true
-  - name: "Isaac Slaughter"
+  - name: "Isaac Slaughter (0000-0002-1911-2374)"
     orcid: 0000-0002-1911-2374
     affiliations:
       - ref: 1
-  - name: "Nicholas Weber"
+  - name: "Nicholas Weber (0000-0002-6008-3763)"
     orcid: 0000-0002-6008-3763
     affiliations:
       - ref: 1
@@ -22,7 +22,14 @@ affiliations:
     name: University of Washington Information School
 
 abstract: |
-    Software development has become essential to scientific research, but its relationship to traditional metrics of scholarly credit remains poorly understood. We develop a dataset of approximately 140,000 paired research articles and code repositories, as well as a predictive model that matches research article authors with software repository developer accounts. We use this data to investigate how software development activities influence credit allocation in collaborative scientific settings. Our findings reveal significant patterns distinguishing software contributions from traditional authorship credit. We find that nearly 30% of articles include non-author code contributors—individuals who participated in software development but received no formal authorship recognition. While code-contributing authors show a modest \~4.2% increase in article citations, this effect becomes non-significant when controlling for domain, article type, and open access status. First authors are significantly more likely to be code contributors than other author positions. Notably, we identify a negative relationship between coding frequency and scholarly impact metrics. Authors who contribute code more frequently exhibit progressively lower h-indices than non-coding colleagues, even when controlling for publication count, author position, domain, and article type. These results suggest a disconnect between software contributions and credit, highlighting important implications for institutional reward structures and science policy.
+    Software development has become essential to scientific research, but its relationship to traditional metrics of scholarly credit remains poorly understood. We develop a dataset of approximately 140,000 paired research articles and code repositories, and a predictive model that matches research article authors with software repository developer accounts. We use this dataset to investigate how software development activities influence credit allocation in collaborative scientific settings. Our findings reveal significant patterns distinguishing software contributions from traditional authorship credit. We find that \~30% of articles include non-author code contributors—individuals who participated in software development but received no authorship recognition. While code-contributing authors provide a \~4.2% increase in article citations, this effect becomes non-significant when controlling for domain, article type, and open access status. First authors are significantly more likely to be code contributors than other author positions. Notably, we identify a negative relationship between coding frequency and scholarly impact metrics. Authors who contribute code more frequently exhibit progressively lower h-indices than non-coding colleagues, even when controlling for publication count, author position, domain, and article type. These results suggest a disconnect between software contributions and credit, highlighting important implications for institutional reward structures and science policy.
+
+keywords:
+    - scientific software
+    - research software
+    - authorship
+    - contributorship
+    - credit
 
 ## Basics
 bibliography: main.bib
@@ -37,18 +44,19 @@ number-sections: true
 
 ## Specific for target format
 format:
-  html:
-   standalone: true
-   embed-resources: true
-   toc: true
-   toc-location: left
-   reference-location: margin
-   citation-location: document
-   execute:
-     echo: false
-     warning: false
+#   html:
+#    standalone: true
+#    embed-resources: true
+#    toc: true
+#    toc-location: left
+#    reference-location: margin
+#    citation-location: document
+#    execute:
+#      echo: false
+#      warning: false
 
   elsevier-pdf:
+    keep-tex: true
     toc: false
     execute:
       echo: false
@@ -62,8 +70,6 @@ format:
           \usepackage[table]{xcolor}  % The 'table' option is crucial for \rowcolors to work
           \usepackage{float}
           \floatplacement{table}{H}
-          \usepackage{lineno}
-          \linenumbers
         
     journal:
       cite-style: authoryear
@@ -71,13 +77,13 @@ format:
       model: "3p"
       layout: "onecolumn"
 
-    # Word count
-    citeproc: false
-    filters:
-      - at: pre-quarto
-        path: _extensions/andrewheiss/wordcount/citeproc.lua
-      - at: pre-quarto
-        path: _extensions/andrewheiss/wordcount/wordcount.lua
+    # # Word count
+    # citeproc: false
+    # filters:
+    #   - at: pre-quarto
+    #     path: _extensions/andrewheiss/wordcount/citeproc.lua
+    #   - at: pre-quarto
+    #     path: _extensions/andrewheiss/wordcount/wordcount.lua
 ---
 
 # Introduction
@@ -91,6 +97,7 @@ from io import StringIO
 import yaml
 import os
 from pathlib import Path
+import shutil
 
 import colormaps as cmaps
 import IPython.display
@@ -535,7 +542,7 @@ print_ready_pwc_doi_resolved = "{:,}".format(per_dataset_doi_resolved_counts["pw
 
 Recent advances in genomic sequencing, climate modeling, particle physics, and neuroimaging have all required the development of novel scientific software [@hocquet2024software]. In many ways, software development has changed how scientific work is organized and performed, but we lack large-scale quantitative evidence characterizing these effects. This lack of evidence has important consequences. Scientific institutions continue to rely heavily on bibliometric indicators to evaluate research productivity [@haustein2014use], but software is rarely mentioned or cited in research publications [@du2021softcite]. As a result, researchers who invest substantial effort in building computational tools may face systematic disadvantages in career advancement. We argue that understanding whether and how software contributions translate into formal scientific credit is important for designing equitable reward structures and evidence-based science policy.
 
-The challenge of measuring software's role in science stems, in part, from the historical separation of code from publication. Scientific articles and their metadata (e.g. author lists, citations, and acknowledgments) can provide a valuable tool for estimating productivity, tracing collaboration, or inferring impact [@fortunato2018science]. However, software contributions often remain invisible in these records, making it difficult to quantify their relationship to traditional markers of scientific productivity [@weber2014paratexts]. As a result, studies of scientific software have relied primarily on self-reports (surveys) [@Carver2022ASO] or participant observation (ethnographies) [@paine2017has], which provide valuable insights but are limited in the scope and generalizability. 
+The challenge of measuring software's role in science stems, in part, from the historical separation of code from publication. Scientific articles and their metadata (e.g. author lists, citations, and acknowledgments) can provide a valuable tool for estimating productivity, tracing collaboration, or inferring impact [@fortunato2018science]. However, software contributions often remain invisible in these records, making it difficult to quantify their relationship to traditional markers of scientific productivity [@weber2014paratexts]. As a result, studies regarding the maintainers and contributors of scientific software have relied primarily on self-reports (surveys) [@Carver2022ASO] or participant observation (ethnographies) [@paine2017has], which provide valuable insights but are limited in the scope and generalizability. 
 
 In the following paper, we overcome this challenge by constructing a dataset (`rs-graph-v1`) of 138,596 research articles and their associated code repositories. Using this data we then develop a machine learning model to match article authors with repository contributor accounts. By connecting papers to repositories, and authors to developers, we are able to observe both the presence and effect of code contributions across different authorship positions and examine how coding activity relates to both article-level citations and career-level productivity metrics (e.g., h-index). This approach enables us to address fundamental questions about the scientific reward system: How do software contributions correspond to authorship positions? Does coding effort translate into citation impact? How do patterns of code contribution relate to long-term career trajectories?
 
@@ -594,7 +601,7 @@ Our dataset integrates article-repository pairs from four sources, each with exp
 
 Articles collected from JOSS and SoftwareX were labeled as "software articles," articles obtained from PLOS were labeled as "research articles," and articles from Papers with Code were labeled as either "preprint" or "research article" based on their document type from OpenAlex. While Papers with Code data is largely tied to ArXiv preprints, because of our DOI resolution process, we were able to identify a subset of these articles that had been published in a journal and were thus labeled as "research articles" by OpenAlex[^3]. Article domain classifications (e.g., Health Sciences, Life Sciences, Physical Sciences, and Social Sciences) were obtained from OpenAlex. While each article can be associated to multiple "topics", we utilize the primary topic and its associated domain for our analyses[^4].
 
-[^3]: Papers with Code (arXiv) preprints likely include some number of software articles but without a clear and consistent mechanism to identify these articles, but we are unable to label them as such. We discuss this limitation further in @sec-discussion.
+[^3]: Papers with Code (arXiv) preprints likely include some number of software articles but without a clear and consistent mechanism to identify these articles, but we are unable to label them as such. We discuss this limitation further in @sec-discussion. Further, while some PLOS, JOSS, and SoftwareX articles may also have a preprinted version, we select and analyze the published version of the article when one is available at the time of data processing. This is made possible via the DOI resolution process using Semantic Scholar.
 
 [^4]: OpenAlex documentation for concepts, topics, fields, and domains is available at <https://help.openalex.org/hc/en-us/articles/24736129405719-Topics/>
 
@@ -1723,7 +1730,7 @@ When examining these patterns over time and across different team sizes (@fig-co
 
 ```{python}
 #| label: fig-contributor-type-by-time-and-size
-#| fig-cap: "Average number of contributors per article, by contribution type, along with A) the year the article was published and B) the total number of authors included in the article. Only includes research teams from article-repository pairs with repositories that have programming language files, a most recent commit no later than 90 days after publication, and excludes research teams in the top 3% of total author sizes for publication years with 50 or more articles. Shaded areas show the 95% confidence interval for the mean."
+#| fig-cap: "Average number of contributors per article, by contribution type: Non-Code-Contributing Authors (NCC-A), Code-Contributing Authors (CC-A), and Code-Contributing Non-Authors (CC-NA). Split into, A) the year the article was published and B) the total number of authors included in the article. Only includes research teams from article-repository pairs with repositories that have programming language files, a most recent commit no later than 90 days after publication, and excludes research teams in the top 3% of total author sizes for publication years with 50 or more articles. Shaded areas show the 95% confidence interval for the mean."
 
 # Make a copy for team size comparison
 team_comp_by_year_and_size = team_comp_no_push_after_pub.copy()
@@ -1733,9 +1740,9 @@ team_comp_by_year_and_size = team_comp_by_year_and_size.rename(
     columns={
         "n_authors": "Total Authors",
         "publication_year": "Publication Year",
-        "n_author_devs": "Code-Contrib. Authors",
-        "n_author_non_devs": "Non-Code-Contrib. Authors",
-        "n_non_author_devs": "Code-Contrib. Non-Authors",
+        "n_author_devs": "CC-A",
+        "n_author_non_devs": "NCC-A",
+        "n_non_author_devs": "CC-NA",
     }
 )
 
@@ -1753,9 +1760,9 @@ team_comp_by_year_and_size = team_comp_by_year_and_size.loc[
 team_comp_by_year_and_size = team_comp_by_year_and_size.melt(
     id_vars=[
         "document_id",
-        "Non-Code-Contrib. Authors",
-        "Code-Contrib. Authors",
-        "Code-Contrib. Non-Authors",
+        "NCC-A",
+        "CC-A",
+        "CC-NA",
     ],
     value_vars=[
         "Publication Year",
@@ -1773,9 +1780,9 @@ team_comp_by_year_and_size = team_comp_by_year_and_size.melt(
         "value",
     ],
     value_vars=[
-        "Non-Code-Contrib. Authors",
-        "Code-Contrib. Authors",
-        "Code-Contrib. Non-Authors",
+        "NCC-A",
+        "CC-A",
+        "CC-NA",
     ],
     var_name="Contributor Type",
     value_name="Count",
@@ -1789,10 +1796,11 @@ g = sns.relplot(
     col="comparison_var",
     hue="Contributor Type",
     hue_order=[
-        "Non-Code-Contrib. Authors",
-        "Code-Contrib. Authors",
-        "Code-Contrib. Non-Authors",
+        "NCC-A",
+        "CC-A",
+        "CC-NA",
     ],
+    palette=cmaps.bold[3:]._colors.tolist(),
     kind="line",
     estimator="mean",
     legend=True,
@@ -2822,7 +2830,7 @@ Further, while our data processing workflow began with ~60,000 possible article-
 
 [^12]: Article-repository pair counts are approximate because there are no snapshots of these databases at a single point in time. The estimates are based on counts from each data source taken in October 2025.
 
-Our labeling of article types (software article, research article, preprint) was based on the data source (PLOS, JOSS, SoftwareX, Papers with Code) and in the case of Papers with Code articles, our DOI resolution process and the document type available from OpenAlex. This approach may misclassify certain articles, especially those from Papers with Code (arXiv). One potential alternative approach would involve classification of the repository itself following the recommendations of @researchsoftwareclassifications in breaking down repositories by their role in research (e.g., "Modeling, Simuluation, and Data Analysis", "Technology Research Software", and "Research Infrastructure Software"). This classification would allow us to investigate not only the differences of "software papers" vs "research articles" and "preprints" (which we believe would both typically be paired with "Modeling, Simulation, and Data Analysis" repositories), but the _purpose_ of the code as it relates to the research. However, there is currently no established automated method for performing this classification at scale.
+Our labeling of article types (software article, research article, preprint) was based on the data source (PLOS, JOSS, SoftwareX, Papers with Code) and in the case of Papers with Code articles, our DOI resolution process and the document type available from OpenAlex. This approach may misclassify certain articles, especially those from Papers with Code (arXiv). One potential alternative approach would involve classification of the repository itself following the recommendations of @researchsoftwareclassifications in breaking down repositories by their role in research (e.g., "Modeling, Simulation, and Data Analysis", "Technology Research Software", and "Research Infrastructure Software"). This classification would allow us to investigate not only the differences of "software papers" vs "research articles" and "preprints" (which we believe would both typically be paired with "Modeling, Simulation, and Data Analysis" repositories), but the _purpose_ of the code as it relates to the research. However, there is currently no established automated method for performing this classification at scale.
 
 Similarly, our simplification of author positions, domains, and article types to each author's "most common" (most frequent, with ties broken by most recent) introduces potential biases [@li2025determination]. This reduction may obscure the diversity of an author's contributions across different contexts, particularly for interdisciplinary researchers or those with varied roles in different projects. Further, these labels are created from metadata for articles only within our dataset. That is, even though a researcher may have dozens of articles, their "most common" author position, domain, and article type was determined with data for article-repository pairs. This inherently biases the dataset towards research teams who, as a collective, frequently create and share software and code as a part of their research process. While this approach was necessary for managing the complexity of our analysis, it may not fully capture the nuances of individual research careers.
 
