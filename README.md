@@ -4,7 +4,7 @@ Research Software Graph (rs-graph) is a software repository which contains the f
 
 1. A Python library for collecting, processing, and standardizing scientific publication and associated research software/code from multiple sources.
 
-2. Select publications, analysis scripts, and presentations which utilize the created dataset(s). Notably, this includes our preprint [Code Contribution and Credit in Science](https://evamaxfield.github.io/rs-graph/qss-code-contribution.html) which investigates how code contributions are recognized and rewarded in scientific publications.
+2. Select publications, analysis scripts, and presentations which utilize the created dataset(s). Notably, this includes our preprint [Code Contribution and Credit in Science](https://evamaxfield.github.io/rs-graph/qss-code-authors.html) which investigates how code contributions are recognized and rewarded in scientific publications.
 
 If you are interested in:
 
