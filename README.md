@@ -1,7 +1,5 @@
 # Research Software Graph
 
-[![DOI](https://zenodo.org/badge/699484922.svg)](https://doi.org/10.5281/zenodo.17401959)
-
 Research Software Graph (rs-graph) is a software repository which contains the following:
 
 1. A Python library for collecting, processing, and standardizing scientific publication and associated research software/code from multiple sources.
@@ -56,7 +54,7 @@ While there is more information available in the dataset, these are the primary 
 
 The initial release of data from our processing pipeline is stored in Harvard Dataverse: [https://doi.org/10.7910/DVN/KPYVI1](https://doi.org/10.7910/DVN/KPYVI1)
 
-This dataset was used to create the preprint manuscript [Code Contribution and Credit in Science](https://evamaxfield.github.io/rs-graph/qss-code-contribution.html).
+This dataset was used to create the preprint manuscript [Code Contribution and Credit in Science](https://doi.org/10.48550/arXiv.2510.16242).
 
 To access the dataset, please create an account on Harvard Dataverse and download the
 `rs-graph-v1-redacted.db` and/or `rs-graph-v1-prod.db` SQLite database file(s).
@@ -161,6 +159,8 @@ with Session(engine) as session:
 ## Publications
 
 ### Code Contribution and Credit in Science
+
+- [Preprint](https://doi.org/10.48550/arXiv.2510.16242)
 
 **Note:** You will need to request access to the `rs-graph-v1-prod.db` SQLite database file from
 Harvard Dataverse [https://doi.org/10.7910/DVN/KPYVI1](https://doi.org/10.7910/DVN/KPYVI1) to regenerate the manuscript.
