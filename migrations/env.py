@@ -29,9 +29,8 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def run_migrations_online():
+def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
@@ -45,9 +44,9 @@ def run_migrations_online():
             render_as_batch=True,
             compare_type=True,
             # Configure batch operations to recreate tables
-            batch_alter_table=dict(
-                recreate="always",
-            ),
+            batch_alter_table={
+                "recreate": "always",
+            },
             # Don't generate explicit FK constraint operations
             # since recreate='always' will handle them
             include_object=lambda obj, name, type_, reflected, compare_to: (
