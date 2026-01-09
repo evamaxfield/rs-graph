@@ -24,7 +24,12 @@ SQLModel.metadata.naming_convention = convention
 class StripMixin:
     def __init__(self, **data: Any):
         for field, value in data.items():
-            if isinstance(value, str):
+            # Handle AttrDict and empty dicts
+            if isinstance(value, dict) and len(value) == 0:
+                data[field] = None
+            elif hasattr(value, "__class__") and value.__class__.__name__ == "AttrDict":
+                data[field] = None
+            elif isinstance(value, str):
                 data[field] = value.strip()
         super().__init__(**data)
 

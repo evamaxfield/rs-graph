@@ -93,6 +93,8 @@ def get_dataset(
         # Increment page
         current_page += 1
 
+        break
+
         # Update progress
         if total_processed % 500 == 0:
             print(f"Processed {total_processed} papers")

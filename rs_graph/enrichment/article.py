@@ -12,7 +12,7 @@ from pathlib import Path
 import backoff
 import msgspec
 import pyalex
-from semanticscholar import SemanticScholar
+import requests
 
 from .. import types
 from ..db import models as db_models
@@ -129,26 +129,38 @@ def get_updated_doi_from_semantic_scholar(
     doi: str,
     semantic_scholar_api_key: str,
 ) -> str:
-    # Try and get updated DOI
     try:
         # Handle searchable ID
         if "arxiv" in doi.lower():
             search_id = doi.lower().split("arxiv.")[-1]
-            search_string = f"arxiv:{search_id}"
+            search_string = f"ARXIV:{search_id}"
         else:
-            search_string = f"doi:{doi}"
-
-        # Setup API
-        api = SemanticScholar(api_key=semantic_scholar_api_key)
-
-        # Get paper details
-        paper_details = api.get_paper(search_string)
-
-        # Return updated DOI
-        return paper_details.externalIds["DOI"]
-
-    # Return original
+            search_string = f"DOI:{doi}"
+        
+        # Build API request
+        url = f"https://api.semanticscholar.org/graph/v1/paper/{search_string}"
+        headers = {
+            "x-api-key": semantic_scholar_api_key,
+        }
+        params = {
+            "fields": "externalIds"
+        }
+        
+        # Make request
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response.raise_for_status()
+        
+        # Parse response
+        paper_details = response.json()
+        
+        # Return updated DOI if available
+        if "externalIds" in paper_details and "DOI" in paper_details["externalIds"]:
+            return paper_details["externalIds"]["DOI"]
+        else:
+            return doi
+            
     except Exception:
+        # Return original DOI on any error
         return doi
 
 
@@ -487,10 +499,10 @@ def process_article(  # noqa: C901
         # Funder, FundingInstance, and DocumentFundingInstance
         if fetch_grant_details:
             all_funding_instance_details = []
-            for grant_details in open_alex_work["grants"]:
+            for grant_details in open_alex_work["awards"]:
                 # Create the Funder
                 funder = db_models.Funder(
-                    open_alex_id=grant_details["funder"],
+                    open_alex_id=grant_details["funder_id"],
                     name=grant_details["funder_display_name"],
                 )
 
@@ -502,7 +514,7 @@ def process_article(  # noqa: C901
 
                 funding_instance = db_models.FundingInstance(
                     funder_id=funder.id,
-                    award_id=grant_details["award_id"],
+                    award_id=grant_details["funder_award_id"],
                 )
 
                 # Add to list
