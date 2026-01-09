@@ -27,7 +27,7 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-  "sqlmodel>=0.0.16,<0.0.28",
+  "sqlmodel>=0.0.31,<0.1",
 ]
 
 [project.urls]
