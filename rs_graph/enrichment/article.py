@@ -136,29 +136,27 @@ def get_updated_doi_from_semantic_scholar(
             search_string = f"ARXIV:{search_id}"
         else:
             search_string = f"DOI:{doi}"
-        
+
         # Build API request
         url = f"https://api.semanticscholar.org/graph/v1/paper/{search_string}"
         headers = {
             "x-api-key": semantic_scholar_api_key,
         }
-        params = {
-            "fields": "externalIds"
-        }
-        
+        params = {"fields": "externalIds"}
+
         # Make request
         response = requests.get(url, headers=headers, params=params, timeout=10)
         response.raise_for_status()
-        
+
         # Parse response
         paper_details = response.json()
-        
+
         # Return updated DOI if available
         if "externalIds" in paper_details and "DOI" in paper_details["externalIds"]:
             return paper_details["externalIds"]["DOI"]
         else:
             return doi
-            
+
     except Exception:
         # Return original DOI on any error
         return doi
