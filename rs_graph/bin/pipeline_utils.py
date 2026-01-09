@@ -36,7 +36,7 @@ def _get_small_cpu_api_cluster(
         # and should help avoid rate limiting
         "n_workers": n_workers,
         "threads_per_worker": 1,
-        "spot_policy": "on-demand",
+        "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
         "region": coiled_region,
     }
@@ -52,8 +52,8 @@ def _get_basic_gpu_cluster_config(
         "software": software_env_name,
         "keepalive": keepalive,
         "vm_type": "g4dn.xlarge",
-        "n_workers": [4, 6],
-        "spot_policy": "on-demand",
+        "n_workers": [6, 10],
+        "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
         "region": coiled_region,
     }
