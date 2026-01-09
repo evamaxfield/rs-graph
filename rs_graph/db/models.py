@@ -9,6 +9,18 @@ from sqlalchemy import Column, DateTime, func
 from sqlmodel import Field, SQLModel, UniqueConstraint
 
 
+# Define naming convention for all constraints
+convention = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s"
+}
+
+# Apply the naming convention to SQLModel's metadata
+SQLModel.metadata.naming_convention = convention
+
 class StripMixin:
     def __init__(self, **data: Any):
         for field, value in data.items():
