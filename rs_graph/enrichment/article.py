@@ -505,9 +505,9 @@ def process_article(  # noqa: C901
                 )
 
                 # Create the FundingInstance
-                # TODO: Handle None award_id
+                # TODO: Handle None funder_award_id
                 # planned: add a DocumentFunder model that stores these types of connections
-                if grant_details["award_id"] is None:
+                if grant_details["funder_award_id"] is None:
                     continue
 
                 funding_instance = db_models.FundingInstance(
