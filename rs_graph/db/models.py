@@ -8,23 +8,28 @@ from typing import Any
 from sqlalchemy import Column, DateTime, func
 from sqlmodel import Field, SQLModel, UniqueConstraint
 
-
 # Define naming convention for all constraints
 convention = {
     "ix": "ix_%(column_0_label)s",
     "uq": "uq_%(table_name)s_%(column_0_name)s",
     "ck": "ck_%(table_name)s_%(constraint_name)s",
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
-    "pk": "pk_%(table_name)s"
+    "pk": "pk_%(table_name)s",
 }
 
 # Apply the naming convention to SQLModel's metadata
 SQLModel.metadata.naming_convention = convention
 
+
 class StripMixin:
     def __init__(self, **data: Any):
         for field, value in data.items():
-            if isinstance(value, str):
+            # Handle AttrDict and empty dicts
+            if isinstance(value, dict) and len(value) == 0:
+                data[field] = None
+            elif hasattr(value, "__class__") and value.__class__.__name__ == "AttrDict":
+                data[field] = None
+            elif isinstance(value, str):
                 data[field] = value.strip()
         super().__init__(**data)
 
@@ -75,7 +80,12 @@ class Location(StrippedSQLModel, table=True):  # type: ignore
     id: int | None = Field(default=None, primary_key=True)
     landing_page_url: str | None = Field(index=True)
     pdf_url: str | None = Field(index=True)
-    source_id: int | None = Field(foreign_key="source.id", index=True, nullable=True, ondelete="CASCADE",)
+    source_id: int | None = Field(
+        foreign_key="source.id",
+        index=True,
+        nullable=True,
+        ondelete="CASCADE",
+    )
 
     __table_args__ = (UniqueConstraint("landing_page_url", "pdf_url", "source_id"),)
 
@@ -109,10 +119,16 @@ class Document(StrippedSQLModel, table=True):  # type: ignore
 
     # Foreign Keys
     primary_location_id: int | None = Field(
-        foreign_key="location.id", index=True, nullable=True, ondelete="CASCADE",
+        foreign_key="location.id",
+        index=True,
+        nullable=True,
+        ondelete="CASCADE",
     )
     best_open_access_location_id: int | None = Field(
-        foreign_key="location.id", index=True, nullable=True, ondelete="CASCADE",
+        foreign_key="location.id",
+        index=True,
+        nullable=True,
+        ondelete="CASCADE",
     )
 
     # Updates
@@ -132,7 +148,11 @@ class DocumentAlternateDOI(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    document_id: int = Field(foreign_key="document.id", index=True, ondelete="CASCADE",)
+    document_id: int = Field(
+        foreign_key="document.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     doi: str = Field(unique=True)
 
     # Updates
@@ -147,7 +167,11 @@ class DocumentAbstract(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    document_id: int = Field(foreign_key="document.id", index=True, ondelete="CASCADE",)
+    document_id: int = Field(
+        foreign_key="document.id",
+        index=True,
+        ondelete="CASCADE",
+    )
 
     __table_args__ = (UniqueConstraint("document_id"),)
 
@@ -187,8 +211,16 @@ class DocumentTopic(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    document_id: int = Field(foreign_key="document.id", index=True, ondelete="CASCADE",)
-    topic_id: int = Field(foreign_key="topic.id", index=True, ondelete="CASCADE",)
+    document_id: int = Field(
+        foreign_key="document.id",
+        index=True,
+        ondelete="CASCADE",
+    )
+    topic_id: int = Field(
+        foreign_key="topic.id",
+        index=True,
+        ondelete="CASCADE",
+    )
 
     __table_args__ = (UniqueConstraint("document_id", "topic_id"),)
 
@@ -228,8 +260,16 @@ class DocumentContributor(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    researcher_id: int = Field(foreign_key="researcher.id", index=True, ondelete="CASCADE",)
-    document_id: int = Field(foreign_key="document.id", index=True, ondelete="CASCADE",)
+    researcher_id: int = Field(
+        foreign_key="researcher.id",
+        index=True,
+        ondelete="CASCADE",
+    )
+    document_id: int = Field(
+        foreign_key="document.id",
+        index=True,
+        ondelete="CASCADE",
+    )
 
     __table_args__ = (UniqueConstraint("researcher_id", "document_id"),)
 
@@ -267,8 +307,16 @@ class DocumentContributorInstitution(StrippedSQLModel, table=True):  # type: ign
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    document_contributor_id: int = Field(foreign_key="document_contributor.id", index=True, ondelete="CASCADE",)
-    institution_id: int = Field(foreign_key="institution.id", index=True, ondelete="CASCADE",)
+    document_contributor_id: int = Field(
+        foreign_key="document_contributor.id",
+        index=True,
+        ondelete="CASCADE",
+    )
+    institution_id: int = Field(
+        foreign_key="institution.id",
+        index=True,
+        ondelete="CASCADE",
+    )
 
     __table_args__ = (UniqueConstraint("document_contributor_id", "institution_id"),)
 
@@ -299,7 +347,11 @@ class FundingInstance(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    funder_id: int = Field(foreign_key="funder.id", index=True, ondelete="CASCADE",)
+    funder_id: int = Field(
+        foreign_key="funder.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     award_id: str = Field(index=True)
 
     __table_args__ = (UniqueConstraint("funder_id", "award_id"),)
@@ -316,8 +368,16 @@ class DocumentFundingInstance(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    document_id: int = Field(foreign_key="document.id", index=True, ondelete="CASCADE",)
-    funding_instance_id: int = Field(foreign_key="funding_instance.id", index=True, ondelete="CASCADE",)
+    document_id: int = Field(
+        foreign_key="document.id",
+        index=True,
+        ondelete="CASCADE",
+    )
+    funding_instance_id: int = Field(
+        foreign_key="funding_instance.id",
+        index=True,
+        ondelete="CASCADE",
+    )
 
     __table_args__ = (UniqueConstraint("document_id", "funding_instance_id"),)
 
@@ -347,7 +407,11 @@ class Repository(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    code_host_id: int = Field(foreign_key="code_host.id", index=True, ondelete="CASCADE",)
+    code_host_id: int = Field(
+        foreign_key="code_host.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     owner: str
     name: str
 
@@ -382,7 +446,11 @@ class RepositoryReadme(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    repository_id: int = Field(foreign_key="repository.id", index=True, ondelete="CASCADE",)
+    repository_id: int = Field(
+        foreign_key="repository.id",
+        index=True,
+        ondelete="CASCADE",
+    )
 
     __table_args__ = (UniqueConstraint("repository_id"),)
 
@@ -401,7 +469,11 @@ class RepositoryLanguage(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    repository_id: int = Field(foreign_key="repository.id", index=True, ondelete="CASCADE",)
+    repository_id: int = Field(
+        foreign_key="repository.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     language: str = Field(index=True)
 
     __table_args__ = (UniqueConstraint("repository_id", "language"),)
@@ -421,7 +493,11 @@ class RepositoryFile(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    repository_id: int = Field(foreign_key="repository.id", index=True, ondelete="CASCADE",)
+    repository_id: int = Field(
+        foreign_key="repository.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     path: str = Field(index=True)
 
     __table_args__ = (UniqueConstraint("repository_id", "path"),)
@@ -442,7 +518,11 @@ class DeveloperAccount(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    code_host_id: int = Field(foreign_key="code_host.id", index=True, ondelete="CASCADE",)
+    code_host_id: int = Field(
+        foreign_key="code_host.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     username: str
 
     __table_args__ = (UniqueConstraint("code_host_id", "username"),)
@@ -463,8 +543,16 @@ class RepositoryContributor(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    repository_id: int = Field(foreign_key="repository.id", index=True, ondelete="CASCADE",)
-    developer_account_id: int = Field(foreign_key="developer_account.id", index=True, ondelete="CASCADE",)
+    repository_id: int = Field(
+        foreign_key="repository.id",
+        index=True,
+        ondelete="CASCADE",
+    )
+    developer_account_id: int = Field(
+        foreign_key="developer_account.id",
+        index=True,
+        ondelete="CASCADE",
+    )
 
     __table_args__ = (UniqueConstraint("repository_id", "developer_account_id"),)
 
@@ -489,13 +577,25 @@ class DocumentRepositoryLink(StrippedSQLModel, table=True):  # type: ignore
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    document_id: int = Field(foreign_key="document.id", index=True, ondelete="CASCADE",)
-    repository_id: int = Field(foreign_key="repository.id", index=True, ondelete="CASCADE",)
+    document_id: int = Field(
+        foreign_key="document.id",
+        index=True,
+        ondelete="CASCADE",
+    )
+    repository_id: int = Field(
+        foreign_key="repository.id",
+        index=True,
+        ondelete="CASCADE",
+    )
 
     __table_args__ = (UniqueConstraint("document_id", "repository_id"),)
 
     # Data
-    dataset_source_id: int = Field(foreign_key="dataset_source.id", index=True, ondelete="CASCADE",)
+    dataset_source_id: int = Field(
+        foreign_key="dataset_source.id",
+        index=True,
+        ondelete="CASCADE",
+    )
     predictive_model_name: str | None = None
     predictive_model_version: str | None = None
     predictive_model_confidence: float | None = None
@@ -512,8 +612,16 @@ class ResearcherDeveloperAccountLink(StrippedSQLModel, table=True):  # type: ign
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    researcher_id: int = Field(foreign_key="researcher.id", index=True, ondelete="CASCADE",)
-    developer_account_id: int = Field(foreign_key="developer_account.id", index=True, ondelete="CASCADE",)
+    researcher_id: int = Field(
+        foreign_key="researcher.id",
+        index=True,
+        ondelete="CASCADE",
+    )
+    developer_account_id: int = Field(
+        foreign_key="developer_account.id",
+        index=True,
+        ondelete="CASCADE",
+    )
 
     __table_args__ = (UniqueConstraint("researcher_id", "developer_account_id"),)
 

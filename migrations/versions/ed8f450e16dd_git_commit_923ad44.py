@@ -1,9 +1,9 @@
-"""Git Commit: dc1f275.
+"""
+Git Commit: 923ad44
 
-Revision ID: 92de9f98a387
+Revision ID: ed8f450e16dd
 Revises:
-Create Date: 2025-07-02 08:08:44.405584
-
+Create Date: 2026-01-09 12:34:11.971433
 """
 
 from collections.abc import Sequence
@@ -13,7 +13,7 @@ import sqlmodel
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "92de9f98a387"
+revision: str = "ed8f450e16dd"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -32,7 +32,7 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("updated_datetime", sa.DateTime(), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_code_host")),
     )
     with op.batch_alter_table("code_host", schema=None) as batch_op:
         batch_op.create_index(batch_op.f("ix_code_host_name"), ["name"], unique=True)
@@ -48,8 +48,8 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("updated_datetime", sa.DateTime(), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("name"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_dataset_source")),
+        sa.UniqueConstraint("name", name=op.f("uq_dataset_source_name")),
     )
     op.create_table(
         "funder",
@@ -63,8 +63,8 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("updated_datetime", sa.DateTime(), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("open_alex_id"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_funder")),
+        sa.UniqueConstraint("open_alex_id", name=op.f("uq_funder_open_alex_id")),
     )
     with op.batch_alter_table("funder", schema=None) as batch_op:
         batch_op.create_index(batch_op.f("ix_funder_name"), ["name"], unique=False)
@@ -84,8 +84,8 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("updated_datetime", sa.DateTime(), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("open_alex_id"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_institution")),
+        sa.UniqueConstraint("open_alex_id", name=op.f("uq_institution_open_alex_id")),
     )
     with op.batch_alter_table("institution", schema=None) as batch_op:
         batch_op.create_index(
@@ -115,8 +115,8 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("updated_datetime", sa.DateTime(), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("open_alex_id"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_researcher")),
+        sa.UniqueConstraint("open_alex_id", name=op.f("uq_researcher_open_alex_id")),
     )
     with op.batch_alter_table("researcher", schema=None) as batch_op:
         batch_op.create_index(
@@ -153,8 +153,8 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("updated_datetime", sa.DateTime(), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("open_alex_id"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_source")),
+        sa.UniqueConstraint("open_alex_id", name=op.f("uq_source_open_alex_id")),
     )
     with op.batch_alter_table("source", schema=None) as batch_op:
         batch_op.create_index(
@@ -185,8 +185,8 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("updated_datetime", sa.DateTime(), nullable=True),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("open_alex_id"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_topic")),
+        sa.UniqueConstraint("open_alex_id", name=op.f("uq_topic_open_alex_id")),
     )
     with op.batch_alter_table("topic", schema=None) as batch_op:
         batch_op.create_index(batch_op.f("ix_topic_domain_name"), ["domain_name"], unique=False)
@@ -213,9 +213,13 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["code_host_id"],
             ["code_host.id"],
+            name=op.f("fk_developer_account_code_host_id_code_host"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("code_host_id", "username"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_developer_account")),
+        sa.UniqueConstraint(
+            "code_host_id", "username", name=op.f("uq_developer_account_code_host_id")
+        ),
     )
     with op.batch_alter_table("developer_account", schema=None) as batch_op:
         batch_op.create_index(
@@ -237,9 +241,13 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["funder_id"],
             ["funder.id"],
+            name=op.f("fk_funding_instance_funder_id_funder"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("funder_id", "award_id"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_funding_instance")),
+        sa.UniqueConstraint(
+            "funder_id", "award_id", name=op.f("uq_funding_instance_funder_id")
+        ),
     )
     with op.batch_alter_table("funding_instance", schema=None) as batch_op:
         batch_op.create_index(
@@ -268,9 +276,16 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["source_id"],
             ["source.id"],
+            name=op.f("fk_location_source_id_source"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("landing_page_url", "pdf_url", "source_id"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_location")),
+        sa.UniqueConstraint(
+            "landing_page_url",
+            "pdf_url",
+            "source_id",
+            name=op.f("uq_location_landing_page_url"),
+        ),
     )
     with op.batch_alter_table("location", schema=None) as batch_op:
         batch_op.create_index(
@@ -315,9 +330,13 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["code_host_id"],
             ["code_host.id"],
+            name=op.f("fk_repository_code_host_id_code_host"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("code_host_id", "owner", "name"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_repository")),
+        sa.UniqueConstraint(
+            "code_host_id", "owner", "name", name=op.f("uq_repository_code_host_id")
+        ),
     )
     with op.batch_alter_table("repository", schema=None) as batch_op:
         batch_op.create_index(
@@ -383,13 +402,17 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["best_open_access_location_id"],
             ["location.id"],
+            name=op.f("fk_document_best_open_access_location_id_location"),
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["primary_location_id"],
             ["location.id"],
+            name=op.f("fk_document_primary_location_id_location"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("doi"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_document")),
+        sa.UniqueConstraint("doi", name=op.f("uq_document_doi")),
     )
     with op.batch_alter_table("document", schema=None) as batch_op:
         batch_op.create_index(
@@ -437,13 +460,21 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["developer_account_id"],
             ["developer_account.id"],
+            name=op.f("fk_repository_contributor_developer_account_id_developer_account"),
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["repository_id"],
             ["repository.id"],
+            name=op.f("fk_repository_contributor_repository_id_repository"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("repository_id", "developer_account_id"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_repository_contributor")),
+        sa.UniqueConstraint(
+            "repository_id",
+            "developer_account_id",
+            name=op.f("uq_repository_contributor_repository_id"),
+        ),
     )
     with op.batch_alter_table("repository_contributor", schema=None) as batch_op:
         batch_op.create_index(
@@ -474,9 +505,13 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["repository_id"],
             ["repository.id"],
+            name=op.f("fk_repository_file_repository_id_repository"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("repository_id", "path"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_repository_file")),
+        sa.UniqueConstraint(
+            "repository_id", "path", name=op.f("uq_repository_file_repository_id")
+        ),
     )
     with op.batch_alter_table("repository_file", schema=None) as batch_op:
         batch_op.create_index(batch_op.f("ix_repository_file_path"), ["path"], unique=False)
@@ -500,9 +535,13 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["repository_id"],
             ["repository.id"],
+            name=op.f("fk_repository_language_repository_id_repository"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("repository_id", "language"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_repository_language")),
+        sa.UniqueConstraint(
+            "repository_id", "language", name=op.f("uq_repository_language_repository_id")
+        ),
     )
     with op.batch_alter_table("repository_language", schema=None) as batch_op:
         batch_op.create_index(
@@ -527,9 +566,11 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["repository_id"],
             ["repository.id"],
+            name=op.f("fk_repository_readme_repository_id_repository"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("repository_id"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_repository_readme")),
+        sa.UniqueConstraint("repository_id", name=op.f("uq_repository_readme_repository_id")),
     )
     with op.batch_alter_table("repository_readme", schema=None) as batch_op:
         batch_op.create_index(
@@ -546,6 +587,7 @@ def upgrade() -> None:
             "predictive_model_version", sqlmodel.sql.sqltypes.AutoString(), nullable=True
         ),
         sa.Column("predictive_model_confidence", sa.Float(), nullable=True),
+        sa.Column("last_snowball_processed_datetime", sa.DateTime(), nullable=True),
         sa.Column(
             "created_datetime",
             sa.DateTime(),
@@ -556,18 +598,33 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["developer_account_id"],
             ["developer_account.id"],
+            name=op.f(
+                "fk_researcher_developer_account_link_developer_account_id_developer_account"
+            ),
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["researcher_id"],
             ["researcher.id"],
+            name=op.f("fk_researcher_developer_account_link_researcher_id_researcher"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("researcher_id", "developer_account_id"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_researcher_developer_account_link")),
+        sa.UniqueConstraint(
+            "researcher_id",
+            "developer_account_id",
+            name=op.f("uq_researcher_developer_account_link_researcher_id"),
+        ),
     )
     with op.batch_alter_table("researcher_developer_account_link", schema=None) as batch_op:
         batch_op.create_index(
             batch_op.f("ix_researcher_developer_account_link_developer_account_id"),
             ["developer_account_id"],
+            unique=False,
+        )
+        batch_op.create_index(
+            batch_op.f("ix_researcher_developer_account_link_last_snowball_processed_datetime"),
+            ["last_snowball_processed_datetime"],
             unique=False,
         )
         batch_op.create_index(
@@ -591,9 +648,11 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["document_id"],
             ["document.id"],
+            name=op.f("fk_document_abstract_document_id_document"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("document_id"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_document_abstract")),
+        sa.UniqueConstraint("document_id", name=op.f("uq_document_abstract_document_id")),
     )
     with op.batch_alter_table("document_abstract", schema=None) as batch_op:
         batch_op.create_index(
@@ -615,9 +674,11 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["document_id"],
             ["document.id"],
+            name=op.f("fk_document_alternate_doi_document_id_document"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("doi"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_document_alternate_doi")),
+        sa.UniqueConstraint("doi", name=op.f("uq_document_alternate_doi_doi")),
     )
     with op.batch_alter_table("document_alternate_doi", schema=None) as batch_op:
         batch_op.create_index(
@@ -641,13 +702,19 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["document_id"],
             ["document.id"],
+            name=op.f("fk_document_contributor_document_id_document"),
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["researcher_id"],
             ["researcher.id"],
+            name=op.f("fk_document_contributor_researcher_id_researcher"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("researcher_id", "document_id"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_document_contributor")),
+        sa.UniqueConstraint(
+            "researcher_id", "document_id", name=op.f("uq_document_contributor_researcher_id")
+        ),
     )
     with op.batch_alter_table("document_contributor", schema=None) as batch_op:
         batch_op.create_index(
@@ -680,13 +747,21 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["document_id"],
             ["document.id"],
+            name=op.f("fk_document_funding_instance_document_id_document"),
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["funding_instance_id"],
             ["funding_instance.id"],
+            name=op.f("fk_document_funding_instance_funding_instance_id_funding_instance"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("document_id", "funding_instance_id"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_document_funding_instance")),
+        sa.UniqueConstraint(
+            "document_id",
+            "funding_instance_id",
+            name=op.f("uq_document_funding_instance_document_id"),
+        ),
     )
     with op.batch_alter_table("document_funding_instance", schema=None) as batch_op:
         batch_op.create_index(
@@ -721,17 +796,25 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["dataset_source_id"],
             ["dataset_source.id"],
+            name=op.f("fk_document_repository_link_dataset_source_id_dataset_source"),
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["document_id"],
             ["document.id"],
+            name=op.f("fk_document_repository_link_document_id_document"),
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["repository_id"],
             ["repository.id"],
+            name=op.f("fk_document_repository_link_repository_id_repository"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("document_id", "repository_id"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_document_repository_link")),
+        sa.UniqueConstraint(
+            "document_id", "repository_id", name=op.f("uq_document_repository_link_document_id")
+        ),
     )
     with op.batch_alter_table("document_repository_link", schema=None) as batch_op:
         batch_op.create_index(
@@ -764,13 +847,19 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["document_id"],
             ["document.id"],
+            name=op.f("fk_document_topic_document_id_document"),
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["topic_id"],
             ["topic.id"],
+            name=op.f("fk_document_topic_topic_id_topic"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("document_id", "topic_id"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_document_topic")),
+        sa.UniqueConstraint(
+            "document_id", "topic_id", name=op.f("uq_document_topic_document_id")
+        ),
     )
     with op.batch_alter_table("document_topic", schema=None) as batch_op:
         batch_op.create_index(
@@ -796,13 +885,23 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["document_contributor_id"],
             ["document_contributor.id"],
+            name=op.f(
+                "fk_document_contributor_institution_document_contributor_id_document_contributor"
+            ),
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["institution_id"],
             ["institution.id"],
+            name=op.f("fk_document_contributor_institution_institution_id_institution"),
+            ondelete="CASCADE",
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("document_contributor_id", "institution_id"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_document_contributor_institution")),
+        sa.UniqueConstraint(
+            "document_contributor_id",
+            "institution_id",
+            name=op.f("uq_document_contributor_institution_document_contributor_id"),
+        ),
     )
     with op.batch_alter_table("document_contributor_institution", schema=None) as batch_op:
         batch_op.create_index(
@@ -862,6 +961,9 @@ def downgrade() -> None:
     op.drop_table("document_abstract")
     with op.batch_alter_table("researcher_developer_account_link", schema=None) as batch_op:
         batch_op.drop_index(batch_op.f("ix_researcher_developer_account_link_researcher_id"))
+        batch_op.drop_index(
+            batch_op.f("ix_researcher_developer_account_link_last_snowball_processed_datetime")
+        )
         batch_op.drop_index(
             batch_op.f("ix_researcher_developer_account_link_developer_account_id")
         )

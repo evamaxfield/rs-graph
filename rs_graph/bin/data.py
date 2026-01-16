@@ -8,7 +8,6 @@ from datetime import date
 import typer
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
-from easyDataverse import Dataverse
 
 from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.data import DATA_FILES_DIR, GCS_PROJECT_ID, REMOTE_STORAGE_BUCKET
@@ -124,6 +123,8 @@ def _gcs_download(force: bool = False) -> None:
 
 
 def _dataverse_download(dataverse_token: str | None = None) -> None:
+    from easyDataverse import Dataverse
+
     # Handle token
     if dataverse_token is None:
         # Load env
