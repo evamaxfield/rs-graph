@@ -117,18 +117,59 @@ def _clean_repo_name(repo: str) -> str:
     return name
 
 
-def parse_code_host_url(url: str) -> types.CodeHostResult:
+# Maximum URL length to prevent processing extremely long strings
+MAX_URL_LENGTH = 2048
+
+
+def _validate_and_normalize_url(url: str) -> str:
+    """Validate and normalize a URL for code host parsing.
+
+    Returns the normalized URL ready for parsing.
+    Raises ValueError if the URL is invalid.
+    """
+    if not url or not isinstance(url, str):
+        raise ValueError("URL must be a non-empty string")
+
+    if len(url) > MAX_URL_LENGTH:
+        raise ValueError(f"URL exceeds maximum length of {MAX_URL_LENGTH} characters")
+
     # Standardize the URL
     url = url.strip().lower()
+    if not url:
+        raise ValueError("URL must be a non-empty string after stripping whitespace")
 
-    # Get rid of HTTPS, then HTTP, the www.
-    url = url.replace("https://", "")
-    url = url.replace("http://", "")
-    url = url.replace("www.", "")
+    # Remove protocol prefixes
+    url = url.replace("https://", "").replace("http://", "").replace("www.", "")
+    if not url:
+        raise ValueError("URL contains only protocol prefix (http/https)")
 
-    # If no trailing slash always add one
-    if url[-1] != "/":
+    # Ensure trailing slash for parser matching
+    if not url.endswith("/"):
         url += "/"
+
+    return url
+
+
+def parse_code_host_url(url: str) -> types.CodeHostResult:
+    """Parse a code host URL and extract host, owner, and repository name.
+
+    Parameters
+    ----------
+    url : str
+        The URL to parse. Must be a valid HTTP/HTTPS URL pointing to a
+        supported code host (GitHub, GitLab, Bitbucket, SourceForge).
+
+    Returns
+    -------
+    CodeHostResult
+        Parsed result with host, owner, and name fields.
+
+    Raises
+    ------
+    ValueError
+        If the URL is empty, too long, or cannot be parsed as a supported code host.
+    """
+    url = _validate_and_normalize_url(url)
 
     # Run the parsers
     result = None
@@ -204,7 +245,7 @@ def _wrapped_parse_code_host_url(
 def filter_repo_paper_pairs(
     pairs: list[types.BasicRepositoryDocumentPair],
     **kwargs: dict,
-) -> types.SuccessAndErroredResultsLists:
+) -> types.SuccessAndErroredResultsLists[types.ExpandedRepositoryDocumentPair]:
     # Filter each repo pair
     # Accepting only GitHub full repository results
     results = [

@@ -105,7 +105,7 @@ def _process_xml(
 
 def get_dataset(
     **kwargs: dict[str, str],
-) -> types.SuccessAndErroredResultsLists:
+) -> types.SuccessAndErroredResultsLists[types.BasicRepositoryDocumentPair]:
     """Download the PLOS dataset."""
     # Get all PLOS XMLs
     plos_xmls = _get_plos_xmls()

@@ -8,6 +8,7 @@ import traceback
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import backoff
 import msgspec
@@ -20,6 +21,41 @@ from ..db import models as db_models
 #######################################################################################
 
 log = logging.getLogger(__name__)
+
+
+#######################################################################################
+# Safe dictionary access helpers
+
+
+def _safe_get(data: dict | None, *keys: str, default: Any = None) -> Any:
+    """Safely access nested dictionary keys, returning default if any key is missing."""
+    if data is None:
+        return default
+    current = data
+    for key in keys:
+        if not isinstance(current, dict):
+            return default
+        current = current.get(key)
+        if current is None:
+            return default
+    return current
+
+
+class MissingRequiredFieldError(ValueError):
+    """Raised when a required field is missing from API response."""
+
+    pass
+
+
+def _require_field(data: dict, field: str, context: str) -> Any:
+    """Get a required field from a dictionary, raising a descriptive error if missing."""
+    value = data.get(field)
+    if value is None:
+        raise MissingRequiredFieldError(
+            f"Required field '{field}' is missing or None in {context}"
+        )
+    return value
+
 
 #######################################################################################
 
@@ -360,25 +396,37 @@ def process_article(  # noqa: C901
             dataset_source = db_models.DatasetSource(name=source)
 
             # Check for citation_normalized_percentile
-            if open_alex_work["citation_normalized_percentile"] is not None:
-                citation_normalized_percentile = open_alex_work[
-                    "citation_normalized_percentile"
-                ]["value"]
-            else:
-                citation_normalized_percentile = None
+            citation_normalized_percentile = _safe_get(
+                open_alex_work, "citation_normalized_percentile", "value"
+            )
+
+            # Validate required fields for Document
+            open_alex_id = _require_field(open_alex_work, "id", "OpenAlex work response")
+            title = _require_field(open_alex_work, "title", "OpenAlex work response")
+            publication_date_str = _require_field(
+                open_alex_work, "publication_date", "OpenAlex work response"
+            )
+            try:
+                publication_date_parsed = date.fromisoformat(publication_date_str)
+            except ValueError as e:
+                raise MissingRequiredFieldError(
+                    f"Invalid publication_date format '{publication_date_str}': {e}"
+                ) from e
 
             # Create the Document
             document = db_models.Document(
                 doi=updated_doi,
-                open_alex_id=open_alex_work["id"],
-                title=open_alex_work["title"],
-                publication_date=date.fromisoformat(open_alex_work["publication_date"]),
-                cited_by_count=open_alex_work["cited_by_count"],
-                fwci=open_alex_work["fwci"],
+                open_alex_id=open_alex_id,
+                title=title,
+                publication_date=publication_date_parsed,
+                cited_by_count=open_alex_work.get("cited_by_count", 0),
+                fwci=open_alex_work.get("fwci"),
                 citation_normalized_percentile=citation_normalized_percentile,
-                document_type=open_alex_work["type"],
-                is_open_access=open_alex_work["open_access"]["is_oa"],
-                open_access_status=open_alex_work["open_access"]["oa_status"],
+                document_type=open_alex_work.get("type", "unknown"),
+                is_open_access=_safe_get(open_alex_work, "open_access", "is_oa", default=False),
+                open_access_status=_safe_get(
+                    open_alex_work, "open_access", "oa_status", default="unknown"
+                ),
                 primary_location_id=primary_location.id if primary_location else None,
                 best_oa_location_id=best_oa_location.id if best_oa_location else None,
             )

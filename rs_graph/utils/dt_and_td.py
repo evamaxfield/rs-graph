@@ -68,8 +68,10 @@ def parse_timedelta(  # noqa: C901
         return s
     if isinstance(s, Number):
         s_str = str(s)
-    if isinstance(s, str):
+    elif isinstance(s, str):
         s_str = s
+    else:
+        raise TypeError(f"Expected str, Number, or timedelta, got {type(s).__name__}")
 
     # Should be a string now, parse
     s_str = s_str.replace(" ", "")

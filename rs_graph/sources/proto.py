@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from ..types import SuccessAndErroredResultsLists
+from ..types import BasicRepositoryDocumentPair, SuccessAndErroredResultsLists
 
 ###############################################################################
 
 
-DatasetRetrievalFunction = Callable[..., SuccessAndErroredResultsLists]
+DatasetRetrievalFunction = Callable[
+    ..., SuccessAndErroredResultsLists[BasicRepositoryDocumentPair]
+]

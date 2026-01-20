@@ -21,14 +21,33 @@ convention = {
 SQLModel.metadata.naming_convention = convention
 
 
+def _is_attrdict_like(value: Any) -> bool:
+    """Check if a value is an AttrDict-like object that should be treated as None.
+
+    AttrDict objects come from various libraries (fastcore, etc.) and behave like
+    dicts but may represent "empty" or "missing" data from API responses.
+    We check for the class name to handle AttrDict from any library.
+    """
+    if value is None:
+        return False
+    class_name = type(value).__name__
+    # Check for common AttrDict class names from various libraries
+    return class_name in ("AttrDict", "L", "AttrDefault")
+
+
 class StripMixin:
+    """Mixin that strips string values and normalizes empty containers to None."""
+
     def __init__(self, **data: Any):
         for field, value in data.items():
-            # Handle AttrDict and empty dicts
+            # Handle empty dicts (convert to None for cleaner storage)
             if isinstance(value, dict) and len(value) == 0:
                 data[field] = None
-            elif hasattr(value, "__class__") and value.__class__.__name__ == "AttrDict":
+            # Handle AttrDict-like objects from API responses (e.g., fastcore.foundation.L)
+            # These often represent empty/null data and should be converted to None
+            elif _is_attrdict_like(value):
                 data[field] = None
+            # Strip whitespace from strings
             elif isinstance(value, str):
                 data[field] = value.strip()
         super().__init__(**data)

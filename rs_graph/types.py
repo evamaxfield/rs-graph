@@ -152,8 +152,10 @@ class StoredRepositoryDocumentPair(DataClassJsonMixin):
 
 
 @dataclass
-class SuccessAndErroredResultsLists(DataClassJsonMixin):
-    successful_results: list[BasicRepositoryDocumentPair | ExpandedRepositoryDocumentPair]
+class SuccessAndErroredResultsLists[PairT](DataClassJsonMixin):
+    """Generic container for pipeline results with success/error separation."""
+
+    successful_results: list[PairT]
     errored_results: list[ErrorResult]
 
 

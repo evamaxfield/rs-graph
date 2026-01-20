@@ -99,7 +99,7 @@ def _process_item(
 
 def get_dataset(
     **kwargs: dict[str, str],
-) -> types.SuccessAndErroredResultsLists:
+) -> types.SuccessAndErroredResultsLists[types.BasicRepositoryDocumentPair]:
     """Download the PLOS dataset."""
     # Get all data
     data = _get_raw_data()

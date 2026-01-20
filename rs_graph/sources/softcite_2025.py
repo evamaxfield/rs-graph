@@ -421,7 +421,7 @@ def _prep_softcite_2025_data_for_use(data_dir: str | Path) -> None:
 
 def get_dataset(
     **kwargs: dict[str, str],
-) -> types.SuccessAndErroredResultsLists:
+) -> types.SuccessAndErroredResultsLists[types.BasicRepositoryDocumentPair]:
     """Load the SoftCite 2025 dataset."""
     # Load the dataset
     df = pl.read_parquet(SOFTCITE_PREPPED_DATA_STORAGE_PATH)

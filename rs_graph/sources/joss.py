@@ -43,7 +43,7 @@ def _process_joss_results_page(
 
 def get_dataset(
     **kwargs: dict[str, str],
-) -> types.SuccessAndErroredResultsLists:
+) -> types.SuccessAndErroredResultsLists[types.BasicRepositoryDocumentPair]:
     """Download the JOSS dataset."""
     # Get all processed results
     processed_results = []

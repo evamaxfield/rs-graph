@@ -95,7 +95,7 @@ def get_dataset(
     github_tokens: list[str],
     elsevier_api_keys: list[str],
     **kwargs: dict[str, str],
-) -> types.SuccessAndErroredResultsLists:
+) -> types.SuccessAndErroredResultsLists[types.BasicRepositoryDocumentPair]:
     """Download the SoftwareX dataset."""
     # Cycle github tokens
     github_tokens_cycle = itertools.cycle(github_tokens)
