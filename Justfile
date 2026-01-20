@@ -25,14 +25,9 @@ install:
 	pip install uv
 	uv pip install -e ".[dev,lint,modeling,data,pipeline]"
 
-# install with pipeline deps
-install-pipeline:
-	pip install uv
-	uv pip install -e ".[dev,lint,pipeline]"
-
 # lint, format, and check all files
 lint:
-	pre-commit run --all-files
+	prek run --all-files
 
 ###############################################################################
 # Release and versioning
@@ -45,6 +40,14 @@ tag-for-release version:
 # release a new version
 release:
 	git push --follow-tags
+
+###############################################################################
+# Cookiecutter management
+
+# update this repo using latest cookiecutter
+update-from-cookiecutter:
+	pip install cookiecutter
+	cookiecutter gh:evamaxfield/pyproject-template --config-file .cookiecutter.yaml --no-input --overwrite-if-exists --output-dir ..
 
 ###############################################################################
 # Infra / Data Storage

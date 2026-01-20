@@ -30,17 +30,12 @@ dependencies = [
   "sqlmodel>=0.0.31,<0.1",
 ]
 
-[project.urls]
-Homepage = "https://github.com/evamaxfield/rs-graph"
-"Bug Tracker" = "https://github.com/evamaxfield/rs-graph/issues"
-Documentation = "https://evamaxfield.github.io/rs-graph"
-"User Support" = "https://github.com/evamaxfield/rs-graph/issues"
-
 # extra dependencies
 # https://peps.python.org/pep-0621/#dependencies-optional-dependencies
 [project.optional-dependencies]
 lint = [
-  "pre-commit>=2.20.0",
+  "prek>=0.2.29",
+  "ty>=0.0.12",
 ]
 dev = [
   "ipython",
@@ -97,12 +92,17 @@ pipeline = [
   "typer>=0.15",
 ]
 
+[project.urls]
+Homepage = "https://github.com/evamaxfield/rs-graph"
+"Bug Tracker" = "https://github.com/evamaxfield/rs-graph/issues"
+Documentation = "https://evamaxfield.github.io/rs-graph"
+"User Support" = "https://github.com/evamaxfield/rs-graph/issues"
+
 # entry points
+# example
+# rs-graph-prelinked-dataset-ingestion = "rs_graph.bin.prelinked_dataset_ingestion:main"
 # https://peps.python.org/pep-0621/#entry-points
-[project.entry-points."console_scripts"]
-rs-graph-data = "rs_graph.bin.data:main"
-rs-graph-prelinked-dataset-ingestion = "rs_graph.bin.prelinked_dataset_ingestion:main"
-rs-graph-snowball-sampling-discovery = "rs_graph.bin.snowball_sampling_discovery:main"
+# [project.entry-points."console_scripts"]
 
 # build settings
 # https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html
@@ -114,7 +114,7 @@ include-package-data = true
 exclude = ["*docs/*", "*tests/*"]
 
 [tool.setuptools.package-data]
-"*" = ["*.yaml", "py.typed"]
+"*" = ["py.typed"]
 
 # tools
 # https://github.com/charliermarsh/ruff
@@ -154,8 +154,5 @@ lint.extend-ignore = [
 "**/tests/*.py" = ["D"]
 "**/migrations/*.py" = ["D"]
 
-[tool.mypy]
-ignore_missing_imports = true
-disallow_untyped_defs = true
-check_untyped_defs = true
-show_error_codes = true
+[tool.ty.src]
+exclude = [".github", ".pre-commit-config.yaml", "pyproject.toml"]

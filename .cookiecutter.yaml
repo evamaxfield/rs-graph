@@ -1,0 +1,8 @@
+default_context:
+    author_name: "Eva Maxfield Brown"
+    author_email: "evamaxfieldbrown@gmail.com"
+    hosting_github_username_or_org: "evamaxfield"
+    project_name: "rs-graph"
+    project_slug: "rs-graph"
+    python_slug: "rs_graph"
+    project_short_description: "Exploring research software"

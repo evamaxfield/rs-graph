@@ -127,6 +127,10 @@ index.md
 index_files/
 index.tex
 
+# Claude
+.claude/
+CLAUDE.md
+
 # Project specific
 joss-short-paper-details.parquet
 joss-upstream-deps-failed.parquet
@@ -146,7 +150,7 @@ elsarticle-harv.bst
 elsarticle.cls
 qss-code-authors.spl
 
-# Ignore all files in the data/files/ directory
+# Ignored data files
 rs_graph/data/files/*
 author-dev-em-annotation-dataset.csv
 author-dev-em-annotation-dataset-irr.csv

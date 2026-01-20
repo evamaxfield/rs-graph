@@ -9,13 +9,7 @@ on:
   pull_request:
     branches:
       - main
-  schedule:
-    - cron: "31 10 * * 4"
   workflow_dispatch:
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   # Check linting, formating, types, etc.
@@ -23,48 +17,64 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v6
       with:
         python-version: "3.14"
-    - uses: extractions/setup-just@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - uses: extractions/setup-just@v3
     - name: Install Dependencies
       run: |
-        python -m pip install --upgrade pip wheel
-        pip install pre-commit
+        python -m pip install --upgrade pip uv
+        uv venv
+        source .venv/bin/activate
+        just install
     - name: Lint
-      run: just lint
+      run: |
+        source .venv/bin/activate
+        just lint
 
-  # Build docker
-  # docker-build:
+  # Run tests
+  # test:
   #   runs-on: ubuntu-latest
 
+  #   steps:
+  #   - uses: actions/checkout@v6
+  #   - name: Set up Python
+  #     uses: actions/setup-python@v6
+  #     with:
+  #       python-version: "3.14"
+  #   - uses: extractions/setup-just@v3
+  #   - name: Install Dependencies
+  #     run: |
+  #       python -m pip install --upgrade pip uv
+  #       uv venv
+  #       source .venv/bin/activate
+  #       uv pip install .[test]
+  #   - name: Run Tests
+  #     run: |
+  #       source .venv/bin/activate
+  #       just test
+
+  # # Publish to pypi
+  # publish:
+  #   needs: [lint, test]
+  #   if: success() && startsWith(github.ref, 'refs/tags/v')
+  #   runs-on: ubuntu-latest
   #   permissions:
-  #     contents: read
-  #     packages: write
+  #     id-token: write
+  #     contents: write
 
   #   steps:
-  #     - uses: actions/checkout@v4
-
-  #     - uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+  #     - uses: actions/checkout@v6
   #       with:
-  #         registry: ${{ env.REGISTRY }}
-  #         username: ${{ github.actor }}
-  #         password: ${{ secrets.GITHUB_TOKEN }}
-
-  #     - name: Extract metadata (tags, labels) for Docker
-  #       id: meta
-  #       uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
+  #         fetch-depth: 0
+  #     - uses: actions/setup-python@v6
   #       with:
-  #         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-
-  #     - name: Build and push Docker image
-  #       uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
-  #       with:
-  #         context: .
-  #         push: true
-  #         tags: ${{ steps.meta.outputs.tags }}
-  #         labels: ${{ steps.meta.outputs.labels }}
+  #         python-version: "3.x"
+  #     - name: Build
+  #       run: |
+  #         python -m pip install build
+  #         python -m build
+  #     - name: Publish to PyPI
+  #       uses: pypa/gh-action-pypi-publish@release/v1
