@@ -41,7 +41,7 @@ class StrippedSQLModel(StripMixin, SQLModel):
 ###############################################################################
 
 
-class DatasetSource(StrippedSQLModel, table=True):  # type: ignore
+class DatasetSource(StrippedSQLModel, table=True):
     """Stores the basic information for a dataset source."""
 
     __tablename__ = "dataset_source"
@@ -55,7 +55,7 @@ class DatasetSource(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class Source(StrippedSQLModel, table=True):  # type: ignore
+class Source(StrippedSQLModel, table=True):
     """Stores the basic information about a possible document source."""
 
     # Primary Keys / Uniqueness
@@ -73,7 +73,7 @@ class Source(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class Location(StrippedSQLModel, table=True):  # type: ignore
+class Location(StrippedSQLModel, table=True):
     """Stores the basic information about a document's possible location."""
 
     # Primary Keys / Uniqueness
@@ -99,7 +99,7 @@ class Location(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class Document(StrippedSQLModel, table=True):  # type: ignore
+class Document(StrippedSQLModel, table=True):
     """Stores paper, report, or other academic document details."""
 
     # Primary Keys / Uniqueness
@@ -136,7 +136,7 @@ class Document(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class DocumentAlternateDOI(StrippedSQLModel, table=True):  # type: ignore
+class DocumentAlternateDOI(StrippedSQLModel, table=True):
     """
     Stores alternate DOIs for a document.
 
@@ -160,7 +160,7 @@ class DocumentAlternateDOI(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class DocumentAbstract(StrippedSQLModel, table=True):  # type: ignore
+class DocumentAbstract(StrippedSQLModel, table=True):
     """Stores the abstract for a document."""
 
     __tablename__ = "document_abstract"
@@ -183,7 +183,7 @@ class DocumentAbstract(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class Topic(StrippedSQLModel, table=True):  # type: ignore
+class Topic(StrippedSQLModel, table=True):
     """Stores the basic information for a topic."""
 
     # Primary Keys / Uniqueness
@@ -204,7 +204,7 @@ class Topic(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class DocumentTopic(StrippedSQLModel, table=True):  # type: ignore
+class DocumentTopic(StrippedSQLModel, table=True):
     """Stores the connection between a document and a topic."""
 
     __tablename__ = "document_topic"
@@ -232,7 +232,7 @@ class DocumentTopic(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class Researcher(StrippedSQLModel, table=True):  # type: ignore
+class Researcher(StrippedSQLModel, table=True):
     """Stores researcher details."""
 
     # Primary Keys / Uniqueness
@@ -253,7 +253,7 @@ class Researcher(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class DocumentContributor(StrippedSQLModel, table=True):  # type: ignore
+class DocumentContributor(StrippedSQLModel, table=True):
     """Stores the connection between a researcher and a document."""
 
     __tablename__ = "document_contributor"
@@ -282,7 +282,7 @@ class DocumentContributor(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class Institution(StrippedSQLModel, table=True):  # type: ignore
+class Institution(StrippedSQLModel, table=True):
     """Stores institution details."""
 
     # Primary Keys / Uniqueness
@@ -300,7 +300,7 @@ class Institution(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class DocumentContributorInstitution(StrippedSQLModel, table=True):  # type: ignore
+class DocumentContributorInstitution(StrippedSQLModel, table=True):
     """Stores the connection between a researcher, document, and institution."""
 
     __tablename__ = "document_contributor_institution"
@@ -325,7 +325,7 @@ class DocumentContributorInstitution(StrippedSQLModel, table=True):  # type: ign
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class Funder(StrippedSQLModel, table=True):  # type: ignore
+class Funder(StrippedSQLModel, table=True):
     """Stores the basic information for a funding source (e.g. NSF, NIH)."""
 
     # Primary Keys / Uniqueness
@@ -340,7 +340,7 @@ class Funder(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class FundingInstance(StrippedSQLModel, table=True):  # type: ignore
+class FundingInstance(StrippedSQLModel, table=True):
     """Stores the basic information for a single funding instance (e.g. grant)."""
 
     __tablename__ = "funding_instance"
@@ -361,7 +361,7 @@ class FundingInstance(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class DocumentFundingInstance(StrippedSQLModel, table=True):  # type: ignore
+class DocumentFundingInstance(StrippedSQLModel, table=True):
     """Stores the connection between a document and a funding instance."""
 
     __tablename__ = "document_funding_instance"
@@ -386,7 +386,7 @@ class DocumentFundingInstance(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class CodeHost(StrippedSQLModel, table=True):  # type: ignore
+class CodeHost(StrippedSQLModel, table=True):
     """Stores the basic information for a code host (e.g. GitHub, GitLab)."""
 
     __tablename__ = "code_host"
@@ -402,7 +402,7 @@ class CodeHost(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class Repository(StrippedSQLModel, table=True):  # type: ignore
+class Repository(StrippedSQLModel, table=True):
     """Stores the basic information for a repository."""
 
     # Primary Keys / Uniqueness
@@ -439,7 +439,7 @@ class Repository(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class RepositoryReadme(StrippedSQLModel, table=True):  # type: ignore
+class RepositoryReadme(StrippedSQLModel, table=True):
     """Stores the readme for a repository."""
 
     __tablename__ = "repository_readme"
@@ -462,7 +462,7 @@ class RepositoryReadme(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class RepositoryLanguage(StrippedSQLModel, table=True):  # type: ignore
+class RepositoryLanguage(StrippedSQLModel, table=True):
     """Stores the connection between a repository and a language."""
 
     __tablename__ = "repository_language"
@@ -486,7 +486,7 @@ class RepositoryLanguage(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class RepositoryFile(StrippedSQLModel, table=True):  # type: ignore
+class RepositoryFile(StrippedSQLModel, table=True):
     """Stores the connection between a repository and a file."""
 
     __tablename__ = "repository_file"
@@ -511,7 +511,7 @@ class RepositoryFile(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class DeveloperAccount(StrippedSQLModel, table=True):  # type: ignore
+class DeveloperAccount(StrippedSQLModel, table=True):
     """Stores the basic information for a developer account (e.g. GitHub, GitLab)."""
 
     __tablename__ = "developer_account"
@@ -536,7 +536,7 @@ class DeveloperAccount(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class RepositoryContributor(StrippedSQLModel, table=True):  # type: ignore
+class RepositoryContributor(StrippedSQLModel, table=True):
     """Stores the connection between a repository and a contributor."""
 
     __tablename__ = "repository_contributor"
@@ -570,7 +570,7 @@ class RepositoryContributor(StrippedSQLModel, table=True):  # type: ignore
 # includes date and additions, deletions, and number of commits for that week
 
 
-class DocumentRepositoryLink(StrippedSQLModel, table=True):  # type: ignore
+class DocumentRepositoryLink(StrippedSQLModel, table=True):
     """Stores the connection between a document and a repository."""
 
     __tablename__ = "document_repository_link"
@@ -605,7 +605,7 @@ class DocumentRepositoryLink(StrippedSQLModel, table=True):  # type: ignore
     updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
 
 
-class ResearcherDeveloperAccountLink(StrippedSQLModel, table=True):  # type: ignore
+class ResearcherDeveloperAccountLink(StrippedSQLModel, table=True):
     """Stores the connection between a researcher and a developer account."""
 
     __tablename__ = "researcher_developer_account_link"

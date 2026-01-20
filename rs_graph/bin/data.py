@@ -142,7 +142,10 @@ def _dataverse_download(dataverse_token: str | None = None) -> None:
         )
 
     # Init Dataverse
-    dv = Dataverse(DATAVERSE_HOST, api_token=dataverse_token)
+    dv = Dataverse(
+        DATAVERSE_HOST,  # type: ignore[arg-type]
+        api_token=dataverse_token,  # type: ignore[arg-type]
+    )
 
     # Download all files
     log.info(
@@ -150,7 +153,7 @@ def _dataverse_download(dataverse_token: str | None = None) -> None:
     )
     dv.load_dataset(
         pid=f"doi:{DATAVERSE_RS_GRAPH_V1_DATASET_DOI}",
-        filedir=DATA_FILES_DIR,
+        filedir=str(DATA_FILES_DIR),
         filenames=[
             "rs-graph-v1-prod.db",
             "rs-graph-v1-redacted.db",

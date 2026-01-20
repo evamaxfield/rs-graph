@@ -531,13 +531,14 @@ def _process_matched_article(
     semantic_scholar_api_key: str,
 ) -> types.MatchedAuthorArticleAndDeveloperRepositoryPair | types.ErrorResult:
     # Try getting the rest of the data
+    # Note: pyalex_work is typed as dict for JSON serialization, but is actually a pyalex.Work
     updated_open_alex_results = article.process_article(
         paper_doi=matched_pair.article_doi,
         source=f"snowball-sampling-discovery-v{rs_graph_version}",
         open_alex_email=open_alex_email,
         open_alex_email_count=open_alex_email_count,
         semantic_scholar_api_key=semantic_scholar_api_key,
-        existing_pyalex_work=matched_pair.author_article.pyalex_work,
+        existing_pyalex_work=matched_pair.author_article.pyalex_work,  # type: ignore[arg-type]
         existing_open_alex_results=matched_pair.author_article.open_alex_results_models,
     )
 

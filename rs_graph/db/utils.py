@@ -8,7 +8,6 @@ from pathlib import Path
 
 from prefect import task
 from sqlalchemy.engine import Engine
-from sqlalchemy.sql.operators import is_
 from sqlmodel import (
     Session,
     SQLModel,
@@ -46,7 +45,7 @@ def get_unique_first_model(model: SQLModel, session: Session) -> SQLModel | None
     model_cls = model.__class__
 
     # Get constrained fields
-    all_table_contraints = model_cls.__table__.constraints
+    all_table_contraints = model_cls.__table__.constraints  # type: ignore[attr-defined]
     unique_constraints = [
         constraint
         for constraint in all_table_contraints
@@ -68,16 +67,16 @@ def get_unique_first_model(model: SQLModel, session: Session) -> SQLModel | None
     return session.exec(query).first()
 
 
-def _get_or_add_and_flush(
-    model: SQLModel,
+def _get_or_add_and_flush[ModelT: SQLModel](
+    model: ModelT,
     session: Session,
-) -> SQLModel:
+) -> ModelT:
     # Try getting matching model
     existing_model = get_unique_first_model(model=model, session=session)
 
-    # If model exists, return it
+    # If model exists, return it (cast to preserve type)
     if existing_model is not None:
-        return existing_model
+        return existing_model  # type: ignore[return-value]
 
     # Otherwise, add and flush
     session.add(model)
@@ -112,30 +111,25 @@ def store_full_details(  # noqa: C901
                     model=pair.open_alex_results.primary_document_source_model,
                     session=session,
                 )
-                assert (
-                    pair.open_alex_results.primary_document_source_model.id  # type:ignore
-                    is not None
-                )
+                assert pair.open_alex_results.primary_document_source_model.id is not None
 
             # Store the primary location
             if pair.open_alex_results.primary_location_model is not None:
                 # Update with the document source id
                 if pair.open_alex_results.primary_document_source_model is not None:
                     pair.open_alex_results.primary_location_model.source_id = (
-                        pair.open_alex_results.primary_document_source_model.id  # type: ignore
+                        pair.open_alex_results.primary_document_source_model.id
                     )
 
                 # Add and flush
                 pair.open_alex_results.primary_location_model = _get_or_add_and_flush(
                     model=pair.open_alex_results.primary_location_model, session=session
                 )
-                assert (
-                    pair.open_alex_results.primary_location_model.id is not None  # type: ignore
-                )
+                assert pair.open_alex_results.primary_location_model.id is not None
 
                 # Update the document model with the primary location id
                 pair.open_alex_results.document_model.primary_location_id = (
-                    pair.open_alex_results.primary_location_model.id  # type: ignore
+                    pair.open_alex_results.primary_location_model.id
                 )
 
             # Store the best oa source
@@ -144,30 +138,25 @@ def store_full_details(  # noqa: C901
                     model=pair.open_alex_results.best_oa_document_source_model,
                     session=session,
                 )
-                assert (
-                    pair.open_alex_results.best_oa_document_source_model.id  # type: ignore
-                    is not None
-                )
+                assert pair.open_alex_results.best_oa_document_source_model.id is not None
 
             # Store the best oa location
             if pair.open_alex_results.best_oa_location_model is not None:
                 # Update with the document source id
                 if pair.open_alex_results.best_oa_document_source_model is not None:
                     pair.open_alex_results.best_oa_location_model.source_id = (
-                        pair.open_alex_results.best_oa_document_source_model.id  # type: ignore
+                        pair.open_alex_results.best_oa_document_source_model.id
                     )
 
                 # Add and flush
                 pair.open_alex_results.best_oa_location_model = _get_or_add_and_flush(
                     model=pair.open_alex_results.best_oa_location_model, session=session
                 )
-                assert (
-                    pair.open_alex_results.best_oa_location_model.id is not None  # type: ignore
-                )
+                assert pair.open_alex_results.best_oa_location_model.id is not None
 
                 # Update the document model with the best oa location id
                 pair.open_alex_results.document_model.best_open_access_location_id = (
-                    pair.open_alex_results.best_oa_location_model.id  # type: ignore
+                    pair.open_alex_results.best_oa_location_model.id
                 )
 
             # Document
@@ -388,6 +377,7 @@ def store_full_details(  # noqa: C901
                 db_models.DatasetSource.id == dataset_source_id
             )
             dataset_source_model = session.exec(dataset_source_stmt).first()
+            assert dataset_source_model is not None
             document_stmt = select(db_models.Document).where(
                 db_models.Document.id == document_model_id
             )
@@ -401,11 +391,11 @@ def store_full_details(  # noqa: C901
             developer_account_stmt = select(db_models.DeveloperAccount).where(
                 db_models.DeveloperAccount.id.in_(developer_account_model_ids)  # type: ignore
             )
-            developer_account_models = session.exec(developer_account_stmt).all()
+            developer_account_models = list(session.exec(developer_account_stmt).all())
             researcher_stmt = select(db_models.Researcher).where(
                 db_models.Researcher.id.in_(researcher_model_ids)  # type: ignore
             )
-            researcher_models = session.exec(researcher_stmt).all()
+            researcher_models = list(session.exec(researcher_stmt).all())
 
             # Create the stored pair
             stored_pair = types.StoredRepositoryDocumentPair(
@@ -480,12 +470,13 @@ def store_dev_researcher_em_links(
             assert pair.researcher_developer_links is not None
 
             # Iter over each linked dev researcher link and add to the database
-            link_ids = []
+            link_ids: list[int] = []
             for linked_dev_researcher_pair in pair.researcher_developer_links:
-                linked_dev_researcher_pair = _get_or_add_and_flush(
+                stored_link = _get_or_add_and_flush(
                     model=linked_dev_researcher_pair, session=session
                 )
-                link_ids.append(linked_dev_researcher_pair.id)
+                assert stored_link.id is not None
+                link_ids.append(stored_link.id)
 
             # Commit
             session.commit()
@@ -494,7 +485,7 @@ def store_dev_researcher_em_links(
             linked_dev_researcher_stmt = select(db_models.ResearcherDeveloperAccountLink).where(
                 db_models.ResearcherDeveloperAccountLink.id.in_(link_ids)  # type: ignore
             )
-            linked_dev_researcher_models = session.exec(linked_dev_researcher_stmt).all()
+            linked_dev_researcher_models = list(session.exec(linked_dev_researcher_stmt).all())
 
             # Attach to model
             pair.researcher_developer_links = linked_dev_researcher_models
@@ -609,6 +600,10 @@ def check_pair_exists(
         if repository_model is None:
             return False
 
+        # Fast fail if document not found
+        if document_model is None:
+            return False
+
         # Link
         link_stmt = select(db_models.DocumentRepositoryLink).where(
             db_models.DocumentRepositoryLink.document_id == document_model.id,
@@ -691,10 +686,9 @@ def get_hydrated_author_developer_links(
             cutoff_datetime = datetime.now() - parse_timedelta(filter_datetime_difference)
             stmt = stmt.where(
                 or_(
-                    is_(
-                        db_models.ResearcherDeveloperAccountLink.last_snowball_processed_datetime,
-                        None,
-                    ),
+                    col(
+                        db_models.ResearcherDeveloperAccountLink.last_snowball_processed_datetime
+                    ).is_(None),
                     (
                         col(
                             db_models.ResearcherDeveloperAccountLink.last_snowball_processed_datetime
@@ -718,6 +712,7 @@ def get_hydrated_author_developer_links(
         # Convert to hydrated objects
         hydrated_links = []
         for link, researcher, developer_account in results:
+            assert link.id is not None
             hydrated_links.append(
                 HydratedAuthorDeveloperLink(
                     author_developer_link_id=link.id,

@@ -155,4 +155,4 @@ lint.extend-ignore = [
 "**/migrations/*.py" = ["D"]
 
 [tool.ty.src]
-exclude = [".github", ".pre-commit-config.yaml", "pyproject.toml"]
+exclude = [".github", ".pre-commit-config.yaml", "pyproject.toml", "migrations/"]

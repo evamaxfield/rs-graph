@@ -74,16 +74,16 @@ def _wrap_func_with_coiled_prefect_task(
 
     @task(
         **prefect_kwargs,
-        name=func.__name__,
+        name=func.__name__,  # type: ignore[attr-defined]
         log_prints=True,
         timeout_seconds=timeout_seconds,
     )
     @coiled.function(
         **coiled_kwargs,
-        name=coiled_func_name if coiled_func_name is not None else func.__name__,
+        name=coiled_func_name if coiled_func_name is not None else func.__name__,  # type: ignore[attr-defined]
         environ=environ,
     )
-    def wrapped_func(*args, **kwargs):  # type: ignore
+    def wrapped_func(*args, **kwargs):
         return func(*args, **kwargs)
 
     return wrapped_func

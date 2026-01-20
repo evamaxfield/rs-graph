@@ -8,6 +8,7 @@ import traceback
 
 import backoff
 import pybliometrics
+import pybliometrics.sciencedirect
 from ghapi.all import GhApi, paged
 from pybliometrics.sciencedirect import ScienceDirectSearch
 from tqdm import tqdm
@@ -25,7 +26,7 @@ from .. import types
 def _process_elsevier_repo(
     repo_name: str,
     github_api_token: str,
-    elsevier_api_keys: str,
+    elsevier_api_keys: list[str],
 ) -> types.BasicRepositoryDocumentPair | types.ErrorResult:
     # Be nice to APIs
     time.sleep(0.85)
@@ -57,16 +58,21 @@ def _process_elsevier_repo(
         # Get results
         results = s.results
 
-        # Handle single
-        if len(results) == 0:
+        # Handle no results
+        if results is None or len(results) == 0:
             raise ValueError(f"No papers found for {repo_name}")
+
+        # Handle single
         if len(results) == 1:
             doi = results[0].doi
-
         # Handle multiple
         else:
             # Don't know how to handle right now
             raise ValueError(f"Multiple papers found for {repo_name}")
+
+        # Ensure we have a DOI
+        if doi is None:
+            raise ValueError(f"No DOI found for {repo_name}")
 
         # Return the result
         return types.BasicRepositoryDocumentPair(

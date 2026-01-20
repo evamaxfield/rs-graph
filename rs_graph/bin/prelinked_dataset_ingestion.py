@@ -101,13 +101,17 @@ def _prelinked_dataset_ingestion_flow(
     )
 
     # Filter dataset
+    # Note: type ignore because SuccessAndErroredResultsLists has a union type
+    # but at runtime, source_results only contains BasicRepositoryDocumentPair
     code_filtered_results = code_host_parsing.filter_repo_paper_pairs(
-        source_results.successful_results,
+        source_results.successful_results,  # type: ignore[arg-type]
     )
 
     # Filter out already processed pairs
+    # Note: type ignore because the filtering creates ExpandedRepositoryDocumentPair
+    # instances, but the type signature is still the union type
     stored_filtered_results = db_utils.filter_stored_pairs(
-        code_filtered_results.successful_results,
+        code_filtered_results.successful_results,  # type: ignore[arg-type]
         use_prod=use_prod,
     )
 

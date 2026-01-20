@@ -15,7 +15,7 @@ from cachetools import LRUCache, cached
 from cachetools.keys import hashkey
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
-from fastcore.net import HTTP403ForbiddenError
+from fastcore.net import HTTP403ForbiddenError  # type: ignore[import-not-found]
 from ghapi.all import GhApi, paged
 
 from .. import types
@@ -57,7 +57,7 @@ def _setup_gh_api(github_api_key: str | None = None) -> GhApi:
     (HTTP403ForbiddenError),
     max_time=16,
 )
-@cached(  # type: ignore[misc]
+@cached(
     cache=LRUCache(maxsize=2 * 16),  # Cache up to 32k results
     key=lambda login, **kwargs: hashkey(login),  # Only cache by login
 )

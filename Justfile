@@ -19,6 +19,11 @@ clean:
 	rm -fr .pytest_cache
 	rm -fr .ruff_cache
 	rm -fr build
+	rm -fr .vscode
+	rm -fr .ropeproject
+	rm -fr .ipynb_checkpoints
+	rm -fr processing-results
+	rm -fr client.log
 
 # install with all deps
 install:
