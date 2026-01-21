@@ -609,6 +609,12 @@ def compare_imported_vs_mentioned(
 
     # Save results
     results_df = pl.DataFrame(results)
+
+    # Add publication year column derived from publication date
+    results_df = results_df.with_columns(
+        pl.col("document_publication_date").dt.year().alias("document_publication_year")
+    )
+
     results_df.write_parquet(output_path)
     if debug:
         print()
@@ -633,6 +639,49 @@ def compare_imported_vs_mentioned(
     print(
         f"Median match score: {results_df.filter(pl.col('median_match_score') > 0)['median_match_score'].mean():.2f}"
     )
+
+    # Print stats by grouping variables
+    grouping_cols = [
+        ("document_domain_name", "Domain"),
+        ("dataset_source_name", "Dataset Source"),
+        ("repository_primary_language", "Language"),
+        ("document_publication_year", "Publication Year"),
+    ]
+
+    for col, label in grouping_cols:
+        print()
+        print(f"Stats by {label}:")
+        print("-" * 60)
+
+        grouped_stats = (
+            results_df.group_by(col)
+            .agg(
+                pl.len().alias("count"),
+                pl.col("n_imported").mean().alias("avg_imported"),
+                pl.col("n_mentioned").mean().alias("avg_mentioned"),
+                pl.col("n_matched").mean().alias("avg_matched"),
+                pl.col("avg_match_score")
+                .filter(pl.col("avg_match_score") > 0)
+                .mean()
+                .alias("avg_score"),
+            )
+            .sort(col)
+        )
+
+        for row in grouped_stats.iter_rows(named=True):
+            group_val = row[col] if row[col] is not None else "Unknown"
+            count = row["count"]
+            avg_imported = row["avg_imported"] or 0
+            avg_mentioned = row["avg_mentioned"] or 0
+            avg_matched = row["avg_matched"] or 0
+            avg_score = row["avg_score"] or 0
+            print(
+                f"  {group_val}: n={count}, "
+                f"avg_imported={avg_imported:.1f}, "
+                f"avg_mentioned={avg_mentioned:.1f}, "
+                f"avg_matched={avg_matched:.2f}, "
+                f"avg_score={avg_score:.1f}"
+            )
 
 
 ###############################################################################
