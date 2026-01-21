@@ -548,15 +548,11 @@ def compare_imported_vs_mentioned(
         mention_subset = softcite_mentions_df.filter(pl.col("softcite_paper_doi") == doi)
 
         # Get repository info for this DOI
-        repo_owner = repo_subset.select("repository_owner").item()
-        repo_name = repo_subset.select("repository_name").item()
+        repo_owner = repo_subset["repository_owner"][0]
+        repo_name = repo_subset["repository_name"][0]
 
         # Get imported libraries from the FULL used_software_df
-        imported_libs_subset = used_software_df.filter(
-            (pl.col("repository_owner") == repo_owner)
-            & (pl.col("repository_name") == repo_name)
-        )
-        imported_set = set(imported_libs_subset["imported_library"].to_list())
+        imported_set = set(v for v in repo_subset["imported_library"].to_list() if v is not None)
         mentioned_set = set(mention_subset["softcite_software_mention_raw"].to_list())
 
         # Align
@@ -592,18 +588,16 @@ def compare_imported_vs_mentioned(
 
         results.append(
             {
-                "document_doi": article_doi,
-                "repository_owner": repo_owner,
-                "repository_name": repo_name,
+                **repo_subset.drop("imported_library").row(0, named=True),
                 "n_imported": n_imported,
                 "n_mentioned": n_mentioned,
                 "n_matched": n_matched,
                 "n_unmatched_imported": n_unmatched_imported,
                 "avg_match_score": avg_score,
                 "median_match_score": median_score,
-                "matched_software": [f"<matched-software>{name}</matched-software>" for name in matched_names],
-                "unmatched_imported": [f"<unmatched-imported>{name}</unmatched-imported>" for name in unmatched],
-                "unmatched_mentioned": [f"<unmatched-mentioned>{name}</unmatched-mentioned>" for name in (mentioned_set - matched_names)],
+                "imported_libraries": [f"<imported-library>{name}</imported-library>" for name in imported_set],
+                "mentioned_software": [f"<mentioned-software>{name}</mentioned-software>" for name in mentioned_set],
+                "matched_imports_to_mentions": [f"<matched-imported-to-mentioned-software>{name}</matched-imported-to-mentioned-software>" for name in matched_names],
             }
         )
 
@@ -621,6 +615,10 @@ def compare_imported_vs_mentioned(
     print(f"Average number of imported libraries: {results_df['n_imported'].mean():.2f}")
     print(f"Average number of mentioned software: {results_df['n_mentioned'].mean():.2f}")
     print(f"Average number of matched software: {results_df['n_matched'].mean():.2f}")
+    comparisons_with_both_imports_and_mentions = results_df.filter(
+        (pl.col("n_imported") > 0) & (pl.col("n_mentioned") > 0)
+    )
+    print(f"Average matched software (repos with both imports and mentions): {comparisons_with_both_imports_and_mentions['n_matched'].mean():.2f}")
     print(f"Average match score: {results_df.filter(pl.col('avg_match_score') > 0)['avg_match_score'].mean():.2f}")
     print(f"Median match score: {results_df.filter(pl.col('median_match_score') > 0)['median_match_score'].mean():.2f}")
 
