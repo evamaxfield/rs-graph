@@ -218,13 +218,26 @@ def normalize_name(name: str) -> str:
     - Converts to lowercase
     - Removes hyphens, underscores, and spaces
     - Preserves alphanumeric characters and dots
+    - Removes newlines and other whitespace
     """
-    return name.lower().replace("-", "").replace("_", "").replace(" ", "")
+    return (
+        name.lower()
+        .replace("-", "")
+        .replace("_", "")
+        .replace(" ", "")
+        .replace("\n", "")
+        .replace("\r", "")
+        .strip()
+    )
 
 
-def _normalize_software_name(name: str) -> str:
-    """Normalize a software name for aggregation/counting."""
-    return name.lower().replace("-", "").replace("_", "").replace(" ", "")
+def prep_name_for_printing(name: str) -> str:
+    """
+    Normalize a name for printing.
+
+    - Removes newlines, carriage returns, and extra spaces
+    """
+    return name.replace("\n", "").replace("\r", "").strip()
 
 
 @dataclass
@@ -271,7 +284,7 @@ def _create_software_records(
                 software_id=str(uuid.uuid4()),
                 import_name=import_name,
                 mention_name=mention_name,
-                normalized_name=_normalize_software_name(import_name),
+                normalized_name=normalize_name(import_name),
                 match_score=score,
                 status="matched",
             )
@@ -284,7 +297,7 @@ def _create_software_records(
                 software_id=str(uuid.uuid4()),
                 import_name=import_name,
                 mention_name=None,
-                normalized_name=_normalize_software_name(import_name),
+                normalized_name=normalize_name(import_name),
                 match_score=None,
                 status="import_only",
             )
@@ -297,7 +310,7 @@ def _create_software_records(
                 software_id=str(uuid.uuid4()),
                 import_name=None,
                 mention_name=mention_name,
-                normalized_name=_normalize_software_name(mention_name),
+                normalized_name=normalize_name(mention_name),
                 match_score=None,
                 status="mention_only",
             )
@@ -352,7 +365,10 @@ def _get_top_items_by_status(
         .head(top_n)
     )
 
-    return [f"{r['display_name']} ({r['count']})" for r in counts.iter_rows(named=True)]
+    return [
+        f"{prep_name_for_printing(r['display_name'])} ({r['count']})"
+        for r in counts.iter_rows(named=True)
+    ]
 
 
 def _print_overall_top_n(results_df: pl.DataFrame, top_n: int) -> None:
