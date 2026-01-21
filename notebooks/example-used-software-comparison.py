@@ -1,20 +1,21 @@
 #!/usr/bin/env python
 
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 
 import connectorx  # noqa: F401
 import numpy as np
 import polars as pl
 import typer
-from eil import Extractor
+from eil import Extractor  # type: ignore[import-not-found]
 from git import GitCommandError, Repo
 from git.remote import RemoteProgress
 from nb_to_src import convert_directory as convert_nb_to_src_in_dir
+from py_ascii_tree import ascii_tree
 from rapidfuzz import fuzz
 from scipy.optimize import linear_sum_assignment
 from tqdm import tqdm
-from py_ascii_tree import ascii_tree
 
 from rs_graph.db import constants as db_constants
 
@@ -63,8 +64,6 @@ def load_pairs() -> pl.DataFrame:
     pairs = _read_table("document_repository_link")
     doc_topics = _read_table("document_topic")
     topics = _read_table("topic")
-    doc_alternate_dois = _read_table("document_alternate_doi")
-
     # Drop to unique doc and unique repo in pairs
     pairs = pairs.unique(
         subset="document_id",
@@ -143,9 +142,7 @@ def load_pairs() -> pl.DataFrame:
                 pl.col("fwci").alias("document_fwci"),
                 pl.col("is_open_access").alias("document_is_open_access"),
                 pl.col("publication_date").alias("document_publication_date"),
-            ).with_columns(
-                _normalize_doi_expr("document_doi").alias("document_doi")
-            ),
+            ).with_columns(_normalize_doi_expr("document_doi").alias("document_doi")),
             on="document_id",
             how="left",
         )
@@ -227,7 +224,7 @@ def align_dependencies(
     imported: set[str],
     mentioned: set[str],
     score_cutoff: float = 70.0,
-    scorer: callable = fuzz.ratio,
+    scorer: Callable[[str, str], float] = fuzz.ratio,
 ) -> tuple[dict[str, tuple[str, float]], list[str], dict[str, str], dict[str, str]]:
     """
     Align imported dependencies with mentioned software names using optimal assignment.
@@ -370,9 +367,7 @@ def get_imported_libraries(
 
     # Filter to repositories with primary language of "Python", "Jupyter Notebook", or "R"
     df = df.filter(
-        pl.col("repository_primary_language").is_in(
-            ["Python", "Jupyter Notebook", "R"]
-        )
+        pl.col("repository_primary_language").is_in(["Python", "Jupyter Notebook", "R"])
     )
     print(f"Filtered to {df.height} pairs with target programming languages")
 
@@ -405,7 +400,7 @@ def get_imported_libraries(
             if debug:
                 print(f"Repository: {repo_full_name}")
                 all_repo_files = [
-                    p.relative_to(TEMP_REPO_PATH) for p in TEMP_REPO_PATH.glob("**/*")
+                    str(p.relative_to(TEMP_REPO_PATH)) for p in TEMP_REPO_PATH.glob("**/*")
                 ]
                 print(ascii_tree(all_repo_files, max_depth=3, max_files_per_dir=3))
                 print()
@@ -427,11 +422,11 @@ def get_imported_libraries(
 
             # Condense third party libraries
             third_party_libs = list(
-                set(
+                {
                     lib
                     for _file_path, imported_libs_result in extracted_lib_results.extracted.items()
                     for lib in imported_libs_result.third_party
-                )
+                }
             )
 
             # Store as long format
@@ -448,7 +443,7 @@ def get_imported_libraries(
                 if debug:
                     print(f"No third-party libraries found in {repo_full_name}")
                     print(extracted_lib_results)
-                    
+
                 results.append(
                     {
                         **row_dict,
@@ -486,6 +481,7 @@ def compare_imported_vs_mentioned(
         used_software_path: Path to the parquet file with imported libraries
         output_path: Path to save comparison results
         score_cutoff: Minimum similarity score (0-100) for matching
+        debug: Whether to print detailed debug information
     """
     # Load the imported libraries data
     used_software_df = pl.read_parquet(used_software_path)
@@ -555,7 +551,7 @@ def compare_imported_vs_mentioned(
         repo_name = repo_subset["repository_name"][0]
 
         # Get imported libraries from the FULL used_software_df
-        imported_set = set(v for v in repo_subset["imported_library"].to_list() if v is not None)
+        imported_set = {v for v in repo_subset["imported_library"].to_list() if v is not None}
         mentioned_set = set(mention_subset["softcite_software_mention_raw"].to_list())
 
         # Align
@@ -598,9 +594,16 @@ def compare_imported_vs_mentioned(
                 "n_unmatched_imported": n_unmatched_imported,
                 "avg_match_score": avg_score,
                 "median_match_score": median_score,
-                "imported_libraries": [f"<imported-library>{name}</imported-library>" for name in imported_set],
-                "mentioned_software": [f"<mentioned-software>{name}</mentioned-software>" for name in mentioned_set],
-                "matched_imports_to_mentions": [f"<matched-imported-to-mentioned-software>{name}</matched-imported-to-mentioned-software>" for name in matched_names],
+                "imported_libraries": [
+                    f"<imported-library>{name}</imported-library>" for name in imported_set
+                ],
+                "mentioned_software": [
+                    f"<mentioned-software>{name}</mentioned-software>" for name in mentioned_set
+                ],
+                "matched_imports_to_mentions": [
+                    f"<matched-imported-to-mentioned-software>{name}</matched-imported-to-mentioned-software>"
+                    for name in matched_names
+                ],
             }
         )
 
@@ -621,9 +624,15 @@ def compare_imported_vs_mentioned(
     comparisons_with_both_imports_and_mentions = results_df.filter(
         (pl.col("n_imported") > 0) & (pl.col("n_mentioned") > 0)
     )
-    print(f"Average matched software (repos with both imports and mentions): {comparisons_with_both_imports_and_mentions['n_matched'].mean():.2f}")
-    print(f"Average match score: {results_df.filter(pl.col('avg_match_score') > 0)['avg_match_score'].mean():.2f}")
-    print(f"Median match score: {results_df.filter(pl.col('median_match_score') > 0)['median_match_score'].mean():.2f}")
+    print(
+        f"Average matched software (repos with both imports and mentions): {comparisons_with_both_imports_and_mentions['n_matched'].mean():.2f}"
+    )
+    print(
+        f"Average match score: {results_df.filter(pl.col('avg_match_score') > 0)['avg_match_score'].mean():.2f}"
+    )
+    print(
+        f"Median match score: {results_df.filter(pl.col('median_match_score') > 0)['median_match_score'].mean():.2f}"
+    )
 
 
 ###############################################################################
