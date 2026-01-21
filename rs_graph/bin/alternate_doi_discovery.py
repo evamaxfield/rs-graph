@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import itertools
 import math
+import os
 import time
 import traceback
 from collections import deque
@@ -22,6 +23,7 @@ import pandas as pd
 import requests
 import typer
 from dataclasses_json import DataClassJsonMixin
+from dotenv import load_dotenv
 from prefect import Task, flow, task, unmapped
 from sqlmodel import Session, select
 from tqdm import tqdm
@@ -39,7 +41,6 @@ from rs_graph.enrichment.article import (
 app = typer.Typer()
 
 DEFAULT_OPEN_ALEX_EMAILS_FILE = ".open-alex-emails.yml"
-DEFAULT_SEMANTIC_SCHOLAR_API_KEY_FILE = ".semantic-scholar-api-key.yml"
 
 ###############################################################################
 
@@ -399,7 +400,7 @@ def alternate_doi_discovery_flow(
     use_coiled: bool = False,
     coiled_region: str = "us-west-2",
     open_alex_emails_file: str = DEFAULT_OPEN_ALEX_EMAILS_FILE,
-    semantic_scholar_api_key_file: str | None = DEFAULT_SEMANTIC_SCHOLAR_API_KEY_FILE,
+    semantic_scholar_api_key: str | None = None,
     batch_size: int = 50,
     limit: int | None = None,
 ) -> None:
@@ -411,7 +412,7 @@ def alternate_doi_discovery_flow(
         use_coiled: Whether to use Coiled for distributed execution
         coiled_region: AWS region for Coiled cluster
         open_alex_emails_file: Path to OpenAlex emails YAML file
-        semantic_scholar_api_key_file: Path to Semantic Scholar API key file
+        semantic_scholar_api_key: Semantic Scholar API key
         batch_size: Number of documents to process per batch
         limit: Maximum number of documents to process (None for all)
     """
@@ -421,31 +422,10 @@ def alternate_doi_discovery_flow(
         use_coiled=use_coiled,
         coiled_region=coiled_region,
         open_alex_emails_file=open_alex_emails_file,
-        semantic_scholar_api_key_file=semantic_scholar_api_key_file,
+        semantic_scholar_api_key=semantic_scholar_api_key,
         batch_size=batch_size,
         limit=limit,
     )
-
-
-def _load_semantic_scholar_api_key(
-    semantic_scholar_api_key_file: str | None,
-) -> str | None:
-    """Load Semantic Scholar API key from file if available."""
-    if not semantic_scholar_api_key_file:
-        return None
-
-    try:
-        import yaml
-
-        with open(semantic_scholar_api_key_file) as f:
-            ss_config = yaml.safe_load(f)
-            return ss_config.get("api_key")
-    except Exception:
-        print(
-            f"Warning: Could not load Semantic Scholar API key "
-            f"from {semantic_scholar_api_key_file}"
-        )
-        return None
 
 
 def _process_batches(
@@ -511,7 +491,7 @@ def _run_alternate_doi_discovery(
     use_coiled: bool,
     coiled_region: str,
     open_alex_emails_file: str,
-    semantic_scholar_api_key_file: str | None,
+    semantic_scholar_api_key: str | None,
     batch_size: int,
     limit: int | None,
 ) -> None:
@@ -520,9 +500,6 @@ def _run_alternate_doi_discovery(
     open_alex_emails = pipeline_utils._load_open_alex_emails(open_alex_emails_file)
     n_open_alex_emails = len(open_alex_emails)
     cycled_emails = itertools.cycle(open_alex_emails)
-
-    # Load Semantic Scholar API key
-    semantic_scholar_api_key = _load_semantic_scholar_api_key(semantic_scholar_api_key_file)
 
     print(f"Loaded {n_open_alex_emails} OpenAlex emails")
     ss_status = "loaded" if semantic_scholar_api_key else "not configured"
@@ -588,7 +565,6 @@ def alternate_doi_discovery(
     use_coiled: bool = False,
     coiled_region: str = "us-west-2",
     open_alex_emails_file: str = DEFAULT_OPEN_ALEX_EMAILS_FILE,
-    semantic_scholar_api_key_file: str | None = DEFAULT_SEMANTIC_SCHOLAR_API_KEY_FILE,
     batch_size: int = 50,
     limit: int | None = None,
 ) -> None:
@@ -599,12 +575,16 @@ def alternate_doi_discovery(
     DOI versions (preprints, published versions, etc.) for documents
     already in the database.
     """
+    # Load env for semantic scholar API key
+    load_dotenv()
+    semantic_scholar_api_key = os.environ.get("SEMANTIC_SCHOLAR_API_KEY")
+
     alternate_doi_discovery_flow(
         use_prod=use_prod,
         use_coiled=use_coiled,
         coiled_region=coiled_region,
         open_alex_emails_file=open_alex_emails_file,
-        semantic_scholar_api_key_file=semantic_scholar_api_key_file,
+        semantic_scholar_api_key=semantic_scholar_api_key,
         batch_size=batch_size,
         limit=limit,
     )
