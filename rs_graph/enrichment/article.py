@@ -182,6 +182,9 @@ def get_updated_doi_from_semantic_scholar(
 
         # Make request
         response = requests.get(url, headers=headers, params=params, timeout=10)
+        if response.status_code == 404:
+            return doi
+
         response.raise_for_status()
 
         # Parse response
@@ -193,9 +196,11 @@ def get_updated_doi_from_semantic_scholar(
         else:
             return doi
 
-    except Exception:
-        # Return original DOI on any error
-        return doi
+    except Exception as e:
+        raise RuntimeError(
+            f"Error fetching updated DOI from Semantic Scholar for DOI '{doi}': {e}. "
+            f"Be sure to check that your Semantic Scholar API key is valid."
+        ) from e
 
 
 def get_open_alex_work_from_doi(

@@ -126,7 +126,7 @@ def _get_doi_from_semantic_scholar(
 
     try:
         response = requests.get(url, headers=headers, params=params, timeout=10)
-        # Rate limit: ~100 requests per 5 minutes without key, more with key
+        # Rate limit: ~1 request/sec with API key
         time.sleep(3.0 if not api_key else 1.0)
 
         if response.status_code == 404:
@@ -137,8 +137,11 @@ def _get_doi_from_semantic_scholar(
         if "externalIds" in paper_details and "DOI" in paper_details["externalIds"]:
             return paper_details["externalIds"]["DOI"]
         return None
-    except Exception:
-        return None
+    except Exception as e:
+        raise RuntimeError(
+            f"Error fetching updated DOI from Semantic Scholar for DOI '{doi}': {e}. "
+            f"Be sure to check that your Semantic Scholar API key is valid."
+        ) from e
 
 
 def _get_dois_from_openalex(
@@ -163,6 +166,7 @@ def _get_dois_from_openalex(
         query_doi = f"https://doi.org/{query_doi}"
 
     try:
+        print("Querying OpenAlex for DOI:", query_doi)
         work = pyalex.Works()[query_doi]
         if work is None:
             return []
@@ -170,6 +174,7 @@ def _get_dois_from_openalex(
         dois = []
 
         # Get the primary DOI
+        print("Parsing OpenAlex work for DOIs...")
         if work.get("doi"):
             dois.append(work["doi"].replace("https://doi.org/", ""))
 
@@ -181,7 +186,8 @@ def _get_dois_from_openalex(
                     dois.append(doi_from_ids)
 
         return dois
-    except Exception:
+    except Exception as e:
+        print(f"Error querying OpenAlex for DOI {doi}: {e}")
         return []
 
 
@@ -201,8 +207,10 @@ def discover_alternate_dois(
     try:
         original_normalized = _normalize_doi(doc_info.doi)
         alternate_dois: set[str] = set()
+        print(f"Discovering alternates for DOI: {doc_info.doi}")
 
         # Query Semantic Scholar
+        print("About to query Semantic Scholar...")
         ss_doi = _get_doi_from_semantic_scholar(
             doc_info.doi,
             api_key=semantic_scholar_api_key,
@@ -210,6 +218,7 @@ def discover_alternate_dois(
         ss_doi_normalized = _normalize_doi(ss_doi) if ss_doi else None
 
         # Query OpenAlex
+        print("About to query OpenAlex...")
         oa_dois = _get_dois_from_openalex(
             doc_info.doi,
             open_alex_email=open_alex_email,
@@ -217,6 +226,7 @@ def discover_alternate_dois(
         )
 
         # Collect alternates (any DOI that differs from the original)
+        print("Collecting alternate DOIs...")
         if ss_doi_normalized and ss_doi_normalized != original_normalized:
             alternate_dois.add(ss_doi_normalized)
 
@@ -237,6 +247,7 @@ def discover_alternate_dois(
         )
 
     except Exception as e:
+        print(f"Error discovering alternates for DOI {doc_info.doi}: {e}")
         return ErrorResult(
             source="alternate_doi_discovery",
             step="discover_alternate_dois",
@@ -268,8 +279,13 @@ def get_documents_without_alternates(
         existing_doc_ids = set(session.exec(existing_alternates_query).all())
 
         # Get all documents
-        docs_query = select(db_models.Document.id, db_models.Document.doi).where(
-            db_models.Document.doi != None  # noqa: E711
+        # Sort by publication datetime (oldest first)
+        docs_query = (
+            select(db_models.Document.id, db_models.Document.doi)
+            .where(
+                db_models.Document.doi != None  # noqa: E711
+            )
+            .order_by("publication_date")
         )
 
         if limit:
@@ -338,9 +354,10 @@ def store_alternate_dois(
 
 @task(
     log_prints=True,
-    retries=2,
-    retry_delay_seconds=5,
-    retry_jitter_factor=0.5,
+    # retries=2,
+    # retry_delay_seconds=3,
+    # retry_jitter_factor=0.5,
+    timeout_seconds=4,
 )
 def discover_alternate_dois_task(
     doc_info: DocumentDOIInfo,
@@ -523,7 +540,6 @@ def _run_alternate_doi_discovery(
                 use_coiled=use_coiled,
                 coiled_region=coiled_region,
             ),
-            timeout_seconds=300,
         )
     else:
         discover_task = discover_alternate_dois_task
