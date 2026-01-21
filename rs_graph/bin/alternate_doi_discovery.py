@@ -22,7 +22,7 @@ import pandas as pd
 import requests
 import typer
 from dataclasses_json import DataClassJsonMixin
-from prefect import flow, task, unmapped
+from prefect import Task, flow, task, unmapped
 from sqlmodel import Session, select
 from tqdm import tqdm
 
@@ -261,12 +261,14 @@ def get_documents_without_alternates(
 
     with Session(engine) as session:
         # Get document IDs that already have alternates
-        existing_alternates_query = select(db_models.DocumentAlternateDOI.document_id).distinct()
+        existing_alternates_query = select(
+            db_models.DocumentAlternateDOI.document_id
+        ).distinct()
         existing_doc_ids = set(session.exec(existing_alternates_query).all())
 
         # Get all documents
         docs_query = select(db_models.Document.id, db_models.Document.doi).where(
-            db_models.Document.doi.is_not(None)
+            db_models.Document.doi != None  # noqa: E711
         )
 
         if limit:
@@ -297,7 +299,6 @@ def store_alternate_dois(
         # No alternates to store
         return result
 
-    start_time = time.time()
     engine = get_engine(use_prod=use_prod)
 
     try:
@@ -319,8 +320,6 @@ def store_alternate_dois(
 
             session.commit()
 
-        end_time = time.time()
-        # Update result with storage time (we'll track this separately)
         return result
 
     except Exception as e:
@@ -334,6 +333,7 @@ def store_alternate_dois(
 
 
 ###############################################################################
+
 
 @task(
     log_prints=True,
@@ -404,7 +404,7 @@ def alternate_doi_discovery_flow(
     limit: int | None = None,
 ) -> None:
     """
-    Main flow for discovering alternate DOIs.
+    Discover alternate DOIs for documents in the database.
 
     Args:
         use_prod: Whether to use production database
@@ -415,50 +415,49 @@ def alternate_doi_discovery_flow(
         batch_size: Number of documents to process per batch
         limit: Maximum number of documents to process (None for all)
     """
-    # Load credentials
-    open_alex_emails = pipeline_utils._load_open_alex_emails(open_alex_emails_file)
-    n_open_alex_emails = len(open_alex_emails)
-    cycled_emails = itertools.cycle(open_alex_emails)
+    # Load credentials and process documents
+    _run_alternate_doi_discovery(
+        use_prod=use_prod,
+        use_coiled=use_coiled,
+        coiled_region=coiled_region,
+        open_alex_emails_file=open_alex_emails_file,
+        semantic_scholar_api_key_file=semantic_scholar_api_key_file,
+        batch_size=batch_size,
+        limit=limit,
+    )
 
-    # Load Semantic Scholar API key if available
-    semantic_scholar_api_key = None
-    if semantic_scholar_api_key_file:
-        try:
-            import yaml
 
-            with open(semantic_scholar_api_key_file) as f:
-                ss_config = yaml.safe_load(f)
-                semantic_scholar_api_key = ss_config.get("api_key")
-        except Exception:
-            print(f"Warning: Could not load Semantic Scholar API key from {semantic_scholar_api_key_file}")
+def _load_semantic_scholar_api_key(
+    semantic_scholar_api_key_file: str | None,
+) -> str | None:
+    """Load Semantic Scholar API key from file if available."""
+    if not semantic_scholar_api_key_file:
+        return None
 
-    print(f"Loaded {n_open_alex_emails} OpenAlex emails")
-    print(f"Semantic Scholar API key: {'loaded' if semantic_scholar_api_key else 'not configured'}")
+    try:
+        import yaml
 
-    # Get documents to process
-    print("\nFetching documents without alternate DOIs...")
-    doc_infos = get_documents_without_alternates(use_prod=use_prod, limit=limit)
-    print(f"Found {len(doc_infos)} documents to process")
-
-    if not doc_infos:
-        print("No documents to process. Exiting.")
-        return
-
-    # Setup task wrapper with coiled if enabled
-    if use_coiled:
-        discover_task = pipeline_utils._wrap_func_with_coiled_prefect_task(
-            discover_alternate_dois,
-            coiled_kwargs=pipeline_utils._get_small_cpu_api_cluster(
-                n_workers=n_open_alex_emails,
-                use_coiled=use_coiled,
-                coiled_region=coiled_region,
-            ),
-            timeout_seconds=300,
+        with open(semantic_scholar_api_key_file) as f:
+            ss_config = yaml.safe_load(f)
+            return ss_config.get("api_key")
+    except Exception:
+        print(
+            f"Warning: Could not load Semantic Scholar API key "
+            f"from {semantic_scholar_api_key_file}"
         )
-    else:
-        discover_task = discover_alternate_dois_task
+        return None
 
-    # Process in batches
+
+def _process_batches(
+    doc_infos: list[DocumentDOIInfo],
+    discover_task: Task,
+    cycled_emails: itertools.cycle,
+    n_open_alex_emails: int,
+    semantic_scholar_api_key: str | None,
+    use_prod: bool,
+    batch_size: int,
+) -> tuple[list[AlternateDOIResult | ErrorResult], ProcessingTimes, int, int]:
+    """Process documents in batches and return results with statistics."""
     processing_times = ProcessingTimes()
     total_alternates_found = 0
     total_errors = 0
@@ -466,6 +465,7 @@ def alternate_doi_discovery_flow(
 
     n_batches = math.ceil(len(doc_infos) / batch_size)
     print(f"\nProcessing {len(doc_infos)} documents in {n_batches} batches...")
+
     for i in tqdm(range(0, len(doc_infos), batch_size), total=n_batches, desc="Batches"):
         batch = doc_infos[i : i + batch_size]
 
@@ -503,6 +503,65 @@ def alternate_doi_discovery_flow(
                 f"{total_alternates_found} alternates found, {total_errors} errors"
             )
 
+    return all_results, processing_times, total_alternates_found, total_errors
+
+
+def _run_alternate_doi_discovery(
+    use_prod: bool,
+    use_coiled: bool,
+    coiled_region: str,
+    open_alex_emails_file: str,
+    semantic_scholar_api_key_file: str | None,
+    batch_size: int,
+    limit: int | None,
+) -> None:
+    """Run the alternate DOI discovery process."""
+    # Load credentials
+    open_alex_emails = pipeline_utils._load_open_alex_emails(open_alex_emails_file)
+    n_open_alex_emails = len(open_alex_emails)
+    cycled_emails = itertools.cycle(open_alex_emails)
+
+    # Load Semantic Scholar API key
+    semantic_scholar_api_key = _load_semantic_scholar_api_key(semantic_scholar_api_key_file)
+
+    print(f"Loaded {n_open_alex_emails} OpenAlex emails")
+    ss_status = "loaded" if semantic_scholar_api_key else "not configured"
+    print(f"Semantic Scholar API key: {ss_status}")
+
+    # Get documents to process
+    print("\nFetching documents without alternate DOIs...")
+    doc_infos = get_documents_without_alternates(use_prod=use_prod, limit=limit)
+    print(f"Found {len(doc_infos)} documents to process")
+
+    if not doc_infos:
+        print("No documents to process. Exiting.")
+        return
+
+    # Setup task wrapper with coiled if enabled
+    if use_coiled:
+        discover_task = pipeline_utils._wrap_func_with_coiled_prefect_task(
+            discover_alternate_dois,
+            coiled_kwargs=pipeline_utils._get_small_cpu_api_cluster(
+                n_workers=n_open_alex_emails,
+                use_coiled=use_coiled,
+                coiled_region=coiled_region,
+            ),
+            timeout_seconds=300,
+        )
+    else:
+        discover_task = discover_alternate_dois_task
+
+    # Process in batches
+    all_results, processing_times, total_alternates_found, total_errors = _process_batches(
+        doc_infos=doc_infos,
+        discover_task=discover_task,
+        cycled_emails=cycled_emails,
+        n_open_alex_emails=n_open_alex_emails,
+        semantic_scholar_api_key=semantic_scholar_api_key,
+        use_prod=use_prod,
+        batch_size=batch_size,
+    )
+
     # Final report
     _report_statistics(
         processing_times=processing_times,
@@ -521,6 +580,7 @@ def alternate_doi_discovery_flow(
 
 
 ###############################################################################
+
 
 @app.command()
 def alternate_doi_discovery(
