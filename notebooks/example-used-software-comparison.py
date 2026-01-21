@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 import shutil
+import uuid
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 import connectorx  # noqa: F401
@@ -220,18 +222,184 @@ def normalize_name(name: str) -> str:
     return name.lower().replace("-", "").replace("_", "").replace(" ", "")
 
 
-def _get_top_items(group_df: pl.DataFrame, col_name: str, top_n: int) -> list[str]:
-    """Explode, count, and format top items from a list column."""
+def _normalize_software_name(name: str) -> str:
+    """Normalize a software name for aggregation/counting."""
+    return name.lower().replace("-", "").replace("_", "").replace(" ", "")
+
+
+@dataclass
+class SoftwareRecord:
+    """
+    A unified record for a piece of software, tracking both import and mention forms.
+
+    Each record represents a unique software entity within a single paper's analysis.
+    For matched software, both import_name and mention_name are populated.
+    For unmatched imports, only import_name is populated.
+    For unmatched mentions, only mention_name is populated.
+    """
+
+    software_id: str  # UUID for this software entity
+    import_name: str | None  # Original import name (None if mention_only)
+    mention_name: str | None  # Original mention name (None if import_only)
+    normalized_name: str  # Normalized name for aggregation
+    match_score: float | None  # Fuzzy match score (None if not matched)
+    status: str  # "matched", "import_only", "mention_only"
+
+
+def _create_software_records(
+    matched: dict[str, tuple[str, float]],
+    unmatched_imports: list[str],
+    unmatched_mentions: set[str],
+) -> list[SoftwareRecord]:
+    """
+    Create unified software records from matching results.
+
+    Args:
+        matched: Dict mapping mention_name -> (import_name, score)
+        unmatched_imports: List of import names that weren't matched
+        unmatched_mentions: Set of mention names that weren't matched
+
+    Returns:
+        List of SoftwareRecord objects
+    """
+    records = []
+
+    # Matched software - has both import and mention names
+    for mention_name, (import_name, score) in matched.items():
+        records.append(
+            SoftwareRecord(
+                software_id=str(uuid.uuid4()),
+                import_name=import_name,
+                mention_name=mention_name,
+                normalized_name=_normalize_software_name(import_name),
+                match_score=score,
+                status="matched",
+            )
+        )
+
+    # Import-only software
+    for import_name in unmatched_imports:
+        records.append(
+            SoftwareRecord(
+                software_id=str(uuid.uuid4()),
+                import_name=import_name,
+                mention_name=None,
+                normalized_name=_normalize_software_name(import_name),
+                match_score=None,
+                status="import_only",
+            )
+        )
+
+    # Mention-only software
+    for mention_name in unmatched_mentions:
+        records.append(
+            SoftwareRecord(
+                software_id=str(uuid.uuid4()),
+                import_name=None,
+                mention_name=mention_name,
+                normalized_name=_normalize_software_name(mention_name),
+                match_score=None,
+                status="mention_only",
+            )
+        )
+
+    return records
+
+
+def _get_top_items_by_status(
+    group_df: pl.DataFrame,
+    status_filter: str | list[str],
+    name_column: str,
+    top_n: int,
+) -> list[str]:
+    """
+    Get top N software items by status from software_records.
+
+    Args:
+        group_df: DataFrame with software_records column
+        status_filter: Status to filter by ("matched", "import_only", "mention_only")
+                      or list of statuses
+        name_column: Which name to use for display ("import_name" or "mention_name")
+        top_n: Number of top items to return
+
+    Returns:
+        List of formatted strings like "numpy (5)"
+    """
+    if isinstance(status_filter, str):
+        status_filter = [status_filter]
+
+    # Explode and unnest software records
+    exploded = (
+        group_df.select("software_records")
+        .explode("software_records")
+        .filter(pl.col("software_records").is_not_null())
+        .unnest("software_records")
+        .filter(pl.col("status").is_in(status_filter))
+        .filter(pl.col(name_column).is_not_null())
+    )
+
+    if exploded.height == 0:
+        return []
+
+    # Group by normalized name, count, and keep most common original form
     counts = (
-        group_df.select(col_name)
-        .explode(col_name)
-        .filter(pl.col(col_name).is_not_null())
-        .group_by(col_name)
-        .len()
-        .sort("len", descending=True)
+        exploded.group_by("normalized_name")
+        .agg(
+            pl.len().alias("count"),
+            pl.col(name_column).mode().first().alias("display_name"),
+        )
+        .sort("count", descending=True)
         .head(top_n)
     )
-    return [f"{r[col_name]} ({r['len']})" for r in counts.iter_rows(named=True)]
+
+    return [f"{r['display_name']} ({r['count']})" for r in counts.iter_rows(named=True)]
+
+
+def _print_overall_top_n(results_df: pl.DataFrame, top_n: int) -> None:
+    """Print overall top N analysis across all papers."""
+    print()
+    print(f"Overall Top {top_n} Analysis:")
+    print("-" * 60)
+
+    # Top imported libraries (matched + import_only)
+    top_imported = _get_top_items_by_status(
+        results_df,
+        status_filter=["matched", "import_only"],
+        name_column="import_name",
+        top_n=top_n,
+    )
+    if top_imported:
+        print(f"  Top imported: {', '.join(top_imported)}")
+
+    # Top mentioned software (matched + mention_only)
+    top_mentioned = _get_top_items_by_status(
+        results_df,
+        status_filter=["matched", "mention_only"],
+        name_column="mention_name",
+        top_n=top_n,
+    )
+    if top_mentioned:
+        print(f"  Top mentioned: {', '.join(top_mentioned)}")
+
+    # Top imported but not mentioned (import_only)
+    top_unmatched_imports = _get_top_items_by_status(
+        results_df,
+        status_filter="import_only",
+        name_column="import_name",
+        top_n=top_n,
+    )
+    if top_unmatched_imports:
+        print(f"  Top imported (not mentioned): {', '.join(top_unmatched_imports)}")
+
+    # Top mentioned but not imported (mention_only)
+    top_unmatched_mentions = _get_top_items_by_status(
+        results_df,
+        status_filter="mention_only",
+        name_column="mention_name",
+        top_n=top_n,
+    )
+    if top_unmatched_mentions:
+        print(f"  Top mentioned (not imported): {', '.join(top_unmatched_mentions)}")
 
 
 def _print_top_n_analysis(
@@ -244,7 +412,7 @@ def _print_top_n_analysis(
     Print detailed top N analysis for imported/mentioned software by group.
 
     Args:
-        results_df: DataFrame with comparison results
+        results_df: DataFrame with comparison results (with software_records column)
         group_col: Column name to group by
         label: Human-readable label for the grouping
         top_n: Number of top items to show
@@ -263,23 +431,43 @@ def _print_top_n_analysis(
         print()
         print(f"    [{group_val}]")
 
-        # Top imported libraries
-        top_imported = _get_top_items(group_df, "imported_libraries", top_n)
+        # Top imported libraries (matched + import_only)
+        top_imported = _get_top_items_by_status(
+            group_df,
+            status_filter=["matched", "import_only"],
+            name_column="import_name",
+            top_n=top_n,
+        )
         if top_imported:
             print(f"      Top imported: {', '.join(top_imported)}")
 
-        # Top mentioned software
-        top_mentioned = _get_top_items(group_df, "mentioned_software", top_n)
+        # Top mentioned software (matched + mention_only)
+        top_mentioned = _get_top_items_by_status(
+            group_df,
+            status_filter=["matched", "mention_only"],
+            name_column="mention_name",
+            top_n=top_n,
+        )
         if top_mentioned:
             print(f"      Top mentioned: {', '.join(top_mentioned)}")
 
-        # Top unmatched imports (imported but not mentioned)
-        top_unmatched_imports = _get_top_items(group_df, "unmatched_imported", top_n)
+        # Top imported but not mentioned (import_only)
+        top_unmatched_imports = _get_top_items_by_status(
+            group_df,
+            status_filter="import_only",
+            name_column="import_name",
+            top_n=top_n,
+        )
         if top_unmatched_imports:
             print(f"      Top imported (not mentioned): {', '.join(top_unmatched_imports)}")
 
-        # Top unmatched mentions (mentioned but not imported)
-        top_unmatched_mentions = _get_top_items(group_df, "unmatched_mentioned", top_n)
+        # Top mentioned but not imported (mention_only)
+        top_unmatched_mentions = _get_top_items_by_status(
+            group_df,
+            status_filter="mention_only",
+            name_column="mention_name",
+            top_n=top_n,
+        )
         if top_unmatched_mentions:
             print(f"      Top mentioned (not imported): {', '.join(top_unmatched_mentions)}")
 
@@ -535,7 +723,7 @@ def compare_imported_vs_mentioned(
     used_software_path: str = str(THIS_DIR / "used-software.parquet"),
     output_path: str = str(THIS_DIR / "comparison-results.parquet"),
     score_cutoff: float = 75.0,
-    top_n: int = 10,
+    top_n: int = 5,
     debug: bool = False,
 ) -> None:
     """
@@ -628,8 +816,14 @@ def compare_imported_vs_mentioned(
         )
         # matched keys are mentioned names, values are (imported_name, score)
         matched_mentioned_names = set(matched.keys())
-        matched_imported_names = {imp for imp, _ in matched.values()}
         unmatched_mentions = mentioned_set - matched_mentioned_names
+
+        # Create unified software records
+        software_records = _create_software_records(
+            matched=matched,
+            unmatched_imports=unmatched_imports,
+            unmatched_mentions=unmatched_mentions,
+        )
 
         # Store results per repo
         article_doi = doi
@@ -656,6 +850,19 @@ def compare_imported_vs_mentioned(
             print(f"Unmatched mentioned ({n_unmatched_mentioned}): {unmatched_mentions}")
             print()
 
+        # Convert software records to dicts for polars
+        software_records_dicts = [
+            {
+                "software_id": r.software_id,
+                "import_name": r.import_name,
+                "mention_name": r.mention_name,
+                "normalized_name": r.normalized_name,
+                "match_score": r.match_score,
+                "status": r.status,
+            }
+            for r in software_records
+        ]
+
         results.append(
             {
                 **repo_subset.drop("imported_library").row(0, named=True),
@@ -666,12 +873,7 @@ def compare_imported_vs_mentioned(
                 "n_unmatched_mentioned": n_unmatched_mentioned,
                 "avg_match_score": avg_score,
                 "median_match_score": median_score,
-                "imported_libraries": list(imported_set),
-                "mentioned_software": list(mentioned_set),
-                "matched_imported": list(matched_imported_names),
-                "matched_mentioned": list(matched_mentioned_names),
-                "unmatched_imported": list(unmatched_imports),
-                "unmatched_mentioned": list(unmatched_mentions),
+                "software_records": software_records_dicts,
             }
         )
 
@@ -707,6 +909,9 @@ def compare_imported_vs_mentioned(
     print(
         f"Median match score: {results_df.filter(pl.col('median_match_score') > 0)['median_match_score'].mean():.2f}"
     )
+
+    # Overall top N analysis
+    _print_overall_top_n(results_df, top_n)
 
     # Print stats by grouping variables
     grouping_cols = [
