@@ -1,20 +1,20 @@
 #!/usr/bin/env python
 
-import typer
-from dataclasses_json import DataClassJsonMixin
-import polars as pl
-import connectorx  # noqa: F401
-from tqdm import tqdm
-from eil import Extractor
-from nb_to_src import convert_directory as convert_nb_to_src_in_dir
-from git import Repo, GitCommandError
-from git.remote import RemoteProgress
 import shutil
 from pathlib import Path
-from py_ascii_tree import ascii_tree
+
+import connectorx  # noqa: F401
 import numpy as np
+import polars as pl
+import typer
+from eil import Extractor
+from git import GitCommandError, Repo
+from git.remote import RemoteProgress
+from nb_to_src import convert_directory as convert_nb_to_src_in_dir
 from rapidfuzz import fuzz
 from scipy.optimize import linear_sum_assignment
+from tqdm import tqdm
+from py_ascii_tree import ascii_tree
 
 from rs_graph.db import constants as db_constants
 
@@ -35,6 +35,26 @@ def _read_table(table: str) -> pl.DataFrame:
     )
 
 
+def _normalize_doi_expr(col_name: str) -> pl.Expr:
+    """
+    Create a Polars expression to normalize DOIs.
+
+    Normalization:
+    - Strip whitespace
+    - Lowercase
+    - Remove URL prefixes (https://doi.org/, http://dx.doi.org/, etc.)
+    - Remove 'doi:' prefix
+    """
+    return (
+        pl.col(col_name)
+        .str.strip_chars()
+        .str.to_lowercase()
+        .str.replace(r"^https?://(dx\.)?doi\.org/", "")
+        .str.replace(r"^doi:", "")
+        .str.strip_chars()
+    )
+
+
 def load_pairs() -> pl.DataFrame:
     # Read all the tables we need
     dataset_sources = _read_table("dataset_source")
@@ -43,6 +63,7 @@ def load_pairs() -> pl.DataFrame:
     pairs = _read_table("document_repository_link")
     doc_topics = _read_table("document_topic")
     topics = _read_table("topic")
+    doc_alternate_dois = _read_table("document_alternate_doi")
 
     # Drop to unique doc and unique repo in pairs
     pairs = pairs.unique(
@@ -122,6 +143,8 @@ def load_pairs() -> pl.DataFrame:
                 pl.col("fwci").alias("document_fwci"),
                 pl.col("is_open_access").alias("document_is_open_access"),
                 pl.col("publication_date").alias("document_publication_date"),
+            ).with_columns(
+                _normalize_doi_expr("document_doi").alias("document_doi")
             ),
             on="document_id",
             how="left",
@@ -283,11 +306,18 @@ def align_dependencies(
 
 class _TqdmProgress(RemoteProgress):
     """Progress handler for git clone operations with tqdm integration."""
+
     def __init__(self, desc: str):
         super().__init__()
-        self._tqdm = tqdm(unit='objects', desc=desc, leave=False)
+        self._tqdm = tqdm(unit="objects", desc=desc, leave=False)
 
-    def update(self, op_code: int, cur_count: str | float, max_count: str | float | None = None, message: str = '') -> None:
+    def update(
+        self,
+        op_code: int,
+        cur_count: str | float,
+        max_count: str | float | None = None,
+        message: str = "",
+    ) -> None:
         try:
             cur = int(cur_count or 0)
             if max_count and int(max_count) > 0:
@@ -313,15 +343,41 @@ class _TqdmProgress(RemoteProgress):
 
 @app.command()
 def get_imported_libraries(
+    softcite_dataset_dir: str,
     sample_n: int = 50,
-    results_path: str = "used-software.parquet",
+    results_path: str = str(THIS_DIR / "used-software.parquet"),
     cache_every_n: int = 1,
+    debug: bool = False,
 ) -> None:
-    # Load the pairs data
+    # Load softcite papers to filter to only repos with known mentions
+    softcite_dir = Path(softcite_dataset_dir)
+    softcite_papers_path = softcite_dir / "papers.parquet"
+    softcite_papers_df = pl.read_parquet(softcite_papers_path)
+
+    # Normalize softcite DOIs
+    softcite_papers_df = softcite_papers_df.with_columns(
+        _normalize_doi_expr("doi").alias("doi")
+    )
+    softcite_dois = softcite_papers_df.select("doi").drop_nulls().unique()["doi"].to_list()
+    print(f"Found {len(softcite_dois)} unique DOIs in softcite dataset")
+
+    # Load the pairs data and normalize DOIs
     df = load_pairs()
 
+    # Filter to only documents with softcite mentions
+    df = df.filter(pl.col("document_doi").is_in(softcite_dois))
+    print(f"Filtered to {df.height} document-repository pairs with softcite mentions")
+
+    # Filter to repositories with primary language of "Python", "Jupyter Notebook", or "R"
+    df = df.filter(
+        pl.col("repository_primary_language").is_in(
+            ["Python", "Jupyter Notebook", "R"]
+        )
+    )
+    print(f"Filtered to {df.height} pairs with target programming languages")
+
     # Sample
-    df_sample = df.sample(n=sample_n, seed=12)
+    df_sample = df.sample(n=min(sample_n, df.height), seed=12)
 
     # Clean prior temp repo
     if TEMP_REPO_PATH.exists():
@@ -339,15 +395,20 @@ def get_imported_libraries(
         # Clone the repo using GitPython with a progress bar
         try:
             with _TqdmProgress(desc=f"Cloning {repo_full_name}") as progress:
-                Repo.clone_from(f"https://github.com/{repo_full_name}.git", str(TEMP_REPO_PATH), progress=progress)
+                Repo.clone_from(
+                    f"https://github.com/{repo_full_name}.git",
+                    str(TEMP_REPO_PATH),
+                    progress=progress,
+                )
 
             # Print tree of files
-            # print(f"Repository: {repo_full_name}")
-            # all_repo_files = [
-            #     p.relative_to(TEMP_REPO_PATH) for p in TEMP_REPO_PATH.glob("**/*")
-            # ]
-            # print(ascii_tree(all_repo_files, max_depth=3, max_files_per_dir=3))
-            # print()
+            if debug:
+                print(f"Repository: {repo_full_name}")
+                all_repo_files = [
+                    p.relative_to(TEMP_REPO_PATH) for p in TEMP_REPO_PATH.glob("**/*")
+                ]
+                print(ascii_tree(all_repo_files, max_depth=3, max_files_per_dir=3))
+                print()
 
             # Convert notebooks to source code
             convert_nb_to_src_in_dir(
@@ -365,23 +426,40 @@ def get_imported_libraries(
             )
 
             # Condense third party libraries
-            third_party_libs = list(set(
-                lib for _file_path, imported_libs_result in extracted_lib_results.extracted.items()
-                for lib in imported_libs_result.third_party
-            ))
+            third_party_libs = list(
+                set(
+                    lib
+                    for _file_path, imported_libs_result in extracted_lib_results.extracted.items()
+                    for lib in imported_libs_result.third_party
+                )
+            )
 
             # Store as long format
             for lib in third_party_libs:
-                results.append({
-                    "repository_owner": row_dict['repository_owner'],
-                    "repository_name": row_dict['repository_name'],
-                    "imported_library": lib,
-                })
+                results.append(
+                    {
+                        **row_dict,
+                        "imported_library": lib,
+                    }
+                )
+
+            # If no third party libs found, still record the repo with no imports
+            if not third_party_libs:
+                if debug:
+                    print(f"No third-party libraries found in {repo_full_name}")
+                    print(extracted_lib_results)
+                    
+                results.append(
+                    {
+                        **row_dict,
+                        "imported_library": None,
+                    }
+                )
 
             # Cache every n
             if len(results) % cache_every_n == 0:
                 pl.DataFrame(results).write_parquet(results_path)
-        
+
         except GitCommandError as e:
             print(f"Failed to clone repository: {repo_full_name} ({e})")
             continue
@@ -397,11 +475,12 @@ def compare_imported_vs_mentioned(
     softcite_dataset_dir: str,
     used_software_path: str = str(THIS_DIR / "used-software.parquet"),
     output_path: str = str(THIS_DIR / "comparison-results.parquet"),
-    score_cutoff: float = 70.0,
+    score_cutoff: float = 75.0,
+    debug: bool = False,
 ) -> None:
     """
     Compare imported libraries from code analysis with software mentioned in papers.
-    
+
     Args:
         softcite_dataset_dir: Path to directory containing softcite dataset files (papers.parquet, etc.)
         used_software_path: Path to the parquet file with imported libraries
@@ -410,97 +489,74 @@ def compare_imported_vs_mentioned(
     """
     # Load the imported libraries data
     used_software_df = pl.read_parquet(used_software_path)
-    
     print(
         f"Loaded {used_software_df.height} imported library records from "
-        f"{used_software_df.n_unique(subset=["repository_owner", "repository_name"])} " f"repositories"
-    )
-    
-    # Load document-repository links
-    print("Loading document-repository pairs...")
-    pairs = load_pairs()
-    print(f"Loaded {pairs.height} document-repository pairs")
-    
-    # Get repository IDs for our analyzed repos
-    analyzed_repos = (
-        used_software_df
-        .unique(subset=["repository_owner", "repository_name"])
-        .join(
-            pairs,
-            on=["repository_owner", "repository_name"],
-            how="left",
-        )
+        f"{used_software_df.n_unique(subset=['repository_owner', 'repository_name'])} "
+        f"repositories"
     )
 
-    # Make DOI lowercase
-    analyzed_repos = analyzed_repos.with_columns(
-        pl.col("document_doi").str.to_lowercase()
-    )
-    
-    # Load software mentions from softcite dataset
+    # Load software mentions from softcite dataset and normalize DOIs
     softcite_dir = Path(softcite_dataset_dir)
     softcite_papers_path = softcite_dir / "papers.parquet"
     softcite_mentions_path = softcite_dir / "mentions.pdf.parquet"
     softcite_papers_df = pl.read_parquet(softcite_papers_path)
+    softcite_papers_df = softcite_papers_df.with_columns(
+        _normalize_doi_expr("doi").alias("doi")
+    )
+
     softcite_mentions_df = pl.scan_parquet(softcite_mentions_path)
-    softcite_mentions_df = softcite_mentions_df.select(
-        pl.col("software_mention_id").str.strip_chars().alias("softcite_mention_id"),
-        pl.col("paper_id").alias("softcite_paper_id"),
-        pl.col("software_raw").alias("softcite_software_mention_raw"),
-    ).collect().join(
-        softcite_papers_df.select(
+    softcite_mentions_df = (
+        softcite_mentions_df.select(
+            pl.col("software_mention_id").str.strip_chars().alias("softcite_mention_id"),
             pl.col("paper_id").alias("softcite_paper_id"),
-            pl.col("doi")
-            .str.strip_chars()
-            .str.to_lowercase()
-            .alias("softcite_paper_doi"),
-        ).filter(
-            pl.col("softcite_paper_doi")
-            .is_in(
-                analyzed_repos["document_doi"]
-                .unique()
-                .to_list()
-            )
-        ),
-        on="softcite_paper_id",
-        how="right",
-    ).drop_nulls()
+            pl.col("software_raw").alias("softcite_software_mention_raw"),
+        )
+        .collect()
+        .join(
+            softcite_papers_df.select(
+                pl.col("paper_id").alias("softcite_paper_id"),
+                pl.col("doi").alias("softcite_paper_doi"),
+            ).filter(
+                pl.col("softcite_paper_doi").is_in(
+                    used_software_df["document_doi"].unique().to_list()
+                )
+            ),
+            on="softcite_paper_id",
+            how="right",
+        )
+        .drop_nulls()
+    )
 
     print(
         f"Found {softcite_mentions_df.height} software mentions from "
         f"{softcite_mentions_df['softcite_paper_id'].n_unique()} relevant papers"
     )
 
-    # TODO: in the future, we should only analyze repos with known softcite mentions
-    # requires changing the upstream data processing function to first parse the softcite
-    # dataset and then filter the repository list accordingly
-
-    # For now drop analyzed repos to DOIs with softcite mentions
-    analyzed_repos = analyzed_repos.filter(
-        pl.col("document_doi")
-        .is_in(
-            softcite_mentions_df["softcite_paper_doi"]
-            .unique()
-            .to_list()
-        )
-    )
-
-    print()
-    print("-" * 80)
-    print()
+    if debug:
+        print()
+        print("-" * 80)
+        print()
 
     # Iter over DOIs get subset of each dataframe and align
     results = []
     for doi in tqdm(
-        analyzed_repos["document_doi"].unique().to_list(),
+        used_software_df["document_doi"].unique().to_list(),
         desc="Comparing imported vs mentioned",
     ):
         # Subset data
-        repo_subset = analyzed_repos.filter(pl.col("document_doi") == doi)
+        repo_subset = used_software_df.filter(pl.col("document_doi") == doi)
         mention_subset = softcite_mentions_df.filter(pl.col("softcite_paper_doi") == doi)
 
-        # Get sets
-        imported_set = set(repo_subset["imported_library"].to_list())
+        # Get repository info for this DOI
+        repo_owner = repo_subset.select("repository_owner").item()
+        repo_name = repo_subset.select("repository_name").item()
+
+        # Get imported libraries from the FULL used_software_df
+        imported_libs_subset = used_software_df.filter(
+            (pl.col("repository_owner") == repo_owner)
+            & (pl.col("repository_name") == repo_name)
+        )
+        imported_set = set(imported_libs_subset["imported_library"].to_list())
         mentioned_set = set(mention_subset["softcite_software_mention_raw"].to_list())
 
         # Align
@@ -509,56 +565,55 @@ def compare_imported_vs_mentioned(
             mentioned=mentioned_set,
             score_cutoff=score_cutoff,
         )
-
-        # Get article and repo info
-        row = repo_subset.select(
-            "document_doi",
-            "repository_owner",
-            "repository_name",
-        ).row(0, named=True)
+        matched_names = set(matched.keys())
 
         # Store results per repo
-        article_doi = row["document_doi"]
-        repo_owner = row["repository_owner"]
-        repo_name = row["repository_name"]
+        article_doi = doi
         n_imported = len(imported_set)
         n_mentioned = len(mentioned_set)
         n_matched = len(matched)
         n_unmatched_imported = len(unmatched)
         total_score = sum(score for _, score in matched.values())
         avg_score = total_score / n_matched if n_matched > 0 else 0.0
-        median_score = np.median([score for _, score in matched.values()]) if n_matched > 0 else 0.0
+        median_score = (
+            np.median([score for _, score in matched.values()]) if n_matched > 0 else 0.0
+        )
 
         # Show the whole match lut
-        print()
-        print(f"Article DOI: {article_doi}")
-        print(f"Repository URL: https://github.com/{repo_owner}/{repo_name}")
-        print(f"Imported libraries ({n_imported}): {imported_set}")
-        print(f"Mentioned software ({n_mentioned}): {mentioned_set}")
-        print(f"Matched ({n_matched}): {matched}")
-        print(f"Unmatched imported ({n_unmatched_imported}): {unmatched}")
-        print()
+        if debug:
+            print()
+            print(f"Article DOI: {article_doi}")
+            print(f"Repository URL: https://github.com/{repo_owner}/{repo_name}")
+            print(f"Imported libraries ({n_imported}): {imported_set}")
+            print(f"Mentioned software ({n_mentioned}): {mentioned_set}")
+            print(f"Matched ({n_matched}): {matched_names}")
+            print(f"Unmatched imported ({n_unmatched_imported}): {unmatched}")
+            print()
 
-        results.append({
-            "document_doi": article_doi,
-            "repository_owner": repo_owner,
-            "repository_name": repo_name,
-            "n_imported": n_imported,
-            "n_mentioned": n_mentioned,
-            "n_matched": n_matched,
-            "n_unmatched_imported": n_unmatched_imported,
-            "avg_match_score": avg_score,
-            "median_match_score": median_score,
-            "matched_pairs": str(matched),
-            "unmatched_imported": str(unmatched),
-        })
-    
+        results.append(
+            {
+                "document_doi": article_doi,
+                "repository_owner": repo_owner,
+                "repository_name": repo_name,
+                "n_imported": n_imported,
+                "n_mentioned": n_mentioned,
+                "n_matched": n_matched,
+                "n_unmatched_imported": n_unmatched_imported,
+                "avg_match_score": avg_score,
+                "median_match_score": median_score,
+                "matched_software": [f"<matched-software>{name}</matched-software>" for name in matched_names],
+                "unmatched_imported": [f"<unmatched-imported>{name}</unmatched-imported>" for name in unmatched],
+                "unmatched_mentioned": [f"<unmatched-mentioned>{name}</unmatched-mentioned>" for name in (mentioned_set - matched_names)],
+            }
+        )
+
     # Save results
     results_df = pl.DataFrame(results)
     results_df.write_parquet(output_path)
-    print()
-    print("-" * 80)
-    print()
+    if debug:
+        print()
+        print("-" * 80)
+        print()
 
     # Print summary
     print("Summary of comparison results:")
@@ -566,10 +621,12 @@ def compare_imported_vs_mentioned(
     print(f"Average number of imported libraries: {results_df['n_imported'].mean():.2f}")
     print(f"Average number of mentioned software: {results_df['n_mentioned'].mean():.2f}")
     print(f"Average number of matched software: {results_df['n_matched'].mean():.2f}")
-    print(f"Average match score: {results_df['avg_match_score'].mean():.2f}")
-    print(f"Median match score: {results_df['median_match_score'].mean():.2f}")
+    print(f"Average match score: {results_df.filter(pl.col('avg_match_score') > 0)['avg_match_score'].mean():.2f}")
+    print(f"Median match score: {results_df.filter(pl.col('median_match_score') > 0)['median_match_score'].mean():.2f}")
+
 
 ###############################################################################
+
 
 def main() -> None:
     app()
