@@ -220,6 +220,70 @@ def normalize_name(name: str) -> str:
     return name.lower().replace("-", "").replace("_", "").replace(" ", "")
 
 
+def _get_top_items(group_df: pl.DataFrame, col_name: str, top_n: int) -> list[str]:
+    """Explode, count, and format top items from a list column."""
+    counts = (
+        group_df.select(col_name)
+        .explode(col_name)
+        .filter(pl.col(col_name).is_not_null())
+        .group_by(col_name)
+        .len()
+        .sort("len", descending=True)
+        .head(top_n)
+    )
+    return [f"{r[col_name]} ({r['len']})" for r in counts.iter_rows(named=True)]
+
+
+def _print_top_n_analysis(
+    results_df: pl.DataFrame,
+    group_col: str,
+    label: str,
+    top_n: int,
+) -> None:
+    """
+    Print detailed top N analysis for imported/mentioned software by group.
+
+    Args:
+        results_df: DataFrame with comparison results
+        group_col: Column name to group by
+        label: Human-readable label for the grouping
+        top_n: Number of top items to show
+    """
+    print()
+    print(f"  Top {top_n} Analysis by {label}:")
+
+    for group_val in results_df[group_col].unique().sort().to_list():
+        if group_val is None:
+            continue
+
+        group_df = results_df.filter(pl.col(group_col) == group_val)
+        if group_df.height == 0:
+            continue
+
+        print()
+        print(f"    [{group_val}]")
+
+        # Top imported libraries
+        top_imported = _get_top_items(group_df, "imported_libraries", top_n)
+        if top_imported:
+            print(f"      Top imported: {', '.join(top_imported)}")
+
+        # Top mentioned software
+        top_mentioned = _get_top_items(group_df, "mentioned_software", top_n)
+        if top_mentioned:
+            print(f"      Top mentioned: {', '.join(top_mentioned)}")
+
+        # Top unmatched imports (imported but not mentioned)
+        top_unmatched_imports = _get_top_items(group_df, "unmatched_imported", top_n)
+        if top_unmatched_imports:
+            print(f"      Top imported (not mentioned): {', '.join(top_unmatched_imports)}")
+
+        # Top unmatched mentions (mentioned but not imported)
+        top_unmatched_mentions = _get_top_items(group_df, "unmatched_mentioned", top_n)
+        if top_unmatched_mentions:
+            print(f"      Top mentioned (not imported): {', '.join(top_unmatched_mentions)}")
+
+
 def align_dependencies(
     imported: set[str],
     mentioned: set[str],
@@ -471,6 +535,7 @@ def compare_imported_vs_mentioned(
     used_software_path: str = str(THIS_DIR / "used-software.parquet"),
     output_path: str = str(THIS_DIR / "comparison-results.parquet"),
     score_cutoff: float = 75.0,
+    top_n: int = 10,
     debug: bool = False,
 ) -> None:
     """
@@ -481,6 +546,7 @@ def compare_imported_vs_mentioned(
         used_software_path: Path to the parquet file with imported libraries
         output_path: Path to save comparison results
         score_cutoff: Minimum similarity score (0-100) for matching
+        top_n: Number of top items to show in detailed breakdowns
         debug: Whether to print detailed debug information
     """
     # Load the imported libraries data
@@ -555,19 +621,23 @@ def compare_imported_vs_mentioned(
         mentioned_set = set(mention_subset["softcite_software_mention_raw"].to_list())
 
         # Align
-        matched, unmatched, _, _ = align_dependencies(
+        matched, unmatched_imports, _, _ = align_dependencies(
             imported=imported_set,
             mentioned=mentioned_set,
             score_cutoff=score_cutoff,
         )
-        matched_names = set(matched.keys())
+        # matched keys are mentioned names, values are (imported_name, score)
+        matched_mentioned_names = set(matched.keys())
+        matched_imported_names = {imp for imp, _ in matched.values()}
+        unmatched_mentions = mentioned_set - matched_mentioned_names
 
         # Store results per repo
         article_doi = doi
         n_imported = len(imported_set)
         n_mentioned = len(mentioned_set)
         n_matched = len(matched)
-        n_unmatched_imported = len(unmatched)
+        n_unmatched_imported = len(unmatched_imports)
+        n_unmatched_mentioned = len(unmatched_mentions)
         total_score = sum(score for _, score in matched.values())
         avg_score = total_score / n_matched if n_matched > 0 else 0.0
         median_score = (
@@ -581,8 +651,9 @@ def compare_imported_vs_mentioned(
             print(f"Repository URL: https://github.com/{repo_owner}/{repo_name}")
             print(f"Imported libraries ({n_imported}): {imported_set}")
             print(f"Mentioned software ({n_mentioned}): {mentioned_set}")
-            print(f"Matched ({n_matched}): {matched_names}")
-            print(f"Unmatched imported ({n_unmatched_imported}): {unmatched}")
+            print(f"Matched ({n_matched}): {matched_mentioned_names}")
+            print(f"Unmatched imported ({n_unmatched_imported}): {unmatched_imports}")
+            print(f"Unmatched mentioned ({n_unmatched_mentioned}): {unmatched_mentions}")
             print()
 
         results.append(
@@ -592,18 +663,15 @@ def compare_imported_vs_mentioned(
                 "n_mentioned": n_mentioned,
                 "n_matched": n_matched,
                 "n_unmatched_imported": n_unmatched_imported,
+                "n_unmatched_mentioned": n_unmatched_mentioned,
                 "avg_match_score": avg_score,
                 "median_match_score": median_score,
-                "imported_libraries": [
-                    f"<imported-library>{name}</imported-library>" for name in imported_set
-                ],
-                "mentioned_software": [
-                    f"<mentioned-software>{name}</mentioned-software>" for name in mentioned_set
-                ],
-                "matched_imports_to_mentions": [
-                    f"<matched-imported-to-mentioned-software>{name}</matched-imported-to-mentioned-software>"
-                    for name in matched_names
-                ],
+                "imported_libraries": list(imported_set),
+                "mentioned_software": list(mentioned_set),
+                "matched_imported": list(matched_imported_names),
+                "matched_mentioned": list(matched_mentioned_names),
+                "unmatched_imported": list(unmatched_imports),
+                "unmatched_mentioned": list(unmatched_mentions),
             }
         )
 
@@ -643,10 +711,14 @@ def compare_imported_vs_mentioned(
     # Print stats by grouping variables
     grouping_cols = [
         ("document_domain_name", "Domain"),
+        ("document_field_name", "Field"),
         ("dataset_source_name", "Dataset Source"),
         ("repository_primary_language", "Language"),
         ("document_publication_year", "Publication Year"),
     ]
+
+    # Columns that get detailed top N analysis
+    detailed_analysis_cols = {"document_domain_name", "document_field_name"}
 
     for col, label in grouping_cols:
         print()
@@ -682,6 +754,10 @@ def compare_imported_vs_mentioned(
                 f"avg_matched={avg_matched:.2f}, "
                 f"avg_score={avg_score:.1f}"
             )
+
+        # Detailed top N analysis for domain and field
+        if col in detailed_analysis_cols:
+            _print_top_n_analysis(results_df, col, label, top_n)
 
 
 ###############################################################################
