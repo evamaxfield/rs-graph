@@ -537,10 +537,13 @@ def compare_imported_vs_mentioned(
         print("-" * 80)
         print()
 
+    # Get all DOIs from used_software_df (includes repos without softcite mentions)
+    used_dois = used_software_df["document_doi"].unique().to_list()
+
     # Iter over DOIs get subset of each dataframe and align
     results = []
     for doi in tqdm(
-        used_software_df["document_doi"].unique().to_list(),
+        used_dois,
         desc="Comparing imported vs mentioned",
     ):
         # Subset data
