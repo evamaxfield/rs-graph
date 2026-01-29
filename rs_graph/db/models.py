@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, ClassVar
 
 from sqlalchemy import Column, DateTime, func
 from sqlmodel import Field, SQLModel, UniqueConstraint
@@ -42,7 +42,7 @@ class StripMixin:
     be lowercased for consistency (e.g., DOIs, usernames, repository names).
     """
 
-    FIELDS_TO_LOWER: tuple[str, ...] = ()
+    FIELDS_TO_LOWER: ClassVar[tuple[str, ...]] = ()
 
     def __init__(self, **data: Any):
         for field, value in data.items():
