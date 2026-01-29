@@ -36,7 +36,13 @@ def _is_attrdict_like(value: Any) -> bool:
 
 
 class StripMixin:
-    """Mixin that strips string values and normalizes empty containers to None."""
+    """Mixin that strips string values and normalizes empty containers to None.
+
+    Subclasses can define FIELDS_TO_LOWER as a tuple of field names that should
+    be lowercased for consistency (e.g., DOIs, usernames, repository names).
+    """
+
+    FIELDS_TO_LOWER: tuple[str, ...] = ()
 
     def __init__(self, **data: Any):
         for field, value in data.items():
@@ -50,6 +56,11 @@ class StripMixin:
             # Strip whitespace from strings
             elif isinstance(value, str):
                 data[field] = value.strip()
+
+            # Lowercase specific fields for consistency
+            if field in self.FIELDS_TO_LOWER and isinstance(data[field], str):
+                data[field] = data[field].lower()
+
         super().__init__(**data)
 
 
@@ -121,6 +132,8 @@ class Location(StrippedSQLModel, table=True):
 class Document(StrippedSQLModel, table=True):
     """Stores paper, report, or other academic document details."""
 
+    FIELDS_TO_LOWER = ("doi",)
+
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
     doi: str = Field(unique=True)
@@ -162,6 +175,8 @@ class DocumentAlternateDOI(StrippedSQLModel, table=True):
     "Alternate" DOIs are DOIs that were previously associated with a document
     which we have resolved to a more recent version.
     """
+
+    FIELDS_TO_LOWER = ("doi",)
 
     __tablename__ = "document_alternate_doi"
 
@@ -424,6 +439,8 @@ class CodeHost(StrippedSQLModel, table=True):
 class Repository(StrippedSQLModel, table=True):
     """Stores the basic information for a repository."""
 
+    FIELDS_TO_LOWER = ("owner", "name")
+
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
     code_host_id: int = Field(
@@ -532,6 +549,8 @@ class RepositoryFile(StrippedSQLModel, table=True):
 
 class DeveloperAccount(StrippedSQLModel, table=True):
     """Stores the basic information for a developer account (e.g. GitHub, GitLab)."""
+
+    FIELDS_TO_LOWER = ("username", "email")
 
     __tablename__ = "developer_account"
 
