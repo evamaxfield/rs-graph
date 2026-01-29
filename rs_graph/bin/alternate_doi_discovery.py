@@ -127,7 +127,7 @@ def _get_doi_from_semantic_scholar(
     try:
         response = requests.get(url, headers=headers, params=params, timeout=10)
         # Rate limit: ~1 request/sec with API key
-        time.sleep(3.0 if not api_key else 1.0)
+        time.sleep(3.05 if not api_key else 1.05)
 
         if response.status_code == 404:
             return None
