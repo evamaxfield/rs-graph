@@ -615,6 +615,7 @@ class DocumentRepositoryLink(StrippedSQLModel, table=True):
         index=True,
         ondelete="CASCADE",
     )
+    iteration: int | None = Field(default=None, index=True)
     predictive_model_name: str | None = None
     predictive_model_version: str | None = None
     predictive_model_confidence: float | None = None
