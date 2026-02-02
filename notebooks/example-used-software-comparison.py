@@ -609,7 +609,7 @@ class _TqdmProgress(RemoteProgress):
 @app.command()
 def get_imported_libraries(
     softcite_dataset_dir: str,
-    sample_n: int = 50,
+    sample_n: int = 200,
     results_path: str = str(THIS_DIR / "used-software.parquet"),
     cache_every_n: int = 1,
     debug: bool = False,
