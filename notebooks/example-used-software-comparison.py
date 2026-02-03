@@ -24,6 +24,20 @@ from rs_graph.db import constants as db_constants
 THIS_DIR = Path(__file__).parent.resolve()
 TEMP_REPO_PATH = THIS_DIR / "temp-repo"
 
+# Normalized mention exclusion set (hardcoded)
+MENTION_EXCLUDE_NORMALIZED = {
+    "code",
+    "latex",
+    "script",
+    "scripts",
+    "codes",
+    "library",
+    "libraries",
+    "package",
+    "packages",
+    "api",
+}
+
 ###############################################################################
 
 app = typer.Typer()
@@ -371,6 +385,20 @@ def _get_top_items_by_status(
     ]
 
 
+def _filter_display_items_by_normalized(items: list[str], exclude: set[str]) -> list[str]:
+    """
+    Given items like 'Name (count)' filter out items whose normalized name is in exclude.
+    Returns list of items still formatted as 'Name (count)'.
+    """
+    filtered = []
+    for item in items:
+        # Extract display name (strip trailing ' (N)' if present)
+        name_part = item.rsplit("(", 1)[0].strip()
+        if normalize_name(name_part) not in exclude:
+            filtered.append(item)
+    return filtered
+
+
 def _print_overall_top_n(results_df: pl.DataFrame, top_n: int) -> None:
     """Print overall top N analysis across all papers."""
     print()
@@ -395,7 +423,11 @@ def _print_overall_top_n(results_df: pl.DataFrame, top_n: int) -> None:
         top_n=top_n,
     )
     if top_mentioned:
-        print(f"  Top mentioned: {', '.join(top_mentioned)}")
+        print(f"  Top mentioned (unfiltered): {', '.join(top_mentioned)}")
+        filtered_top_mentioned = _filter_display_items_by_normalized(
+            top_mentioned, MENTION_EXCLUDE_NORMALIZED
+        )
+        print(f"  Top mentioned (filtered): {', '.join(filtered_top_mentioned)}")
 
     # Top imported but not mentioned (import_only)
     top_unmatched_imports = _get_top_items_by_status(
@@ -415,7 +447,13 @@ def _print_overall_top_n(results_df: pl.DataFrame, top_n: int) -> None:
         top_n=top_n,
     )
     if top_unmatched_mentions:
-        print(f"  Top mentioned (not imported): {', '.join(top_unmatched_mentions)}")
+        print(
+            f"  Top mentioned (not imported) (unfiltered): {', '.join(top_unmatched_mentions)}"
+        )
+        filtered_top_unmatched = _filter_display_items_by_normalized(
+            top_unmatched_mentions, MENTION_EXCLUDE_NORMALIZED
+        )
+        print(f"  Top mentioned (not imported) (filtered): {', '.join(filtered_top_unmatched)}")
 
 
 def _print_top_n_analysis(
@@ -465,7 +503,11 @@ def _print_top_n_analysis(
             top_n=top_n,
         )
         if top_mentioned:
-            print(f"      Top mentioned: {', '.join(top_mentioned)}")
+            print(f"      Top mentioned (unfiltered): {', '.join(top_mentioned)}")
+            filtered_group_top_mentioned = _filter_display_items_by_normalized(
+                top_mentioned, MENTION_EXCLUDE_NORMALIZED
+            )
+            print(f"      Top mentioned (filtered): {', '.join(filtered_group_top_mentioned)}")
 
         # Top imported but not mentioned (import_only)
         top_unmatched_imports = _get_top_items_by_status(
@@ -485,7 +527,15 @@ def _print_top_n_analysis(
             top_n=top_n,
         )
         if top_unmatched_mentions:
-            print(f"      Top mentioned (not imported): {', '.join(top_unmatched_mentions)}")
+            print(
+                f"      Top mentioned (not imported) (unfiltered): {', '.join(top_unmatched_mentions)}"
+            )
+            filtered_group_top_unmatched = _filter_display_items_by_normalized(
+                top_unmatched_mentions, MENTION_EXCLUDE_NORMALIZED
+            )
+            print(
+                f"      Top mentioned (not imported) (filtered): {', '.join(filtered_group_top_unmatched)}"
+            )
 
 
 def align_dependencies(
@@ -762,6 +812,7 @@ def compare_imported_vs_mentioned(
     )
 
     # Load software mentions from softcite dataset and normalize DOIs
+    print("Loading softcite software mentions...")
     softcite_dir = Path(softcite_dataset_dir)
     softcite_papers_path = softcite_dir / "papers.parquet"
     softcite_mentions_path = softcite_dir / "mentions.pdf.parquet"
@@ -769,13 +820,12 @@ def compare_imported_vs_mentioned(
     softcite_papers_df = softcite_papers_df.with_columns(
         _normalize_doi_expr("doi").alias("doi")
     )
-
     softcite_mentions_df = pl.scan_parquet(softcite_mentions_path)
     softcite_mentions_df = (
         softcite_mentions_df.select(
             pl.col("software_mention_id").str.strip_chars().alias("softcite_mention_id"),
             pl.col("paper_id").alias("softcite_paper_id"),
-            pl.col("software_raw").alias("softcite_software_mention_raw"),
+            pl.col("software_normalized").alias("softcite_software_mention_normalized"),
         )
         .collect()
         .join(
@@ -822,7 +872,7 @@ def compare_imported_vs_mentioned(
 
         # Get imported libraries from the FULL used_software_df
         imported_set = {v for v in repo_subset["imported_library"].to_list() if v is not None}
-        mentioned_set = set(mention_subset["softcite_software_mention_raw"].to_list())
+        mentioned_set = set(mention_subset["softcite_software_mention_normalized"].to_list())
 
         # Align
         matched, unmatched_imports, _, _ = align_dependencies(
