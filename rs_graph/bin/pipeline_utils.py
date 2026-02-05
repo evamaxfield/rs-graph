@@ -14,6 +14,7 @@ DEFAULT_RESULTS_DIR = Path("processing-results")
 DEFAULT_GITHUB_TOKENS_FILE = ".github-tokens.yml"
 DEFAULT_OPEN_ALEX_EMAILS_FILE = ".open-alex-emails.yml"
 DEFAULT_ELSEVIER_API_KEYS_FILE = ".elsevier-api-keys.yml"
+DEFAULT_ERRORS_CACHE_FILE = DEFAULT_RESULTS_DIR / "errors-cache.parquet"
 
 ###############################################################################
 

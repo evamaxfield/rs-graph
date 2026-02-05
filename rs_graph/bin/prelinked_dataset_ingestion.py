@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+import polars as pl
 import typer
 from dotenv import load_dotenv
 from gh_tokens_loader import GitHubTokensCycler
@@ -21,6 +22,7 @@ from rs_graph.bin.data import download as download_rs_graph_data_files
 from rs_graph.bin.data import upload as upload_rs_graph_data_files
 from rs_graph.bin.pipeline_utils import (
     DEFAULT_ELSEVIER_API_KEYS_FILE,
+    DEFAULT_ERRORS_CACHE_FILE,
     DEFAULT_GITHUB_TOKENS_FILE,
     DEFAULT_OPEN_ALEX_EMAILS_FILE,
     DEFAULT_RESULTS_DIR,
@@ -50,6 +52,98 @@ PRELINKED_INGESTION_SOURCE_MAP: dict[str, proto.DatasetRetrievalFunction] = {
 ###############################################################################
 
 
+def _parse_error_identifier(identifier: str) -> tuple[str, str | tuple[str, str, str]] | None:
+    """
+    Parse an error identifier into its type and components.
+
+    Returns:
+        - ("doi", doi_string) for DOI identifiers
+        - ("repo", (code_host, owner, name)) for repository identifiers
+        - None if identifier doesn't match either pattern
+    """
+    # Check if DOI pattern (contains "10." prefix typical for DOIs)
+    if identifier.startswith("10.") or "/10." in identifier:
+        return ("doi", identifier)
+
+    # Check if repo pattern: {code_host}:{owner}/{name}
+    if ":" in identifier and "/" in identifier:
+        parts = identifier.split(":", 1)
+        if len(parts) == 2:
+            code_host = parts[0]
+            owner_name = parts[1].split("/", 1)
+            if len(owner_name) == 2:
+                return ("repo", (code_host, owner_name[0], owner_name[1]))
+
+    return None
+
+
+def _load_errors_cache(errors_cache_file: Path) -> set[str]:
+    """Load error identifiers from cache file and log unrecognized formats."""
+    if not errors_cache_file.exists():
+        return set()
+
+    df = pl.read_parquet(errors_cache_file)
+    identifiers = set(df["identifier"].to_list())
+
+    # Log unrecognized identifiers
+    for identifier in identifiers:
+        parsed = _parse_error_identifier(identifier)
+        if parsed is None:
+            print(f"Unrecognized error identifier format: {identifier}")
+
+    return identifiers
+
+
+def _filter_prior_errored_pairs(
+    pairs: list[types.ExpandedRepositoryDocumentPair],
+    errored_identifiers: set[str],
+) -> list[types.ExpandedRepositoryDocumentPair]:
+    """Filter out pairs whose DOI or repository identifier is in the error cache."""
+    filtered = []
+
+    for pair in pairs:
+        # Check if DOI is in error cache
+        if pair.paper_doi in errored_identifiers:
+            continue
+
+        # Check if repo identifier is in error cache
+        if pair.repo_parts is not None:
+            repo_id = f"{pair.repo_parts.host}:{pair.repo_parts.owner}/{pair.repo_parts.name}"
+            if repo_id in errored_identifiers:
+                continue
+
+        filtered.append(pair)
+
+    skipped_count = len(pairs) - len(filtered)
+    print(f"Filtered out {skipped_count} pairs with prior errors")
+    print(f"Remaining pairs after error filtering: {len(filtered)}")
+
+    return filtered
+
+
+def _append_errors_to_cache(
+    errors: list[types.ErrorResult],
+    errors_cache_file: Path,
+) -> None:
+    """Append new error identifiers to the cache file."""
+    if not errors:
+        return
+
+    new_identifiers = {e.identifier for e in errors}
+
+    # Load existing
+    if errors_cache_file.exists():
+        existing_df = pl.read_parquet(errors_cache_file)
+        existing_identifiers = set(existing_df["identifier"].to_list())
+        new_identifiers = new_identifiers | existing_identifiers
+
+    # Write back
+    pl.DataFrame({"identifier": list(new_identifiers)}).write_parquet(errors_cache_file)
+
+
+###############################################################################
+
+
 @flow(
     log_prints=True,
 )
@@ -64,6 +158,8 @@ def _prelinked_dataset_ingestion_flow(
     coiled_region: str,
     batch_size: int,
     errored_store_path: Path,
+    filter_prior_errors: bool,
+    errors_cache_file: Path,
 ) -> None:
     # Get an infinite cycle of github tokens
     cycled_github_tokens = GitHubTokensCycler(gh_tokens_file=github_tokens_file)
@@ -110,6 +206,17 @@ def _prelinked_dataset_ingestion_flow(
         code_filtered_results.successful_results,
         use_prod=use_prod,
     )
+
+    # Filter out prior errored pairs if enabled
+    if filter_prior_errors:
+        print("Loading errors cache...")
+        errored_identifiers = _load_errors_cache(errors_cache_file)
+        print(f"Loaded {len(errored_identifiers)} prior error identifiers")
+
+        stored_filtered_results = _filter_prior_errored_pairs(
+            stored_filtered_results,
+            errored_identifiers,
+        )
 
     # Keep track of processing times
     processing_times = ProcessingTimes(
@@ -196,6 +303,7 @@ def _prelinked_dataset_ingestion_flow(
                 results=[f.result() for f in stored_dev_researcher_futures],
                 store_path=this_batch_store_path,
                 processing_times=processing_times,
+                errors_cache_file=errors_cache_file,
             )
 
             # Log "{median} ({mean} +- {std})" for each processing time
@@ -270,6 +378,7 @@ def _store_batch_results(
     results: list[types.StoredRepositoryDocumentPair | types.ErrorResult],
     store_path: Path,
     processing_times: ProcessingTimes,
+    errors_cache_file: Path,
 ) -> ProcessingTimes:
     print("Storing batch results...")
 
@@ -283,6 +392,9 @@ def _store_batch_results(
     # Store errored results
     errored_df = pd.DataFrame(errored_results)
     errored_df.to_parquet(store_path)
+
+    # Append errors to cache
+    _append_errors_to_cache(errored_results, errors_cache_file)
 
     # Update processing times
     for result in results:
@@ -321,6 +433,8 @@ def prelinked_dataset_ingestion(
     open_alex_emails_file: str = DEFAULT_OPEN_ALEX_EMAILS_FILE,
     elsevier_api_keys_file: str = DEFAULT_ELSEVIER_API_KEYS_FILE,
     batch_size: int = 50,
+    filter_prior_errors: bool = True,
+    errors_cache_file: Path = DEFAULT_ERRORS_CACHE_FILE,
 ) -> None:
     """
     Process and ingest a stored pre-linked dataset of
@@ -376,6 +490,8 @@ def prelinked_dataset_ingestion(
         coiled_region=coiled_region,
         batch_size=batch_size,
         errored_store_path=errored_store_path,
+        filter_prior_errors=filter_prior_errors,
+        errors_cache_file=errors_cache_file,
     )
 
     # End duration
