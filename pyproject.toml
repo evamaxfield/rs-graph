@@ -55,7 +55,6 @@ modeling = [
   "scipy>=1,<2",
   "sci-soft-models @ file:///Users/evamaxfield/active/research/sci-soft-models",
   "seaborn>=0.13,<0.14",
-  "skops>=0.11,<0.12",
   "statsmodels>=0.14,<0.15",
 ]
 data = [
