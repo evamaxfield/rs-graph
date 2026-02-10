@@ -1513,6 +1513,7 @@ table_header_start = """\\begin{{table}}
 \\small
 \\caption{{{caption}}}
 \\label{{{label}}}
+\\resizebox{{\\textwidth}}{{!}}{{%
 \\begin{{tabular}}{{llrrrr}}
 \\toprule
 \\textbf{{Category}} & \\textbf{{Subset}} & \\textbf{{Total Authors}} & \\textbf{{Any Code}} & \\textbf{{Majority Code}} & \\textbf{{Always Code}} \\\\
@@ -1523,6 +1524,7 @@ table_header_start = """\\begin{{table}}
 
 table_footer = """\\bottomrule
 \\end{tabular}
+}
 \\end{table}"""
 
 # Generate table content
