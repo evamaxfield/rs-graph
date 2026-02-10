@@ -22,7 +22,8 @@ def _apply_regex(text: str, pattern: str, repl: str, flags: int = 0) -> tuple[st
 def cleanup_tex(text: str) -> tuple[str, list[tuple[str, int]]]:
     """Apply a fixed set of text cleanups.
 
-    Returns:
+    Returns
+    -------
       cleaned_text, list of (rule_name, replacement_count)
     """
     changes: list[tuple[str, int]] = []
@@ -58,18 +59,18 @@ def cleanup_tex(text: str) -> tuple[str, list[tuple[str, int]]]:
     # 6) Convert any Unicode dash variants to LaTeX-safe dash forms.
     # En dash -> --
     # Em dash/minus variants -> ---
-    n_en = text.count("–")
+    n_en = text.count("–")  # noqa: RUF001
     n_em = text.count("—")
-    n_minus = text.count("−")
-    n_nb_hyphen = text.count("‑")
+    n_minus = text.count("−")  # noqa: RUF001
+    n_nb_hyphen = text.count("‑")  # noqa: RUF001
     if n_en:
-        text = text.replace("–", "--")
+        text = text.replace("–", "--")  # noqa: RUF001
     if n_em:
         text = text.replace("—", "---")
     if n_minus:
-        text = text.replace("−", "---")
+        text = text.replace("−", "---")  # noqa: RUF001
     if n_nb_hyphen:
-        text = text.replace("‑", "-")
+        text = text.replace("‑", "-")  # noqa: RUF001
     changes.append(("unicode_en_dash_to_double_dash", n_en))
     changes.append(("unicode_em_dash_to_triple_dash", n_em))
     changes.append(("unicode_minus_to_triple_dash", n_minus))
@@ -87,7 +88,9 @@ def cleanup_tex(text: str) -> tuple[str, list[tuple[str, int]]]:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Clean generated TeX for Overleaf/arXiv.")
+    parser = argparse.ArgumentParser(
+        description="Clean generated TeX for Overleaf/arXiv."
+    )
     parser.add_argument(
         "--input",
         type=Path,
