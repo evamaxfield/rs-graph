@@ -274,7 +274,7 @@ def _prep_softcite_2025_data_for_use(data_dir: str | Path) -> None:
     ]
 
     # Run predictions in batches
-    batch_size = 24
+    batch_size = 128
     all_predictions = []
     for i in tqdm(
         range(0, len(software_mentions), batch_size),
@@ -287,7 +287,6 @@ def _prep_softcite_2025_data_for_use(data_dir: str | Path) -> None:
             loaded_software_mentions_repo_clf_model=model,
         )
         all_predictions.extend(batch_preds)
-        break
 
     # Add prediction results back to the dataframe
     filtered_data = filtered_data.with_columns(
