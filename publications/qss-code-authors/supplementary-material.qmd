@@ -4,6 +4,7 @@ bibliography: supplementary-material.bib
 number-sections: true
 format:
   pdf:
+    keep-tex: true
     toc: false
     execute:
       echo: false
