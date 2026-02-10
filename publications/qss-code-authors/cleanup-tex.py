@@ -5,6 +5,7 @@ Usage examples:
   python cleanup-tex.py
   python cleanup-tex.py --input qss-code-authors.tex --in-place
   python cleanup-tex.py --input qss-code-authors.tex --output qss-code-authors-cleaned.tex
+  python cleanup-tex.py --input qss-code-authors.tex --supplementary
 """
 
 from __future__ import annotations
@@ -104,23 +105,25 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Overwrite input file in place.",
     )
+    parser.add_argument(
+        "--supplementary",
+        action="store_true",
+        help=(
+            "Also clean supplementary-material.tex located in the same directory as --input. "
+            "If --output is provided, it applies only to --input; supplementary output uses "
+            "the default '<stem>-cleaned.tex' naming."
+        ),
+    )
     return parser.parse_args()
 
 
-def main() -> int:
-    args = parse_args()
-    input_path = args.input
+def _default_output_path(input_path: Path) -> Path:
+    return input_path.with_name(f"{input_path.stem}-cleaned{input_path.suffix}")
 
+
+def _process_file(input_path: Path, output_path: Path) -> None:
     if not input_path.exists():
         raise FileNotFoundError(f"Input TeX file not found: {input_path}")
-
-    output_path: Path
-    if args.in_place:
-        output_path = input_path
-    elif args.output is not None:
-        output_path = args.output
-    else:
-        output_path = input_path.with_name(f"{input_path.stem}-cleaned{input_path.suffix}")
 
     original = input_path.read_text(encoding="utf-8")
     cleaned, changes = cleanup_tex(original)
@@ -133,6 +136,27 @@ def main() -> int:
     for rule_name, count in changes:
         if count:
             print(f"  - {rule_name}: {count}")
+    print("")
+
+
+def main() -> int:
+    args = parse_args()
+    input_paths = [args.input]
+
+    if args.supplementary:
+        supplementary_path = args.input.parent / "supplementary-material.tex"
+        if supplementary_path not in input_paths:
+            input_paths.append(supplementary_path)
+
+    for idx, input_path in enumerate(input_paths):
+        if args.in_place:
+            output_path = input_path
+        elif idx == 0 and args.output is not None:
+            output_path = args.output
+        else:
+            output_path = _default_output_path(input_path)
+
+        _process_file(input_path, output_path)
 
     return 0
 

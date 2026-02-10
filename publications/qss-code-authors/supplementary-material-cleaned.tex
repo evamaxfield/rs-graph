@@ -1,0 +1,1543 @@
+% Options for packages loaded elsewhere
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\PassOptionsToPackage{dvipsnames,svgnames,x11names}{xcolor}
+%
+\documentclass[
+  letterpaper,
+  DIV=11,
+  numbers=noendperiod]{scrartcl}
+\usepackage{xcolor}
+\usepackage{amsmath,amssymb}
+\setcounter{secnumdepth}{5}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+% Make \paragraph and \subparagraph free-standing
+\makeatletter
+\ifx\paragraph\undefined\else
+  \let\oldparagraph\paragraph
+  \renewcommand{\paragraph}{
+    \@ifstar
+      \xxxParagraphStar
+      \xxxParagraphNoStar
+  }
+  \newcommand{\xxxParagraphStar}[1]{\oldparagraph*{#1}\mbox{}}
+  \newcommand{\xxxParagraphNoStar}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+  \let\oldsubparagraph\subparagraph
+  \renewcommand{\subparagraph}{
+    \@ifstar
+      \xxxSubParagraphStar
+      \xxxSubParagraphNoStar
+  }
+  \newcommand{\xxxSubParagraphStar}[1]{\oldsubparagraph*{#1}\mbox{}}
+  \newcommand{\xxxSubParagraphNoStar}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+\makeatother
+
+
+\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\usepackage{graphicx}
+\makeatletter
+\newsavebox\pandoc@box
+\newcommand*\pandocbounded[1]{% scales image to fit in text height/width
+  \sbox\pandoc@box{#1}%
+  \Gscale@div\@tempa{\textheight}{\dimexpr\ht\pandoc@box+\dp\pandoc@box\relax}%
+  \Gscale@div\@tempb{\linewidth}{\wd\pandoc@box}%
+  \ifdim\@tempb\p@<\@tempa\p@\let\@tempa\@tempb\fi% select the smaller of both
+  \ifdim\@tempa\p@<\p@\scalebox{\@tempa}{\usebox\pandoc@box}%
+  \else\usebox{\pandoc@box}%
+  \fi%
+}
+% Set default figure placement to htbp
+\def\fps@figure{htbp}
+\makeatother
+
+
+% definitions for citeproc citations
+\NewDocumentCommand\citeproctext{}{}
+\NewDocumentCommand\citeproc{mm}{%
+  \begingroup\def\citeproctext{#2}\cite{#1}\endgroup}
+\makeatletter
+ % allow citations to break across lines
+ \let\@cite@ofmt\@firstofone
+ % avoid brackets around text for \cite:
+ \def\@biblabel#1{}
+ \def\@cite#1#2{{#1\if@tempswa , #2\fi}}
+\makeatother
+\newlength{\cslhangindent}
+\setlength{\cslhangindent}{1.5em}
+\newlength{\csllabelwidth}
+\setlength{\csllabelwidth}{3em}
+\newenvironment{CSLReferences}[2] % #1 hanging-indent, #2 entry-spacing
+ {\begin{list}{}{%
+  \setlength{\itemindent}{0pt}
+  \setlength{\leftmargin}{0pt}
+  \setlength{\parsep}{0pt}
+  % turn on hanging indent if param 1 is 1
+  \ifodd #1
+   \setlength{\leftmargin}{\cslhangindent}
+   \setlength{\itemindent}{-1\cslhangindent}
+  \fi
+  % set entry spacing
+  \setlength{\itemsep}{#2\baselineskip}}}
+ {\end{list}}
+\usepackage{calc}
+\newcommand{\CSLBlock}[1]{\hfill\break\parbox[t]{\linewidth}{\strut\ignorespaces#1\strut}}
+\newcommand{\CSLLeftMargin}[1]{\parbox[t]{\csllabelwidth}{\strut#1\strut}}
+\newcommand{\CSLRightInline}[1]{\parbox[t]{\linewidth - \csllabelwidth}{\strut#1\strut}}
+\newcommand{\CSLIndent}[1]{\hspace{\cslhangindent}#1}
+
+
+
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+
+
+ 
+
+
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{siunitx}
+\usepackage[table]{xcolor}
+\usepackage{float}
+\floatplacement{table}{H}
+\setcounter{table}{0}
+\renewcommand{\thetable}{S\arabic{table}}
+\setcounter{figure}{0}
+\renewcommand{\thefigure}{S\arabic{figure}}
+\KOMAoption{captions}{tableheading}
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\AtBeginDocument{%
+\ifdefined\contentsname
+  \renewcommand*\contentsname{Table of contents}
+\else
+  \newcommand\contentsname{Table of contents}
+\fi
+\ifdefined\listfigurename
+  \renewcommand*\listfigurename{List of Figures}
+\else
+  \newcommand\listfigurename{List of Figures}
+\fi
+\ifdefined\listtablename
+  \renewcommand*\listtablename{List of Tables}
+\else
+  \newcommand\listtablename{List of Tables}
+\fi
+\ifdefined\figurename
+  \renewcommand*\figurename{Figure}
+\else
+  \newcommand\figurename{Figure}
+\fi
+\ifdefined\tablename
+  \renewcommand*\tablename{Table}
+\else
+  \newcommand\tablename{Table}
+\fi
+}
+\@ifpackageloaded{float}{}{\usepackage{float}}
+\floatstyle{ruled}
+\@ifundefined{c@chapter}{\newfloat{codelisting}{h}{lop}}{\newfloat{codelisting}{h}{lop}[chapter]}
+\floatname{codelisting}{Listing}
+\newcommand*\listoflistings{\listof{codelisting}{List of Listings}}
+\makeatother
+\makeatletter
+\makeatother
+\makeatletter
+\@ifpackageloaded{caption}{}{\usepackage{caption}}
+\@ifpackageloaded{subcaption}{}{\usepackage{subcaption}}
+\makeatother
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  pdftitle={Supplementary Material: Code Contribution and Credit in Science},
+  colorlinks=true,
+  linkcolor={blue},
+  filecolor={Maroon},
+  citecolor={Blue},
+  urlcolor={Blue},
+  pdfcreator={LaTeX via pandoc}}
+
+
+\title{Supplementary Material: Code Contribution and Credit in Science}
+\author{}
+\date{}
+\begin{document}
+\maketitle
+
+
+\section{Supplementary Material}\label{supplementary-material}
+
+\subsection{Extended Data and Methods}\label{extended-data-and-methods}
+
+\subsubsection{Building a Dataset of Linked Scientific Articles and Code
+Repositories}\label{building-a-dataset-of-linked-scientific-articles-and-code-repositories}
+
+The increasing emphasis on research transparency has led many journals
+and platforms to require or recommend code and data sharing (Stodden,
+Guo, and Ma 2013; Sharma et al. 2024), creating traceable links between
+publications and code. These explicit links enable systematic study of
+both article-repository and author-developer account relationships (Hata
+et al. 2021; Kelley and Garijo 2021; Stankovski and Garijo 2024;
+Milewicz, Pinto, and Rodeghero 2019).
+
+Our dataset collection process leveraged four sources of linked
+scientific articles and code repositories, each with specific mechanisms
+for establishing these connections:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \textbf{Public Library of Science (PLOS)}: We extracted repository
+  links from PLOS articles' mandatory data and code availability
+  statements.
+\item
+  \textbf{Journal of Open Source Software (JOSS)}: JOSS requires
+  explicit code repository submission and review as a core part of its
+  publication process.
+\item
+  \textbf{SoftwareX}: Similar to JOSS, SoftwareX mandates code
+  repositories as a publication requirement.
+\item
+  \textbf{Papers with Code}: This platform directly connects machine
+  learning preprints with their implementations. We focus solely on the
+  ``official'' article-repository relationships rather than the
+  ``unverified'' or ``unofficial'' links.
+\end{enumerate}
+
+We enriched these article-repository pairs with metadata from multiple
+sources to create a comprehensive and analyzable dataset. We utilized
+the Semantic Scholar API for DOI resolution to ensure we found the
+latest version of each article. This resolution step was particularly
+important when working with preprints, as journals may have published
+these papers since their inclusion in the Papers with Code dataset.
+Using Semantic Scholar, we successfully resolved $\sim$56.3\%
+(n=78,021) of all DOIs within our dataset\footnote{Broken out by dataset
+  source, we resolved $\sim$2.1\% (n=125) of all PLOS DOIs,
+  $\sim$4.0\% (n=93) of all JOSS DOIs, $\sim$0.0\%
+  (n=0) of all SoftwareX DOIs, and $\sim$49.2\% (n=63,817) of
+  all Papers with Code (arXiv) DOIs.}.
+
+We then utilized the OpenAlex API to gather detailed publication
+metadata, including:
+
+\begin{itemize}
+\tightlist
+\item
+  Publication characteristics (open access status, domain, publication
+  date)
+\item
+  Author details (name, author position, corresponding author status)
+\item
+  Article- and individual-level metrics (citation counts, FWCI, h-index)
+\end{itemize}
+
+Similarly, the GitHub API provided comprehensive information for source
+code repositories:
+
+\begin{itemize}
+\tightlist
+\item
+  Repository metadata (name, description, programming languages,
+  creation date)
+\item
+  Contributor details (username, display name, email)
+\item
+  Repository-level metrics (star count, fork count, issue count)
+\end{itemize}
+
+\subsubsection{Developing a Predictive Model for Author-Developer
+Account
+Matching}\label{developing-a-predictive-model-for-author-developer-account-matching}
+
+\paragraph{Annotated Dataset Creation}\label{annotated-dataset-creation}
+
+Creating an accurate author-developer account matching model required
+high quality, labeled training data that reflects real-world
+identity-matching challenges. Exact matching on names or emails proved
+insufficient due to variations in formatting (e.g., ``J. Doe''
+vs.~``Jane Doe''), use of institutional versus personal email addresses,
+and incomplete information. However, author and developer account
+information often contains sufficient similarities for probabilistic
+matching, such as when author ``Jane Doe'' corresponds to username
+``jdoe'' or ``janedoe123.''
+
+To efficiently build our training and evaluation dataset, we used JOSS
+articles as we believed they typically feature higher
+author-developer-account overlap, increasing positive match density. Our
+dataset creation process followed these steps:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  We generated semantic embeddings for each developer account and author
+  name using the
+  \href{https://huggingface.co/sentence-transformers/multi-qa-MiniLM-L6-cos-v1}{multi-qa-MiniLM-L6-cos-v1}
+  model from the Sentence Transformers Python library (Reimers and
+  Gurevych 2019).
+\item
+  We calculated cosine similarity between all potential
+  author-developer-account pairs for each article-repository pair.
+\item
+  We selected the three most similar authors for each developer account
+  for annotation efficiency.
+\end{enumerate}
+
+From these generated author-developer-account pairs, we randomly
+selected 2,999 for classification by two independent annotators as
+either matches or non-matches, resolving disagreements through
+discussion and verification. The resulting dataset contains 451
+($\sim$15.0\%) positive matches and 2,548
+($\sim$85.0\%) negative matches, comprising 2,027 unique
+authors and 2,733 unique developer accounts.
+
+Our collected data for annotation confirmed that exact matching would be
+insufficient---only 2,191 ($\sim$80.2\%) of developer accounts
+had associated display names and just 839 ($\sim$30.7\%) had
+associated email addresses.
+
+\paragraph{Training and
+Evaluation}\label{sec-appendix-model-training-eval}
+
+Our training and evaluation methodology began with careful dataset
+preparation to prevent data leakage between training and test sets. To
+ensure complete separation of authors and developers, we randomly
+selected 10\% of unique authors and 10\% of unique developers,
+designating any pairs containing these selected entities for the test
+set. This entity-based splitting strategy resulted in 2,442
+($\sim$81.4\%) pairs for training and 557
+($\sim$18.6\%) pairs for testing.
+
+For our predictive model, we evaluated three transformer-based
+architectures that have demonstrated strong performance in
+entity-matching tasks:
+
+\begin{itemize}
+\tightlist
+\item
+  DeBERTa-v3-base (He, Gao, and Chen 2021; He et al. 2021)
+\item
+  mBERT (bert-base-multilingual-cased) (Devlin et al. 2018)
+\item
+  DistilBERT (Sanh et al. 2019)
+\end{itemize}
+
+We systematically evaluated these base models across different
+combinations of developer-account features, ranging from using only the
+username to incorporating complete profile information (username,
+display name, and email address). We fine-tuned all models using the
+Adam optimizer with a linear learning rate of 1e-5 for training and a
+batch size of 8 for training and evaluation. Given the size of our
+dataset and the binary nature of our classification task, models were
+trained for a single epoch to prevent overfitting.
+
+We evaluated model performance using precision, recall, and F1-score.
+This evaluation framework allowed us to directly compare model
+architectures and feature combinations while accounting for the balance
+between precision and recall in identifying correct matches.
+
+Our comprehensive model evaluation revealed that fine-tuning
+DeBERTa-v3-base (He, Gao, and Chen 2021) with developer username and
+display name as input features produces optimal performance for
+author-developer matching. This model configuration achieved a binary F1
+score of 0.944, with an accuracy of 0.984, precision of 0.938, and
+recall of 0.95. Table~\ref{tbl-em-model-comparison} presents a complete
+comparison of model architectures and feature combinations.
+
+\begin{table}
+
+\caption{\label{tbl-em-model-comparison}Comparison of Models for Author-Developer-Account Matching}
+
+\centering{
+
+\centering
+
+
+\begin{tabular}{llrrrr}
+\toprule
+\textbf{Optional Feats.} & \textbf{Model} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} \\
+\midrule
+    \cellcolor{white}name & \cellcolor{white}deberta & \cellcolor{white}0.984 & \cellcolor{white}0.938 & \cellcolor{white}0.950 & \cellcolor{white}0.944 \\
+    \cellcolor{gray!10}name, email & \cellcolor{gray!10}bert-multilingual & \cellcolor{gray!10}0.984 & \cellcolor{gray!10}0.938 & \cellcolor{gray!10}0.950 & \cellcolor{gray!10}0.944 \\
+    \cellcolor{white}name, email & \cellcolor{white}deberta & \cellcolor{white}0.982 & \cellcolor{white}0.907 & \cellcolor{white}0.975 & \cellcolor{white}0.940 \\
+    \cellcolor{gray!10}name & \cellcolor{gray!10}bert-multilingual & \cellcolor{gray!10}0.982 & \cellcolor{gray!10}0.938 & \cellcolor{gray!10}0.938 & \cellcolor{gray!10}0.938 \\
+    \cellcolor{white}name & \cellcolor{white}distilbert & \cellcolor{white}0.978 & \cellcolor{white}0.936 & \cellcolor{white}0.912 & \cellcolor{white}0.924 \\
+    \cellcolor{gray!10}name, email & \cellcolor{gray!10}distilbert & \cellcolor{gray!10}0.978 & \cellcolor{gray!10}0.936 & \cellcolor{gray!10}0.912 & \cellcolor{gray!10}0.924 \\
+    \cellcolor{white}email & \cellcolor{white}deberta & \cellcolor{white}0.957 & \cellcolor{white}0.859 & \cellcolor{white}0.838 & \cellcolor{white}0.848 \\
+    \cellcolor{gray!10}email & \cellcolor{gray!10}bert-multilingual & \cellcolor{gray!10}0.950 & \cellcolor{gray!10}0.894 & \cellcolor{gray!10}0.738 & \cellcolor{gray!10}0.808 \\
+    \cellcolor{white}n/a & \cellcolor{white}deberta & \cellcolor{white}0.946 & \cellcolor{white}0.847 & \cellcolor{white}0.762 & \cellcolor{white}0.803 \\
+    \cellcolor{gray!10}n/a & \cellcolor{gray!10}bert-multilingual & \cellcolor{gray!10}0.941 & \cellcolor{gray!10}0.862 & \cellcolor{gray!10}0.700 & \cellcolor{gray!10}0.772 \\
+    \cellcolor{white}n/a & \cellcolor{white}distilbert & \cellcolor{white}0.856 & \cellcolor{white}0.000 & \cellcolor{white}0.000 & \cellcolor{white}0.000 \\
+    \cellcolor{gray!10}email & \cellcolor{gray!10}distilbert & \cellcolor{gray!10}0.856 & \cellcolor{gray!10}0.000 & \cellcolor{gray!10}0.000 & \cellcolor{gray!10}0.000 \\
+\bottomrule
+\end{tabular}
+
+}
+
+\end{table}%
+
+Analysis of each model's performance revealed that including developer
+display names had the most significant positive impact on model
+performance compared to username alone. We also observed that mBERT's
+performance was comparable to DeBERTa's while using the developer email
+address as an additional input feature. However, we selected the DeBERTa
+configuration as it consistently performed well across various feature
+combinations.
+
+To facilitate the reuse of our work, we have made our trained model and
+supporting code publicly available. Complete fine-tuning, evaluation,
+and inference code is available as the Python package:
+\href{https://github.com/evamaxfield/sci-soft-models}{sci-soft-models},
+and the fine-tuned model has been released on HuggingFace
+(\href{https://huggingface.co/evamxb/dev-author-em-clf}{evamxb/dev-author-em-clf}).
+
+\paragraph{Evaluation of Model Performance on Non-JOSS Author-Developer
+Pairs}\label{evaluation-of-model-performance-on-non-joss-author-developer-pairs}
+
+To assess our model's generalizability beyond the JOSS dataset used for
+training, we conducted an additional evaluation using
+author-developer-account pairs from the PLOS, SoftwareX, and Papers with
+Code datasets. We created a dataset of all combinations of possible
+author-developer pairs from 20 article-repository pairs from each
+dataset. This resulted in 535 possible author-developer pairs for
+annotation across the 60 total article-repository pairs. Two independent
+annotators classified each of the possible author-developer pairs as
+either matches or non-matches. This annotation process mirrors how our
+complete dataset was constructed by using the trained model to predict
+matches from all possible author-developer pairs for a given
+article-repository pair. The two annotators achieved a Cohen's kappa of
+0.948, or ``almost perfect'' agreement (Cohen 1960; McHugh 2012).
+Annotators further discussed and resolved all disagreements.
+
+The trained author-developer matching model was then applied to this new
+dataset, achieving an overall binary-F1 score of 0.89, precision of 0.92
+and recall of 0.87 (positive=``match''). The overall macro-F1 score was
+0.94, with a precision of 0.95 and recall of 0.93. Per-dataset
+performance is presented in Table~\ref{tbl-em-model-non-joss-eval}.
+Across each of the non-JOSS datasets, the model demonstrated strong
+performance, with binary-F1 scores ranging from 0.88 to 0.90, and
+acheiving 0.94 for all macro-F1 scores.
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1748}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1068}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1748}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1456}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.0971}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1650}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 12\tabcolsep) * \real{0.1359}}@{}}
+\caption{Per-dataset performance of the author-developer-account
+matching model on non-JOSS
+datasets.}\label{tbl-em-model-non-joss-eval}\tabularnewline
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+dataset
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+binary-F1
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+binary-Precision
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+binary-Recall
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+macro-F1
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+macro-Precision
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+macro-Recall
+\end{minipage} \\
+\midrule\noalign{}
+\endfirsthead
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+dataset
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+binary-F1
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+binary-Precision
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+binary-Recall
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+macro-F1
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+macro-Precision
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+macro-Recall
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+PLOS & 0.88 & 0.79 & 1.00 & 0.94 & 0.89 & 0.99 \\
+SoftwareX & 0.90 & 0.96 & 0.85 & 0.94 & 0.97 & 0.92 \\
+Papers With Code & 0.89 & 1.00 & 0.81 & 0.94 & 0.98 & 0.90 \\
+\end{longtable}
+
+\paragraph{Model Limitations}\label{model-limitations}
+
+While our model demonstrates strong performance, we acknowledge certain
+limitations in our approach:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \textbf{Short name sensitivity}: Shorter names (both usernames and
+  display names) can affect the model's performance, as less textual
+  information is available for matching.
+\item
+  \textbf{Organization accounts}: Research lab accounts used for project
+  management present a potential challenge for accurate matching, as
+  they do not correspond to individual authors. However, our filtering
+  mechanisms applied before analysis help minimize their impact on
+  modeling.
+\end{enumerate}
+
+Additional limitations are discussed in a qualitative error analysis
+conducted as part of our evaluation of the code-contributing non-author
+sub-sample in Section~\ref{sec-appendix-cc-na-error-analysis}.
+
+\subsubsection{Dataset Characteristics and Repository
+Types}\label{sec-appendix-dataset-char}
+
+Our compiled dataset appears to contain a mix of repository types,
+varying from analysis script repositories to software tools and likely
+some ``code dumps'' (where code is copied to a new repository
+immediately before publication). This diversity is reflected in the
+commit duration patterns across different publication types. The median
+commit duration for repositories in our analysis is:
+
+\begin{itemize}
+\tightlist
+\item
+  53 days for preprints
+\item
+  114 days for research articles
+\item
+  282 days for software articles
+\end{itemize}
+
+Complete statistics on commit durations, including count, mean, and
+quantile details, are available in
+Table~\ref{tbl-commit-duration-distributions}.
+
+\begin{longtable}[]{@{}lllllllllll@{}}
+
+\caption{\label{tbl-commit-duration-distributions}Commit duration (in
+days) distributions for different publication types. Only includes
+article-repository pairs with a most recent commit no later than 90 days
+after publication and excludes publications from research teams in the
+top 3\% of total author sizes.}
+
+\tabularnewline
+
+\toprule\noalign{}
+& count & mean & std & min & 10\% & 25\% & 50\% & 75\% & 90\% & max \\
+article\_type & & & & & & & & & & \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+preprint & 55 & 89 & 110 & 0 & 0 & 4 & 47 & 131 & 215 & 587 \\
+research article & 367 & 186 & 235 & 0 & 0 & 18 & 108 & 269 & 484 &
+1697 \\
+software article & 4 & 773 & 585 & 350 & 384 & 436 & 555 & 891 & 1335 &
+1631 \\
+
+\end{longtable}
+
+\subsection{Distributions of Author-Developer-Account Prediction
+Confidence}\label{distributions-of-author-developer-account-prediction-confidence}
+
+\begin{figure}
+
+\centering{
+
+\pandocbounded{\includegraphics[keepaspectratio]{supplementary-material_files/figure-pdf/fig-dist-of-author-dev-pred-confidence-output-1.png}}
+
+}
+
+\caption{\label{fig-dist-of-author-dev-pred-confidence}Distribution of
+author-developer-account prediction confidence scores. The plot on the
+left shows the distribution of all prediction confidence scores. The
+plot on the right shows the distribution of prediction confidence scores
+for author-developer-account pairs with a confidence score greater than
+or equal to 0.97.}
+
+\end{figure}%
+
+Thresholding the predictive model confidence at 0.97 resulted in a
+$\sim$3.2\% (n=2,909) reduction in the number of
+author-developer-account pairs (from an unfiltered total of 90,086
+author-developer-account pairs). This threshold was chosen to ensure a
+high level of confidence in the matches while retaining a large number
+of pairs for analysis.
+
+\subsection{Filtered Dataset Description for Article-Citation,
+Author-Position, and Author-Correspondence
+Analysis}\label{filtered-dataset-description-for-article-citation-author-position-and-author-correspondence-analysis}
+
+\begin{table}
+
+\caption{\label{tbl-team-comp-no-push-after-pub-counts}Counts of article-repository pairs, authors, and developers for research teams. Only includes research teams from article-repository pairs with a most recent commit no later than 90 days after publication and excludes research teams in the top 3\% of total author sizes.}
+
+\centering{
+
+    \centering
+    \small
+    
+    
+    \begin{tabular}{llrrr}
+    \toprule
+    \textbf{Category} & \textbf{Subset} & \textbf{Article-Repository Pairs} & \textbf{Authors} & \textbf{Developers} \\
+    \midrule
+        \multirow{4}{*}{\textbf{By Domain}} & \cellcolor{gray!10}Health Sciences & \cellcolor{gray!10}19 & \cellcolor{gray!10}100 & \cellcolor{gray!10}25 \\
+    & Life Sciences & 31 & 141 & 34 \\
+    & \cellcolor{gray!10}Physical Sciences & \cellcolor{gray!10}354 & \cellcolor{gray!10}1,675 & \cellcolor{gray!10}512 \\
+    & Social Sciences & 22 & 92 & 26 \\\midrule
+    \multirow{3}{*}{\textbf{By Document Type}} & \cellcolor{gray!10}preprint & \cellcolor{gray!10}55 & \cellcolor{gray!10}244 & \cellcolor{gray!10}93 \\
+    & research article & 367 & 1,761 & 494 \\
+    & \cellcolor{gray!10}software article & \cellcolor{gray!10}4 & \cellcolor{gray!10}18 & \cellcolor{gray!10}12 \\\midrule
+    \multirow{2}{*}{\textbf{By Access Status}} & \cellcolor{gray!10}Closed & \cellcolor{gray!10}22 & \cellcolor{gray!10}99 & \cellcolor{gray!10}28 \\
+    & Open & 404 & 1,915 & 570 \\\midrule
+    \multirow{4}{*}{\textbf{By Data Source}} & \cellcolor{gray!10}joss & \cellcolor{gray!10}2 & \cellcolor{gray!10}8 & \cellcolor{gray!10}6 \\
+    & plos & 40 & 194 & 46 \\
+    & \cellcolor{gray!10}pwc & \cellcolor{gray!10}382 & \cellcolor{gray!10}1,796 & \cellcolor{gray!10}539 \\
+    & softwarex & 2 & 10 & 6 \\\midrule
+    \textbf{Total} & & \textbf{426} & \textbf{2,008} & \textbf{597} \\
+    \bottomrule
+    \end{tabular}
+    
+
+}
+
+\end{table}%
+
+\subsubsection{Distributions of Team
+Composition}\label{distributions-of-team-composition}
+
+Table~\ref{tbl-team-composition-counts} provides detailed statistics on
+the composition of research teams across different domains, article
+types, and open access statuses.
+
+\begin{table}
+
+\caption{\label{tbl-team-composition-counts}Mean and Standard Deviation of Non-Code-Contributing Authors (NCC-A), Code-Contributing Authors (CC-A), and Code-Contributing Non-Authors (CC-NA) Research Team Members by Domain, Article Type, and Open Access Status. Only includes research teams from article-repository pairs with repositories that have programming language files, a most recent commit no later than 90 days after publication, and excludes research teams in the top $3\%$ of total author sizes.}
+
+\centering{
+
+\centering
+\small
+
+
+\begin{tabular}{llrrrr}
+\toprule\textbf{Control} & \textbf{Subset} & \textbf{Total Authors} & \textbf{NCC-A} & \textbf{CC-A} & \textbf{CC-NA} \\
+\midrule
+    \multirow{2}{*}{\textbf{OA Status}} & \cellcolor{gray!10}Closed & \cellcolor{gray!10}4.5 $\pm$ 1.7 & \cellcolor{gray!10}3.5 $\pm$ 1.7 & \cellcolor{gray!10}1.0 $\pm$ 0.8 & \cellcolor{gray!10}0.3 $\pm$ 0.5 \\
+    & Open & 4.8 $\pm$ 1.9 & 3.8 $\pm$ 2.0 & 1.0 $\pm$ 0.7 & 0.4 $\pm$ 1.2 \\\midrule
+    \multirow{4}{*}{\textbf{Domain}} & \cellcolor{gray!10}Health Sciences & \cellcolor{gray!10}5.3 $\pm$ 1.9 & \cellcolor{gray!10}4.1 $\pm$ 1.9 & \cellcolor{gray!10}1.2 $\pm$ 0.7 & \cellcolor{gray!10}0.2 $\pm$ 0.4 \\
+    & Life Sciences & 4.5 $\pm$ 2.1 & 3.8 $\pm$ 2.1 & 0.8 $\pm$ 0.6 & 0.3 $\pm$ 0.5 \\
+    & \cellcolor{gray!10}Physical Sciences & \cellcolor{gray!10}4.9 $\pm$ 1.9 & \cellcolor{gray!10}3.8 $\pm$ 2.0 & \cellcolor{gray!10}1.0 $\pm$ 0.7 & \cellcolor{gray!10}0.4 $\pm$ 1.3 \\
+    & Social Sciences & 4.2 $\pm$ 1.8 & 3.0 $\pm$ 1.7 & 1.2 $\pm$ 0.4 & 0.0 $\pm$ 0.0 \\\midrule
+    \multirow{3}{*}{\textbf{Article Type}} & \cellcolor{gray!10}preprint & \cellcolor{gray!10}4.4 $\pm$ 1.6 & \cellcolor{gray!10}3.3 $\pm$ 1.9 & \cellcolor{gray!10}1.1 $\pm$ 0.8 & \cellcolor{gray!10}0.5 $\pm$ 1.6 \\
+    & research article & 4.9 $\pm$ 1.9 & 3.9 $\pm$ 2.0 & 1.0 $\pm$ 0.7 & 0.3 $\pm$ 1.1 \\
+    & \cellcolor{gray!10}software article & \cellcolor{gray!10}4.5 $\pm$ 1.0 & \cellcolor{gray!10}2.2 $\pm$ 1.0 & \cellcolor{gray!10}2.2 $\pm$ 1.0 & \cellcolor{gray!10}0.8 $\pm$ 1.0 \\\midrule
+    \multirow{1}{*}{\textbf{Overall}} & \textbf{} & \textbf{4.8 $\pm$ 1.9} & \textbf{3.8 $\pm$ 2.0} & \textbf{1.0 $\pm$ 0.7} & \textbf{0.4 $\pm$ 1.2} \\
+\bottomrule
+\end{tabular}
+
+}
+
+\end{table}%
+
+\subsection{Additional Analysis of Code-Contributing
+Non-Authors}\label{sec-appendix-additional-cc-na-analysis}
+
+\subsubsection{Sample Construction and
+Labeling}\label{sample-construction-and-labeling}
+
+To better understand the nature and extent of contributions made by
+code-contributing non-authors in our dataset, we conducted a detailed
+analysis using a random sample of 200 individuals from our filtered
+dataset used in other analyses
+(Table~\ref{tbl-team-comp-no-push-after-pub-counts}). Our analysis
+combined qualitative labeling of contribution types with quantitative
+analysis of commit activity, additions, and deletions made by these
+contributors to their respective article-repository pairs.
+
+\paragraph{Annotation Process}\label{annotation-process}
+
+Two independent annotators labeled each of the 200 code-contributing
+non-authors across three dimensions after completing two rounds of trial
+labeling on 20 cases to establish agreement. The final labeling criteria
+were:
+
+\textbf{Contribution Type}:
+
+\begin{itemize}
+\tightlist
+\item
+  \emph{``docs''}: Contributors who only modified documentation files
+  (README, LICENSE, etc.) or made changes limited to code comments.
+\item
+  \emph{``code''}: Contributors who modified actual code files (.py, .R,
+  .js, etc.) with substantive changes or modified code support files
+  (requirements.txt, pyproject.toml, package.json, etc.). Contributors
+  who made code and documentation changes were labeled ``code.''
+\item
+  \emph{``other''}: Contributors whose changes did not fit the above
+  categories, including those who committed to upstream forks or merged
+  code without authoring it.
+\end{itemize}
+
+\textbf{Author Matching Assessment}:
+
+\begin{itemize}
+\tightlist
+\item
+  \emph{``yes''}: Contributors who should have been matched to an author
+  (missed classification).
+\item
+  \emph{``no''}: Contributors correctly classified as non-authors.
+\item
+  \emph{``unclear''}: Cases with insufficient information for
+  determination.
+\end{itemize}
+
+\textbf{Bot Account Detection}:
+
+\begin{itemize}
+\tightlist
+\item
+  \emph{``yes''}: Automated accounts (GitHub Actions, Dependabot, etc.).
+\item
+  \emph{``no''}: Human users.
+\end{itemize}
+
+After establishing near perfect agreement for contribution type
+(κ=0.89), and perfect agreement for author matching assessment and bot
+account detection (κ=1.0), each annotator independently labeled 90
+contributors--- the final sample of 200 created by combining both sets
+plus the 20 cases used for criteria development.
+
+\paragraph{Quantitative Metrics}\label{quantitative-metrics}
+
+For each code-contributing non-author, we collected commit activity data
+using the GitHub API contributor stats endpoint:
+
+\begin{itemize}
+\tightlist
+\item
+  \textbf{Number of Commits}: The total number of commits made by the
+  code contributor to the article-repository pair.
+\item
+  \textbf{Number of Additions}: The total number of lines of code added
+  by the code contributor to the article-repository pair.
+\item
+  \textbf{Number of Deletions}: The total number of lines of code
+  deleted by the code contributor to the article-repository pair.
+\item
+  \textbf{Number of Total Repository Commits}: The total number of
+  commits made to the article-repository pair, regardless of code
+  contributor.
+\item
+  \textbf{Number of Total Repository Additions}: The number of lines of
+  code added to the article-repository pair, regardless of code
+  contributor.
+\item
+  \textbf{Number of Total Repository Deletions}: The total number of
+  lines of code deleted from the article-repository pair, regardless of
+  code contributor.
+\end{itemize}
+
+We additionally calculated the absolute change for each code contributor
+as the sum of additions and deletions, which provides a measure of the
+total impact of their contributions. Further, we normalized these
+metrics by the total number of commits, additions, deletions, and
+absolute changes made to the article-repository pair, regardless of code
+contributor. This normalization allows us to compare the relative
+contribution of each code-contributing non-author to the overall amount
+of changes to the repository.
+
+\subsubsection{Results}\label{results}
+
+We find that $\sim$39\% (n=78) of code-contributing non-authors
+were correctly classified as non-authors, $\sim$30.5\% (n=61)
+were unclear due to insufficient profile information, and
+$\sim$30.5\% (n=61) appeared to be missed classifications that
+should have been matched to authors. Only two accounts
+($\sim$1\%) were identified as bot accounts.
+
+When broken out by contribution type, we find that:
+
+\begin{itemize}
+\tightlist
+\item
+  \emph{``true non-authors'' (n=78)}: 59 contributed code, 13
+  contributed documentation, and 4 contributed some other type of change
+\item
+  \emph{``missed classifications'' (n=61)}: 49 contributed code, 12
+  contributed documentation, and 0 contributed some other type of change
+\item
+  \emph{``unclear'' (n=61)}: 50 contributed code, 8 contributed
+  documentation, and 3 contributed some other type of change
+\end{itemize}
+
+Table~\ref{tbl-true-cc-na-commit-stats} and
+Table~\ref{tbl-unclear-cc-na-commit-stats} present commit statistics for
+true non-authors and unclear cases, respectively. Among true non-authors
+making code contributions, the top quartile (75th percentile and above)
+contributed $\sim$10.7\% of total repository commits and
+$\sim$14.4\% of absolute changes (additions + deletions). The
+unclear cases showed substantially higher contribution levels. Code
+contributors in this group comprised $\sim$50.5\% of total
+repository commits and $\sim$41.7\% of repository absolute
+changes, even at the 25th percentile.
+
+\begin{longtable}[]{@{}llllllll@{}}
+
+\caption{\label{tbl-true-cc-na-commit-stats}Commit statistics for
+code-contributing non-authors labeled as true non-authors. Statistics
+are calculated as the proportion of commits, additions, deletions, and
+absolute changes made by the code-contributing non-author to the total
+commits, additions, deletions, and absolute changes made to the
+article-repository pair, regardless of code-contributor.}
+
+\tabularnewline
+
+\toprule\noalign{}
+& mean & std & min & 25\% & 50\% & 75\% & max \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+commit\_stats & 0.178 & 0.307 & 0.001 & 0.007 & 0.029 & 0.107 & 1.0 \\
+addition\_stats & 0.227 & 0.380 & 0.000 & 0.001 & 0.007 & 0.192 & 1.0 \\
+deletion\_stats & 0.193 & 0.358 & 0.000 & 0.000 & 0.006 & 0.149 & 1.0 \\
+abs\_stats & 0.222 & 0.379 & 0.000 & 0.001 & 0.010 & 0.144 & 1.0 \\
+
+\end{longtable}
+
+\begin{longtable}[]{@{}llllllll@{}}
+
+\caption{\label{tbl-unclear-cc-na-commit-stats}Commit statistics for
+code-contributing non-authors labeled as unclear. Statistics are
+calculated as the proportion of commits, additions, deletions, and
+absolute changes made by the code-contributing non-author to the total
+commits, additions, deletions, and absolute changes made to the
+article-repository pair, regardless of code-contributor.}
+
+\tabularnewline
+
+\toprule\noalign{}
+& mean & std & min & 25\% & 50\% & 75\% & max \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+commit\_stats & 0.747 & 0.366 & 0.004 & 0.505 & 1.0 & 1.0 & 1.0 \\
+addition\_stats & 0.722 & 0.420 & 0.000 & 0.310 & 1.0 & 1.0 & 1.0 \\
+deletion\_stats & 0.737 & 0.417 & 0.000 & 0.722 & 1.0 & 1.0 & 1.0 \\
+abs\_stats & 0.733 & 0.404 & 0.000 & 0.417 & 1.0 & 1.0 & 1.0 \\
+
+\end{longtable}
+
+We observed a notable pattern where very few true non-authors (n=4) were
+repository owners, while $\sim$49.2\% of unclear cases (n=30)
+owned the repositories they contributed to. This suggests that many
+unclear contributors were likely primary code authors who could not be
+matched due to limited profile information. When excluding repository
+owners from the unclear group
+(Table~\ref{tbl-unclear-cc-na-commit-stats-no-repo-owner}), the median
+contribution drops to $\sim$34.6\% of total commits and
+$\sim$12.7\% of absolute changes, though this still represents
+substantial technical involvement.
+
+\begin{longtable}[]{@{}llllllll@{}}
+
+\caption{\label{tbl-unclear-cc-na-commit-stats-no-repo-owner}Commit
+statistics for code-contributing non-authors labeled as unclear,
+excluding repository owners. Statistics are calculated as the proportion
+of commits, additions, deletions, and absolute changes made by the
+code-contributing non-author to the total commits, additions, deletions,
+and absolute changes made to the article-repository pair, regardless of
+code-contributor.}
+
+\tabularnewline
+
+\toprule\noalign{}
+& mean & std & min & 25\% & 50\% & 75\% & max \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+commit\_stats & 0.454 & 0.399 & 0.004 & 0.041 & 0.346 & 0.841 & 1.0 \\
+addition\_stats & 0.380 & 0.443 & 0.000 & 0.016 & 0.094 & 0.917 & 1.0 \\
+deletion\_stats & 0.486 & 0.492 & 0.000 & 0.003 & 0.431 & 0.999 & 1.0 \\
+abs\_stats & 0.392 & 0.440 & 0.000 & 0.011 & 0.127 & 0.919 & 1.0 \\
+
+\end{longtable}
+
+Our analysis provides evidence that code-contributing non-authors
+represent a heterogeneous group with varying contribution levels. While
+defining ``substantial'' contribution worthy of authorship remains
+challenging, our findings reveal a clear mix of legitimate non-authors
+and potentially missed classifications, with both groups often
+contributing meaningful portions of repository commits and code changes.
+
+Our sample size of 200 limits generalizability to the full population of
+code-contributing non-authors. Additionally, the manual annotation
+process introduces potential subjectivity despite our established
+criteria, and our reliance on publicly available GitHub profiles may
+systematically underestimate contributions from developers with minimal
+profile information.
+
+\subsubsection{Qualitative Error Analysis of Missed
+Classifications}\label{sec-appendix-cc-na-error-analysis}
+
+To better understand why certain code-contributing non-authors were
+missed classifications, we conducted a qualitative error analysis of the
+61 contributors labeled as such. We identified several common themes:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  \textbf{Limited Information from Text Alone}: The original dataset for
+  model training and evaluation was constructed using only text-based
+  features from author names and developer information. However, for
+  this extended examination, annotators utilized the full
+  code-contributor profile, including linked websites or linked ORCID
+  profiles. This was done because we wanted to understand the nature of
+  missed classifications (with more time and information to make a
+  classification) rather than strictly replicating the model's text-only
+  approach. From text alone, many of these missed classifications would
+  have been very challenging to identify. This highlights a limitation
+  in our current model, and a potential area for future work, such as
+  incorporating details from linked websites or other contextual
+  information to improve matching performance.
+\item
+  \textbf{Name Variations and Cultural Differences}: The model performed
+  better with Anglo-Saxon names, while names from other cultures were
+  more likely to be missed. This suggests possible bias in the training
+  data and a clear area for future work.
+\item
+  \textbf{Additional Unrelated Text in Names}: When usernames or display
+  names contained longer phrases or unrelated words, the model tended to
+  classify them as no-match, even if there were strong indicators of a
+  match. For example, a username such as
+  ``awesome\_computational\_biologist\_john\_d'' paired with an author
+  name ``John Doe'' might be missed due to the additional text in the
+  username.
+\item
+  \textbf{Significant Differences Between Username and Author Name}: The
+  model struggled when there were substantial differences between the
+  username and author name, such as when an individual provides a chosen
+  name in their GitHub profile that differed significantly from their
+  authorship name. Most commonly this occurred when an individual used a
+  chosen ``English'' name in their GitHub profile that was very
+  different from their authorship name.
+\end{enumerate}
+
+These themes highlight areas for potential improvement in the model,
+such as incorporating more diverse training data and exploring
+additional features that could capture cultural name variations and
+contextual information.
+
+\subsection{Article Citation Linear Model
+Results}\label{article-citation-linear-model-results}
+
+\begin{table}
+
+\caption{\label{tbl-article-composition-overall}Article citations by code contributorship of the research team. Generalized linear model fit with negative binomial distribution and log link function. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)}
+
+\centering{
+
+\centering
+
+
+\begin{tabular}{l*{6}{r}}
+\toprule
+\textbf{Variable} & \textbf{coef} & \textbf{P>|z|} & \multicolumn{2}{c}{\textbf{[0.025 0.975]}} \\
+\midrule
+    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}0.76 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.39 & \bfseries\cellcolor{white}1.14 \\
+    \bfseries\cellcolor{gray!10}Total Authors~$^{***}$ & \bfseries\cellcolor{gray!10}0.14 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.08 & \bfseries\cellcolor{gray!10}0.19 \\
+    \cellcolor{white}Code-Contrib. Authors & \cellcolor{white}0.07 & \cellcolor{white}0.34 & \cellcolor{white}-0.07 & \cellcolor{white}0.22 \\
+    \cellcolor{gray!10}Code-Contrib. Non-Authors & \cellcolor{gray!10}-0.04 & \cellcolor{gray!10}0.34 & \cellcolor{gray!10}-0.12 & \cellcolor{gray!10}0.04 \\
+    \bfseries\cellcolor{white}Years Since Publication~$^{***}$ & \bfseries\cellcolor{white}0.38 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.32 & \bfseries\cellcolor{white}0.44 \\
+\bottomrule
+\end{tabular}
+
+}
+
+\end{table}%
+
+\begin{table}
+
+\caption{\label{tbl-article-composition-oa-status}Article citations by code contributorship of the research team controlled by open access status. Generalized linear model fit with negative binomial distribution and log link function. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)}
+
+\centering{
+
+\centering
+
+
+\begin{tabular}{l*{6}{r}}
+\toprule
+\textbf{Variable} & \textbf{coef} & \textbf{P>|z|} & \multicolumn{2}{c}{\textbf{[0.025 0.975]}} \\
+\midrule
+    \cellcolor{white}const & \cellcolor{white}-0.70 & \cellcolor{white}0.23 & \cellcolor{white}-1.84 & \cellcolor{white}0.45 \\
+    \bfseries\cellcolor{gray!10}Total Authors~$^{***}$ & \bfseries\cellcolor{gray!10}0.13 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.08 & \bfseries\cellcolor{gray!10}0.19 \\
+    \cellcolor{white}Code-Contrib. Authors & \cellcolor{white}0.61 & \cellcolor{white}0.10 & \cellcolor{white}-0.12 & \cellcolor{white}1.35 \\
+    \cellcolor{gray!10}Code-Contrib. Non-Authors & \cellcolor{gray!10}0.90 & \cellcolor{gray!10}0.16 & \cellcolor{gray!10}-0.36 & \cellcolor{gray!10}2.16 \\
+    \bfseries\cellcolor{white}Years Since Publication~$^{***}$ & \bfseries\cellcolor{white}0.36 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.30 & \bfseries\cellcolor{white}0.42 \\
+    \bfseries\cellcolor{gray!10}Is Open Access~$^{**}$ & \bfseries\cellcolor{gray!10}1.56 & \bfseries\cellcolor{gray!10}0.01 & \bfseries\cellcolor{gray!10}0.43 & \bfseries\cellcolor{gray!10}2.69 \\
+    \cellcolor{white}Code-Contrib. Authors × Is Open Access & \cellcolor{white}-0.55 & \cellcolor{white}0.15 & \cellcolor{white}-1.30 & \cellcolor{white}0.20 \\
+    \cellcolor{gray!10}Code-Contrib. Non-Authors × Is Open Access & \cellcolor{gray!10}-0.94 & \cellcolor{gray!10}0.15 & \cellcolor{gray!10}-2.20 & \cellcolor{gray!10}0.33 \\
+\bottomrule
+\end{tabular}
+
+}
+
+\end{table}%
+
+\begin{table}
+
+\caption{\label{tbl-article-composition-domain}Article citations by code contributorship of the research team controlled by domain. Generalized linear model fit with negative binomial distribution and log link function. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)}
+
+\centering{
+
+\centering
+
+
+\begin{tabular}{l*{6}{r}}
+\toprule
+\textbf{Variable} & \textbf{coef} & \textbf{P>|z|} & \multicolumn{2}{c}{\textbf{[0.025 0.975]}} \\
+\midrule
+    \bfseries\cellcolor{white}const~$^{*}$ & \bfseries\cellcolor{white}1.53 & \bfseries\cellcolor{white}0.01 & \bfseries\cellcolor{white}0.31 & \bfseries\cellcolor{white}2.75 \\
+    \bfseries\cellcolor{gray!10}Total Authors~$^{***}$ & \bfseries\cellcolor{gray!10}0.13 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.08 & \bfseries\cellcolor{gray!10}0.19 \\
+    \cellcolor{white}Code-Contrib. Authors & \cellcolor{white}-0.41 & \cellcolor{white}0.33 & \cellcolor{white}-1.24 & \cellcolor{white}0.41 \\
+    \cellcolor{gray!10}Code-Contrib. Non-Authors & \cellcolor{gray!10}-0.68 & \cellcolor{gray!10}0.38 & \cellcolor{gray!10}-2.19 & \cellcolor{gray!10}0.84 \\
+    \bfseries\cellcolor{white}Years Since Publication~$^{***}$ & \bfseries\cellcolor{white}0.40 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.34 & \bfseries\cellcolor{white}0.46 \\
+    \cellcolor{gray!10}Domain Life Sciences & \cellcolor{gray!10}-1.13 & \cellcolor{gray!10}0.14 & \cellcolor{gray!10}-2.63 & \cellcolor{gray!10}0.37 \\
+    \cellcolor{white}Domain Physical Sciences & \cellcolor{white}-0.75 & \cellcolor{white}0.22 & \cellcolor{white}-1.97 & \cellcolor{white}0.46 \\
+    \bfseries\cellcolor{gray!10}Domain Social Sciences~$^{*}$ & \bfseries\cellcolor{gray!10}-1.98 & \bfseries\cellcolor{gray!10}0.04 & \bfseries\cellcolor{gray!10}-3.84 & \bfseries\cellcolor{gray!10}-0.12 \\
+    \cellcolor{white}Code-Contrib. Authors × Domain Life Sciences & \cellcolor{white}-0.04 & \cellcolor{white}0.94 & \cellcolor{white}-1.17 & \cellcolor{white}1.08 \\
+    \cellcolor{gray!10}Code-Contrib. Authors × Domain Physical Sciences & \cellcolor{gray!10}0.48 & \cellcolor{gray!10}0.26 & \cellcolor{gray!10}-0.36 & \cellcolor{gray!10}1.32 \\
+    \cellcolor{white}Code-Contrib. Authors × Domain Social Sciences & \cellcolor{white}1.22 & \cellcolor{white}0.09 & \cellcolor{white}-0.19 & \cellcolor{white}2.62 \\
+    \cellcolor{gray!10}Code-Contrib. Non-Authors × Domain Life Sciences & \cellcolor{gray!10}0.49 & \cellcolor{gray!10}0.59 & \cellcolor{gray!10}-1.32 & \cellcolor{gray!10}2.30 \\
+    \cellcolor{white}Code-Contrib. Non-Authors × Domain Physical Sciences & \cellcolor{white}0.63 & \cellcolor{white}0.41 & \cellcolor{white}-0.88 & \cellcolor{white}2.15 \\
+    \cellcolor{gray!10}Code-Contrib. Non-Authors × Domain Social Sciences & \cellcolor{gray!10}0.00 & \cellcolor{gray!10}nan & \cellcolor{gray!10}0.00 & \cellcolor{gray!10}0.00 \\
+\bottomrule
+\end{tabular}
+
+}
+
+\end{table}%
+
+\begin{table}
+
+\caption{\label{tbl-article-composition-type}Article citations by code contributorship of the research team controlled by article type. Generalized linear model fit with negative binomial distribution and log link function. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)}
+
+\centering{
+
+\centering
+
+
+\begin{tabular}{l*{6}{r}}
+\toprule
+\textbf{Variable} & \textbf{coef} & \textbf{P>|z|} & \multicolumn{2}{c}{\textbf{[0.025 0.975]}} \\
+\midrule
+    \cellcolor{white}const & \cellcolor{white}0.63 & \cellcolor{white}0.05 & \cellcolor{white}-0.01 & \cellcolor{white}1.27 \\
+    \bfseries\cellcolor{gray!10}Total Authors~$^{***}$ & \bfseries\cellcolor{gray!10}0.13 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.08 & \bfseries\cellcolor{gray!10}0.19 \\
+    \cellcolor{white}Code-Contrib. Authors & \cellcolor{white}-0.05 & \cellcolor{white}0.79 & \cellcolor{white}-0.44 & \cellcolor{white}0.33 \\
+    \cellcolor{gray!10}Code-Contrib. Non-Authors & \cellcolor{gray!10}-0.20 & \cellcolor{gray!10}0.10 & \cellcolor{gray!10}-0.45 & \cellcolor{gray!10}0.04 \\
+    \bfseries\cellcolor{white}Years Since Publication~$^{***}$ & \bfseries\cellcolor{white}0.39 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.33 & \bfseries\cellcolor{white}0.45 \\
+    \cellcolor{gray!10}Article Type Research Article & \cellcolor{gray!10}0.12 & \cellcolor{gray!10}0.68 & \cellcolor{gray!10}-0.43 & \cellcolor{gray!10}0.66 \\
+    \cellcolor{white}Article Type Software Article & \cellcolor{white}0.23 & \cellcolor{white}0.93 & \cellcolor{white}-4.95 & \cellcolor{white}5.41 \\
+    \cellcolor{gray!10}Code-Contrib. Authors × Article Type Research Article & \cellcolor{gray!10}0.18 & \cellcolor{gray!10}0.39 & \cellcolor{gray!10}-0.24 & \cellcolor{gray!10}0.60 \\
+    \cellcolor{white}Code-Contrib. Authors × Article Type Software Article & \cellcolor{white}-0.52 & \cellcolor{white}0.58 & \cellcolor{white}-2.34 & \cellcolor{white}1.30 \\
+    \cellcolor{gray!10}Code-Contrib. Non-Authors × Article Type Research Article & \cellcolor{gray!10}0.18 & \cellcolor{gray!10}0.19 & \cellcolor{gray!10}-0.09 & \cellcolor{gray!10}0.44 \\
+    \cellcolor{white}Code-Contrib. Non-Authors × Article Type Software Article & \cellcolor{white}0.03 & \cellcolor{white}0.97 & \cellcolor{white}-1.81 & \cellcolor{white}1.87 \\
+\bottomrule
+\end{tabular}
+
+}
+
+\end{table}%
+
+\subsection{Post-Hoc Tests for Coding vs Non-Coding Authors by
+Position}\label{post-hoc-tests-for-coding-vs-non-coding-authors-by-position}
+
+\begin{table}
+
+\caption{\label{tbl-post-hoc-tests-on-author-positions}Counts of Code-Contributing Authors ('Coding') and Total Authors by Position and Bonferroni Corrected p-values from Post-Hoc Binomial Tests. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***).}
+
+\centering{
+
+\centering
+\small
+
+
+\begin{tabular}{llllrr}
+\toprule
+\textbf{Control} & \textbf{Subset} & \textbf{Position} & \textbf{Coding} & \textbf{Total} & \textbf{p} \\
+\midrule
+    \multirow{12}{*}{\textbf{Domain}} & \multirow{3}{*}{\textbf{Health Sciences}} & First & 16 & 19 & 0.027$^{*}$ \\
+    & & \cellcolor{gray!10}Middle & \cellcolor{gray!10}7 & \cellcolor{gray!10}62 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Last & 0 & 19 & 0.000$^{***}$ \\
+    & \multirow{3}{*}{\textbf{Life Sciences}} & \cellcolor{gray!10}First & \cellcolor{gray!10}17 & \cellcolor{gray!10}31 & \cellcolor{gray!10}1.000 \\
+    & & Middle & 3 & 79 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Last & \cellcolor{gray!10}4 & \cellcolor{gray!10}31 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & \multirow{3}{*}{\textbf{Physical Sciences}} & First & 255 & 354 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Middle & \cellcolor{gray!10}97 & \cellcolor{gray!10}1002 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Last & 25 & 348 & 0.000$^{***}$ \\
+    & \multirow{3}{*}{\textbf{Social Sciences}} & \cellcolor{gray!10}First & \cellcolor{gray!10}20 & \cellcolor{gray!10}22 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Middle & 5 & 48 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Last & \cellcolor{gray!10}1 & \cellcolor{gray!10}21 & \cellcolor{gray!10}0.000$^{***}$ \\
+    \midrule
+    \multirow{9}{*}{\textbf{Article Type}} & \multirow{3}{*}{\textbf{Preprint}} & First & 40 & 55 & 0.006$^{**}$ \\
+    & & \cellcolor{gray!10}Middle & \cellcolor{gray!10}15 & \cellcolor{gray!10}131 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Last & 7 & 55 & 0.000$^{***}$ \\
+    & \multirow{3}{*}{\textbf{Research Article}} & \cellcolor{gray!10}First & \cellcolor{gray!10}265 & \cellcolor{gray!10}367 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Middle & 92 & 1050 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Last & \cellcolor{gray!10}22 & \cellcolor{gray!10}360 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & \multirow{3}{*}{\textbf{Software Article}} & First & 3 & 4 & 1.000 \\
+    & & \cellcolor{gray!10}Middle & \cellcolor{gray!10}5 & \cellcolor{gray!10}10 & \cellcolor{gray!10}1.000 \\
+    & & Last & 1 & 4 & 1.000 \\
+    \midrule
+    \multirow{6}{*}{\textbf{Open Access Status}} & \multirow{3}{*}{\textbf{Closed Access}} & \cellcolor{gray!10}First & \cellcolor{gray!10}16 & \cellcolor{gray!10}22 & \cellcolor{gray!10}0.315 \\
+    & & Middle & 6 & 55 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Last & \cellcolor{gray!10}2 & \cellcolor{gray!10}21 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & \multirow{3}{*}{\textbf{Open Access}} & First & 292 & 404 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Middle & \cellcolor{gray!10}106 & \cellcolor{gray!10}1136 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Last & 28 & 398 & 0.000$^{***}$ \\
+    \midrule
+    \multirow{3}{*}{\textbf{Overall}} & \multirow{3}{*}{\textbf{Overall}} & \cellcolor{gray!10}First & \cellcolor{gray!10}308 & \cellcolor{gray!10}426 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Middle & 112 & 1191 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Last & \cellcolor{gray!10}30 & \cellcolor{gray!10}419 & \cellcolor{gray!10}0.000$^{***}$ \\
+\bottomrule
+\end{tabular}
+
+}
+
+\end{table}%
+
+Counts of authors in Table~\ref{tbl-post-hoc-tests-on-author-positions}
+may differ slightly from counts in
+Table~\ref{tbl-team-comp-no-push-after-pub-counts}.
+Table~\ref{tbl-team-comp-no-push-after-pub-counts} counts unique
+authors, while Table~\ref{tbl-post-hoc-tests-on-author-positions} counts
+unique author-document pairs (i.e., the same author may appear in
+multiple documents).
+
+\subsection{Post-Hoc Tests for Coding vs Non-Coding Authors by
+Corresponding
+Status}\label{post-hoc-tests-for-coding-vs-non-coding-authors-by-corresponding-status}
+
+\begin{table}
+
+\caption{\label{tbl-post-hoc-tests-on-corresponding-status}Counts of Code-Contributing Authors ('Coding') and Total Authors by Corresponding Status and Bonferroni Corrected p-values from Post-Hoc Binomial Tests. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***).}
+
+\centering{
+
+\centering
+\small
+
+
+\begin{tabular}{llllrr}
+\toprule
+\textbf{Control} & \textbf{Subset} & \textbf{Is Corresponding} & \textbf{Coding} & \textbf{Total} & \textbf{p} \\
+\midrule
+    \multirow{8}{*}{\textbf{Domain}} & \multirow{2}{*}{\textbf{Health Sciences}} & Corresponding & 6 & 18 & 0.476 \\
+    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}17 & \cellcolor{gray!10}82 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & \multirow{2}{*}{\textbf{Life Sciences}} & Corresponding & 11 & 59 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}13 & \cellcolor{gray!10}82 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & \multirow{2}{*}{\textbf{Physical Sciences}} & Corresponding & 42 & 138 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}335 & \cellcolor{gray!10}1566 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & \multirow{2}{*}{\textbf{Social Sciences}} & Corresponding & 6 & 10 & 1.000 \\
+    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}20 & \cellcolor{gray!10}81 & \cellcolor{gray!10}0.000$^{***}$ \\
+    \midrule
+    \multirow{5}{*}{\textbf{Article Type}} & \multirow{1}{*}{\textbf{Preprint}} & Not Corresponding & 62 & 241 & 0.000$^{***}$ \\
+    & \multirow{2}{*}{\textbf{Research Article}} & \cellcolor{gray!10}Corresponding & \cellcolor{gray!10}64 & \cellcolor{gray!10}224 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Not Corresponding & 315 & 1553 & 0.000$^{***}$ \\
+    & \multirow{2}{*}{\textbf{Software Article}} & \cellcolor{gray!10}Corresponding & \cellcolor{gray!10}1 & \cellcolor{gray!10}1 & \cellcolor{gray!10}1.000 \\
+    & & Not Corresponding & 8 & 17 & 1.000 \\
+    \midrule
+    \multirow{4}{*}{\textbf{Open Access Status}} & \multirow{2}{*}{\textbf{Closed Access}} & \cellcolor{gray!10}Corresponding & \cellcolor{gray!10}2 & \cellcolor{gray!10}6 & \cellcolor{gray!10}1.000 \\
+    & & Not Corresponding & 22 & 92 & 0.000$^{***}$ \\
+    & \multirow{2}{*}{\textbf{Open Access}} & \cellcolor{gray!10}Corresponding & \cellcolor{gray!10}63 & \cellcolor{gray!10}219 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Not Corresponding & 363 & 1719 & 0.000$^{***}$ \\
+    \midrule
+    \multirow{2}{*}{\textbf{Overall}} & \multirow{2}{*}{\textbf{Overall}} & \cellcolor{gray!10}Corresponding & \cellcolor{gray!10}65 & \cellcolor{gray!10}225 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Not Corresponding & 385 & 1811 & 0.000$^{***}$ \\
+\bottomrule
+\end{tabular}
+
+}
+
+\end{table}%
+
+Counts of authors in
+Table~\ref{tbl-post-hoc-tests-on-corresponding-status} may differ
+slightly from counts in
+Table~\ref{tbl-team-comp-no-push-after-pub-counts}.
+Table~\ref{tbl-team-comp-no-push-after-pub-counts} counts unique
+authors, while Table~\ref{tbl-post-hoc-tests-on-corresponding-status}
+counts unique author-document pairs (i.e., the same author may appear in
+multiple documents).
+
+\subsection{Filtered Dataset Description for h-Index
+Analysis}\label{filtered-dataset-description-for-h-index-analysis}
+
+\begin{table}
+
+\caption{\label{tbl-h-index-counts}Counts of Total Authors, n Any Coding Authors, n Majority Coding Authors, and n Always Coding Authors by Common Domain, Document Type, and Author Position. Authors are only included if they have three or more publications within our dataset and are associated with no more than three developer accounts, with each association having a predicted model confidence of at least 97\%.}
+
+\centering{
+
+\centering
+\small
+
+
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llrrrr}
+\toprule
+\textbf{Category} & \textbf{Subset} & \textbf{Total Authors} & \textbf{Any Code} & \textbf{Majority Code} & \textbf{Always Code} \\
+\midrule
+    \multirow{4}{*}{\textbf{By Commmon Domain}} & \cellcolor{gray!10}Health Sciences & \cellcolor{gray!10}24 & \cellcolor{gray!10}5 & \cellcolor{gray!10}2 & \cellcolor{gray!10}1 \\
+    & Life Sciences & 29 & 12 & 3 & 3 \\
+    & \cellcolor{gray!10}Physical Sciences & \cellcolor{gray!10}1001 & \cellcolor{gray!10}313 & \cellcolor{gray!10}156 & \cellcolor{gray!10}76 \\
+    & Social Sciences & 23 & 4 & 4 & 2 \\\midrule
+    \multirow{3}{*}{\textbf{By Document Type}} & \cellcolor{gray!10}Preprint & \cellcolor{gray!10}606 & \cellcolor{gray!10}214 & \cellcolor{gray!10}98 & \cellcolor{gray!10}36 \\
+    & research article & 466 & 119 & 67 & 44 \\
+    & \cellcolor{gray!10}software article & \cellcolor{gray!10}5 & \cellcolor{gray!10}1 & \cellcolor{gray!10}0 & \cellcolor{gray!10}2 \\\midrule
+    \multirow{3}{*}{\textbf{By Author Position}} & \cellcolor{gray!10}First & \cellcolor{gray!10}218 & \cellcolor{gray!10}35 & \cellcolor{gray!10}83 & \cellcolor{gray!10}71 \\
+    & last & 215 & 45 & 12 & 5 \\
+    & \cellcolor{gray!10}middle & \cellcolor{gray!10}644 & \cellcolor{gray!10}254 & \cellcolor{gray!10}70 & \cellcolor{gray!10}6 \\\midrule
+    \textbf{Total} & & \textbf{1077} & \textbf{334} & \textbf{165} & \textbf{82} \\
+\bottomrule
+\end{tabular}
+}
+
+}
+
+\end{table}%
+
+\subsection{h-Index Linear Model
+Results}\label{h-index-linear-model-results}
+
+\begin{table}
+
+\caption{\label{tbl-researcher-coding-status-no-control}Code-contributing authors h-index by coding status. Generalized linear model fit with Gaussian distribution and log link function. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***).}
+
+\centering{
+
+\centering
+
+
+\begin{tabular}{l*{6}{r}}
+\toprule
+\textbf{Variable} & \textbf{coef} & \textbf{P>|z|} & \multicolumn{2}{c}{\textbf{[0.025 0.975]}} \\
+\midrule
+    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}2.88 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}2.83 & \bfseries\cellcolor{white}2.94 \\
+    \bfseries\cellcolor{gray!10}Works Count~$^{***}$ & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 \\
+    \bfseries\cellcolor{white}Any Coding~$^{*}$ & \bfseries\cellcolor{white}-0.09 & \bfseries\cellcolor{white}0.01 & \bfseries\cellcolor{white}-0.17 & \bfseries\cellcolor{white}-0.02 \\
+    \bfseries\cellcolor{gray!10}Majority Coding~$^{***}$ & \bfseries\cellcolor{gray!10}-0.52 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}-0.67 & \bfseries\cellcolor{gray!10}-0.37 \\
+    \bfseries\cellcolor{white}Always Coding~$^{***}$ & \bfseries\cellcolor{white}-0.68 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-0.94 & \bfseries\cellcolor{white}-0.42 \\
+\bottomrule
+\end{tabular}
+
+}
+
+\end{table}%
+
+\begin{table}
+
+\caption{\label{tbl-researcher-coding-status-author-position}Code-contributing authors h-index by coding status controlled by most freq. author position. Generalized linear model fit with Gaussian distribution and log link function. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***).}
+
+\centering{
+
+\centering
+
+
+\begin{tabular}{l*{6}{r}}
+\toprule
+\textbf{Variable} & \textbf{coef} & \textbf{P>|z|} & \multicolumn{2}{c}{\textbf{[0.025 0.975]}} \\
+\midrule
+    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}2.13 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}1.66 & \bfseries\cellcolor{white}2.59 \\
+    \bfseries\cellcolor{gray!10}Works Count~$^{***}$ & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 \\
+    \cellcolor{white}Any Coding & \cellcolor{white}0.43 & \cellcolor{white}0.11 & \cellcolor{white}-0.10 & \cellcolor{white}0.95 \\
+    \cellcolor{gray!10}Majority Coding & \cellcolor{gray!10}0.11 & \cellcolor{gray!10}0.68 & \cellcolor{gray!10}-0.41 & \cellcolor{gray!10}0.63 \\
+    \cellcolor{white}Always Coding & \cellcolor{white}0.10 & \cellcolor{white}0.72 & \cellcolor{white}-0.44 & \cellcolor{white}0.63 \\
+    \bfseries\cellcolor{gray!10}Common Author Position Last~$^{***}$ & \bfseries\cellcolor{gray!10}0.90 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.43 & \bfseries\cellcolor{gray!10}1.37 \\
+    \bfseries\cellcolor{white}Common Author Position Middle~$^{**}$ & \bfseries\cellcolor{white}0.72 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.25 & \bfseries\cellcolor{white}1.19 \\
+    \cellcolor{gray!10}Any Coding × Common Author Position Last & \cellcolor{gray!10}-0.34 & \cellcolor{gray!10}0.21 & \cellcolor{gray!10}-0.88 & \cellcolor{gray!10}0.19 \\
+    \bfseries\cellcolor{white}Any Coding × Common Author Position Middle~$^{*}$ & \bfseries\cellcolor{white}-0.55 & \bfseries\cellcolor{white}0.04 & \bfseries\cellcolor{white}-1.08 & \bfseries\cellcolor{white}-0.01 \\
+    \cellcolor{gray!10}Majority Coding × Common Author Position Last & \cellcolor{gray!10}-0.31 & \cellcolor{gray!10}0.30 & \cellcolor{gray!10}-0.90 & \cellcolor{gray!10}0.27 \\
+    \bfseries\cellcolor{white}Majority Coding × Common Author Position Middle~$^{*}$ & \bfseries\cellcolor{white}-0.61 & \bfseries\cellcolor{white}0.04 & \bfseries\cellcolor{white}-1.17 & \bfseries\cellcolor{white}-0.04 \\
+    \cellcolor{gray!10}Always Coding × Common Author Position Last & \cellcolor{gray!10}-1.36 & \cellcolor{gray!10}0.14 & \cellcolor{gray!10}-3.14 & \cellcolor{gray!10}0.42 \\
+    \cellcolor{white}Always Coding × Common Author Position Middle & \cellcolor{white}-0.72 & \cellcolor{white}0.18 & \cellcolor{white}-1.78 & \cellcolor{white}0.34 \\
+\bottomrule
+\end{tabular}
+
+}
+
+\end{table}%
+
+\begin{table}
+
+\caption{\label{tbl-researcher-coding-status-domain}Code-contributing authors h-index by coding status controlled by most freq. domain. Generalized linear model fit with Gaussian distribution and log link function. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***).}
+
+\centering{
+
+\centering
+
+
+\begin{tabular}{l*{6}{r}}
+\toprule
+\textbf{Variable} & \textbf{coef} & \textbf{P>|z|} & \multicolumn{2}{c}{\textbf{[0.025 0.975]}} \\
+\midrule
+    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}3.15 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}2.99 & \bfseries\cellcolor{white}3.32 \\
+    \bfseries\cellcolor{gray!10}Works Count~$^{***}$ & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 \\
+    \cellcolor{white}Any Coding & \cellcolor{white}-0.47 & \cellcolor{white}0.16 & \cellcolor{white}-1.12 & \cellcolor{white}0.19 \\
+    \cellcolor{gray!10}Majority Coding & \cellcolor{gray!10}-0.20 & \cellcolor{gray!10}0.58 & \cellcolor{gray!10}-0.89 & \cellcolor{gray!10}0.49 \\
+    \cellcolor{white}Always Coding & \cellcolor{white}-1.56 & \cellcolor{white}0.47 & \cellcolor{white}-5.84 & \cellcolor{white}2.71 \\
+    \cellcolor{gray!10}Common Domain Life Sciences & \cellcolor{gray!10}-0.17 & \cellcolor{gray!10}0.32 & \cellcolor{gray!10}-0.52 & \cellcolor{gray!10}0.17 \\
+    \bfseries\cellcolor{white}Common Domain Physical Sciences~$^{**}$ & \bfseries\cellcolor{white}-0.29 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-0.45 & \bfseries\cellcolor{white}-0.12 \\
+    \cellcolor{gray!10}Common Domain Social Sciences & \cellcolor{gray!10}-0.24 & \cellcolor{gray!10}0.11 & \cellcolor{gray!10}-0.53 & \cellcolor{gray!10}0.05 \\
+    \cellcolor{white}Any Coding × Common Domain Life Sciences & \cellcolor{white}0.67 & \cellcolor{white}0.08 & \cellcolor{white}-0.08 & \cellcolor{white}1.42 \\
+    \cellcolor{gray!10}Any Coding × Common Domain Physical Sciences & \cellcolor{gray!10}0.36 & \cellcolor{gray!10}0.28 & \cellcolor{gray!10}-0.29 & \cellcolor{gray!10}1.02 \\
+    \cellcolor{white}Any Coding × Common Domain Social Sciences & \cellcolor{white}0.59 & \cellcolor{white}0.15 & \cellcolor{white}-0.22 & \cellcolor{white}1.40 \\
+    \cellcolor{gray!10}Majority Coding × Common Domain Life Sciences & \cellcolor{gray!10}-0.40 & \cellcolor{gray!10}0.54 & \cellcolor{gray!10}-1.70 & \cellcolor{gray!10}0.90 \\
+    \cellcolor{white}Majority Coding × Common Domain Physical Sciences & \cellcolor{white}-0.33 & \cellcolor{white}0.37 & \cellcolor{white}-1.03 & \cellcolor{white}0.38 \\
+    \cellcolor{gray!10}Majority Coding × Common Domain Social Sciences & \cellcolor{gray!10}-0.34 & \cellcolor{gray!10}0.53 & \cellcolor{gray!10}-1.42 & \cellcolor{gray!10}0.73 \\
+    \cellcolor{white}Always Coding × Common Domain Life Sciences & \cellcolor{white}0.02 & \cellcolor{white}0.99 & \cellcolor{white}-5.13 & \cellcolor{white}5.17 \\
+    \cellcolor{gray!10}Always Coding × Common Domain Physical Sciences & \cellcolor{gray!10}0.93 & \cellcolor{gray!10}0.67 & \cellcolor{gray!10}-3.36 & \cellcolor{gray!10}5.21 \\
+    \cellcolor{white}Always Coding × Common Domain Social Sciences & \cellcolor{white}0.70 & \cellcolor{white}0.77 & \cellcolor{white}-3.94 & \cellcolor{white}5.34 \\
+\bottomrule
+\end{tabular}
+
+}
+
+\end{table}%
+
+\begin{table}
+
+\caption{\label{tbl-researcher-coding-status-article-type}Code-contributing authors h-index by coding status controlled by most freq. article type. Generalized linear model fit with Gaussian distribution and log link function. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***).}
+
+\centering{
+
+\centering
+
+
+\begin{tabular}{l*{6}{r}}
+\toprule
+\textbf{Variable} & \textbf{coef} & \textbf{P>|z|} & \multicolumn{2}{c}{\textbf{[0.025 0.975]}} \\
+\midrule
+    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}2.88 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}2.81 & \bfseries\cellcolor{white}2.94 \\
+    \bfseries\cellcolor{gray!10}Works Count~$^{***}$ & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 \\
+    \bfseries\cellcolor{white}Any Coding~$^{**}$ & \bfseries\cellcolor{white}-0.16 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-0.27 & \bfseries\cellcolor{white}-0.06 \\
+    \bfseries\cellcolor{gray!10}Majority Coding~$^{***}$ & \bfseries\cellcolor{gray!10}-0.54 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}-0.73 & \bfseries\cellcolor{gray!10}-0.34 \\
+    \bfseries\cellcolor{white}Always Coding~$^{**}$ & \bfseries\cellcolor{white}-0.66 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-1.05 & \bfseries\cellcolor{white}-0.26 \\
+    \cellcolor{gray!10}Common Article Type Research Article & \cellcolor{gray!10}0.02 & \cellcolor{gray!10}0.57 & \cellcolor{gray!10}-0.06 & \cellcolor{gray!10}0.10 \\
+    \cellcolor{white}Common Article Type Software Article & \cellcolor{white}-0.08 & \cellcolor{white}0.88 & \cellcolor{white}-1.16 & \cellcolor{white}0.99 \\
+    \cellcolor{gray!10}Any Coding × Common Article Type Research Article & \cellcolor{gray!10}0.14 & \cellcolor{gray!10}0.05 & \cellcolor{gray!10}-0.00 & \cellcolor{gray!10}0.29 \\
+    \cellcolor{white}Any Coding × Common Article Type Software Article & \cellcolor{white}0.97 & \cellcolor{white}0.10 & \cellcolor{white}-0.19 & \cellcolor{white}2.13 \\
+    \cellcolor{gray!10}Majority Coding × Common Article Type Research Article & \cellcolor{gray!10}0.03 & \cellcolor{gray!10}0.86 & \cellcolor{gray!10}-0.27 & \cellcolor{gray!10}0.32 \\
+    \cellcolor{white}Majority Coding × Common Article Type Software Article & \cellcolor{white}0.00 & \cellcolor{white}0.80 & \cellcolor{white}-0.00 & \cellcolor{white}0.00 \\
+    \cellcolor{gray!10}Always Coding × Common Article Type Research Article & \cellcolor{gray!10}-0.04 & \cellcolor{gray!10}0.89 & \cellcolor{gray!10}-0.56 & \cellcolor{gray!10}0.48 \\
+    \cellcolor{white}Always Coding × Common Article Type Software Article & \cellcolor{white}-0.55 & \cellcolor{white}0.81 & \cellcolor{white}-4.98 & \cellcolor{white}3.88 \\
+\bottomrule
+\end{tabular}
+
+}
+
+\end{table}%
+
+\subsection{Study Differences from
+Preregistration}\label{study-differences-from-preregistration}
+
+\subsubsection{Analysis of Article Field Weighted Citation Impact (FWCI)
+and Code
+Contribution}\label{analysis-of-article-field-weighted-citation-impact-fwci-and-code-contribution}
+
+In our pre-registered analysis plan (\url{https://osf.io/fc74m}), we
+initially stated that we would additionally investigate the relationship
+between an article's Field Weighted Citation Impact (FWCI) and the
+number of code contributors to the project. We decided against this
+analysis as the FWCI metric was only available from OpenAlex for 55.5\%
+(n=76904) articles from the \texttt{rs-graph-v1} dataset at the time of
+data processing. In addition, our analysis of the relationship between
+article citations and the number of code contributors to the project
+already includes the articles domain and duration since publication
+providing similar control.
+
+\subsubsection{Analysis of Project Duration and Percentage
+Code-Contributors Who Are
+Authors}\label{analysis-of-project-duration-and-percentage-code-contributors-who-are-authors}
+
+In our pre-registered analysis plan (\url{https://osf.io/fc74m}), we
+initially hypothesized that there would be a positive relationship
+between project duration and authorship recognition. Specifically, we
+posited that sustained technical engagement and scientific recognition
+might be meaningfully related, with longer project durations potentially
+leading to higher rates of code-contributor authorship. We saw
+repository histories as providing a unique opportunity to examine this
+relationship, leading us to hypothesize that projects with longer commit
+durations would be associated with higher percentages of developers
+receiving authorship recognition (pre-registered as H2).
+
+However, our analysis found no evidence to support this hypothesis. When
+examining the relationship between a repository's commit duration and
+the percentage of developers who receive authorship recognition, we
+found no significant correlation (r = 0.07, p = n.s.). This suggests
+that the length of time a project has been in development has no
+meaningful relationship with the proportion of developers who are
+recognized as authors.
+
+We ultimately decided to exclude this analysis for two key
+methodological reasons. First, our approach of using repository-level
+commit duration as a proxy for individual contribution patterns proved
+too coarse-grained. A more precise analysis would need to examine
+individual-level contribution durations and patterns rather than overall
+project length. Second, our method did not account for the varying
+levels of contribution that different developers make to a repository.
+Simply correlating overall project duration with authorship rates fails
+to capture the nuanced ways that sustained, meaningful technical
+contributions might influence authorship decisions.
+
+These limitations suggest potential directions for future work that
+could more rigorously examine the relationship between long-term
+technical engagement and scientific recognition. Such work could benefit
+from a more granular analysis of individual contribution patterns,
+incorporating measures of contribution significance and sustainability
+rather than just temporal duration.
+
+\section{References}\label{references}
+
+\phantomsection\label{refs}
+\begin{CSLReferences}{1}{0}
+\bibitem[\citeproctext]{ref-cohen1960coefficient}
+Cohen, Jacob. 1960. {``A Coefficient of Agreement for Nominal Scales.''}
+\emph{Educational and Psychological Measurement} 20 (1): 37--46.
+
+\bibitem[\citeproctext]{ref-bert2018}
+Devlin, Jacob, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2018.
+{``{BERT:} Pre-Training of Deep Bidirectional Transformers for Language
+Understanding.''} \emph{CoRR} abs/1810.04805.
+\url{http://arxiv.org/abs/1810.04805}.
+
+\bibitem[\citeproctext]{ref-Hata2021ScienceSoftwareLT}
+Hata, Hideaki, Jin L. C. Guo, Raula Gaikovina Kula, and Christoph
+Treude. 2021. {``Science-Software Linkage: The Challenges of
+Traceability Between Scientific Knowledge and Software Artifacts.''}
+\emph{ArXiv} abs/2104.05891.
+
+\bibitem[\citeproctext]{ref-he2021debertav3}
+He, Pengcheng, Jianfeng Gao, and Weizhu Chen. 2021. {``DeBERTaV3:
+Improving DeBERTa Using ELECTRA-Style Pre-Training with
+Gradient-Disentangled Embedding Sharing.''}
+\url{https://arxiv.org/abs/2111.09543}.
+
+\bibitem[\citeproctext]{ref-he2021deberta}
+He, Pengcheng, Xiaodong Liu, Jianfeng Gao, and Weizhu Chen. 2021.
+{``DEBERTA: DECODING-ENHANCED BERT WITH DISENTANGLED ATTENTION.''} In
+\emph{International Conference on Learning Representations}.
+\url{https://openreview.net/forum?id=XPZIaotutsD}.
+
+\bibitem[\citeproctext]{ref-Kelley2021AFF}
+Kelley, Aidan, and Daniel Garijo. 2021. {``A Framework for Creating
+Knowledge Graphs of Scientific Software Metadata.''} \emph{Quantitative
+Science Studies} 2: 1423--46.
+
+\bibitem[\citeproctext]{ref-mchugh2012interrater}
+McHugh, Mary L. 2012. {``Interrater Reliability: The Kappa Statistic.''}
+\emph{Biochemia Medica} 22 (3): 276--82.
+
+\bibitem[\citeproctext]{ref-milewicz2019characterizing}
+Milewicz, Reed, Gustavo Pinto, and Paige Rodeghero. 2019.
+{``Characterizing the Roles of Contributors in Open-Source Scientific
+Software Projects.''} In \emph{2019 IEEE/ACM 16th International
+Conference on Mining Software Repositories (MSR)}, 421--32.
+\url{https://doi.org/10.1109/MSR.2019.00069}.
+
+\bibitem[\citeproctext]{ref-reimers-2019-sentence-bert}
+Reimers, Nils, and Iryna Gurevych. 2019. {``Sentence-BERT: Sentence
+Embeddings Using Siamese BERT-Networks.''} In \emph{Proceedings of the
+2019 Conference on Empirical Methods in Natural Language Processing}.
+Association for Computational Linguistics.
+\url{https://arxiv.org/abs/1908.10084}.
+
+\bibitem[\citeproctext]{ref-Sanh2019DistilBERTAD}
+Sanh, Victor, Lysandre Debut, Julien Chaumond, and Thomas Wolf. 2019.
+{``DistilBERT, a Distilled Version of BERT: Smaller, Faster, Cheaper and
+Lighter.''} \emph{ArXiv} abs/1910.01108.
+
+\bibitem[\citeproctext]{ref-sharma2024analytical}
+Sharma, Nitesh Kumar, Ram Ayyala, Dhrithi Deshpande, Yesha Patel, Viorel
+Munteanu, Dumitru Ciorba, Viorel Bostan, et al. 2024. {``Analytical Code
+Sharing Practices in Biomedical Research.''} \emph{PeerJ Computer
+Science} 10: e2066.
+
+\bibitem[\citeproctext]{ref-Stankovski2024RepoFromPaperAA}
+Stankovski, Aleksandar, and Daniel Garijo. 2024. {``RepoFromPaper: An
+Approach to Extract Software Code Implementations from Scientific
+Publications.''} In \emph{NSLP}.
+
+\bibitem[\citeproctext]{ref-stodden2013toward}
+Stodden, Victoria, Peixuan Guo, and Zhaokun Ma. 2013. {``Toward
+Reproducible Computational Research: An Empirical Analysis of Data and
+Code Policy Adoption by Journals.''} \emph{PloS One} 8 (6): e67111.
+
+\end{CSLReferences}
+
+
+
+
+\end{document}
