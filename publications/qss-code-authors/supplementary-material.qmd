@@ -1,4 +1,52 @@
-# Appendix
+---
+title: "Supplementary Material: Code Contribution and Credit in Science"
+bibliography: supplementary-material.bib
+number-sections: true
+format:
+  pdf:
+    toc: false
+    execute:
+      echo: false
+      warning: false
+    include-in-header:
+      - text: |
+          \usepackage{booktabs}
+          \usepackage{multirow}
+          \usepackage{siunitx}
+          \usepackage[table]{xcolor}
+          \usepackage{float}
+          \floatplacement{table}{H}
+          \setcounter{table}{0}
+          \renewcommand{\thetable}{S\arabic{table}}
+          \setcounter{figure}{0}
+          \renewcommand{\thefigure}{S\arabic{figure}}
+---
+
+```{python}
+#| output: false
+#| echo: false
+#| warning: false
+
+import re
+from pathlib import Path
+
+
+def _exec_main_python_chunks(main_qmd: Path) -> None:
+    # Reuse all manuscript computation cells to avoid duplicating analysis code.
+    main_text = main_qmd.read_text()
+    main_text_before_refs = main_text.split("\n# References\n", 1)[0]
+    for chunk in re.finditer(
+        r"```[{]python[^}]*[}]\n(.*?)\n```",
+        main_text_before_refs,
+        flags=re.DOTALL,
+    ):
+        exec(chunk.group(1), globals())
+
+
+_exec_main_python_chunks(Path.cwd() / "qss-code-authors.qmd")
+```
+
+# Supplementary Material
 
 ## Extended Data and Methods
 
@@ -1802,3 +1850,8 @@ However, our analysis found no evidence to support this hypothesis. When examini
 We ultimately decided to exclude this analysis for two key methodological reasons. First, our approach of using repository-level commit duration as a proxy for individual contribution patterns proved too coarse-grained. A more precise analysis would need to examine individual-level contribution durations and patterns rather than overall project length. Second, our method did not account for the varying levels of contribution that different developers make to a repository. Simply correlating overall project duration with authorship rates fails to capture the nuanced ways that sustained, meaningful technical contributions might influence authorship decisions.
 
 These limitations suggest potential directions for future work that could more rigorously examine the relationship between long-term technical engagement and scientific recognition. Such work could benefit from a more granular analysis of individual contribution patterns, incorporating measures of contribution significance and sustainability rather than just temporal duration.
+
+# References
+
+::: {#refs}
+:::
