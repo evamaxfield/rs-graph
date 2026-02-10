@@ -948,11 +948,15 @@ ignorable_doi_spans_default = typer.Option(
 
 @app.command()
 def snowball_sampling_discovery(
-    process_n_author_developer_pairs: int = 10,
+    researcher_developer_account_links_parquet_file: str = typer.Argument(
+        help=(
+            "Path to a parquet file with a 'researcher_developer_account_link_id' "
+            "column containing the IDs of ResearcherDeveloperAccountLink records "
+            "to process."
+        ),
+    ),
     article_repository_allowed_datetime_difference_positive: str = "374 days",
     article_repository_allowed_datetime_difference_negative: str = "326 days",
-    author_developer_links_filter_confidence_threshold: float = 0.97,
-    author_developer_links_duration_since_last_process: str = "2 years",
     author_developer_links_batch_size: int = 4,
     article_repository_matching_batch_size: int = 24,
     ignore_forks: bool = True,
@@ -969,10 +973,10 @@ def snowball_sampling_discovery(
     """
     Discover new article-repository pairs via snowball sampling.
 
-    This will use the existing database starting from stored
-    researcher-developer-account links, then lookup each author's articles
-    and their repositories, use our article-repository matching model
-    to predict new pairs, and then conduct standard processing.
+    Reads a parquet file containing 'researcher_developer_account_link_id' values,
+    hydrates them from the database, then looks up each author's articles
+    and their repositories, uses our article-repository matching model
+    to predict new pairs, and then conducts standard processing.
     """
     # Load environment variables
     load_dotenv()
@@ -1015,19 +1019,14 @@ def snowball_sampling_discovery(
     # Print dataset and coiled status
     print("-" * 80)
     print("Pipeline Options:")
-    print(f"Process N Author-Developer Pairs: {process_n_author_developer_pairs}")
+    print(
+        f"Researcher Developer Account Links Parquet File: "
+        f"{researcher_developer_account_links_parquet_file}"
+    )
     print(
         f"Article Repository Allowed Datetime Difference: "
         f"{article_respository_allowed_datetime_difference_negative_td.days} to "
         f"{article_respository_allowed_datetime_difference_positive_td.days}"
-    )
-    print(
-        f"Author Developer Links Filter Confidence Threshold: "
-        f"{author_developer_links_filter_confidence_threshold}"
-    )
-    print(
-        f"Skip Author Developer Links Processed Within Last: "
-        f"{author_developer_links_duration_since_last_process}"
     )
     print(f"Use Prod Database: {use_prod}")
     print(f"Use Coiled: {use_coiled}")
@@ -1036,13 +1035,20 @@ def snowball_sampling_discovery(
     print(f"Open Alex Email Count: {n_open_alex_emails}")
     print("-" * 80)
 
-    # Get author-developer-account links from the database
-    print("Getting author-developer-account links from the database...")
-    hydrated_author_developer_links = db_utils.get_hydrated_author_developer_links(
+    # Read the parquet file to get the link IDs
+    print(
+        f"Reading researcher-developer-account link IDs from: "
+        f"{researcher_developer_account_links_parquet_file}"
+    )
+    link_ids_df = pl.read_parquet(researcher_developer_account_links_parquet_file)
+    link_ids: list[int] = link_ids_df["researcher_developer_account_link_id"].to_list()
+    print(f"Found {len(link_ids)} researcher-developer-account link IDs in parquet file.")
+
+    # Hydrate the links from the database
+    print("Hydrating researcher-developer-account links from the database...")
+    hydrated_author_developer_links = db_utils.get_hydrated_author_developer_links_by_ids(
+        link_ids=link_ids,
         use_prod=use_prod,
-        filter_datetime_difference=author_developer_links_duration_since_last_process,
-        filter_confidence_threshold=author_developer_links_filter_confidence_threshold,
-        n=process_n_author_developer_pairs,
     )
 
     # Iter over author-developer links in batches

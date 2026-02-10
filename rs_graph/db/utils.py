@@ -725,6 +725,74 @@ def get_hydrated_author_developer_links(
         return hydrated_links
 
 
+def get_hydrated_author_developer_links_by_ids(
+    link_ids: list[int],
+    use_prod: bool = False,
+) -> list[HydratedAuthorDeveloperLink]:
+    """
+    Get researcher-developer account links for specific link IDs.
+
+    Parameters
+    ----------
+    link_ids: list[int]
+        The IDs of ResearcherDeveloperAccountLink records to look up.
+    use_prod: bool
+        Whether to use production database.
+
+    Returns
+    -------
+    list[HydratedAuthorDeveloperLink]
+        The hydrated links for the given IDs.
+
+    Raises
+    ------
+    ValueError
+        If any of the requested link IDs are not found in the database.
+    """
+    # Get the engine
+    engine = get_engine(use_prod=use_prod)
+
+    # Create a session
+    with Session(engine) as session:
+        # Query for the specific link IDs with joins
+        stmt = (
+            select(
+                db_models.ResearcherDeveloperAccountLink,
+                db_models.Researcher,
+                db_models.DeveloperAccount,
+            )
+            .join(db_models.Researcher)
+            .join(db_models.DeveloperAccount)
+            .where(col(db_models.ResearcherDeveloperAccountLink.id).in_(link_ids))
+        )
+
+        # Execute the query
+        results = session.exec(stmt).all()
+
+        # Convert to hydrated objects
+        hydrated_links = []
+        for link, researcher, developer_account in results:
+            assert link.id is not None
+            hydrated_links.append(
+                HydratedAuthorDeveloperLink(
+                    author_developer_link_id=link.id,
+                    researcher_open_alex_id=researcher.open_alex_id,
+                    developer_account_username=developer_account.username,
+                    last_snowball_processed_datetime=link.last_snowball_processed_datetime,
+                )
+            )
+
+        # Validate that all requested IDs were found
+        found_ids = {link.author_developer_link_id for link in hydrated_links}
+        missing_ids = set(link_ids) - found_ids
+        if missing_ids:
+            raise ValueError(
+                f"The following link IDs were not found in the database: {missing_ids}"
+            )
+
+        return hydrated_links
+
+
 def check_article_in_db(
     article_doi: str,
     article_title: str,
