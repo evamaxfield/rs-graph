@@ -1083,6 +1083,17 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
     tbl_label="tbl-article-composition-type",
 )
 
+# Slightly scale down S12 to ensure it fits on the page.
+model_results_latex = model_results_latex.replace(
+    "\\begin{tabular}{l*{6}{r}}",
+    "\\resizebox{0.95\\textwidth}{!}{%\n\\begin{tabular}{l*{6}{r}}",
+    1,
+).replace(
+    "\\end{tabular}",
+    "\\end{tabular}\n}",
+    1,
+)
+
 IPython.display.Latex(model_results_latex)
 ```
 :::
@@ -1739,6 +1750,17 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
     tbl_label="tbl-researcher-coding-status-author-position",
 )
 
+# Slightly scale down S17 to ensure it fits on the page.
+model_results_latex = model_results_latex.replace(
+    "\\begin{tabular}{l*{6}{r}}",
+    "\\resizebox{0.95\\textwidth}{!}{%\n\\begin{tabular}{l*{6}{r}}",
+    1,
+).replace(
+    "\\end{tabular}",
+    "\\end{tabular}\n}",
+    1,
+)
+
 IPython.display.Latex(model_results_latex)
 ```
 :::
@@ -1766,6 +1788,17 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
     tbl_label="tbl-researcher-coding-status-domain",
 )
 
+# Slightly scale down S18 to ensure it fits on the page.
+model_results_latex = model_results_latex.replace(
+    "\\begin{tabular}{l*{6}{r}}",
+    "\\resizebox{0.95\\textwidth}{!}{%\n\\begin{tabular}{l*{6}{r}}",
+    1,
+).replace(
+    "\\end{tabular}",
+    "\\end{tabular}\n}",
+    1,
+)
+
 IPython.display.Latex(model_results_latex)
 ```
 :::
@@ -1791,6 +1824,17 @@ model_results_latex, model_results_df = convert_model_results_to_printable_pdf_r
         "with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)."
     ),
     tbl_label="tbl-researcher-coding-status-article-type",
+)
+
+# Slightly scale down S19 to ensure it fits on the page.
+model_results_latex = model_results_latex.replace(
+    "\\begin{tabular}{l*{6}{r}}",
+    "\\resizebox{0.95\\textwidth}{!}{%\n\\begin{tabular}{l*{6}{r}}",
+    1,
+).replace(
+    "\\end{tabular}",
+    "\\end{tabular}\n}",
+    1,
 )
 
 IPython.display.Latex(model_results_latex)

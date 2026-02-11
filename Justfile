@@ -146,3 +146,5 @@ quarto-serve:
 quarto-render:
 	-quarto render {{justfile_directory()}}/publications/qss-code-authors/qss-code-authors.qmd
 	-quarto render {{justfile_directory()}}/publications/qss-code-authors/supplementary-material.qmd
+	python {{justfile_directory()}}/publications/qss-code-authors/cleanup-tex.py --input {{justfile_directory()}}/publications/qss-code-authors/qss-code-authors.tex
+	python {{justfile_directory()}}/publications/qss-code-authors/cleanup-tex.py --input {{justfile_directory()}}/publications/qss-code-authors/supplementary-material.tex

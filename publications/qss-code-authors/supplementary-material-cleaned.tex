@@ -219,12 +219,12 @@
 Repositories}\label{building-a-dataset-of-linked-scientific-articles-and-code-repositories}
 
 The increasing emphasis on research transparency has led many journals
-and platforms to require or recommend code and data sharing (Stodden,
-Guo, and Ma 2013; Sharma et al. 2024), creating traceable links between
+and platforms to require or recommend code and data sharing (Sharma et
+al., 2024; Stodden et al., 2013), creating traceable links between
 publications and code. These explicit links enable systematic study of
 both article-repository and author-developer account relationships (Hata
-et al. 2021; Kelley and Garijo 2021; Stankovski and Garijo 2024;
-Milewicz, Pinto, and Rodeghero 2019).
+et al., 2021; Kelley \& Garijo, 2021; Milewicz et al., 2019; Stankovski
+\& Garijo, 2024).
 
 Our dataset collection process leveraged four sources of linked
 scientific articles and code repositories, each with specific mechanisms
@@ -320,8 +320,8 @@ dataset creation process followed these steps:
   We generated semantic embeddings for each developer account and author
   name using the
   \href{https://huggingface.co/sentence-transformers/multi-qa-MiniLM-L6-cos-v1}{multi-qa-MiniLM-L6-cos-v1}
-  model from the Sentence Transformers Python library (Reimers and
-  Gurevych 2019).
+  model from the Sentence Transformers Python library (Reimers \&
+  Gurevych, 2019).
 \item
   We calculated cosine similarity between all potential
   author-developer-account pairs for each article-repository pair.
@@ -362,11 +362,11 @@ entity-matching tasks:
 \begin{itemize}
 \tightlist
 \item
-  DeBERTa-v3-base (He, Gao, and Chen 2021; He et al. 2021)
+  DeBERTa-v3-base (He, Gao, et al., 2021; He, Liu, et al., 2021)
 \item
-  mBERT (bert-base-multilingual-cased) (Devlin et al. 2018)
+  mBERT (bert-base-multilingual-cased) (Devlin et al., 2018)
 \item
-  DistilBERT (Sanh et al. 2019)
+  DistilBERT (Sanh et al., 2019)
 \end{itemize}
 
 We systematically evaluated these base models across different
@@ -384,7 +384,7 @@ architectures and feature combinations while accounting for the balance
 between precision and recall in identifying correct matches.
 
 Our comprehensive model evaluation revealed that fine-tuning
-DeBERTa-v3-base (He, Gao, and Chen 2021) with developer username and
+DeBERTa-v3-base (He, Gao, et al., 2021) with developer username and
 display name as input features produces optimal performance for
 author-developer matching. This model configuration achieved a binary F1
 score of 0.944, with an accuracy of 0.984, precision of 0.938, and
@@ -453,7 +453,7 @@ either matches or non-matches. This annotation process mirrors how our
 complete dataset was constructed by using the trained model to predict
 matches from all possible author-developer pairs for a given
 article-repository pair. The two annotators achieved a Cohen's kappa of
-0.948, or ``almost perfect'' agreement (Cohen 1960; McHugh 2012).
+0.948, or ``almost perfect'' agreement (Cohen, 1960; McHugh, 2012).
 Annotators further discussed and resolved all disagreements.
 
 The trained author-developer matching model was then applied to this new
@@ -584,11 +584,11 @@ article\_type & & & & & & & & & & \\
 \endhead
 \bottomrule\noalign{}
 \endlastfoot
-preprint & 55 & 89 & 110 & 0 & 0 & 4 & 47 & 131 & 215 & 587 \\
-research article & 367 & 186 & 235 & 0 & 0 & 18 & 108 & 269 & 484 &
-1697 \\
-software article & 4 & 773 & 585 & 350 & 384 & 436 & 555 & 891 & 1335 &
-1631 \\
+preprint & 2683 & 110 & 182 & -1520 & 0 & 6 & 53 & 138 & 285 & 2091 \\
+research article & 17017 & 193 & 253 & -931 & 0 & 19 & 114 & 269 & 487 &
+3176 \\
+software article & 200 & 394 & 475 & -1 & 0 & 50 & 282 & 536 & 951 &
+3007 \\
 
 \end{longtable}
 
@@ -637,20 +637,20 @@ Analysis}\label{filtered-dataset-description-for-article-citation-author-positio
     \toprule
     \textbf{Category} & \textbf{Subset} & \textbf{Article-Repository Pairs} & \textbf{Authors} & \textbf{Developers} \\
     \midrule
-        \multirow{4}{*}{\textbf{By Domain}} & \cellcolor{gray!10}Health Sciences & \cellcolor{gray!10}19 & \cellcolor{gray!10}100 & \cellcolor{gray!10}25 \\
-    & Life Sciences & 31 & 141 & 34 \\
-    & \cellcolor{gray!10}Physical Sciences & \cellcolor{gray!10}354 & \cellcolor{gray!10}1,675 & \cellcolor{gray!10}512 \\
-    & Social Sciences & 22 & 92 & 26 \\\midrule
-    \multirow{3}{*}{\textbf{By Document Type}} & \cellcolor{gray!10}preprint & \cellcolor{gray!10}55 & \cellcolor{gray!10}244 & \cellcolor{gray!10}93 \\
-    & research article & 367 & 1,761 & 494 \\
-    & \cellcolor{gray!10}software article & \cellcolor{gray!10}4 & \cellcolor{gray!10}18 & \cellcolor{gray!10}12 \\\midrule
-    \multirow{2}{*}{\textbf{By Access Status}} & \cellcolor{gray!10}Closed & \cellcolor{gray!10}22 & \cellcolor{gray!10}99 & \cellcolor{gray!10}28 \\
-    & Open & 404 & 1,915 & 570 \\\midrule
-    \multirow{4}{*}{\textbf{By Data Source}} & \cellcolor{gray!10}joss & \cellcolor{gray!10}2 & \cellcolor{gray!10}8 & \cellcolor{gray!10}6 \\
-    & plos & 40 & 194 & 46 \\
-    & \cellcolor{gray!10}pwc & \cellcolor{gray!10}382 & \cellcolor{gray!10}1,796 & \cellcolor{gray!10}539 \\
-    & softwarex & 2 & 10 & 6 \\\midrule
-    \textbf{Total} & & \textbf{426} & \textbf{2,008} & \textbf{597} \\
+        \multirow{4}{*}{\textbf{By Domain}} & \cellcolor{gray!10}Health Sciences & \cellcolor{gray!10}929 & \cellcolor{gray!10}4,904 & \cellcolor{gray!10}1,181 \\
+    & Life Sciences & 1,685 & 7,910 & 2,257 \\
+    & \cellcolor{gray!10}Physical Sciences & \cellcolor{gray!10}16,164 & \cellcolor{gray!10}55,161 & \cellcolor{gray!10}20,904 \\
+    & Social Sciences & 1,122 & 4,661 & 1,562 \\\midrule
+    \multirow{3}{*}{\textbf{By Document Type}} & \cellcolor{gray!10}preprint & \cellcolor{gray!10}2,683 & \cellcolor{gray!10}11,327 & \cellcolor{gray!10}4,190 \\
+    & research article & 17,017 & 61,279 & 21,482 \\
+    & \cellcolor{gray!10}software article & \cellcolor{gray!10}200 & \cellcolor{gray!10}905 & \cellcolor{gray!10}449 \\\midrule
+    \multirow{2}{*}{\textbf{By Access Status}} & \cellcolor{gray!10}Closed & \cellcolor{gray!10}1,070 & \cellcolor{gray!10}5,054 & \cellcolor{gray!10}1,679 \\
+    & Open & 18,830 & 66,677 & 24,026 \\\midrule
+    \multirow{4}{*}{\textbf{By Data Source}} & \cellcolor{gray!10}joss & \cellcolor{gray!10}77 & \cellcolor{gray!10}353 & \cellcolor{gray!10}246 \\
+    & plos & 2,109 & 10,345 & 2,729 \\
+    & \cellcolor{gray!10}pwc & \cellcolor{gray!10}17,591 & \cellcolor{gray!10}59,261 & \cellcolor{gray!10}22,313 \\
+    & softwarex & 123 & 554 & 204 \\\midrule
+    \textbf{Total} & & \textbf{19,900} & \textbf{69,808} & \textbf{25,358} \\
     \bottomrule
     \end{tabular}
     
@@ -679,16 +679,16 @@ types, and open access statuses.
 \begin{tabular}{llrrrr}
 \toprule\textbf{Control} & \textbf{Subset} & \textbf{Total Authors} & \textbf{NCC-A} & \textbf{CC-A} & \textbf{CC-NA} \\
 \midrule
-    \multirow{2}{*}{\textbf{OA Status}} & \cellcolor{gray!10}Closed & \cellcolor{gray!10}4.5 $\pm$ 1.7 & \cellcolor{gray!10}3.5 $\pm$ 1.7 & \cellcolor{gray!10}1.0 $\pm$ 0.8 & \cellcolor{gray!10}0.3 $\pm$ 0.5 \\
-    & Open & 4.8 $\pm$ 1.9 & 3.8 $\pm$ 2.0 & 1.0 $\pm$ 0.7 & 0.4 $\pm$ 1.2 \\\midrule
-    \multirow{4}{*}{\textbf{Domain}} & \cellcolor{gray!10}Health Sciences & \cellcolor{gray!10}5.3 $\pm$ 1.9 & \cellcolor{gray!10}4.1 $\pm$ 1.9 & \cellcolor{gray!10}1.2 $\pm$ 0.7 & \cellcolor{gray!10}0.2 $\pm$ 0.4 \\
-    & Life Sciences & 4.5 $\pm$ 2.1 & 3.8 $\pm$ 2.1 & 0.8 $\pm$ 0.6 & 0.3 $\pm$ 0.5 \\
-    & \cellcolor{gray!10}Physical Sciences & \cellcolor{gray!10}4.9 $\pm$ 1.9 & \cellcolor{gray!10}3.8 $\pm$ 2.0 & \cellcolor{gray!10}1.0 $\pm$ 0.7 & \cellcolor{gray!10}0.4 $\pm$ 1.3 \\
-    & Social Sciences & 4.2 $\pm$ 1.8 & 3.0 $\pm$ 1.7 & 1.2 $\pm$ 0.4 & 0.0 $\pm$ 0.0 \\\midrule
-    \multirow{3}{*}{\textbf{Article Type}} & \cellcolor{gray!10}preprint & \cellcolor{gray!10}4.4 $\pm$ 1.6 & \cellcolor{gray!10}3.3 $\pm$ 1.9 & \cellcolor{gray!10}1.1 $\pm$ 0.8 & \cellcolor{gray!10}0.5 $\pm$ 1.6 \\
-    & research article & 4.9 $\pm$ 1.9 & 3.9 $\pm$ 2.0 & 1.0 $\pm$ 0.7 & 0.3 $\pm$ 1.1 \\
-    & \cellcolor{gray!10}software article & \cellcolor{gray!10}4.5 $\pm$ 1.0 & \cellcolor{gray!10}2.2 $\pm$ 1.0 & \cellcolor{gray!10}2.2 $\pm$ 1.0 & \cellcolor{gray!10}0.8 $\pm$ 1.0 \\\midrule
-    \multirow{1}{*}{\textbf{Overall}} & \textbf{} & \textbf{4.8 $\pm$ 1.9} & \textbf{3.8 $\pm$ 2.0} & \textbf{1.0 $\pm$ 0.7} & \textbf{0.4 $\pm$ 1.2} \\
+    \multirow{2}{*}{\textbf{OA Status}} & \cellcolor{gray!10}Closed & \cellcolor{gray!10}5.1 $\pm$ 1.8 & \cellcolor{gray!10}4.0 $\pm$ 1.9 & \cellcolor{gray!10}1.1 $\pm$ 0.7 & \cellcolor{gray!10}0.6 $\pm$ 2.1 \\
+    & Open & 4.8 $\pm$ 1.8 & 3.8 $\pm$ 1.9 & 1.0 $\pm$ 0.7 & 0.5 $\pm$ 1.8 \\\midrule
+    \multirow{4}{*}{\textbf{Domain}} & \cellcolor{gray!10}Health Sciences & \cellcolor{gray!10}5.8 $\pm$ 2.2 & \cellcolor{gray!10}4.8 $\pm$ 2.3 & \cellcolor{gray!10}1.0 $\pm$ 0.6 & \cellcolor{gray!10}0.4 $\pm$ 1.3 \\
+    & Life Sciences & 5.0 $\pm$ 2.0 & 4.0 $\pm$ 2.1 & 1.0 $\pm$ 0.7 & 0.4 $\pm$ 1.2 \\
+    & \cellcolor{gray!10}Physical Sciences & \cellcolor{gray!10}4.8 $\pm$ 1.7 & \cellcolor{gray!10}3.7 $\pm$ 1.8 & \cellcolor{gray!10}1.0 $\pm$ 0.7 & \cellcolor{gray!10}0.5 $\pm$ 1.9 \\
+    & Social Sciences & 4.5 $\pm$ 1.7 & 3.4 $\pm$ 1.7 & 1.1 $\pm$ 0.7 & 0.3 $\pm$ 1.2 \\\midrule
+    \multirow{3}{*}{\textbf{Article Type}} & \cellcolor{gray!10}preprint & \cellcolor{gray!10}4.8 $\pm$ 1.7 & \cellcolor{gray!10}3.7 $\pm$ 1.8 & \cellcolor{gray!10}1.0 $\pm$ 0.7 & \cellcolor{gray!10}0.6 $\pm$ 2.3 \\
+    & research article & 4.8 $\pm$ 1.8 & 3.8 $\pm$ 1.9 & 1.0 $\pm$ 0.7 & 0.4 $\pm$ 1.7 \\
+    & \cellcolor{gray!10}software article & \cellcolor{gray!10}4.6 $\pm$ 1.7 & \cellcolor{gray!10}3.1 $\pm$ 1.8 & \cellcolor{gray!10}1.5 $\pm$ 1.3 & \cellcolor{gray!10}0.9 $\pm$ 1.1 \\\midrule
+    \multirow{1}{*}{\textbf{Overall}} & \textbf{} & \textbf{4.8 $\pm$ 1.8} & \textbf{3.8 $\pm$ 1.9} & \textbf{1.0 $\pm$ 0.7} & \textbf{0.5 $\pm$ 1.8} \\
 \bottomrule
 \end{tabular}
 
@@ -1006,11 +1006,11 @@ Results}\label{article-citation-linear-model-results}
 \toprule
 \textbf{Variable} & \textbf{coef} & \textbf{P>|z|} & \multicolumn{2}{c}{\textbf{[0.025 0.975]}} \\
 \midrule
-    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}0.76 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.39 & \bfseries\cellcolor{white}1.14 \\
-    \bfseries\cellcolor{gray!10}Total Authors~$^{***}$ & \bfseries\cellcolor{gray!10}0.14 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.08 & \bfseries\cellcolor{gray!10}0.19 \\
-    \cellcolor{white}Code-Contrib. Authors & \cellcolor{white}0.07 & \cellcolor{white}0.34 & \cellcolor{white}-0.07 & \cellcolor{white}0.22 \\
-    \cellcolor{gray!10}Code-Contrib. Non-Authors & \cellcolor{gray!10}-0.04 & \cellcolor{gray!10}0.34 & \cellcolor{gray!10}-0.12 & \cellcolor{gray!10}0.04 \\
-    \bfseries\cellcolor{white}Years Since Publication~$^{***}$ & \bfseries\cellcolor{white}0.38 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.32 & \bfseries\cellcolor{white}0.44 \\
+    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}0.95 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.90 & \bfseries\cellcolor{white}1.01 \\
+    \bfseries\cellcolor{gray!10}Total Authors~$^{***}$ & \bfseries\cellcolor{gray!10}0.08 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.07 & \bfseries\cellcolor{gray!10}0.09 \\
+    \bfseries\cellcolor{white}Code-Contrib. Authors~$^{***}$ & \bfseries\cellcolor{white}0.04 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.02 & \bfseries\cellcolor{white}0.06 \\
+    \cellcolor{gray!10}Code-Contrib. Non-Authors & \cellcolor{gray!10}-0.00 & \cellcolor{gray!10}0.61 & \cellcolor{gray!10}-0.01 & \cellcolor{gray!10}0.01 \\
+    \bfseries\cellcolor{white}Years Since Publication~$^{***}$ & \bfseries\cellcolor{white}0.40 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.39 & \bfseries\cellcolor{white}0.40 \\
 \bottomrule
 \end{tabular}
 
@@ -1031,14 +1031,14 @@ Results}\label{article-citation-linear-model-results}
 \toprule
 \textbf{Variable} & \textbf{coef} & \textbf{P>|z|} & \multicolumn{2}{c}{\textbf{[0.025 0.975]}} \\
 \midrule
-    \cellcolor{white}const & \cellcolor{white}-0.70 & \cellcolor{white}0.23 & \cellcolor{white}-1.84 & \cellcolor{white}0.45 \\
-    \bfseries\cellcolor{gray!10}Total Authors~$^{***}$ & \bfseries\cellcolor{gray!10}0.13 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.08 & \bfseries\cellcolor{gray!10}0.19 \\
-    \cellcolor{white}Code-Contrib. Authors & \cellcolor{white}0.61 & \cellcolor{white}0.10 & \cellcolor{white}-0.12 & \cellcolor{white}1.35 \\
-    \cellcolor{gray!10}Code-Contrib. Non-Authors & \cellcolor{gray!10}0.90 & \cellcolor{gray!10}0.16 & \cellcolor{gray!10}-0.36 & \cellcolor{gray!10}2.16 \\
-    \bfseries\cellcolor{white}Years Since Publication~$^{***}$ & \bfseries\cellcolor{white}0.36 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.30 & \bfseries\cellcolor{white}0.42 \\
-    \bfseries\cellcolor{gray!10}Is Open Access~$^{**}$ & \bfseries\cellcolor{gray!10}1.56 & \bfseries\cellcolor{gray!10}0.01 & \bfseries\cellcolor{gray!10}0.43 & \bfseries\cellcolor{gray!10}2.69 \\
-    \cellcolor{white}Code-Contrib. Authors × Is Open Access & \cellcolor{white}-0.55 & \cellcolor{white}0.15 & \cellcolor{white}-1.30 & \cellcolor{white}0.20 \\
-    \cellcolor{gray!10}Code-Contrib. Non-Authors × Is Open Access & \cellcolor{gray!10}-0.94 & \cellcolor{gray!10}0.15 & \cellcolor{gray!10}-2.20 & \cellcolor{gray!10}0.33 \\
+    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}0.65 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.52 & \bfseries\cellcolor{white}0.78 \\
+    \bfseries\cellcolor{gray!10}Total Authors~$^{***}$ & \bfseries\cellcolor{gray!10}0.08 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.07 & \bfseries\cellcolor{gray!10}0.09 \\
+    \cellcolor{white}Code-Contrib. Authors & \cellcolor{white}-0.03 & \cellcolor{white}0.48 & \cellcolor{white}-0.13 & \cellcolor{white}0.06 \\
+    \cellcolor{gray!10}Code-Contrib. Non-Authors & \cellcolor{gray!10}0.01 & \cellcolor{gray!10}0.44 & \cellcolor{gray!10}-0.02 & \cellcolor{gray!10}0.04 \\
+    \bfseries\cellcolor{white}Years Since Publication~$^{***}$ & \bfseries\cellcolor{white}0.39 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.38 & \bfseries\cellcolor{white}0.39 \\
+    \bfseries\cellcolor{gray!10}Is Open Access~$^{***}$ & \bfseries\cellcolor{gray!10}0.34 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.21 & \bfseries\cellcolor{gray!10}0.46 \\
+    \cellcolor{white}Code-Contrib. Authors × Is Open Access & \cellcolor{white}0.08 & \cellcolor{white}0.12 & \cellcolor{white}-0.02 & \cellcolor{white}0.17 \\
+    \cellcolor{gray!10}Code-Contrib. Non-Authors × Is Open Access & \cellcolor{gray!10}-0.01 & \cellcolor{gray!10}0.39 & \cellcolor{gray!10}-0.05 & \cellcolor{gray!10}0.02 \\
 \bottomrule
 \end{tabular}
 
@@ -1059,20 +1059,20 @@ Results}\label{article-citation-linear-model-results}
 \toprule
 \textbf{Variable} & \textbf{coef} & \textbf{P>|z|} & \multicolumn{2}{c}{\textbf{[0.025 0.975]}} \\
 \midrule
-    \bfseries\cellcolor{white}const~$^{*}$ & \bfseries\cellcolor{white}1.53 & \bfseries\cellcolor{white}0.01 & \bfseries\cellcolor{white}0.31 & \bfseries\cellcolor{white}2.75 \\
-    \bfseries\cellcolor{gray!10}Total Authors~$^{***}$ & \bfseries\cellcolor{gray!10}0.13 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.08 & \bfseries\cellcolor{gray!10}0.19 \\
-    \cellcolor{white}Code-Contrib. Authors & \cellcolor{white}-0.41 & \cellcolor{white}0.33 & \cellcolor{white}-1.24 & \cellcolor{white}0.41 \\
-    \cellcolor{gray!10}Code-Contrib. Non-Authors & \cellcolor{gray!10}-0.68 & \cellcolor{gray!10}0.38 & \cellcolor{gray!10}-2.19 & \cellcolor{gray!10}0.84 \\
-    \bfseries\cellcolor{white}Years Since Publication~$^{***}$ & \bfseries\cellcolor{white}0.40 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.34 & \bfseries\cellcolor{white}0.46 \\
-    \cellcolor{gray!10}Domain Life Sciences & \cellcolor{gray!10}-1.13 & \cellcolor{gray!10}0.14 & \cellcolor{gray!10}-2.63 & \cellcolor{gray!10}0.37 \\
-    \cellcolor{white}Domain Physical Sciences & \cellcolor{white}-0.75 & \cellcolor{white}0.22 & \cellcolor{white}-1.97 & \cellcolor{white}0.46 \\
-    \bfseries\cellcolor{gray!10}Domain Social Sciences~$^{*}$ & \bfseries\cellcolor{gray!10}-1.98 & \bfseries\cellcolor{gray!10}0.04 & \bfseries\cellcolor{gray!10}-3.84 & \bfseries\cellcolor{gray!10}-0.12 \\
-    \cellcolor{white}Code-Contrib. Authors × Domain Life Sciences & \cellcolor{white}-0.04 & \cellcolor{white}0.94 & \cellcolor{white}-1.17 & \cellcolor{white}1.08 \\
-    \cellcolor{gray!10}Code-Contrib. Authors × Domain Physical Sciences & \cellcolor{gray!10}0.48 & \cellcolor{gray!10}0.26 & \cellcolor{gray!10}-0.36 & \cellcolor{gray!10}1.32 \\
-    \cellcolor{white}Code-Contrib. Authors × Domain Social Sciences & \cellcolor{white}1.22 & \cellcolor{white}0.09 & \cellcolor{white}-0.19 & \cellcolor{white}2.62 \\
-    \cellcolor{gray!10}Code-Contrib. Non-Authors × Domain Life Sciences & \cellcolor{gray!10}0.49 & \cellcolor{gray!10}0.59 & \cellcolor{gray!10}-1.32 & \cellcolor{gray!10}2.30 \\
-    \cellcolor{white}Code-Contrib. Non-Authors × Domain Physical Sciences & \cellcolor{white}0.63 & \cellcolor{white}0.41 & \cellcolor{white}-0.88 & \cellcolor{white}2.15 \\
-    \cellcolor{gray!10}Code-Contrib. Non-Authors × Domain Social Sciences & \cellcolor{gray!10}0.00 & \cellcolor{gray!10}nan & \cellcolor{gray!10}0.00 & \cellcolor{gray!10}0.00 \\
+    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}0.87 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.73 & \bfseries\cellcolor{white}1.02 \\
+    \bfseries\cellcolor{gray!10}Total Authors~$^{***}$ & \bfseries\cellcolor{gray!10}0.08 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.07 & \bfseries\cellcolor{gray!10}0.09 \\
+    \cellcolor{white}Code-Contrib. Authors & \cellcolor{white}-0.00 & \cellcolor{white}0.98 & \cellcolor{white}-0.12 & \cellcolor{white}0.11 \\
+    \cellcolor{gray!10}Code-Contrib. Non-Authors & \cellcolor{gray!10}0.02 & \cellcolor{gray!10}0.48 & \cellcolor{gray!10}-0.03 & \cellcolor{gray!10}0.07 \\
+    \bfseries\cellcolor{white}Years Since Publication~$^{***}$ & \bfseries\cellcolor{white}0.40 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.39 & \bfseries\cellcolor{white}0.41 \\
+    \bfseries\cellcolor{gray!10}Domain Life Sciences~$^{**}$ & \bfseries\cellcolor{gray!10}-0.23 & \bfseries\cellcolor{gray!10}0.01 & \bfseries\cellcolor{gray!10}-0.39 & \bfseries\cellcolor{gray!10}-0.06 \\
+    \cellcolor{white}Domain Physical Sciences & \cellcolor{white}0.11 & \cellcolor{white}0.13 & \cellcolor{white}-0.03 & \cellcolor{white}0.25 \\
+    \bfseries\cellcolor{gray!10}Domain Social Sciences~$^{**}$ & \bfseries\cellcolor{gray!10}-0.24 & \bfseries\cellcolor{gray!10}0.01 & \bfseries\cellcolor{gray!10}-0.42 & \bfseries\cellcolor{gray!10}-0.06 \\
+    \cellcolor{white}Code-Contrib. Authors × Domain Life Sciences & \cellcolor{white}0.10 & \cellcolor{white}0.17 & \cellcolor{white}-0.04 & \cellcolor{white}0.23 \\
+    \cellcolor{gray!10}Code-Contrib. Authors × Domain Physical Sciences & \cellcolor{gray!10}0.03 & \cellcolor{gray!10}0.57 & \cellcolor{gray!10}-0.08 & \cellcolor{gray!10}0.15 \\
+    \cellcolor{white}Code-Contrib. Authors × Domain Social Sciences & \cellcolor{white}0.13 & \cellcolor{white}0.07 & \cellcolor{white}-0.01 & \cellcolor{white}0.28 \\
+    \cellcolor{gray!10}Code-Contrib. Non-Authors × Domain Life Sciences & \cellcolor{gray!10}-0.05 & \cellcolor{gray!10}0.19 & \cellcolor{gray!10}-0.12 & \cellcolor{gray!10}0.02 \\
+    \cellcolor{white}Code-Contrib. Non-Authors × Domain Physical Sciences & \cellcolor{white}-0.02 & \cellcolor{white}0.41 & \cellcolor{white}-0.08 & \cellcolor{white}0.03 \\
+    \cellcolor{gray!10}Code-Contrib. Non-Authors × Domain Social Sciences & \cellcolor{gray!10}-0.03 & \cellcolor{gray!10}0.35 & \cellcolor{gray!10}-0.11 & \cellcolor{gray!10}0.04 \\
 \bottomrule
 \end{tabular}
 
@@ -1089,23 +1089,25 @@ Results}\label{article-citation-linear-model-results}
 \centering
 
 
+\resizebox{0.95\textwidth}{!}{%
 \begin{tabular}{l*{6}{r}}
 \toprule
 \textbf{Variable} & \textbf{coef} & \textbf{P>|z|} & \multicolumn{2}{c}{\textbf{[0.025 0.975]}} \\
 \midrule
-    \cellcolor{white}const & \cellcolor{white}0.63 & \cellcolor{white}0.05 & \cellcolor{white}-0.01 & \cellcolor{white}1.27 \\
-    \bfseries\cellcolor{gray!10}Total Authors~$^{***}$ & \bfseries\cellcolor{gray!10}0.13 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.08 & \bfseries\cellcolor{gray!10}0.19 \\
-    \cellcolor{white}Code-Contrib. Authors & \cellcolor{white}-0.05 & \cellcolor{white}0.79 & \cellcolor{white}-0.44 & \cellcolor{white}0.33 \\
-    \cellcolor{gray!10}Code-Contrib. Non-Authors & \cellcolor{gray!10}-0.20 & \cellcolor{gray!10}0.10 & \cellcolor{gray!10}-0.45 & \cellcolor{gray!10}0.04 \\
-    \bfseries\cellcolor{white}Years Since Publication~$^{***}$ & \bfseries\cellcolor{white}0.39 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.33 & \bfseries\cellcolor{white}0.45 \\
-    \cellcolor{gray!10}Article Type Research Article & \cellcolor{gray!10}0.12 & \cellcolor{gray!10}0.68 & \cellcolor{gray!10}-0.43 & \cellcolor{gray!10}0.66 \\
-    \cellcolor{white}Article Type Software Article & \cellcolor{white}0.23 & \cellcolor{white}0.93 & \cellcolor{white}-4.95 & \cellcolor{white}5.41 \\
-    \cellcolor{gray!10}Code-Contrib. Authors × Article Type Research Article & \cellcolor{gray!10}0.18 & \cellcolor{gray!10}0.39 & \cellcolor{gray!10}-0.24 & \cellcolor{gray!10}0.60 \\
-    \cellcolor{white}Code-Contrib. Authors × Article Type Software Article & \cellcolor{white}-0.52 & \cellcolor{white}0.58 & \cellcolor{white}-2.34 & \cellcolor{white}1.30 \\
-    \cellcolor{gray!10}Code-Contrib. Non-Authors × Article Type Research Article & \cellcolor{gray!10}0.18 & \cellcolor{gray!10}0.19 & \cellcolor{gray!10}-0.09 & \cellcolor{gray!10}0.44 \\
-    \cellcolor{white}Code-Contrib. Non-Authors × Article Type Software Article & \cellcolor{white}0.03 & \cellcolor{white}0.97 & \cellcolor{white}-1.81 & \cellcolor{white}1.87 \\
+    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}0.44 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.35 & \bfseries\cellcolor{white}0.53 \\
+    \bfseries\cellcolor{gray!10}Total Authors~$^{***}$ & \bfseries\cellcolor{gray!10}0.08 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.07 & \bfseries\cellcolor{gray!10}0.09 \\
+    \cellcolor{white}Code-Contrib. Authors & \cellcolor{white}-0.01 & \cellcolor{white}0.86 & \cellcolor{white}-0.06 & \cellcolor{white}0.05 \\
+    \bfseries\cellcolor{gray!10}Code-Contrib. Non-Authors~$^{**}$ & \bfseries\cellcolor{gray!10}-0.03 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}-0.05 & \bfseries\cellcolor{gray!10}-0.01 \\
+    \bfseries\cellcolor{white}Years Since Publication~$^{***}$ & \bfseries\cellcolor{white}0.41 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.40 & \bfseries\cellcolor{white}0.42 \\
+    \bfseries\cellcolor{gray!10}Article Type Research Article~$^{***}$ & \bfseries\cellcolor{gray!10}0.53 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.45 & \bfseries\cellcolor{gray!10}0.61 \\
+    \bfseries\cellcolor{white}Article Type Software Article~$^{**}$ & \bfseries\cellcolor{white}-0.46 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-0.73 & \bfseries\cellcolor{white}-0.19 \\
+    \bfseries\cellcolor{gray!10}Code-Contrib. Authors × Article Type Research Article~$^{*}$ & \bfseries\cellcolor{gray!10}0.07 & \bfseries\cellcolor{gray!10}0.04 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.13 \\
+    \cellcolor{white}Code-Contrib. Authors × Article Type Software Article & \cellcolor{white}-0.08 & \cellcolor{white}0.23 & \cellcolor{white}-0.22 & \cellcolor{white}0.05 \\
+    \bfseries\cellcolor{gray!10}Code-Contrib. Non-Authors × Article Type Research Article~$^{**}$ & \bfseries\cellcolor{gray!10}0.04 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.02 & \bfseries\cellcolor{gray!10}0.06 \\
+    \cellcolor{white}Code-Contrib. Non-Authors × Article Type Software Article & \cellcolor{white}0.08 & \cellcolor{white}0.28 & \cellcolor{white}-0.07 & \cellcolor{white}0.24 \\
 \bottomrule
 \end{tabular}
+}
 
 }
 
@@ -1128,39 +1130,39 @@ Position}\label{post-hoc-tests-for-coding-vs-non-coding-authors-by-position}
 \toprule
 \textbf{Control} & \textbf{Subset} & \textbf{Position} & \textbf{Coding} & \textbf{Total} & \textbf{p} \\
 \midrule
-    \multirow{12}{*}{\textbf{Domain}} & \multirow{3}{*}{\textbf{Health Sciences}} & First & 16 & 19 & 0.027$^{*}$ \\
-    & & \cellcolor{gray!10}Middle & \cellcolor{gray!10}7 & \cellcolor{gray!10}62 & \cellcolor{gray!10}0.000$^{***}$ \\
-    & & Last & 0 & 19 & 0.000$^{***}$ \\
-    & \multirow{3}{*}{\textbf{Life Sciences}} & \cellcolor{gray!10}First & \cellcolor{gray!10}17 & \cellcolor{gray!10}31 & \cellcolor{gray!10}1.000 \\
-    & & Middle & 3 & 79 & 0.000$^{***}$ \\
-    & & \cellcolor{gray!10}Last & \cellcolor{gray!10}4 & \cellcolor{gray!10}31 & \cellcolor{gray!10}0.000$^{***}$ \\
-    & \multirow{3}{*}{\textbf{Physical Sciences}} & First & 255 & 354 & 0.000$^{***}$ \\
-    & & \cellcolor{gray!10}Middle & \cellcolor{gray!10}97 & \cellcolor{gray!10}1002 & \cellcolor{gray!10}0.000$^{***}$ \\
-    & & Last & 25 & 348 & 0.000$^{***}$ \\
-    & \multirow{3}{*}{\textbf{Social Sciences}} & \cellcolor{gray!10}First & \cellcolor{gray!10}20 & \cellcolor{gray!10}22 & \cellcolor{gray!10}0.000$^{***}$ \\
-    & & Middle & 5 & 48 & 0.000$^{***}$ \\
-    & & \cellcolor{gray!10}Last & \cellcolor{gray!10}1 & \cellcolor{gray!10}21 & \cellcolor{gray!10}0.000$^{***}$ \\
+    \multirow{12}{*}{\textbf{Domain}} & \multirow{3}{*}{\textbf{Health Sciences}} & First & 627 & 929 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Middle & \cellcolor{gray!10}196 & \cellcolor{gray!10}3488 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Last & 83 & 920 & 0.000$^{***}$ \\
+    & \multirow{3}{*}{\textbf{Life Sciences}} & \cellcolor{gray!10}First & \cellcolor{gray!10}1119 & \cellcolor{gray!10}1684 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Middle & 383 & 5082 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Last & \cellcolor{gray!10}216 & \cellcolor{gray!10}1680 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & \multirow{3}{*}{\textbf{Physical Sciences}} & First & 11314 & 16091 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Middle & \cellcolor{gray!10}4465 & \cellcolor{gray!10}44332 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Last & 1074 & 15955 & 0.000$^{***}$ \\
+    & \multirow{3}{*}{\textbf{Social Sciences}} & \cellcolor{gray!10}First & \cellcolor{gray!10}786 & \cellcolor{gray!10}1119 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Middle & 356 & 2770 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Last & \cellcolor{gray!10}119 & \cellcolor{gray!10}1118 & \cellcolor{gray!10}0.000$^{***}$ \\
     \midrule
-    \multirow{9}{*}{\textbf{Article Type}} & \multirow{3}{*}{\textbf{Preprint}} & First & 40 & 55 & 0.006$^{**}$ \\
-    & & \cellcolor{gray!10}Middle & \cellcolor{gray!10}15 & \cellcolor{gray!10}131 & \cellcolor{gray!10}0.000$^{***}$ \\
-    & & Last & 7 & 55 & 0.000$^{***}$ \\
-    & \multirow{3}{*}{\textbf{Research Article}} & \cellcolor{gray!10}First & \cellcolor{gray!10}265 & \cellcolor{gray!10}367 & \cellcolor{gray!10}0.000$^{***}$ \\
-    & & Middle & 92 & 1050 & 0.000$^{***}$ \\
-    & & \cellcolor{gray!10}Last & \cellcolor{gray!10}22 & \cellcolor{gray!10}360 & \cellcolor{gray!10}0.000$^{***}$ \\
-    & \multirow{3}{*}{\textbf{Software Article}} & First & 3 & 4 & 1.000 \\
-    & & \cellcolor{gray!10}Middle & \cellcolor{gray!10}5 & \cellcolor{gray!10}10 & \cellcolor{gray!10}1.000 \\
-    & & Last & 1 & 4 & 1.000 \\
+    \multirow{9}{*}{\textbf{Article Type}} & \multirow{3}{*}{\textbf{Preprint}} & First & 1872 & 2662 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Middle & \cellcolor{gray!10}791 & \cellcolor{gray!10}7335 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Last & 174 & 2656 & 0.000$^{***}$ \\
+    & \multirow{3}{*}{\textbf{Research Article}} & \cellcolor{gray!10}First & \cellcolor{gray!10}11848 & \cellcolor{gray!10}16961 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Middle & 4471 & 47814 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Last & \cellcolor{gray!10}1276 & \cellcolor{gray!10}16817 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & \multirow{3}{*}{\textbf{Software Article}} & First & 126 & 200 & 0.002$^{**}$ \\
+    & & \cellcolor{gray!10}Middle & \cellcolor{gray!10}138 & \cellcolor{gray!10}523 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Last & 42 & 200 & 0.000$^{***}$ \\
     \midrule
-    \multirow{6}{*}{\textbf{Open Access Status}} & \multirow{3}{*}{\textbf{Closed Access}} & \cellcolor{gray!10}First & \cellcolor{gray!10}16 & \cellcolor{gray!10}22 & \cellcolor{gray!10}0.315 \\
-    & & Middle & 6 & 55 & 0.000$^{***}$ \\
-    & & \cellcolor{gray!10}Last & \cellcolor{gray!10}2 & \cellcolor{gray!10}21 & \cellcolor{gray!10}0.000$^{***}$ \\
-    & \multirow{3}{*}{\textbf{Open Access}} & First & 292 & 404 & 0.000$^{***}$ \\
-    & & \cellcolor{gray!10}Middle & \cellcolor{gray!10}106 & \cellcolor{gray!10}1136 & \cellcolor{gray!10}0.000$^{***}$ \\
-    & & Last & 28 & 398 & 0.000$^{***}$ \\
+    \multirow{6}{*}{\textbf{Open Access Status}} & \multirow{3}{*}{\textbf{Closed Access}} & \cellcolor{gray!10}First & \cellcolor{gray!10}772 & \cellcolor{gray!10}1066 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Middle & 298 & 3250 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Last & \cellcolor{gray!10}70 & \cellcolor{gray!10}1053 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & \multirow{3}{*}{\textbf{Open Access}} & First & 13074 & 18757 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Middle & \cellcolor{gray!10}5102 & \cellcolor{gray!10}52422 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Last & 1422 & 18620 & 0.000$^{***}$ \\
     \midrule
-    \multirow{3}{*}{\textbf{Overall}} & \multirow{3}{*}{\textbf{Overall}} & \cellcolor{gray!10}First & \cellcolor{gray!10}308 & \cellcolor{gray!10}426 & \cellcolor{gray!10}0.000$^{***}$ \\
-    & & Middle & 112 & 1191 & 0.000$^{***}$ \\
-    & & \cellcolor{gray!10}Last & \cellcolor{gray!10}30 & \cellcolor{gray!10}419 & \cellcolor{gray!10}0.000$^{***}$ \\
+    \multirow{3}{*}{\textbf{Overall}} & \multirow{3}{*}{\textbf{Overall}} & \cellcolor{gray!10}First & \cellcolor{gray!10}13846 & \cellcolor{gray!10}19823 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & & Middle & 5400 & 55672 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Last & \cellcolor{gray!10}1492 & \cellcolor{gray!10}19673 & \cellcolor{gray!10}0.000$^{***}$ \\
 \bottomrule
 \end{tabular}
 
@@ -1194,28 +1196,29 @@ Status}\label{post-hoc-tests-for-coding-vs-non-coding-authors-by-corresponding-s
 \toprule
 \textbf{Control} & \textbf{Subset} & \textbf{Is Corresponding} & \textbf{Coding} & \textbf{Total} & \textbf{p} \\
 \midrule
-    \multirow{8}{*}{\textbf{Domain}} & \multirow{2}{*}{\textbf{Health Sciences}} & Corresponding & 6 & 18 & 0.476 \\
-    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}17 & \cellcolor{gray!10}82 & \cellcolor{gray!10}0.000$^{***}$ \\
-    & \multirow{2}{*}{\textbf{Life Sciences}} & Corresponding & 11 & 59 & 0.000$^{***}$ \\
-    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}13 & \cellcolor{gray!10}82 & \cellcolor{gray!10}0.000$^{***}$ \\
-    & \multirow{2}{*}{\textbf{Physical Sciences}} & Corresponding & 42 & 138 & 0.000$^{***}$ \\
-    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}335 & \cellcolor{gray!10}1566 & \cellcolor{gray!10}0.000$^{***}$ \\
-    & \multirow{2}{*}{\textbf{Social Sciences}} & Corresponding & 6 & 10 & 1.000 \\
-    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}20 & \cellcolor{gray!10}81 & \cellcolor{gray!10}0.000$^{***}$ \\
+    \multirow{8}{*}{\textbf{Domain}} & \multirow{2}{*}{\textbf{Health Sciences}} & Corresponding & 407 & 1954 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}499 & \cellcolor{gray!10}3383 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & \multirow{2}{*}{\textbf{Life Sciences}} & Corresponding & 871 & 3975 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}847 & \cellcolor{gray!10}4471 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & \multirow{2}{*}{\textbf{Physical Sciences}} & Corresponding & 2213 & 5972 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}14640 & \cellcolor{gray!10}70406 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & \multirow{2}{*}{\textbf{Social Sciences}} & Corresponding & 330 & 959 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}931 & \cellcolor{gray!10}4048 & \cellcolor{gray!10}0.000$^{***}$ \\
     \midrule
-    \multirow{5}{*}{\textbf{Article Type}} & \multirow{1}{*}{\textbf{Preprint}} & Not Corresponding & 62 & 241 & 0.000$^{***}$ \\
-    & \multirow{2}{*}{\textbf{Research Article}} & \cellcolor{gray!10}Corresponding & \cellcolor{gray!10}64 & \cellcolor{gray!10}224 & \cellcolor{gray!10}0.000$^{***}$ \\
-    & & Not Corresponding & 315 & 1553 & 0.000$^{***}$ \\
-    & \multirow{2}{*}{\textbf{Software Article}} & \cellcolor{gray!10}Corresponding & \cellcolor{gray!10}1 & \cellcolor{gray!10}1 & \cellcolor{gray!10}1.000 \\
-    & & Not Corresponding & 8 & 17 & 1.000 \\
+    \multirow{6}{*}{\textbf{Article Type}} & \multirow{2}{*}{\textbf{Preprint}} & Corresponding & 13 & 41 & 0.055 \\
+    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}2824 & \cellcolor{gray!10}12612 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & \multirow{2}{*}{\textbf{Research Article}} & Corresponding & 3739 & 12638 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}13856 & \cellcolor{gray!10}68954 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & \multirow{2}{*}{\textbf{Software Article}} & Corresponding & 69 & 181 & 0.003$^{**}$ \\
+    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}237 & \cellcolor{gray!10}742 & \cellcolor{gray!10}0.000$^{***}$ \\
     \midrule
-    \multirow{4}{*}{\textbf{Open Access Status}} & \multirow{2}{*}{\textbf{Closed Access}} & \cellcolor{gray!10}Corresponding & \cellcolor{gray!10}2 & \cellcolor{gray!10}6 & \cellcolor{gray!10}1.000 \\
-    & & Not Corresponding & 22 & 92 & 0.000$^{***}$ \\
-    & \multirow{2}{*}{\textbf{Open Access}} & \cellcolor{gray!10}Corresponding & \cellcolor{gray!10}63 & \cellcolor{gray!10}219 & \cellcolor{gray!10}0.000$^{***}$ \\
-    & & Not Corresponding & 363 & 1719 & 0.000$^{***}$ \\
+    \multirow{4}{*}{\textbf{Open Access Status}} & \multirow{2}{*}{\textbf{Closed Access}} & Corresponding & 82 & 181 & 0.468 \\
+    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}1058 & \cellcolor{gray!10}5188 & \cellcolor{gray!10}0.000$^{***}$ \\
+    & \multirow{2}{*}{\textbf{Open Access}} & Corresponding & 3739 & 12679 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}15859 & \cellcolor{gray!10}77120 & \cellcolor{gray!10}0.000$^{***}$ \\
     \midrule
-    \multirow{2}{*}{\textbf{Overall}} & \multirow{2}{*}{\textbf{Overall}} & \cellcolor{gray!10}Corresponding & \cellcolor{gray!10}65 & \cellcolor{gray!10}225 & \cellcolor{gray!10}0.000$^{***}$ \\
-    & & Not Corresponding & 385 & 1811 & 0.000$^{***}$ \\
+    \multirow{2}{*}{\textbf{Overall}} & \multirow{2}{*}{\textbf{Overall}} & Corresponding & 3821 & 12860 & 0.000$^{***}$ \\
+    & & \cellcolor{gray!10}Not Corresponding & \cellcolor{gray!10}16917 & \cellcolor{gray!10}82308 & \cellcolor{gray!10}0.000$^{***}$ \\
 \bottomrule
 \end{tabular}
 
@@ -1250,17 +1253,17 @@ Analysis}\label{filtered-dataset-description-for-h-index-analysis}
 \toprule
 \textbf{Category} & \textbf{Subset} & \textbf{Total Authors} & \textbf{Any Code} & \textbf{Majority Code} & \textbf{Always Code} \\
 \midrule
-    \multirow{4}{*}{\textbf{By Commmon Domain}} & \cellcolor{gray!10}Health Sciences & \cellcolor{gray!10}24 & \cellcolor{gray!10}5 & \cellcolor{gray!10}2 & \cellcolor{gray!10}1 \\
-    & Life Sciences & 29 & 12 & 3 & 3 \\
-    & \cellcolor{gray!10}Physical Sciences & \cellcolor{gray!10}1001 & \cellcolor{gray!10}313 & \cellcolor{gray!10}156 & \cellcolor{gray!10}76 \\
-    & Social Sciences & 23 & 4 & 4 & 2 \\\midrule
-    \multirow{3}{*}{\textbf{By Document Type}} & \cellcolor{gray!10}Preprint & \cellcolor{gray!10}606 & \cellcolor{gray!10}214 & \cellcolor{gray!10}98 & \cellcolor{gray!10}36 \\
-    & research article & 466 & 119 & 67 & 44 \\
-    & \cellcolor{gray!10}software article & \cellcolor{gray!10}5 & \cellcolor{gray!10}1 & \cellcolor{gray!10}0 & \cellcolor{gray!10}2 \\\midrule
-    \multirow{3}{*}{\textbf{By Author Position}} & \cellcolor{gray!10}First & \cellcolor{gray!10}218 & \cellcolor{gray!10}35 & \cellcolor{gray!10}83 & \cellcolor{gray!10}71 \\
-    & last & 215 & 45 & 12 & 5 \\
-    & \cellcolor{gray!10}middle & \cellcolor{gray!10}644 & \cellcolor{gray!10}254 & \cellcolor{gray!10}70 & \cellcolor{gray!10}6 \\\midrule
-    \textbf{Total} & & \textbf{1077} & \textbf{334} & \textbf{165} & \textbf{82} \\
+    \multirow{4}{*}{\textbf{By Commmon Domain}} & \cellcolor{gray!10}Health Sciences & \cellcolor{gray!10}1501 & \cellcolor{gray!10}338 & \cellcolor{gray!10}196 & \cellcolor{gray!10}81 \\
+    & Life Sciences & 1436 & 351 & 236 & 127 \\
+    & \cellcolor{gray!10}Physical Sciences & \cellcolor{gray!10}49447 & \cellcolor{gray!10}14756 & \cellcolor{gray!10}7954 & \cellcolor{gray!10}3725 \\
+    & Social Sciences & 1297 & 274 & 216 & 176 \\\midrule
+    \multirow{3}{*}{\textbf{By Document Type}} & \cellcolor{gray!10}Preprint & \cellcolor{gray!10}29038 & \cellcolor{gray!10}9255 & \cellcolor{gray!10}4828 & \cellcolor{gray!10}2151 \\
+    & research article & 24265 & 6419 & 3657 & 1830 \\
+    & \cellcolor{gray!10}software article & \cellcolor{gray!10}378 & \cellcolor{gray!10}45 & \cellcolor{gray!10}117 & \cellcolor{gray!10}128 \\\midrule
+    \multirow{3}{*}{\textbf{By Author Position}} & \cellcolor{gray!10}First & \cellcolor{gray!10}11459 & \cellcolor{gray!10}1671 & \cellcolor{gray!10}4864 & \cellcolor{gray!10}3249 \\
+    & last & 10208 & 2260 & 550 & 186 \\
+    & \cellcolor{gray!10}middle & \cellcolor{gray!10}32014 & \cellcolor{gray!10}11788 & \cellcolor{gray!10}3188 & \cellcolor{gray!10}674 \\\midrule
+    \textbf{Total} & & \textbf{53681} & \textbf{15719} & \textbf{8602} & \textbf{4109} \\
 \bottomrule
 \end{tabular}
 }
@@ -1285,11 +1288,11 @@ Results}\label{h-index-linear-model-results}
 \toprule
 \textbf{Variable} & \textbf{coef} & \textbf{P>|z|} & \multicolumn{2}{c}{\textbf{[0.025 0.975]}} \\
 \midrule
-    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}2.88 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}2.83 & \bfseries\cellcolor{white}2.94 \\
+    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}3.18 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}3.17 & \bfseries\cellcolor{white}3.19 \\
     \bfseries\cellcolor{gray!10}Works Count~$^{***}$ & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 \\
-    \bfseries\cellcolor{white}Any Coding~$^{*}$ & \bfseries\cellcolor{white}-0.09 & \bfseries\cellcolor{white}0.01 & \bfseries\cellcolor{white}-0.17 & \bfseries\cellcolor{white}-0.02 \\
-    \bfseries\cellcolor{gray!10}Majority Coding~$^{***}$ & \bfseries\cellcolor{gray!10}-0.52 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}-0.67 & \bfseries\cellcolor{gray!10}-0.37 \\
-    \bfseries\cellcolor{white}Always Coding~$^{***}$ & \bfseries\cellcolor{white}-0.68 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-0.94 & \bfseries\cellcolor{white}-0.42 \\
+    \bfseries\cellcolor{white}Any Coding~$^{***}$ & \bfseries\cellcolor{white}-0.32 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-0.34 & \bfseries\cellcolor{white}-0.31 \\
+    \bfseries\cellcolor{gray!10}Majority Coding~$^{***}$ & \bfseries\cellcolor{gray!10}-0.76 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}-0.79 & \bfseries\cellcolor{gray!10}-0.73 \\
+    \bfseries\cellcolor{white}Always Coding~$^{***}$ & \bfseries\cellcolor{white}-0.96 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-1.01 & \bfseries\cellcolor{white}-0.91 \\
 \bottomrule
 \end{tabular}
 
@@ -1306,25 +1309,27 @@ Results}\label{h-index-linear-model-results}
 \centering
 
 
+\resizebox{0.95\textwidth}{!}{%
 \begin{tabular}{l*{6}{r}}
 \toprule
 \textbf{Variable} & \textbf{coef} & \textbf{P>|z|} & \multicolumn{2}{c}{\textbf{[0.025 0.975]}} \\
 \midrule
-    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}2.13 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}1.66 & \bfseries\cellcolor{white}2.59 \\
+    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}2.36 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}2.30 & \bfseries\cellcolor{white}2.42 \\
     \bfseries\cellcolor{gray!10}Works Count~$^{***}$ & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 \\
-    \cellcolor{white}Any Coding & \cellcolor{white}0.43 & \cellcolor{white}0.11 & \cellcolor{white}-0.10 & \cellcolor{white}0.95 \\
-    \cellcolor{gray!10}Majority Coding & \cellcolor{gray!10}0.11 & \cellcolor{gray!10}0.68 & \cellcolor{gray!10}-0.41 & \cellcolor{gray!10}0.63 \\
-    \cellcolor{white}Always Coding & \cellcolor{white}0.10 & \cellcolor{white}0.72 & \cellcolor{white}-0.44 & \cellcolor{white}0.63 \\
-    \bfseries\cellcolor{gray!10}Common Author Position Last~$^{***}$ & \bfseries\cellcolor{gray!10}0.90 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.43 & \bfseries\cellcolor{gray!10}1.37 \\
-    \bfseries\cellcolor{white}Common Author Position Middle~$^{**}$ & \bfseries\cellcolor{white}0.72 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.25 & \bfseries\cellcolor{white}1.19 \\
-    \cellcolor{gray!10}Any Coding × Common Author Position Last & \cellcolor{gray!10}-0.34 & \cellcolor{gray!10}0.21 & \cellcolor{gray!10}-0.88 & \cellcolor{gray!10}0.19 \\
-    \bfseries\cellcolor{white}Any Coding × Common Author Position Middle~$^{*}$ & \bfseries\cellcolor{white}-0.55 & \bfseries\cellcolor{white}0.04 & \bfseries\cellcolor{white}-1.08 & \bfseries\cellcolor{white}-0.01 \\
-    \cellcolor{gray!10}Majority Coding × Common Author Position Last & \cellcolor{gray!10}-0.31 & \cellcolor{gray!10}0.30 & \cellcolor{gray!10}-0.90 & \cellcolor{gray!10}0.27 \\
-    \bfseries\cellcolor{white}Majority Coding × Common Author Position Middle~$^{*}$ & \bfseries\cellcolor{white}-0.61 & \bfseries\cellcolor{white}0.04 & \bfseries\cellcolor{white}-1.17 & \bfseries\cellcolor{white}-0.04 \\
-    \cellcolor{gray!10}Always Coding × Common Author Position Last & \cellcolor{gray!10}-1.36 & \cellcolor{gray!10}0.14 & \cellcolor{gray!10}-3.14 & \cellcolor{gray!10}0.42 \\
-    \cellcolor{white}Always Coding × Common Author Position Middle & \cellcolor{white}-0.72 & \cellcolor{white}0.18 & \cellcolor{white}-1.78 & \cellcolor{white}0.34 \\
+    \bfseries\cellcolor{white}Any Coding~$^{***}$ & \bfseries\cellcolor{white}0.16 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.07 & \bfseries\cellcolor{white}0.24 \\
+    \cellcolor{gray!10}Majority Coding & \cellcolor{gray!10}-0.05 & \cellcolor{gray!10}0.19 & \cellcolor{gray!10}-0.12 & \cellcolor{gray!10}0.03 \\
+    \bfseries\cellcolor{white}Always Coding~$^{***}$ & \bfseries\cellcolor{white}-0.22 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-0.31 & \bfseries\cellcolor{white}-0.14 \\
+    \bfseries\cellcolor{gray!10}Common Author Position Last~$^{***}$ & \bfseries\cellcolor{gray!10}1.06 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}1.00 & \bfseries\cellcolor{gray!10}1.13 \\
+    \bfseries\cellcolor{white}Common Author Position Middle~$^{***}$ & \bfseries\cellcolor{white}0.75 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.69 & \bfseries\cellcolor{white}0.82 \\
+    \bfseries\cellcolor{gray!10}Any Coding × Common Author Position Last~$^{***}$ & \bfseries\cellcolor{gray!10}-0.31 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}-0.40 & \bfseries\cellcolor{gray!10}-0.23 \\
+    \bfseries\cellcolor{white}Any Coding × Common Author Position Middle~$^{***}$ & \bfseries\cellcolor{white}-0.47 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-0.55 & \bfseries\cellcolor{white}-0.38 \\
+    \bfseries\cellcolor{gray!10}Majority Coding × Common Author Position Last~$^{***}$ & \bfseries\cellcolor{gray!10}-0.37 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}-0.47 & \bfseries\cellcolor{gray!10}-0.28 \\
+    \bfseries\cellcolor{white}Majority Coding × Common Author Position Middle~$^{***}$ & \bfseries\cellcolor{white}-0.62 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-0.71 & \bfseries\cellcolor{white}-0.54 \\
+    \bfseries\cellcolor{gray!10}Always Coding × Common Author Position Last~$^{***}$ & \bfseries\cellcolor{gray!10}-0.38 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}-0.52 & \bfseries\cellcolor{gray!10}-0.23 \\
+    \bfseries\cellcolor{white}Always Coding × Common Author Position Middle~$^{***}$ & \bfseries\cellcolor{white}-0.51 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-0.64 & \bfseries\cellcolor{white}-0.38 \\
 \bottomrule
 \end{tabular}
+}
 
 }
 
@@ -1339,29 +1344,31 @@ Results}\label{h-index-linear-model-results}
 \centering
 
 
+\resizebox{0.95\textwidth}{!}{%
 \begin{tabular}{l*{6}{r}}
 \toprule
 \textbf{Variable} & \textbf{coef} & \textbf{P>|z|} & \multicolumn{2}{c}{\textbf{[0.025 0.975]}} \\
 \midrule
-    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}3.15 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}2.99 & \bfseries\cellcolor{white}3.32 \\
+    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}3.31 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}3.28 & \bfseries\cellcolor{white}3.35 \\
     \bfseries\cellcolor{gray!10}Works Count~$^{***}$ & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 \\
-    \cellcolor{white}Any Coding & \cellcolor{white}-0.47 & \cellcolor{white}0.16 & \cellcolor{white}-1.12 & \cellcolor{white}0.19 \\
-    \cellcolor{gray!10}Majority Coding & \cellcolor{gray!10}-0.20 & \cellcolor{gray!10}0.58 & \cellcolor{gray!10}-0.89 & \cellcolor{gray!10}0.49 \\
-    \cellcolor{white}Always Coding & \cellcolor{white}-1.56 & \cellcolor{white}0.47 & \cellcolor{white}-5.84 & \cellcolor{white}2.71 \\
-    \cellcolor{gray!10}Common Domain Life Sciences & \cellcolor{gray!10}-0.17 & \cellcolor{gray!10}0.32 & \cellcolor{gray!10}-0.52 & \cellcolor{gray!10}0.17 \\
-    \bfseries\cellcolor{white}Common Domain Physical Sciences~$^{**}$ & \bfseries\cellcolor{white}-0.29 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-0.45 & \bfseries\cellcolor{white}-0.12 \\
-    \cellcolor{gray!10}Common Domain Social Sciences & \cellcolor{gray!10}-0.24 & \cellcolor{gray!10}0.11 & \cellcolor{gray!10}-0.53 & \cellcolor{gray!10}0.05 \\
-    \cellcolor{white}Any Coding × Common Domain Life Sciences & \cellcolor{white}0.67 & \cellcolor{white}0.08 & \cellcolor{white}-0.08 & \cellcolor{white}1.42 \\
-    \cellcolor{gray!10}Any Coding × Common Domain Physical Sciences & \cellcolor{gray!10}0.36 & \cellcolor{gray!10}0.28 & \cellcolor{gray!10}-0.29 & \cellcolor{gray!10}1.02 \\
-    \cellcolor{white}Any Coding × Common Domain Social Sciences & \cellcolor{white}0.59 & \cellcolor{white}0.15 & \cellcolor{white}-0.22 & \cellcolor{white}1.40 \\
-    \cellcolor{gray!10}Majority Coding × Common Domain Life Sciences & \cellcolor{gray!10}-0.40 & \cellcolor{gray!10}0.54 & \cellcolor{gray!10}-1.70 & \cellcolor{gray!10}0.90 \\
-    \cellcolor{white}Majority Coding × Common Domain Physical Sciences & \cellcolor{white}-0.33 & \cellcolor{white}0.37 & \cellcolor{white}-1.03 & \cellcolor{white}0.38 \\
-    \cellcolor{gray!10}Majority Coding × Common Domain Social Sciences & \cellcolor{gray!10}-0.34 & \cellcolor{gray!10}0.53 & \cellcolor{gray!10}-1.42 & \cellcolor{gray!10}0.73 \\
-    \cellcolor{white}Always Coding × Common Domain Life Sciences & \cellcolor{white}0.02 & \cellcolor{white}0.99 & \cellcolor{white}-5.13 & \cellcolor{white}5.17 \\
-    \cellcolor{gray!10}Always Coding × Common Domain Physical Sciences & \cellcolor{gray!10}0.93 & \cellcolor{gray!10}0.67 & \cellcolor{gray!10}-3.36 & \cellcolor{gray!10}5.21 \\
-    \cellcolor{white}Always Coding × Common Domain Social Sciences & \cellcolor{white}0.70 & \cellcolor{white}0.77 & \cellcolor{white}-3.94 & \cellcolor{white}5.34 \\
+    \bfseries\cellcolor{white}Any Coding~$^{***}$ & \bfseries\cellcolor{white}-0.38 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-0.47 & \bfseries\cellcolor{white}-0.29 \\
+    \bfseries\cellcolor{gray!10}Majority Coding~$^{***}$ & \bfseries\cellcolor{gray!10}-1.47 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}-1.67 & \bfseries\cellcolor{gray!10}-1.26 \\
+    \bfseries\cellcolor{white}Always Coding~$^{***}$ & \bfseries\cellcolor{white}-1.18 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-1.55 & \bfseries\cellcolor{white}-0.82 \\
+    \bfseries\cellcolor{gray!10}Common Domain Life Sciences~$^{***}$ & \bfseries\cellcolor{gray!10}0.10 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.06 & \bfseries\cellcolor{gray!10}0.15 \\
+    \bfseries\cellcolor{white}Common Domain Physical Sciences~$^{***}$ & \bfseries\cellcolor{white}-0.14 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-0.18 & \bfseries\cellcolor{white}-0.11 \\
+    \bfseries\cellcolor{gray!10}Common Domain Social Sciences~$^{***}$ & \bfseries\cellcolor{gray!10}-0.17 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}-0.23 & \bfseries\cellcolor{gray!10}-0.11 \\
+    \cellcolor{white}Any Coding × Common Domain Life Sciences & \cellcolor{white}0.08 & \cellcolor{white}0.16 & \cellcolor{white}-0.03 & \cellcolor{white}0.20 \\
+    \cellcolor{gray!10}Any Coding × Common Domain Physical Sciences & \cellcolor{gray!10}0.06 & \cellcolor{gray!10}0.17 & \cellcolor{gray!10}-0.03 & \cellcolor{gray!10}0.15 \\
+    \cellcolor{white}Any Coding × Common Domain Social Sciences & \cellcolor{white}0.02 & \cellcolor{white}0.81 & \cellcolor{white}-0.13 & \cellcolor{white}0.16 \\
+    \bfseries\cellcolor{gray!10}Majority Coding × Common Domain Life Sciences~$^{***}$ & \bfseries\cellcolor{gray!10}0.84 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.61 & \bfseries\cellcolor{gray!10}1.08 \\
+    \bfseries\cellcolor{white}Majority Coding × Common Domain Physical Sciences~$^{***}$ & \bfseries\cellcolor{white}0.73 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.52 & \bfseries\cellcolor{white}0.93 \\
+    \bfseries\cellcolor{gray!10}Majority Coding × Common Domain Social Sciences~$^{***}$ & \bfseries\cellcolor{gray!10}0.75 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.48 & \bfseries\cellcolor{gray!10}1.02 \\
+    \cellcolor{white}Always Coding × Common Domain Life Sciences & \cellcolor{white}0.28 & \cellcolor{white}0.19 & \cellcolor{white}-0.14 & \cellcolor{white}0.70 \\
+    \cellcolor{gray!10}Always Coding × Common Domain Physical Sciences & \cellcolor{gray!10}0.23 & \cellcolor{gray!10}0.23 & \cellcolor{gray!10}-0.14 & \cellcolor{gray!10}0.59 \\
+    \cellcolor{white}Always Coding × Common Domain Social Sciences & \cellcolor{white}0.28 & \cellcolor{white}0.20 & \cellcolor{white}-0.15 & \cellcolor{white}0.72 \\
 \bottomrule
 \end{tabular}
+}
 
 }
 
@@ -1376,25 +1383,27 @@ Results}\label{h-index-linear-model-results}
 \centering
 
 
+\resizebox{0.95\textwidth}{!}{%
 \begin{tabular}{l*{6}{r}}
 \toprule
 \textbf{Variable} & \textbf{coef} & \textbf{P>|z|} & \multicolumn{2}{c}{\textbf{[0.025 0.975]}} \\
 \midrule
-    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}2.88 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}2.81 & \bfseries\cellcolor{white}2.94 \\
+    \bfseries\cellcolor{white}const~$^{***}$ & \bfseries\cellcolor{white}3.09 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}3.08 & \bfseries\cellcolor{white}3.10 \\
     \bfseries\cellcolor{gray!10}Works Count~$^{***}$ & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.00 \\
-    \bfseries\cellcolor{white}Any Coding~$^{**}$ & \bfseries\cellcolor{white}-0.16 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-0.27 & \bfseries\cellcolor{white}-0.06 \\
-    \bfseries\cellcolor{gray!10}Majority Coding~$^{***}$ & \bfseries\cellcolor{gray!10}-0.54 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}-0.73 & \bfseries\cellcolor{gray!10}-0.34 \\
-    \bfseries\cellcolor{white}Always Coding~$^{**}$ & \bfseries\cellcolor{white}-0.66 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-1.05 & \bfseries\cellcolor{white}-0.26 \\
-    \cellcolor{gray!10}Common Article Type Research Article & \cellcolor{gray!10}0.02 & \cellcolor{gray!10}0.57 & \cellcolor{gray!10}-0.06 & \cellcolor{gray!10}0.10 \\
-    \cellcolor{white}Common Article Type Software Article & \cellcolor{white}-0.08 & \cellcolor{white}0.88 & \cellcolor{white}-1.16 & \cellcolor{white}0.99 \\
-    \cellcolor{gray!10}Any Coding × Common Article Type Research Article & \cellcolor{gray!10}0.14 & \cellcolor{gray!10}0.05 & \cellcolor{gray!10}-0.00 & \cellcolor{gray!10}0.29 \\
-    \cellcolor{white}Any Coding × Common Article Type Software Article & \cellcolor{white}0.97 & \cellcolor{white}0.10 & \cellcolor{white}-0.19 & \cellcolor{white}2.13 \\
-    \cellcolor{gray!10}Majority Coding × Common Article Type Research Article & \cellcolor{gray!10}0.03 & \cellcolor{gray!10}0.86 & \cellcolor{gray!10}-0.27 & \cellcolor{gray!10}0.32 \\
-    \cellcolor{white}Majority Coding × Common Article Type Software Article & \cellcolor{white}0.00 & \cellcolor{white}0.80 & \cellcolor{white}-0.00 & \cellcolor{white}0.00 \\
-    \cellcolor{gray!10}Always Coding × Common Article Type Research Article & \cellcolor{gray!10}-0.04 & \cellcolor{gray!10}0.89 & \cellcolor{gray!10}-0.56 & \cellcolor{gray!10}0.48 \\
-    \cellcolor{white}Always Coding × Common Article Type Software Article & \cellcolor{white}-0.55 & \cellcolor{white}0.81 & \cellcolor{white}-4.98 & \cellcolor{white}3.88 \\
+    \bfseries\cellcolor{white}Any Coding~$^{***}$ & \bfseries\cellcolor{white}-0.29 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-0.32 & \bfseries\cellcolor{white}-0.27 \\
+    \bfseries\cellcolor{gray!10}Majority Coding~$^{***}$ & \bfseries\cellcolor{gray!10}-0.76 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}-0.80 & \bfseries\cellcolor{gray!10}-0.72 \\
+    \bfseries\cellcolor{white}Always Coding~$^{***}$ & \bfseries\cellcolor{white}-0.98 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}-1.06 & \bfseries\cellcolor{white}-0.90 \\
+    \bfseries\cellcolor{gray!10}Common Article Type Research Article~$^{***}$ & \bfseries\cellcolor{gray!10}0.18 & \bfseries\cellcolor{gray!10}0.00 & \bfseries\cellcolor{gray!10}0.17 & \bfseries\cellcolor{gray!10}0.20 \\
+    \bfseries\cellcolor{white}Common Article Type Software Article~$^{***}$ & \bfseries\cellcolor{white}0.22 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.12 & \bfseries\cellcolor{white}0.33 \\
+    \bfseries\cellcolor{gray!10}Any Coding × Common Article Type Research Article~$^{*}$ & \bfseries\cellcolor{gray!10}-0.03 & \bfseries\cellcolor{gray!10}0.05 & \bfseries\cellcolor{gray!10}-0.06 & \bfseries\cellcolor{gray!10}-0.00 \\
+    \cellcolor{white}Any Coding × Common Article Type Software Article & \cellcolor{white}0.17 & \cellcolor{white}0.10 & \cellcolor{white}-0.04 & \cellcolor{white}0.37 \\
+    \cellcolor{gray!10}Majority Coding × Common Article Type Research Article & \cellcolor{gray!10}0.01 & \cellcolor{gray!10}0.80 & \cellcolor{gray!10}-0.05 & \cellcolor{gray!10}0.06 \\
+    \bfseries\cellcolor{white}Majority Coding × Common Article Type Software Article~$^{***}$ & \bfseries\cellcolor{white}0.38 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.20 & \bfseries\cellcolor{white}0.56 \\
+    \cellcolor{gray!10}Always Coding × Common Article Type Research Article & \cellcolor{gray!10}0.00 & \cellcolor{gray!10}0.97 & \cellcolor{gray!10}-0.10 & \cellcolor{gray!10}0.10 \\
+    \bfseries\cellcolor{white}Always Coding × Common Article Type Software Article~$^{**}$ & \bfseries\cellcolor{white}0.37 & \bfseries\cellcolor{white}0.00 & \bfseries\cellcolor{white}0.16 & \bfseries\cellcolor{white}0.58 \\
 \bottomrule
 \end{tabular}
+}
 
 }
 
@@ -1436,7 +1445,7 @@ receiving authorship recognition (pre-registered as H2).
 However, our analysis found no evidence to support this hypothesis. When
 examining the relationship between a repository's commit duration and
 the percentage of developers who receive authorship recognition, we
-found no significant correlation (r = 0.07, p = n.s.). This suggests
+found no significant correlation (r = -0.00, p = n.s.). This suggests
 that the length of time a project has been in development has no
 meaningful relationship with the proportion of developers who are
 recognized as authors.
@@ -1459,81 +1468,86 @@ from a more granular analysis of individual contribution patterns,
 incorporating measures of contribution significance and sustainability
 rather than just temporal duration.
 
-\section{References}\label{references}
+\section*{References}\label{references}
+\addcontentsline{toc}{section}{References}
 
 \phantomsection\label{refs}
 \begin{CSLReferences}{1}{0}
 \bibitem[\citeproctext]{ref-cohen1960coefficient}
-Cohen, Jacob. 1960. {``A Coefficient of Agreement for Nominal Scales.''}
-\emph{Educational and Psychological Measurement} 20 (1): 37--46.
+Cohen, J. (1960). A coefficient of agreement for nominal scales.
+\emph{Educational and Psychological Measurement}, \emph{20}(1), 37--46.
+\url{https://doi.org/10.1177/001316446002000104}
 
 \bibitem[\citeproctext]{ref-bert2018}
-Devlin, Jacob, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2018.
-{``{BERT:} Pre-Training of Deep Bidirectional Transformers for Language
-Understanding.''} \emph{CoRR} abs/1810.04805.
-\url{http://arxiv.org/abs/1810.04805}.
+Devlin, J., Chang, M.-W., Lee, K., \& Toutanova, K. (2018). {BERT:}
+Pre-training of deep bidirectional transformers for language
+understanding. \emph{CoRR}, \emph{abs/1810.04805}.
+\url{https://doi.org/10.48550/arXiv.1810.04805}
 
 \bibitem[\citeproctext]{ref-Hata2021ScienceSoftwareLT}
-Hata, Hideaki, Jin L. C. Guo, Raula Gaikovina Kula, and Christoph
-Treude. 2021. {``Science-Software Linkage: The Challenges of
-Traceability Between Scientific Knowledge and Software Artifacts.''}
-\emph{ArXiv} abs/2104.05891.
+Hata, H., Guo, J. L. C., Kula, R. G., \& Treude, C. (2021).
+Science-software linkage: The challenges of traceability between
+scientific knowledge and software artifacts. \emph{ArXiv},
+\emph{abs/2104.05891}. \url{https://doi.org/10.48550/arXiv.2104.05891}
 
 \bibitem[\citeproctext]{ref-he2021debertav3}
-He, Pengcheng, Jianfeng Gao, and Weizhu Chen. 2021. {``DeBERTaV3:
-Improving DeBERTa Using ELECTRA-Style Pre-Training with
-Gradient-Disentangled Embedding Sharing.''}
-\url{https://arxiv.org/abs/2111.09543}.
+He, P., Gao, J., \& Chen, W. (2021). \emph{DeBERTaV3: Improving DeBERTa
+using ELECTRA-style pre-training with gradient-disentangled embedding
+sharing}. \url{https://doi.org/10.48550/arXiv.2111.09543}
 
 \bibitem[\citeproctext]{ref-he2021deberta}
-He, Pengcheng, Xiaodong Liu, Jianfeng Gao, and Weizhu Chen. 2021.
-{``DEBERTA: DECODING-ENHANCED BERT WITH DISENTANGLED ATTENTION.''} In
-\emph{International Conference on Learning Representations}.
-\url{https://openreview.net/forum?id=XPZIaotutsD}.
+He, P., Liu, X., Gao, J., \& Chen, W. (2021). DEBERTA: DECODING-ENHANCED
+BERT WITH DISENTANGLED ATTENTION. \emph{International Conference on
+Learning Representations}.
+\url{https://doi.org/10.48550/arXiv.2006.03654}
 
 \bibitem[\citeproctext]{ref-Kelley2021AFF}
-Kelley, Aidan, and Daniel Garijo. 2021. {``A Framework for Creating
-Knowledge Graphs of Scientific Software Metadata.''} \emph{Quantitative
-Science Studies} 2: 1423--46.
+Kelley, A., \& Garijo, D. (2021). A framework for creating knowledge
+graphs of scientific software metadata. \emph{Quantitative Science
+Studies}, \emph{2}, 1423--1446.
+\url{https://doi.org/10.1162/qss_a_00167}
 
 \bibitem[\citeproctext]{ref-mchugh2012interrater}
-McHugh, Mary L. 2012. {``Interrater Reliability: The Kappa Statistic.''}
-\emph{Biochemia Medica} 22 (3): 276--82.
+McHugh, M. L. (2012). Interrater reliability: The kappa statistic.
+\emph{Biochemia Medica}, \emph{22}(3), 276--282.
+\url{https://doi.org/10.11613/BM.2012.031}
 
 \bibitem[\citeproctext]{ref-milewicz2019characterizing}
-Milewicz, Reed, Gustavo Pinto, and Paige Rodeghero. 2019.
-{``Characterizing the Roles of Contributors in Open-Source Scientific
-Software Projects.''} In \emph{2019 IEEE/ACM 16th International
-Conference on Mining Software Repositories (MSR)}, 421--32.
-\url{https://doi.org/10.1109/MSR.2019.00069}.
+Milewicz, R., Pinto, G., \& Rodeghero, P. (2019). Characterizing the
+roles of contributors in open-source scientific software projects.
+\emph{2019 IEEE/ACM 16th International Conference on Mining Software
+Repositories (MSR)}, 421--432.
+\url{https://doi.org/10.1109/MSR.2019.00069}
 
 \bibitem[\citeproctext]{ref-reimers-2019-sentence-bert}
-Reimers, Nils, and Iryna Gurevych. 2019. {``Sentence-BERT: Sentence
-Embeddings Using Siamese BERT-Networks.''} In \emph{Proceedings of the
-2019 Conference on Empirical Methods in Natural Language Processing}.
-Association for Computational Linguistics.
-\url{https://arxiv.org/abs/1908.10084}.
+Reimers, N., \& Gurevych, I. (2019, November). Sentence-BERT: Sentence
+embeddings using siamese BERT-networks. \emph{Proceedings of the 2019
+Conference on Empirical Methods in Natural Language Processing}.
+\url{https://doi.org/10.18653/v1/D19-1410}
 
 \bibitem[\citeproctext]{ref-Sanh2019DistilBERTAD}
-Sanh, Victor, Lysandre Debut, Julien Chaumond, and Thomas Wolf. 2019.
-{``DistilBERT, a Distilled Version of BERT: Smaller, Faster, Cheaper and
-Lighter.''} \emph{ArXiv} abs/1910.01108.
+Sanh, V., Debut, L., Chaumond, J., \& Wolf, T. (2019). DistilBERT, a
+distilled version of BERT: Smaller, faster, cheaper and lighter.
+\emph{ArXiv}, \emph{abs/1910.01108}.
+\url{https://doi.org/10.48550/arXiv.1910.01108}
 
 \bibitem[\citeproctext]{ref-sharma2024analytical}
-Sharma, Nitesh Kumar, Ram Ayyala, Dhrithi Deshpande, Yesha Patel, Viorel
-Munteanu, Dumitru Ciorba, Viorel Bostan, et al. 2024. {``Analytical Code
-Sharing Practices in Biomedical Research.''} \emph{PeerJ Computer
-Science} 10: e2066.
+Sharma, N. K., Ayyala, R., Deshpande, D., Patel, Y., Munteanu, V.,
+Ciorba, D., Bostan, V., Fiscutean, A., Vahed, M., Sarkar, A., et al.
+(2024). Analytical code sharing practices in biomedical research.
+\emph{PeerJ Computer Science}, \emph{10}, e2066.
+\url{https://doi.org/10.7717/peerj-cs.2066}
 
 \bibitem[\citeproctext]{ref-Stankovski2024RepoFromPaperAA}
-Stankovski, Aleksandar, and Daniel Garijo. 2024. {``RepoFromPaper: An
-Approach to Extract Software Code Implementations from Scientific
-Publications.''} In \emph{NSLP}.
+Stankovski, A., \& Garijo, D. (2024). RepoFromPaper: An approach to
+extract software code implementations from scientific publications.
+\emph{NSLP}. \url{https://doi.org/10.1007/978-3-031-65794-8_7}
 
 \bibitem[\citeproctext]{ref-stodden2013toward}
-Stodden, Victoria, Peixuan Guo, and Zhaokun Ma. 2013. {``Toward
-Reproducible Computational Research: An Empirical Analysis of Data and
-Code Policy Adoption by Journals.''} \emph{PloS One} 8 (6): e67111.
+Stodden, V., Guo, P., \& Ma, Z. (2013). Toward reproducible
+computational research: An empirical analysis of data and code policy
+adoption by journals. \emph{PloS One}, \emph{8}(6), e67111.
+\url{https://doi.org/10.1371/journal.pone.0067111}
 
 \end{CSLReferences}
 

@@ -5,7 +5,7 @@
 \PassOptionsToPackage{dvipsnames,svgnames,x11names}{xcolor}
 %
 \documentclass[
-  authoryear,
+  number,
   3p,
   onecolumn]{elsarticle}
 \usepackage{xcolor}
@@ -93,6 +93,39 @@
 \makeatother
 
 
+% definitions for citeproc citations
+\NewDocumentCommand\citeproctext{}{}
+\NewDocumentCommand\citeproc{mm}{%
+  \begingroup\def\citeproctext{#2}\cite{#1}\endgroup}
+\makeatletter
+ % allow citations to break across lines
+ \let\@cite@ofmt\@firstofone
+ % avoid brackets around text for \cite:
+ \def\@biblabel#1{}
+ \def\@cite#1#2{{#1\if@tempswa , #2\fi}}
+\makeatother
+\newlength{\cslhangindent}
+\setlength{\cslhangindent}{1.5em}
+\newlength{\csllabelwidth}
+\setlength{\csllabelwidth}{3em}
+\newenvironment{CSLReferences}[2] % #1 hanging-indent, #2 entry-spacing
+ {\begin{list}{}{%
+  \setlength{\itemindent}{0pt}
+  \setlength{\leftmargin}{0pt}
+  \setlength{\parsep}{0pt}
+  % turn on hanging indent if param 1 is 1
+  \ifodd #1
+   \setlength{\leftmargin}{\cslhangindent}
+   \setlength{\itemindent}{-1\cslhangindent}
+  \fi
+  % set entry spacing
+  \setlength{\itemsep}{#2\baselineskip}}}
+ {\end{list}}
+\usepackage{calc}
+\newcommand{\CSLBlock}[1]{\hfill\break\parbox[t]{\linewidth}{\strut\ignorespaces#1\strut}}
+\newcommand{\CSLLeftMargin}[1]{\parbox[t]{\csllabelwidth}{\strut#1\strut}}
+\newcommand{\CSLRightInline}[1]{\parbox[t]{\linewidth - \csllabelwidth}{\strut#1\strut}}
+\newcommand{\CSLIndent}[1]{\hspace{\cslhangindent}#1}
 
 
 
@@ -104,8 +137,6 @@
 
 
  
-\usepackage[]{natbib}
-\bibliographystyle{elsarticle-harv}
 
 
 \usepackage{booktabs}    % For professional-looking tables
@@ -239,33 +270,32 @@ software \sep authorship \sep contributorship \sep
 
 Recent advances in genomic sequencing, climate modeling, particle
 physics, and neuroimaging have all required the development of novel
-scientific software \citep{hocquet2024software}. In many ways, software
+scientific software (Hocquet et al., 2024). In many ways, software
 development has changed how scientific work is organized and performed,
 but we lack large-scale quantitative evidence characterizing these
 effects. This lack of evidence has important consequences. Scientific
 institutions continue to rely heavily on bibliometric indicators to
-evaluate research productivity \citep{haustein2014use}, but software is
-rarely mentioned or cited in research publications
-\citep{du2021softcite}. As a result, researchers who invest substantial
-effort in building computational tools may face systematic disadvantages
-in career advancement. We argue that understanding whether and how
-software contributions translate into formal scientific credit is
-important for designing equitable reward structures and evidence-based
-science policy.
+evaluate research productivity (Haustein \& Larivière, 2014), but
+software is rarely mentioned or cited in research publications (Du et
+al., 2021). As a result, researchers who invest substantial effort in
+building computational tools may face systematic disadvantages in career
+advancement. We argue that understanding whether and how software
+contributions translate into formal scientific credit is important for
+designing equitable reward structures and evidence-based science policy.
 
 The challenge of measuring software's role in science stems, in part,
 from the historical separation of code from publication. Scientific
 articles and their metadata (e.g.~author lists, citations, and
 acknowledgments) can provide a valuable tool for estimating
-productivity, tracing collaboration, or inferring impact
-\citep{fortunato2018science}. However, software contributions often
-remain invisible in these records, making it difficult to quantify their
-relationship to traditional markers of scientific productivity
-\citep{weber2014paratexts}. As a result, studies regarding the
-maintainers and contributors of scientific software have relied
-primarily on self-reports (surveys) \citep{Carver2022ASO} or participant
-observation (ethnographies) \citep{paine2017has}, which provide valuable
-insights but are limited in the scope and generalizability.
+productivity, tracing collaboration, or inferring impact (Fortunato et
+al., 2018). However, software contributions often remain invisible in
+these records, making it difficult to quantify their relationship to
+traditional markers of scientific productivity (Weber \& Thomer, 2014).
+As a result, studies regarding the maintainers and contributors of
+scientific software have relied primarily on self-reports (surveys)
+(Carver et al., 2022) or participant observation (ethnographies) (Paine
+\& Lee, 2017), which provide valuable insights but are limited in the
+scope and generalizability.
 
 In the following paper, we overcome this challenge by constructing a
 dataset (\texttt{rs-graph-v1}) of 138,596 research articles and their
@@ -324,32 +354,31 @@ The proper allocation of credit has been a longstanding topic in social
 studies of science. Merton's description of a ``Matthew Effect'' is
 perhaps the most famous account of a cumulative advantage in publishing,
 where established scientists receive more attention for work of similar
-importance or value than their less established peers
-\citep{merton1968matthew}. Contemporary studies of science continue to
-demonstrate important aspects of the dilemma. Dashun Wang et al.~show
-that random career outcomes and the ``hot streak'' phenomenon suggest
-that cumulative advantage and early career success may be less
-predictive of long-term impact than traditionally assumed, complicating
-how we understand the accrual of scientific credit over time
-\citep{wang2013quantifying, liu2018hot}. Separately, work on team
-science demonstrates that larger teams receive disproportionate credit
-compared to smaller teams producing equally impactful work, further
-illustrating how credit allocation deviates from underlying
-contributions \citep{wu2019large}.
+importance or value than their less established peers (Merton, 1968).
+Contemporary studies of science continue to demonstrate important
+aspects of the dilemma. Dashun Wang et al.~show that random career
+outcomes and the ``hot streak'' phenomenon suggest that cumulative
+advantage and early career success may be less predictive of long-term
+impact than traditionally assumed, complicating how we understand the
+accrual of scientific credit over time (Liu et al., 2018; Wang et al.,
+2013). Separately, work on team science demonstrates that larger teams
+receive disproportionate credit compared to smaller teams producing
+equally impactful work, further illustrating how credit allocation
+deviates from underlying contributions (Wu et al., 2019).
 
 In quantitative work, the attribution of credit is most often
 established using proxies in bibliographic data like author order
-\citep{zuckerman1968patterns, sarsons2017recognition, sauermann2017authorship},
-which is an imperfect means of assigning credit, and doing so may
-exacerbate existing inequalities \citep{west2013role}. More recent work
-developing algorithms to assign credit \citep{shen2014collective} and
-formally document contributor roles \citep{allen2014publishing} are
-aimed at trying to improve upon author order as the status quo mechanism
-for assigning credit in collaborative settings. Further, the use of
-contributor statements as data have provided important insights into the
-actual division of labor in scientific collaborations and revealed
-systematic patterns in how different types of contributions are valued
-and recognized across fields \citep{lu2020co, lu2022contributorship}.
+(Sarsons, 2017; Sauermann \& Haeussler, 2017; Zuckerman, 1968), which is
+an imperfect means of assigning credit, and doing so may exacerbate
+existing inequalities (West et al., 2013). More recent work developing
+algorithms to assign credit (Shen \& Barabási, 2014) and formally
+document contributor roles (Allen et al., 2014) are aimed at trying to
+improve upon author order as the status quo mechanism for assigning
+credit in collaborative settings. Further, the use of contributor
+statements as data have provided important insights into the actual
+division of labor in scientific collaborations and revealed systematic
+patterns in how different types of contributions are valued and
+recognized across fields (Lu et al., 2020; Lu et al., 2022).
 
 Among the contributions systematically undervalued in collaborative
 science are technical and infrastructural contributions, particularly
@@ -357,13 +386,13 @@ software development. While contributor role taxonomies have begun to
 make visible the diverse forms of labor that constitute scientific work,
 these systems still struggle to adequately recognize the significance of
 technical contributions that enable research, but may not fit
-traditional notions of intellectual authorship
-\citep{Larivire2020InvestigatingTD}. Even less is known about the
-broader patterns of attention that software-producing research teams
-receive, and under what conditions technical contributions achieve
-visibility in an attention economy driven by citations. We argue that
-understanding these patterns requires examining how team composition and
-software contributions relate to scientific attention at scale.
+traditional notions of intellectual authorship (Larivière et al., 2020).
+Even less is known about the broader patterns of attention that
+software-producing research teams receive, and under what conditions
+technical contributions achieve visibility in an attention economy
+driven by citations. We argue that understanding these patterns requires
+examining how team composition and software contributions relate to
+scientific attention at scale.
 
 Next, we build upon these general findings to motivate three specific
 hypotheses about code contributions and credit that we then test using
@@ -375,34 +404,32 @@ Attention}\label{h1-research-team-composition-and-scientific-attention}
 In collaborative settings, experimental and theoretical research often
 receives more citations than methods-focused contributions, with the
 exception being when methods represent foundational shifts in a field
-\citep{Aksnes2006CitationRA, LIU2023101432, Chen2024ExploringSC}.
-Software is often positioned as a methodological contribution and, as a
-result, can be found in some of the highest-cited papers of the 21st
-century
-\citep{jin2015significance, hampton2013big, hasselbring2024researchsoftwarecategories}.
+(Aksnes, 2006; Chen et al., 2025; Liu et al., 2023). Software is often
+positioned as a methodological contribution and, as a result, can be
+found in some of the highest-cited papers of the 21st century (Hampton
+et al., 2013; Hasselbring et al., 2025; Jin et al., 2015).
 
 Prior work also establishes a positive relationship between team size
 and citation count, where larger and more diverse teams produce
-higher-impact scientific work
-\citep{Franceschet2010TheEO, Larivire2014TeamSM, yoo2024interaction}.
-Research in empirical software studies similarly finds that larger
-development teams tend to create more reliable software with fewer
-defects \citep[\citet{herbsleb2003empirical}]{Wyss2023NothingBut},
-though this comes at the expense of slower development cycles. These
-findings suggest that team size may be particularly important in
+higher-impact scientific work (Franceschet \& Costantini, 2010;
+Larivière et al., 2014; Yoo et al., 2024). Research in empirical
+software studies similarly finds that larger development teams tend to
+create more reliable software with fewer defects (Herbsleb \& Mockus,
+2003), though this comes at the expense of slower development cycles.
+These findings suggest that team size may be particularly important in
 scientific software development, where technical robustness and
-reproducibility remain gold standards \citep{milewicz2018talk}.
+reproducibility remain gold standards (Milewicz \& Raybourn, 2018).
 
 We argue that the unique characteristics of scientific software
 development---including implementing novel algorithms, requiring deep
-domain knowledge, and an increased emphasis on reproducibility
-\citep{muna2016astropyproblem, Howison2013IncentivesAI}---make team
-composition especially important for understanding credit allocation.
-Software development in organized teams may enhance scientific impact
-through multiple mechanisms: teams can produce more robust and
-generalizable software tools for methodological contributions while
-enabling more sophisticated computational analyses and larger-scale data
-processing for experimental work.
+domain knowledge, and an increased emphasis on reproducibility (Howison
+\& Herbsleb, 2013; Muna et al., 2016)---make team composition
+especially important for understanding credit allocation. Software
+development in organized teams may enhance scientific impact through
+multiple mechanisms: teams can produce more robust and generalizable
+software tools for methodological contributions while enabling more
+sophisticated computational analyses and larger-scale data processing
+for experimental work.
 
 Given these patterns in team dynamics, software development practices,
 and citations in collaborative research, we propose that:
@@ -415,39 +442,39 @@ count.}
 Contributions}\label{h2-author-roles-and-technical-contributions}
 
 Author positions in scientific publications signal specific roles and
-responsibilities \citep{shen2014collective}, a relationship that can be
+responsibilities (Shen \& Barabási, 2014), a relationship that can be
 contemporarily studied through contribution role taxonomies like CRediT
-\citep{lariviere2016contributorship}. In this literature, analyses of
-contribution patterns consistently show that software development, data
-analysis, and visualization tasks typically fall to first authors
-\citep{lariviere2016contributorship, Jnior2016PatternsOA, Larivire2020InvestigatingTD, sauermann2017authorship}.
-While these contribution patterns are often inferred from self-reported
-roles (e.g., CRediT) or disciplinary conventions, the linking of
-publications to version-controlled software repositories provides a
-novel window into the actual coding contributions associated with
-scientific papers. Given the established tendency for first authors to
-undertake primary research execution, including technical development,
-we anticipate that this pattern will be directly observable via the
-commit histories of scientific software repositories. Given prior
-findings about the distribution of technical responsibilities within
-research teams, we expect these repository records to reflect similar
-patterns of engagement with software development:
+(Larivière et al., 2016). In this literature, analyses of contribution
+patterns consistently show that software development, data analysis, and
+visualization tasks typically fall to first authors (Júnior et al.,
+2016; Larivière et al., 2016; Larivière et al., 2020; Sauermann \&
+Haeussler, 2017). While these contribution patterns are often inferred
+from self-reported roles (e.g., CRediT) or disciplinary conventions, the
+linking of publications to version-controlled software repositories
+provides a novel window into the actual coding contributions associated
+with scientific papers. Given the established tendency for first authors
+to undertake primary research execution, including technical
+development, we anticipate that this pattern will be directly observable
+via the commit histories of scientific software repositories. Given
+prior findings about the distribution of technical responsibilities
+within research teams, we expect these repository records to reflect
+similar patterns of engagement with software development:
 
 \emph{H2a: First authors have higher code contribution rates than
 authors in other positions.}
 
 Furthermore, studies that use contribution taxonomies like CRediT reveal
 that first authors and corresponding authors, while occasionally the
-same individual, often take on distinct responsibilities
-\citep{birnbaum2023should}. Corresponding authors traditionally bear
-responsibility for the integrity, archiving, and long-term availability
-of research artifacts and underlying data
-\citep{teunis2015corresponding, sauermann2017authorship, da2013corresponding, BHANDARI20141049}.
-As software becomes an increasingly critical, complex, and integral
-research artifact in many disciplines, it logically follows that
-stewardship of these software components should align with the
-responsibilities of being a corresponding author. Given prior findings
-about the distribution of responsibilities within research teams and the
+same individual, often take on distinct responsibilities (Birnbaum et
+al., 2023). Corresponding authors traditionally bear responsibility for
+the integrity, archiving, and long-term availability of research
+artifacts and underlying data (Bhandari et al., 2014; Sauermann \&
+Haeussler, 2017; Silva et al., 2013; Teunis et al., 2015). As software
+becomes an increasingly critical, complex, and integral research
+artifact in many disciplines, it logically follows that stewardship of
+these software components should align with the responsibilities of
+being a corresponding author. Given prior findings about the
+distribution of responsibilities within research teams and the
 expectation of stewardship of created artifacts, we expect repository
 records to reflect similar patterns of engagement with software
 development:
@@ -462,20 +489,20 @@ Despite the increasingly central role of software in science,
 researchers who dedicate significant effort to its development often
 face systemic hurdles in receiving formal scientific credit. Their
 contributions may be relegated to acknowledgment sections rather than
-rewarded with authorship credit \citep{weber2014paratexts}. Further, the
+rewarded with authorship credit (Weber \& Thomer, 2014). Further, the
 scholarly practice of software citation remains inconsistent, frequently
-undervaluing crucial maintenance and extension work
-\citep{Carver2022ASO, olivier_philippe_2019_2585783, Lamprecht2020TowardsFP, Katz2020RecognizingTV, Smith2016SoftwareCP}.
-The h-index, a widely used proxy for an individual's cumulative
-scientific impact, is derived from an individual's record of formally
-authored publications and the citations these publications receive
-\citep{hirsch2005index}. Consequently, if substantial time and
-intellectual effort are invested in software development that does not
-consistently translate into formal authorship on associated research
-papers, or if the software outputs themselves are not robustly and
-formally cited in a way that accrues to the individual developer, then
-the primary activities that build a researcher's h-index are effectively
-diminished or bypassed.
+undervaluing crucial maintenance and extension work (Carver et al.,
+2022; Katz et al., 2020; Lamprecht et al., 2020; Philippe et al., 2019;
+Smith et al., 2016). The h-index, a widely used proxy for an
+individual's cumulative scientific impact, is derived from an
+individual's record of formally authored publications and the citations
+these publications receive (Hirsch, 2005). Consequently, if substantial
+time and intellectual effort are invested in software development that
+does not consistently translate into formal authorship on associated
+research papers, or if the software outputs themselves are not robustly
+and formally cited in a way that accrues to the individual developer,
+then the primary activities that build a researcher's h-index are
+effectively diminished or bypassed.
 
 This creates a structural misalignment where contributions essential for
 scientific advancement (i.e., software development and maintenance) may
@@ -510,16 +537,16 @@ with software implementations, and Public Library of Science (PLOS)
 articles include mandatory data and code availability statements that we
 mined for repository links. We focused exclusively on GitHub-hosted
 repositories, which represent the predominant platform for scientific
-software sharing \citep{Cao2023TheRO, escamilla2022riseofgithub}. For
-each article in our corpus, we resolved the source DOI via Semantic
-Scholar to ensure we captured its latest version and then extracted
-publication metadata and author metrics through OpenAlex. Finally, we
-collected information about each code repository and the repository's
-contributors via the GitHub API. A data collection and processing
-workflow diagram is available in Figure~\ref{fig-workflow-diagram}. All
-data was collected between October and November 2024\footnote{The
-  Journal of Open Source Software (JOSS) is available at
-  \url{https://joss.theoj.org/}. SoftwareX articles are available at
+software sharing (Cao et al., 2023; Escamilla et al., 2022). For each
+article in our corpus, we resolved the source DOI via Semantic Scholar
+to ensure we captured its latest version and then extracted publication
+metadata and author metrics through OpenAlex. Finally, we collected
+information about each code repository and the repository's contributors
+via the GitHub API. A data collection and processing workflow diagram is
+available in Figure~\ref{fig-workflow-diagram}. All data was collected
+between October and November 2024\footnote{The Journal of Open Source
+  Software (JOSS) is available at \url{https://joss.theoj.org/}.
+  SoftwareX articles are available at
   \url{https://www.sciencedirect.com/journal/softwarex/} and SoftwareX
   repositories are available at
   \url{https://github.com/ElsevierSoftwareX/}. Public Library of Science
@@ -719,9 +746,9 @@ downstream analysis\footnote{Figure S1 in the Supplementary Material
   retaining a large proportion of the data (87,175 author-developer
   pairs) as only 2,911 author-developer-account pairs have a confidence
   less than 0.97 in the whole unfiltered dataset.}. This filtering
-process results in a dataset of 426 article-repository pairs. Detailed
-counts by data source, domain, document type, and access status are
-provided in Table S4 of the Supplementary Material.
+process results in a dataset of 19,900 article-repository pairs.
+Detailed counts by data source, domain, document type, and access status
+are provided in Table S4 of the Supplementary Material.
 
 Within this filtered dataset, we categorized individuals into three
 groups: code-contributing authors (CC-A) who both authored papers and
@@ -732,19 +759,19 @@ non-code-contributing authors (NCC-A) who authored papers but showed no
 evidence of code contributions, and code-contributing non-authors
 (CC-NA) who contributed code but received no authorship recognition.
 This categorization revealed that papers in our dataset typically have
-4.8 $\pm$ 1.9 total authors, with 1.0 $\pm$ 0.7 code-contributing authors and
-3.8 $\pm$ 2.0 non-code-contributing authors. Beyond the author list, papers
-averaged 0.4 $\pm$ 1.2 code-contributing non-authors.
+4.8 $\pm$ 1.8 total authors, with 1.0 $\pm$ 0.7 code-contributing authors and
+3.8 $\pm$ 1.9 non-code-contributing authors. Beyond the author list, papers
+averaged 0.5 $\pm$ 1.8 code-contributing non-authors.
 Figure~\ref{fig-team-composition} details these distributions by domain,
 article type, open access status, and overall across the entire filtered
 analysis set\footnote{Means and standard deviations for each
   distribution and subset of team composition are provided in Table S5
   of the Supplementary Material.}.
 
-Perhaps most striking is our finding that 106 papers
-($\sim$24.9\% of our sample) have at least one code contributor
+Perhaps most striking is our finding that 5,694 papers
+($\sim$28.6\% of our sample) have at least one code contributor
 who was not matched to any article author. Further, investigating this
-subset of papers, we find an average of 1.5 $\pm$ 2.1 unmatched code
+subset of papers, we find an average of 1.6 $\pm$ 3.0 unmatched code
 contributors per paper. We constructed a random sample of 200
 code-contributing non-authors (complete methodology provided in the
 Supplementary Material) in order to better understand these individuals
@@ -783,9 +810,9 @@ These findings reveal a more complex dynamic between software
 development and authorship recognition than previously documented. While
 our finding that each paper averages only a single code-contributing
 author aligns with previous research showing technical tasks typically
-fall to first authors \citep{Larivire2020InvestigatingTD}, the
-substantial contributions made by unrecognized contributors suggest
-systematic gaps in how scientific software development work is credited.
+fall to first authors (Larivière et al., 2020), the substantial
+contributions made by unrecognized contributors suggest systematic gaps
+in how scientific software development work is credited.
 
 \begin{figure}
 
@@ -915,9 +942,9 @@ differs significantly based on author position\footnote{Community
   required for analysis was complete, none of the remaining articles
   included multiple first authors.}. Following these significant
 associations, we examined the specific proportions across positions
-(detailed post-hoc test outputs are in Table S13): 72.3\% of first
-authors contributed code to their projects, compared to only 9.4\% of
-middle authors and 7.2\% of last authors. The differences in these
+(detailed post-hoc test outputs are in Table S13): 69.8\% of first
+authors contributed code to their projects, compared to only 9.7\% of
+middle authors and 7.6\% of last authors. The differences in these
 proportions remained statistically significant across all tested
 scenarios, regardless of research domain, article type, or open access
 status.
@@ -926,8 +953,8 @@ Based on these findings, we \textbf{\emph{fail to reject}} our
 hypothesis (\emph{H2a}) that ``first authors have higher code
 contribution rates than authors in other positions.'' The data
 demonstrates that the proportion of first authors who contribute code
-(72.3\%) is significantly higher than the proportion of both middle
-authors (9.4\%) and last authors (7.2\%). This relationship remains
+(69.8\%) is significantly higher than the proportion of both middle
+authors (9.7\%) and last authors (7.6\%). This relationship remains
 robust and statistically significant across all tested conditions,
 including variations in research domain, article type, and open access
 status, indicating a fundamental connection between authorship position
@@ -948,7 +975,7 @@ article-repository pairs, we conducted $\chi^2$ tests of independence
 between corresponding author status and code contribution status. Our
 analysis revealed patterns contrary to our initial hypothesis. The
 proportion of code contributors was low among both groups, with only
-28.9\% of corresponding authors and 21.3\% of non-corresponding authors
+29.7\% of corresponding authors and 20.6\% of non-corresponding authors
 contributing code to their projects. Further examination (full post-hoc
 outputs in Table S14) showed that this pattern holds across nearly all
 conditions, with only one exception: corresponding authors in
@@ -960,8 +987,8 @@ Based on these findings, we \textbf{\emph{reject}} our hypothesis
 (\emph{H2b}) that ``corresponding authors have higher code contribution
 rates than non-corresponding authors.'' Contrary to our expectations,
 our analysis revealed that the proportion of code contributors among
-corresponding authors (28.9\%) did not significantly differ from the
-proportion among non-corresponding authors (21.3\%). This pattern of
+corresponding authors (29.7\%) did not significantly differ from the
+proportion among non-corresponding authors (20.6\%). This pattern of
 similar proportions remained consistent across most studied conditions,
 with a single exception in closed-access publications which we believe
 is due to the relatively small sample size available for testing
@@ -1088,41 +1115,40 @@ contribution. This persistent pattern over time and team size suggests a
 systemic disconnect between software development and scientific
 recognition systems, reflecting challenges in how scientific
 contributions are valued and credited. This exclusion reflects what
-\citet{shapin1989invisible} observed about scientific authority---the
-selective attribution of technical work as either genuine knowledge or
-mere skill significantly impacts who receives formal recognition. These
-findings further support previous surveys
-\citet{olivier_philippe_2019_2585783} and \citet{Carver2022ASO} where
-scientists report the relegation of software contributors to either
-acknowledgment sections or receiving no credit at all. The stability of
-this pattern over time indicates that this phenomenon has embedded
-itself in scientific software development rather than representing a
-transitional phase, raising questions about scientific labor and how
-reward structures integrate technical contributions.
+(Shapin, 1989) observed about scientific authority---the selective
+attribution of technical work as either genuine knowledge or mere skill
+significantly impacts who receives formal recognition. These findings
+further support previous surveys (Philippe et al., 2019) and (Carver et
+al., 2022) where scientists report the relegation of software
+contributors to either acknowledgment sections or receiving no credit at
+all. The stability of this pattern over time indicates that this
+phenomenon has embedded itself in scientific software development rather
+than representing a transitional phase, raising questions about
+scientific labor and how reward structures integrate technical
+contributions.
 
 Our finding that, on average, article-repository pairs have only a
-single code contributor mirrors prior work from
-\citet{farber2020analyzingGithubPapers}. Further, the distribution of
-code contributions across author positions provides context to the
-hierarchical organization of scientific work. First authors are
-significantly more likely to contribute code with 72.3\% of all first
-authors in our dataset contributing code. Middle and last authors,
-meanwhile, were statistically significantly less likely to contribute
-code, with only 9.4\% of middle authors and 7.2\% of last authors acting
-as code-contributing members of the research team. Corresponding authors
-were similarly less likely than expected to be code contributors, as we
-found that within our dataset, corresponding authors were code
-contributors 28.9\% of the time. These patterns align with traditional
-scientific labor distribution where first authors might be expected to
-handle technical aspects of research while middle and last authors are
-likely specialist contributors or provide guidance and oversight
-\citep{Larivire2020InvestigatingTD, sauermann2017authorship}. However,
-our data did not support our initial hypothesis that corresponding
-authors would also be more likely to contribute code due to their shared
-responsibility for the long-term maintenance of research artifacts. This
-finding suggests a potential strict division between project management
-responsibilities and direct technical engagement with software
-development.
+single code contributor mirrors prior work from (Färber, 2020). Further,
+the distribution of code contributions across author positions provides
+context to the hierarchical organization of scientific work. First
+authors are significantly more likely to contribute code with 69.8\% of
+all first authors in our dataset contributing code. Middle and last
+authors, meanwhile, were statistically significantly less likely to
+contribute code, with only 9.7\% of middle authors and 7.6\% of last
+authors acting as code-contributing members of the research team.
+Corresponding authors were similarly less likely than expected to be
+code contributors, as we found that within our dataset, corresponding
+authors were code contributors 29.7\% of the time. These patterns align
+with traditional scientific labor distribution where first authors might
+be expected to handle technical aspects of research while middle and
+last authors are likely specialist contributors or provide guidance and
+oversight (Larivière et al., 2020; Sauermann \& Haeussler, 2017).
+However, our data did not support our initial hypothesis that
+corresponding authors would also be more likely to contribute code due
+to their shared responsibility for the long-term maintenance of research
+artifacts. This finding suggests a potential strict division between
+project management responsibilities and direct technical engagement with
+software development.
 
 The modest citation advantage associated with code-contributing authors
 ($\sim$4.2\% increase in citations per code-contributing
@@ -1135,30 +1161,30 @@ The progressive reduction in h-index as coding frequency increases
 indicates a cumulative disadvantage for frequent code contributors. This
 pattern persists even when controlling for publication count, suggesting
 issues in how software contributions are valued relative to other
-scientific outputs. These findings echo concerns raised by
-\citet{muna2016astropyproblem} about the sustainability of research
-software development and highlight how current reward structures may
-discourage talented developers from pursuing scientific careers.
+scientific outputs. These findings echo concerns raised by (Muna et al.,
+2016) about the sustainability of research software development and
+highlight how current reward structures may discourage talented
+developers from pursuing scientific careers.
 
 Software development represents a form of scholarly labor that has
 become increasingly essential to modern research yet remains
 incompletely integrated into formal recognition systems. Similar to the
 high proportion of articles with authors who made data curation
-contributions towards research observed by
-\citet{Larivire2020InvestigatingTD}, our finding that more than a
-quarter of papers have unacknowledged code contributors highlights a
-labor role that is simultaneously common and undervalued. The prevalence
-of code contributions across domains demonstrates the importance of this
-work to contemporary research. However, the persistent exclusion of
-contributors from authorship suggests that researchers continue to
-classify software development as technical support rather than
-intellectual contribution. This classification may reflect disciplinary
-traditions that privilege certain forms of scholarly production despite
-the growing recognition that software represents a legitimate research
-output \citep{Katz2020RecognizingTV}. The tension between software's
-importance and contributors' recognition status raises questions about
-how we define, value, and reward different forms of scientific labor in
-an increasingly computational research landscape.
+contributions towards research observed by (Larivière et al., 2020), our
+finding that more than a quarter of papers have unacknowledged code
+contributors highlights a labor role that is simultaneously common and
+undervalued. The prevalence of code contributions across domains
+demonstrates the importance of this work to contemporary research.
+However, the persistent exclusion of contributors from authorship
+suggests that researchers continue to classify software development as
+technical support rather than intellectual contribution. This
+classification may reflect disciplinary traditions that privilege
+certain forms of scholarly production despite the growing recognition
+that software represents a legitimate research output (Katz et al.,
+2020). The tension between software's importance and contributors'
+recognition status raises questions about how we define, value, and
+reward different forms of scientific labor in an increasingly
+computational research landscape.
 
 \subsection{Limitations}\label{limitations}
 
@@ -1167,13 +1193,13 @@ constraints to consider when interpreting these results. By focusing
 exclusively on GitHub repositories, we likely miss contributions stored
 on alternative platforms such as GitLab, Bitbucket, or institutional
 repositories, potentially skewing our understanding of contribution
-patterns. As \citet{trujillo2022penumbra}, \citet{Cao2023TheRO}, and
-\citet{escamilla2022riseofgithub} have all noted, while GitHub is the
-predominate host of scientific software, significant portions of
-research code exist on other platforms. Additionally, our reliance on
-public repositories means we cannot account for private repositories or
-code that were never publicly shared, potentially underrepresenting
-sensitive research areas or proprietary methods.
+patterns. As (Trujillo et al., 2022), (Cao et al., 2023), and (Escamilla
+et al., 2022) have all noted, while GitHub is the predominate host of
+scientific software, significant portions of research code exist on
+other platforms. Additionally, our reliance on public repositories means
+we cannot account for private repositories or code that were never
+publicly shared, potentially underrepresenting sensitive research areas
+or proprietary methods.
 
 Further, while our data processing workflow began with
 $\sim$60,000 possible article-repository pairs from PLOS,
@@ -1194,32 +1220,31 @@ resolution process and the document type available from OpenAlex. This
 approach may misclassify certain articles, especially those from Papers
 with Code (arXiv). One potential alternative approach would involve
 classification of the repository itself following the recommendations of
-\citet{researchsoftwareclassifications} in breaking down repositories by
-their role in research (e.g., ``Modeling, Simulation, and Data
-Analysis'', ``Technology Research Software'', and ``Research
-Infrastructure Software''). This classification would allow us to
-investigate not only the differences of ``software papers'' vs
-``research articles'' and ``preprints'' (which we believe would both
-typically be paired with ``Modeling, Simulation, and Data Analysis''
-repositories), but the \emph{purpose} of the code as it relates to the
-research. However, there is currently no established automated method
-for performing this classification at scale.
+(Hasselbring et al., 2025) in breaking down repositories by their role
+in research (e.g., ``Modeling, Simulation, and Data Analysis'',
+``Technology Research Software'', and ``Research Infrastructure
+Software''). This classification would allow us to investigate not only
+the differences of ``software papers'' vs ``research articles'' and
+``preprints'' (which we believe would both typically be paired with
+``Modeling, Simulation, and Data Analysis'' repositories), but the
+\emph{purpose} of the code as it relates to the research. However, there
+is currently no established automated method for performing this
+classification at scale.
 
 Similarly, our simplification of author positions, domains, and article
 types to each author's ``most common'' (most frequent, with ties broken
-by most recent) introduces potential biases \citep{li2025determination}.
-This reduction may obscure the diversity of an author's contributions
-across different contexts, particularly for interdisciplinary
-researchers or those with varied roles in different projects. Further,
-these labels are created from metadata for articles only within our
-dataset. That is, even though a researcher may have dozens of articles,
-their ``most common'' author position, domain, and article type was
-determined with data for article-repository pairs. This inherently
-biases the dataset towards research teams who, as a collective,
-frequently create and share software and code as a part of their
-research process. While this approach was necessary for managing the
-complexity of our analysis, it may not fully capture the nuances of
-individual research careers.
+by most recent) introduces potential biases (Li et al., 2025). This
+reduction may obscure the diversity of an author's contributions across
+different contexts, particularly for interdisciplinary researchers or
+those with varied roles in different projects. Further, these labels are
+created from metadata for articles only within our dataset. That is,
+even though a researcher may have dozens of articles, their ``most
+common'' author position, domain, and article type was determined with
+data for article-repository pairs. This inherently biases the dataset
+towards research teams who, as a collective, frequently create and share
+software and code as a part of their research process. While this
+approach was necessary for managing the complexity of our analysis, it
+may not fully capture the nuances of individual research careers.
 
 Our predictive modeling approach for matching authors with developer
 accounts presents additional limitations. The model's performance can be
@@ -1259,7 +1284,7 @@ limitations to our analysis. While OpenAlex provides good overall
 coverage, it lags behind proprietary databases in indexing references
 and citations. The lag in OpenAlex data may affect our citation-based
 analyses and the completeness of author metadata used in our study
-\citep{alperin2024analysis}.
+(Alperin et al., 2024).
 
 \subsection{Future Work}\label{future-work}
 
@@ -1301,7 +1326,7 @@ contributors unrelated to the original paper.
 Despite their growing importance, the persistent under-recognition of
 software contributions suggests a need for structural interventions in
 how we conceptualize and reward scientific work. Building upon efforts
-like CRediT \citep{brand2015beyond}, future work should investigate
+like CRediT (Brand et al., 2015), future work should investigate
 potential policy changes to better align institutional incentives with
 the diverse spectrum of contributions that drive modern scientific
 progress. However, as the example of CRediT demonstrates, even
@@ -1313,13 +1338,15 @@ support innovation, ensure appropriate credit, maintain research
 integrity, and foster equitable participation in an increasingly
 computational scientific enterprise.
 
-\section{Acknowledgments}\label{acknowledgments}
+\section*{Acknowledgments}\label{acknowledgments}
+\addcontentsline{toc}{section}{Acknowledgments}
 
 We thank our anonymous reviewers for their helpful feedback. We
 especially thank Molly Blank, Shahan Ali Memnon, David Farr, and Jevin
 West for their valuable insights at multiple stages of this research.
 
-\section{Author Contributions}\label{author-contributions}
+\section*{Author Contributions}\label{author-contributions}
+\addcontentsline{toc}{section}{Author Contributions}
 
 Eva Maxfield Brown: Conceptualization, Data Curation, Formal Analysis,
 Investigation, Methodology, Software, Validation, Visualization, Writing
@@ -1333,17 +1360,20 @@ Funding Acquisition, Investigation, Methodology, Project Administration,
 Resources, Supervision, Writing - original draft, Writing - review \&
 editing.
 
-\section{Competing Interests}\label{competing-interests}
+\section*{Competing Interests}\label{competing-interests}
+\addcontentsline{toc}{section}{Competing Interests}
 
 The authors have no competing interests.
 
-\section{Funding Information}\label{funding-information}
+\section*{Funding Information}\label{funding-information}
+\addcontentsline{toc}{section}{Funding Information}
 
 This research was supported by grants from the National Science
 Foundation's (NSF) Office of Advanced Cyberinfrastructure (OAC-2211275)
 and the Sloan Foundation (G-2022-19347).
 
-\section{Data Availability}\label{data-availability}
+\section*{Data Availability}\label{data-availability}
+\addcontentsline{toc}{section}{Data Availability}
 
 The software and code used to train, evaluate, and apply the
 author-developer account matching model is available at:
@@ -1360,11 +1390,338 @@ training and evaluation datasets contain linked personal data (e.g.,
 author names, developer account usernames) and are only available by
 request.
 
-\section{References}\label{references}
+\section*{References}\label{references}
+\addcontentsline{toc}{section}{References}
 
-\renewcommand{\bibsection}{}
-\bibliography{main.bib}
+\phantomsection\label{refs}
+\begin{CSLReferences}{1}{0}
+\bibitem[\citeproctext]{ref-Aksnes2006CitationRA}
+Aksnes, D. W. (2006). Citation rates and perceptions of scientific
+contribution. \emph{J. Assoc. Inf. Sci. Technol.}, \emph{57}, 169--185.
+\url{https://doi.org/10.1002/asi.20262}
 
+\bibitem[\citeproctext]{ref-allen2014publishing}
+Allen, L., Scott, J., Brand, A., Hlava, M., \& Altman, M. (2014).
+Publishing: Credit where credit is due. \emph{Nature}, \emph{508}(7496),
+312--313. \url{https://doi.org/10.1038/508312a}
+
+\bibitem[\citeproctext]{ref-alperin2024analysis}
+Alperin, J. P., Portenoy, J., Demes, K., Larivière, V., \& Haustein, S.
+(2024). An analysis of the suitability of OpenAlex for bibliometric
+analyses. \emph{arXiv Preprint arXiv:2404.17663}.
+\url{https://doi.org/10.48550/arXiv.2404.17663}
+
+\bibitem[\citeproctext]{ref-BHANDARI20141049}
+Bhandari, M., Guyatt, G. H., Kulkarni, A. V., Devereaux, P. J., Leece,
+P., Bajammal, S., Heels-Ansdell, D., \& Busse, J. W. (2014). Perceptions
+of authors' contributions are influenced by both byline order and
+designation of corresponding author. \emph{Journal of Clinical
+Epidemiology}, \emph{67}(9), 1049--1054.
+\url{https://doi.org/10.1016/j.jclinepi.2014.04.006}
+
+\bibitem[\citeproctext]{ref-birnbaum2023should}
+Birnbaum, Y., Kitakaze, M., Grieve, D., \& Uretsky, B. F. (2023). Who
+should be the corresponding author, what are their responsibilities, and
+what email address should they provide? \emph{Cardiovascular Drugs and
+Therapy}, \emph{37}(6), 1039--1040.
+\url{https://doi.org/10.1007/s10557-023-07486-5}
+
+\bibitem[\citeproctext]{ref-brand2015beyond}
+Brand, A., Allen, L., Altman, M., Hlava, M., \& Scott, J. (2015). Beyond
+authorship: Attribution, contribution, collaboration, and credit.
+\emph{Learned Publishing}, \emph{28}(2).
+\url{https://doi.org/10.1087/20150211}
+
+\bibitem[\citeproctext]{ref-Cao2023TheRO}
+Cao, H., Dodge, J., Lo, K., McFarland, D. A., \& Wang, L. L. (2023). The
+rise of open science: Tracking the evolution and perceived value of data
+and methods link-sharing practices. \emph{ArXiv}, \emph{abs/2310.03193}.
+\url{https://doi.org/10.48550/arXiv.2310.03193}
+
+\bibitem[\citeproctext]{ref-Carver2022ASO}
+Carver, J. C., Weber, N., Ram, K., Gesing, S., \& Katz, D. S. (2022). A
+survey of the state of the practice for research software in the united
+states. \emph{PeerJ Computer Science}, \emph{8}.
+\url{https://doi.org/10.7717/peerj-cs.963}
+
+\bibitem[\citeproctext]{ref-Chen2024ExploringSC}
+Chen, L., Ding, J., Song, D., \& Qu, Z. (2025). Exploring scientific
+contributions through citation context and division of labor.
+\emph{Scientometrics}. \url{https://doi.org/10.1007/s11192-025-05318-x}
+
+\bibitem[\citeproctext]{ref-du2021softcite}
+Du, C., Cohoon, J., Lopez, P., \& Howison, J. (2021). Softcite dataset:
+A dataset of software mentions in biomedical and economic research
+publications. \emph{Journal of the Association for Information Science
+and Technology}, \emph{72}(7), 870--884.
+\url{https://doi.org/10.1002/asi.24454}
+
+\bibitem[\citeproctext]{ref-escamilla2022riseofgithub}
+Escamilla, E., Klein, M., Cooper, T., Rampin, V., Weigle, M. C., \&
+Nelson, M. L. (2022). The rise of GitHub in scholarly publications. In
+G. Silvello, O. Corcho, P. Manghi, G. M. Di Nunzio, K. Golub, N. Ferro,
+\& A. Poggi (Eds.), \emph{Linking theory and practice of digital
+libraries} (pp. 187--200). Springer International Publishing.
+\url{https://doi.org/10.1007/978-3-031-16802-4_15}
+
+\bibitem[\citeproctext]{ref-farber2020analyzingGithubPapers}
+Färber, M. (2020). Analyzing the GitHub repositories of research papers.
+\emph{Proceedings of the ACM/IEEE Joint Conference on Digital Libraries
+in 2020, JCDL '20}, 491--492.
+\url{https://doi.org/10.1145/3383583.3398578}
+
+\bibitem[\citeproctext]{ref-fortunato2018science}
+Fortunato, S., Bergstrom, C. T., Börner, K., Evans, J. A., Helbing, D.,
+Milojević, S., Petersen, A. M., Radicchi, F., Sinatra, R., Uzzi, B., et
+al. (2018). Science of science. \emph{Science}, \emph{359}(6379),
+eaao0185. \url{https://doi.org/10.1126/science.aao0185}
+
+\bibitem[\citeproctext]{ref-Franceschet2010TheEO}
+Franceschet, M., \& Costantini, A. (2010). The effect of scholar
+collaboration on impact and quality of academic papers. \emph{J.
+Informetrics}, \emph{4}, 540--553.
+\url{https://doi.org/10.1016/j.joi.2010.06.003}
+
+\bibitem[\citeproctext]{ref-hampton2013big}
+Hampton, S. E., Strasser, C. A., Tewksbury, J. J., Gram, W. K., Budden,
+A. E., Batcheller, A. L., Duke, C. S., \& Porter, J. H. (2013). Big data
+and the future of ecology. \emph{Frontiers in Ecology and the
+Environment}, \emph{11}(3), 156--162.
+\url{https://doi.org/10.1890/120103}
+
+\bibitem[\citeproctext]{ref-researchsoftwareclassifications}
+Hasselbring, W., Druskat, S., Bernoth, J., Betker, P., Felderer, M.,
+Ferenz, S., Hermann, B., Lamprecht, A.-L., Linxweiler, J., Prat, A., et
+al. (2025). Multi-dimensional research software categorization.
+\emph{Computing in Science \& Engineering}.
+\url{https://doi.org/10.1109/MCSE.2025.3555023}
+
+\bibitem[\citeproctext]{ref-haustein2014use}
+Haustein, S., \& Larivière, V. (2014). The use of bibliometrics for
+assessing research: Possibilities, limitations and adverse effects. In
+\emph{Incentives and performance: Governance of research organizations}
+(pp. 121--139). Springer.
+\url{https://doi.org/10.1007/978-3-319-09785-5_8}
+
+\bibitem[\citeproctext]{ref-herbsleb2003empirical}
+Herbsleb, J. D., \& Mockus, A. (2003). An empirical study of speed and
+communication in globally distributed software development. \emph{IEEE
+Transactions on Software Engineering}, \emph{29}(6), 481--494.
+\url{https://doi.org/10.1109/TSE.2003.1205177}
+
+\bibitem[\citeproctext]{ref-hirsch2005index}
+Hirsch, J. E. (2005). An index to quantify an individual's scientific
+research output. \emph{Proceedings of the National Academy of Sciences},
+\emph{102}(46), 16569--16572.
+\url{https://doi.org/10.1073/pnas.0507655102}
+
+\bibitem[\citeproctext]{ref-hocquet2024software}
+Hocquet, A., Wieber, F., Gramelsberger, G., Hinsen, K., Diesmann, M.,
+Pasquini Santos, F., Landström, C., Peters, B., Kasprowicz, D.,
+Borrelli, A., et al. (2024). Software in science is ubiquitous yet
+overlooked. \emph{Nature Computational Science}, \emph{4}(7), 465--468.
+\url{https://doi.org/10.1038/s43588-024-00651-2}
+
+\bibitem[\citeproctext]{ref-Howison2013IncentivesAI}
+Howison, J., \& Herbsleb, J. D. (2013). Incentives and integration in
+scientific software production. \emph{Proceedings of the 2013 Conference
+on Computer Supported Cooperative Work}.
+\url{https://doi.org/10.1145/2441776.2441828}
+
+\bibitem[\citeproctext]{ref-jin2015significance}
+Jin, X., Wah, B. W., Cheng, X., \& Wang, Y. (2015). Significance and
+challenges of big data research. \emph{Big Data Research}, \emph{2}(2),
+59--64. \url{https://doi.org/10.1016/j.bdr.2015.01.006}
+
+\bibitem[\citeproctext]{ref-Jnior2016PatternsOA}
+Júnior, E. A. C., Silva, F. N., Fontoura Costa, L. da, \& Amancio, D. R.
+(2016). Patterns of authors contribution in scientific manuscripts.
+\emph{J. Informetrics}, \emph{11}, 498--510.
+\url{https://doi.org/10.1016/j.joi.2017.03.003}
+
+\bibitem[\citeproctext]{ref-Katz2020RecognizingTV}
+Katz, D. S., Hong, N. P. C., Clark, T., Muench, A., Stall, S., Bouquin,
+D. R., Cannon, M., Edmunds, S. C., Faez, T., Feeney, P., Fenner, M.,
+Friedman, M., Grenier, G., Harrison, M., Heber, J., Leary, A.,
+MacCallum, C. J., Murray, H., Pastrana, Érika, \ldots{} Yeston, J. S.
+(2020). Recognizing the value of software: A software citation guide.
+\emph{F1000Research}, \emph{9}.
+\url{https://doi.org/10.12688/f1000research.26932.2}
+
+\bibitem[\citeproctext]{ref-Lamprecht2020TowardsFP}
+Lamprecht, A.-L., García, L. J., Kuzak, M., Martinez, C., Arcila, R.,
+Pico, E. M. D., Angel, V. D. D., Sandt, S. van de, Ison, J. C.,
+Martínez, P. A., McQuilton, P., Valencia, A., Harrow, J. L.,
+Psomopoulos, F., Gelpi, J. L., Hong, N. P. C., Goble, C. A., \&
+Capella-Gutiérrez, S. (2020). Towards FAIR principles for research
+software. \emph{Data Sci.}, \emph{3}, 37--59.
+\url{https://doi.org/10.3233/DS-190026}
+
+\bibitem[\citeproctext]{ref-lariviere2016contributorship}
+Larivière, V., Desrochers, N., Macaluso, B., Mongeon, P., Paul-Hus, A.,
+\& Sugimoto, C. R. (2016). Contributorship and division of labor in
+knowledge production. \emph{Social Studies of Science}, \emph{46}(3),
+417--435. \url{https://doi.org/10.1177/0306312716650046}
+
+\bibitem[\citeproctext]{ref-Larivire2014TeamSM}
+Larivière, V., Gingras, Y., Sugimoto, C. R., \& Tsou, A. (2014). Team
+size matters: Collaboration and scientific impact since 1900.
+\emph{Journal of the Association for Information Science and
+Technology}, \emph{66}. \url{https://doi.org/10.1002/asi.23266}
+
+\bibitem[\citeproctext]{ref-Larivire2020InvestigatingTD}
+Larivière, V., Pontille, D., \& Sugimoto, C. R. (2020). Investigating
+the division of scientific labor using the contributor roles taxonomy
+(CRediT). \emph{Quantitative Science Studies}, 1--18.
+\url{https://doi.org/10.1162/qss_a_00097}
+
+\bibitem[\citeproctext]{ref-li2025determination}
+Li, X., Rousseau, R., \& Jia, T. (2025). Determination and
+characteristics of the most visible authors in multi-author
+publications. \emph{Journal of Informetrics}, \emph{19}(3), 101683.
+\url{https://doi.org/10.1016/j.joi.2025.101683}
+
+\bibitem[\citeproctext]{ref-liu2018hot}
+Liu, L., Wang, Y., Sinatra, R., Giles, C. L., Song, C., \& Wang, D.
+(2018). Hot streaks in artistic, cultural, and scientific careers.
+\emph{Nature}, \emph{559}(7714), 396--399.
+\url{https://doi.org/10.1038/s41586-018-0315-8}
+
+\bibitem[\citeproctext]{ref-LIU2023101432}
+Liu, X., Zhang, C., \& Li, J. (2023). Conceptual and technical work: Who
+will disrupt science? \emph{Journal of Informetrics}, \emph{17}(3),
+101432. \url{https://doi.org/10.1016/j.joi.2023.101432}
+
+\bibitem[\citeproctext]{ref-lu2022contributorship}
+Lu, C., Zhang, C., Xiao, C., \& Ding, Y. (2022). Contributorship in
+scientific collaborations: The perspective of contribution-based byline
+orders. \emph{Information Processing \& Management}, \emph{59}(3),
+102944. \url{https://doi.org/10.1016/j.ipm.2022.102944}
+
+\bibitem[\citeproctext]{ref-lu2020co}
+Lu, C., Zhang, Y., Ahn, Y.-Y., Ding, Y., Zhang, C., \& Ma, D. (2020).
+Co-contributorship network and division of labor in individual
+scientific collaborations. \emph{Journal of the Association for
+Information Science and Technology}, \emph{71}(10), 1162--1178.
+\url{https://doi.org/10.1002/asi.24321}
+
+\bibitem[\citeproctext]{ref-merton1968matthew}
+Merton, R. K. (1968). The matthew effect in science: The reward and
+communication systems of science are considered. \emph{Science},
+\emph{159}(3810), 56--63.
+\url{https://doi.org/10.1126/science.159.3810.56}
+
+\bibitem[\citeproctext]{ref-milewicz2018talk}
+Milewicz, R., \& Raybourn, E. (2018). Talk to me: A case study on
+coordinating expertise in large-scale scientific software projects.
+\emph{2018 IEEE 14th International Conference on e-Science (e-Science)},
+9--18. \url{https://doi.org/10.1109/eScience.2018.00010}
+
+\bibitem[\citeproctext]{ref-muna2016astropyproblem}
+Muna, D., Alexander, M., Allen, A., Ashley, R., Asmus, D., Azzollini,
+R., Bannister, M., Beaton, R., Benson, A., Berriman, G. B., Bilicki, M.,
+Boyce, P., Bridge, J., Cami, J., Cangi, E., Chen, X., Christiny, N.,
+Clark, C., Collins, M., \ldots{} Zonca, A. (2016). \emph{The astropy
+problem}. \url{https://doi.org/10.48550/arXiv.1610.03159}
+
+\bibitem[\citeproctext]{ref-paine2017has}
+Paine, D., \& Lee, C. P. (2017). "Who has plots?" contextualizing
+scientific software, practice, and visualizations. \emph{Proceedings of
+the ACM on Human-Computer Interaction}, \emph{1}(CSCW), 1--21.
+\url{https://doi.org/10.1145/3134720}
+
+\bibitem[\citeproctext]{ref-olivier_philippe_2019_2585783}
+Philippe, O., Hammitzsch, M., Janosch, S., Walt, A. van der, Werkhoven,
+B. van, Hettrick, S., Katz, D. S., Leinweber, K., Gesing, S., Druskat,
+S., Henwood, S., May, N. R., Lohani, N. P., \& Sinha, M. (2019).
+\emph{Softwaresaved/international-survey: Public release for 2018
+results} (Version 2018-v.1.0.2). Zenodo.
+\url{https://doi.org/10.5281/zenodo.2585783}
+
+\bibitem[\citeproctext]{ref-sarsons2017recognition}
+Sarsons, H. (2017). Recognition for group work: Gender differences in
+academia. \emph{American Economic Review: Papers \& Proceedings},
+\emph{107}(5), 141--145. \url{https://doi.org/10.1257/aer.p20171126}
+
+\bibitem[\citeproctext]{ref-sauermann2017authorship}
+Sauermann, H., \& Haeussler, C. (2017). Authorship and contribution
+disclosures. \emph{Science Advances}, \emph{3}(11), e1700404.
+\url{https://doi.org/10.1126/sciadv.1700404}
+
+\bibitem[\citeproctext]{ref-shapin1989invisible}
+Shapin, S. (1989). The invisible technician. \emph{American Scientist},
+\emph{77}(6), 554--563. \url{http://www.jstor.org/stable/27856006}
+
+\bibitem[\citeproctext]{ref-shen2014collective}
+Shen, H.-W., \& Barabási, A.-L. (2014). Collective credit allocation in
+science. \emph{Proceedings of the National Academy of Sciences},
+\emph{111}(34), 12325--12330.
+\url{https://doi.org/10.1073/pnas.1401992111}
+
+\bibitem[\citeproctext]{ref-da2013corresponding}
+Silva, J. T. da, Dobránszki, J., Van, P. T., \& Payne, W. A. (2013).
+Corresponding authors: Rules, responsibilities and risks. \emph{Asian
+Australas J Plant Sci Biotechnol}, \emph{7}(7), 16--20.
+
+\bibitem[\citeproctext]{ref-Smith2016SoftwareCP}
+Smith, A. M., Katz, D. S., \& Niemeyer, K. E. (2016). Software citation
+principles. \emph{PeerJ Comput. Sci.}, \emph{2}, e86.
+\url{https://doi.org/10.7717/peerj-cs.86}
+
+\bibitem[\citeproctext]{ref-teunis2015corresponding}
+Teunis, T., Nota, S. P., \& Schwab, J. H. (2015). Do corresponding
+authors take responsibility for their work? A covert survey.
+\emph{Clinical Orthopaedics and Related Research{\textregistered}},
+\emph{473}, 729--735. \url{https://doi.org/10.1007/s11999-014-3868-3}
+
+\bibitem[\citeproctext]{ref-trujillo2022penumbra}
+Trujillo, M. Z., Hébert-Dufresne, L., \& Bagrow, J. (2022). The penumbra
+of open source: Projects outside of centralized platforms are longer
+maintained, more academic and more collaborative. \emph{EPJ Data
+Science}, \emph{11}(1), 31.
+\url{https://doi.org/10.1140/epjds/s13688-022-00345-7}
+
+\bibitem[\citeproctext]{ref-wang2013quantifying}
+Wang, D., Song, C., \& Barabási, A.-L. (2013). Quantifying long-term
+scientific impact. \emph{Science}, \emph{342}(6154), 127--132.
+\url{https://doi.org/10.1126/science.1237825}
+
+\bibitem[\citeproctext]{ref-weber2014paratexts}
+Weber, N. M., \& Thomer, A. K. (2014). Paratexts and documentary
+practices: Text mining authorship and acknowledgment from a
+bioinformatics corpus. In \emph{Examining paratextual theory and its
+applications in digital culture} (pp. 84--109). IGI Global.
+\url{https://doi.org/10.4018/978-1-4666-6002-1.ch005}
+
+\bibitem[\citeproctext]{ref-west2013role}
+West, J. D., Jacquet, J., King, M. M., Correll, S. J., \& Bergstrom, C.
+T. (2013). The role of gender in scholarly authorship. \emph{PloS One},
+\emph{8}(7), e66212. \url{https://doi.org/10.1371/journal.pone.0066212}
+
+\bibitem[\citeproctext]{ref-wu2019large}
+Wu, L., Wang, D., \& Evans, J. A. (2019). Large teams develop and small
+teams disrupt science and technology. \emph{Nature}, \emph{566}(7744),
+378--382. \url{https://doi.org/10.1038/s41586-019-0941-9}
+
+\bibitem[\citeproctext]{ref-Wyss2023NothingBut}
+Wyss, E., De Carli, L., \& Davidson, D. (2023). (Nothing but) many eyes
+make all bugs shallow. \emph{Proceedings of the 2023 Workshop on
+Software Supply Chain Offensive Research and Ecosystem Defenses, SCORED
+'23}, 53--63. \url{https://doi.org/10.1145/3605770.3625216}
+
+\bibitem[\citeproctext]{ref-yoo2024interaction}
+Yoo, H. S., Jung, Y. L., Lee, J. Y., \& Lee, C. (2024). The interaction
+of inter-organizational diversity and team size, and the scientific
+impact of papers. \emph{Information Processing \& Management},
+\emph{61}(6), 103851. \url{https://doi.org/10.1016/j.ipm.2024.103851}
+
+\bibitem[\citeproctext]{ref-zuckerman1968patterns}
+Zuckerman, H. (1968). Patterns of name ordering among authors of
+scientific papers: A study of social symbolism and its ambiguity.
+\emph{American Journal of Sociology}, \emph{74}(3), 276--291.
+\url{https://doi.org/10.1086/224641}
+
+\end{CSLReferences}
 
 
 
