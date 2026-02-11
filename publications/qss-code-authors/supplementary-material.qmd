@@ -1,0 +1,1906 @@
+---
+title: "Supplementary Material: Code Contribution and Credit in Science"
+bibliography: supplementary-material.bib
+csl: apa.csl
+number-sections: true
+format:
+  pdf:
+    keep-tex: true
+    cite-method: citeproc
+    toc: false
+    execute:
+      echo: false
+      warning: false
+    include-in-header:
+      - text: |
+          \usepackage{booktabs}
+          \usepackage{multirow}
+          \usepackage{siunitx}
+          \usepackage[table]{xcolor}
+          \usepackage{float}
+          \floatplacement{table}{H}
+          \setcounter{table}{0}
+          \renewcommand{\thetable}{S\arabic{table}}
+          \setcounter{figure}{0}
+          \renewcommand{\thefigure}{S\arabic{figure}}
+---
+
+```{python}
+#| output: false
+#| echo: false
+#| warning: false
+
+import re
+from pathlib import Path
+
+
+def _exec_main_python_chunks(main_qmd: Path) -> None:
+    # Reuse all manuscript computation cells to avoid duplicating analysis code.
+    main_text = main_qmd.read_text()
+    main_text_before_refs = main_text.split("\n# References\n", 1)[0]
+    for chunk in re.finditer(
+        r"```[{]python[^}]*[}]\n(.*?)\n```",
+        main_text_before_refs,
+        flags=re.DOTALL,
+    ):
+        exec(chunk.group(1), globals())
+
+
+_exec_main_python_chunks(Path.cwd() / "qss-code-authors.qmd")
+```
+
+# Supplementary Material
+
+## Extended Data and Methods
+
+### Building a Dataset of Linked Scientific Articles and Code Repositories
+
+The increasing emphasis on research transparency has led many journals and platforms to require or recommend code and data sharing [@stodden2013toward; @sharma2024analytical], creating traceable links between publications and code. These explicit links enable systematic study of both article-repository and author-developer account relationships [@Hata2021ScienceSoftwareLT; @Kelley2021AFF; @Stankovski2024RepoFromPaperAA; @milewicz2019characterizing].
+
+Our dataset collection process leveraged four sources of linked scientific articles and code repositories, each with specific mechanisms for establishing these connections:
+
+1.  **Public Library of Science (PLOS)**: We extracted repository links from PLOS articles' mandatory data and code availability statements.
+2.  **Journal of Open Source Software (JOSS)**: JOSS requires explicit code repository submission and review as a core part of its publication process.
+3.  **SoftwareX**: Similar to JOSS, SoftwareX mandates code repositories as a publication requirement.
+4.  **Papers with Code**: This platform directly connects machine learning preprints with their implementations. We focus solely on the "official" article-repository relationships rather than the "unverified" or "unofficial" links.
+
+```{python}
+print_ready_total_doi_resolved = "{:,}".format(n_articles_with_alt_doi)
+```
+
+We enriched these article-repository pairs with metadata from multiple sources to create a comprehensive and analyzable dataset. We utilized the Semantic Scholar API for DOI resolution to ensure we found the latest version of each article. This resolution step was particularly important when working with preprints, as journals may have published these papers since their inclusion in the Papers with Code dataset. Using Semantic Scholar, we successfully resolved \~`{python} round(overall_doi_resolution * 100, 1)`% (n=`{python} print_ready_total_doi_resolved`) of all DOIs within our dataset[^13].
+
+[^13]: Broken out by dataset source, we resolved \~`{python} round(per_dataset_doi_resolution["plos"] * 100, 1)`% (n=`{python} print_ready_plos_doi_resolved`) of all PLOS DOIs, \~`{python} round(per_dataset_doi_resolution["joss"] * 100, 1)`% (n=`{python} print_ready_joss_doi_resolved`) of all JOSS DOIs, \~`{python} round(per_dataset_doi_resolution["softwarex"] * 100, 1)`% (n=`{python} print_ready_softwarex_doi_resolved`) of all SoftwareX DOIs, and \~`{python} round(per_dataset_doi_resolution["pwc"] * 100, 1)`% (n=`{python} print_ready_pwc_doi_resolved`) of all Papers with Code (arXiv) DOIs.
+
+We then utilized the OpenAlex API to gather detailed publication metadata, including:
+
+- Publication characteristics (open access status, domain, publication date)
+- Author details (name, author position, corresponding author status)
+- Article- and individual-level metrics (citation counts, FWCI, h-index)
+
+Similarly, the GitHub API provided comprehensive information for source code repositories:
+
+- Repository metadata (name, description, programming languages, creation date)
+- Contributor details (username, display name, email)
+- Repository-level metrics (star count, fork count, issue count)
+
+### Developing a Predictive Model for Author-Developer Account Matching
+
+#### Annotated Dataset Creation
+
+```{python}
+#| output: false
+
+# We run this in it's own cell so that output from data download doesn't show
+# Load annotated dataset
+annotated_dataset = sci_soft_models_data.load_annotated_dev_author_em_dataset()
+
+# Get counts of positive and negative examples
+n_positive_examples = len(annotated_dataset.loc[annotated_dataset["match"]])
+n_negative_examples = len(annotated_dataset.loc[~annotated_dataset["match"]])
+print_ready_n_positive_examples = "{:,}".format(n_positive_examples)
+print_ready_n_negative_examples = "{:,}".format(n_negative_examples)
+pct_positive_examples = round(n_positive_examples / len(annotated_dataset), 3) * 100
+pct_negative_examples = round(n_negative_examples / len(annotated_dataset), 3) * 100
+
+# Create function to split row details
+def split_dev_details(dev_details: str) -> dict:
+    details_list = dev_details.split(";\\n")
+    details_dict = {}
+    for detail in details_list:
+        try:
+            key, value = detail.split(": ", 1)
+        except Exception:
+            print(detail)
+            raise
+
+        # Only keep username, name, and email
+        if key in ["username", "name", "email"]:
+            # If value is "None" replace with None
+            if value == "None":
+                value = None
+
+            # Store to details dict
+            details_dict[key] = value
+    
+    return details_dict
+
+# Split dev details
+all_dev_details = annotated_dataset["dev_details"].apply(split_dev_details)
+
+# Convert to dataframe
+all_dev_details_df = pd.DataFrame(all_dev_details.tolist())
+
+# Drop duplicates on username
+all_dev_details_df = all_dev_details_df.drop_duplicates(subset=["username"])
+
+# Get counts
+n_devs = len(all_dev_details_df)
+print_ready_n_devs = "{:,}".format(n_devs)
+n_devs_with_name = all_dev_details_df["name"].notnull().sum()
+n_devs_with_email = all_dev_details_df["email"].notnull().sum()
+print_ready_n_devs_with_name = "{:,}".format(int(n_devs_with_name))
+print_ready_n_devs_with_email = "{:,}".format(int(n_devs_with_email))
+
+pct_devs_with_name = round(n_devs_with_name / n_devs, 3) * 100
+pct_devs_with_email = round(n_devs_with_email / n_devs, 3) * 100
+
+# Get unique authors from original frame from unique semantic scholar id
+n_authors = annotated_dataset["semantic_scholar_id"].nunique()
+print_ready_n_authors = "{:,}".format(n_authors)
+```
+
+Creating an accurate author-developer account matching model required high quality, labeled training data that reflects real-world identity-matching challenges. Exact matching on names or emails proved insufficient due to variations in formatting (e.g., "J. Doe" vs. "Jane Doe"), use of institutional versus personal email addresses, and incomplete information. However, author and developer account information often contains sufficient similarities for probabilistic matching, such as when author "Jane Doe" corresponds to username "jdoe" or "janedoe123."
+
+To efficiently build our training and evaluation dataset, we used JOSS articles as we believed they typically feature higher author-developer-account overlap, increasing positive match density. Our dataset creation process followed these steps:
+
+1. We generated semantic embeddings for each developer account and author name using the [multi-qa-MiniLM-L6-cos-v1](https://huggingface.co/sentence-transformers/multi-qa-MiniLM-L6-cos-v1) model from the Sentence Transformers Python library [@reimers-2019-sentence-bert].
+2. We calculated cosine similarity between all potential author-developer-account pairs for each article-repository pair.
+3. We selected the three most similar authors for each developer account for annotation efficiency.
+
+From these generated author-developer-account pairs, we randomly selected 2,999 for classification by two independent annotators as either matches or non-matches, resolving disagreements through discussion and verification. The resulting dataset contains `{python} print_ready_n_positive_examples` (\~`{python} pct_positive_examples`%) positive matches and `{python} print_ready_n_negative_examples` (\~`{python} pct_negative_examples`%) negative matches, comprising `{python} print_ready_n_authors` unique authors and `{python} print_ready_n_devs` unique developer accounts.
+
+Our collected data for annotation confirmed that exact matching would be insufficient—only `{python} print_ready_n_devs_with_name` (\~`{python} float(pct_devs_with_name)`%) of developer accounts had associated display names and just `{python} print_ready_n_devs_with_email` (\~`{python} float(pct_devs_with_email)`%) had associated email addresses.
+
+#### Training and Evaluation {#sec-appendix-model-training-eval}
+
+```{python}
+training_split_counts = sci_soft_models_data.load_final_model_training_split_details()
+
+# Take sum on rows
+training_split_counts = training_split_counts.set_index("split").sum(axis=1)
+training_split_pct = ((training_split_counts / training_split_counts.sum()) * 100).round(1)
+
+print_ready_train_counts =  "{:,}".format(int(training_split_counts["train"]))
+print_ready_test_counts = "{:,}".format(int(training_split_counts["test"]))
+```
+
+Our training and evaluation methodology began with careful dataset preparation to prevent data leakage between training and test sets. To ensure complete separation of authors and developers, we randomly selected 10% of unique authors and 10% of unique developers, designating any pairs containing these selected entities for the test set. This entity-based splitting strategy resulted in `{python} print_ready_train_counts` (\~`{python} float(training_split_pct["train"])`%) pairs for training and `{python} print_ready_test_counts` (\~`{python} float(training_split_pct["test"])`%) pairs for testing.
+
+For our predictive model, we evaluated three transformer-based architectures that have demonstrated strong performance in entity-matching tasks:
+
+- DeBERTa-v3-base [@he2021debertav3; @he2021deberta]
+- mBERT (bert-base-multilingual-cased) [@bert2018]
+- DistilBERT [@Sanh2019DistilBERTAD]
+
+We systematically evaluated these base models across different combinations of developer-account features, ranging from using only the username to incorporating complete profile information (username, display name, and email address). We fine-tuned all models using the Adam optimizer with a linear learning rate of 1e-5 for training and a batch size of 8 for training and evaluation. Given the size of our dataset and the binary nature of our classification task, models were trained for a single epoch to prevent overfitting.
+
+We evaluated model performance using precision, recall, and F1-score. This evaluation framework allowed us to directly compare model architectures and feature combinations while accounting for the balance between precision and recall in identifying correct matches.
+
+Our comprehensive model evaluation revealed that fine-tuning DeBERTa-v3-base [@he2021debertav3] with developer username and display name as input features produces optimal performance for author-developer matching. This model configuration achieved a binary F1 score of `{python} float(best_model_f1)`, with an accuracy of `{python} float(best_model_acc)`, precision of `{python} float(best_model_prec)`, and recall of `{python} float(best_model_rec)`. @tbl-em-model-comparison presents a complete comparison of model architectures and feature combinations.
+
+::: {.content-visible when-format="html"}
+```{python}
+#| label: tbl-em-model-comparison
+#| tbl-cap: "Comparison of Models for Author-Developer-Account Matching"
+
+exp_results
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{python}
+def df_to_latex_table(
+    df: pd.DataFrame,
+    caption: str,
+    label: str,
+    alignment: str = None,
+    float_format: str = ".3f"
+) -> str:
+    # Generate column alignment if not provided
+    if alignment is None:
+        # Use 'l' for string/object columns, 'r' for numeric columns
+        alignment = "".join(
+            ["l" if dtype.kind in "OUS" else "r" for dtype in df.dtypes]
+        )
+    else:
+        # Ensure provided alignment matches number of columns
+        if len(alignment) != len(df.columns):
+            raise ValueError(f"Alignment string length ({len(alignment)}) must match number of columns ({len(df.columns)})")
+    
+    # Create header row
+    header_row = " & ".join([f"\\textbf{{{col}}}" for col in df.columns]) + " \\\\"
+    
+    # Create data rows with alternating colors
+    data_rows = []
+    for i, row in enumerate(df.itertuples(index=False)):
+        color = "gray!10" if i % 2 == 1 else "white"
+        
+        # Format each cell value
+        cells = []
+        for val, dtype in zip(row, df.dtypes):
+            if pd.isna(val):
+                cells.append("")
+            elif dtype.kind in "fc":  # Float or complex
+                try:
+                    cells.append(f"{float(val):{float_format}}")
+                except (ValueError, TypeError):
+                    cells.append(str(val))
+            else:
+                cells.append(str(val))
+        
+        # Create the row with consistent cell coloring
+        colored_cells = [f"\\cellcolor{{{color}}}{cell}" for cell in cells]
+        row_str = " & ".join(colored_cells) + " \\\\"
+        data_rows.append(f"    {row_str}")
+    
+    # Combine into final table
+    table_template = f"""\\begin{{table}}
+\\centering
+\\caption{{{caption}}}
+\\label{{{label}}}
+\\begin{{tabular}}{{{alignment}}}
+\\toprule
+{header_row}
+\\midrule
+{chr(10).join(data_rows)}
+\\bottomrule
+\\end{{tabular}}
+\\end{{table}}"""
+
+    return table_template
+
+```
+
+```{python}
+# Convert to LaTeX table
+model_comparison_latex = df_to_latex_table(
+    exp_results,
+    caption="Comparison of Models for Author-Developer-Account Matching",
+    label="tbl-em-model-comparison",
+    alignment="llrrrr",
+)
+
+IPython.display.Latex(model_comparison_latex)
+```
+:::
+
+Analysis of each model's performance revealed that including developer display names had the most significant positive impact on model performance compared to username alone. We also observed that mBERT's performance was comparable to DeBERTa's while using the developer email address as an additional input feature. However, we selected the DeBERTa configuration as it consistently performed well across various feature combinations.
+
+To facilitate the reuse of our work, we have made our trained model and supporting code publicly available. Complete fine-tuning, evaluation, and inference code is available as the Python package: [sci-soft-models](https://github.com/evamaxfield/sci-soft-models), and the fine-tuned model has been released on HuggingFace ([evamxb/dev-author-em-clf](https://huggingface.co/evamxb/dev-author-em-clf)).
+
+#### Evaluation of Model Performance on Non-JOSS Author-Developer Pairs
+
+To assess our model's generalizability beyond the JOSS dataset used for training, we conducted an additional evaluation using author-developer-account pairs from the PLOS, SoftwareX, and Papers with Code datasets. We  created a dataset of all combinations of possible author-developer pairs from 20 article-repository pairs from each dataset. This resulted in 535 possible author-developer pairs for annotation across the 60 total article-repository pairs. Two independent annotators classified each of the possible author-developer pairs as either matches or non-matches. This annotation process mirrors how our complete dataset was constructed by using the trained model to predict matches from all possible author-developer pairs for a given article-repository pair. The two annotators achieved a Cohen's kappa of 0.948, or "almost perfect" agreement [@cohen1960coefficient; @mchugh2012interrater]. Annotators further discussed and resolved all disagreements.
+
+The trained author-developer matching model was then applied to this new dataset, achieving an overall binary-F1 score of 0.89, precision of 0.92 and recall of 0.87 (positive="match"). The overall macro-F1 score was 0.94, with a precision of 0.95 and recall of 0.93. Per-dataset performance is presented in @tbl-em-model-non-joss-eval. Across each of the non-JOSS datasets, the model demonstrated strong performance, with binary-F1 scores ranging from 0.88 to 0.90, and acheiving 0.94 for all macro-F1 scores.
+
+| dataset          | binary-F1 | binary-Precision | binary-Recall | macro-F1 | macro-Precision | macro-Recall |
+|------------------|-----------|------------------|---------------|----------|-----------------|--------------|
+| PLOS             | 0.88      | 0.79             | 1.00          | 0.94     | 0.89            | 0.99         |
+| SoftwareX        | 0.90      | 0.96             | 0.85          | 0.94     | 0.97            | 0.92         |
+| Papers With Code | 0.89      | 1.00             | 0.81          | 0.94     | 0.98            | 0.90         |
+: Per-dataset performance of the author-developer-account matching model on non-JOSS datasets. {#tbl-em-model-non-joss-eval}
+
+#### Model Limitations
+
+While our model demonstrates strong performance, we acknowledge certain limitations in our approach:
+
+1.  **Short name sensitivity**: Shorter names (both usernames and display names) can affect the model's performance, as less textual information is available for matching.
+2.  **Organization accounts**: Research lab accounts used for project management present a potential challenge for accurate matching, as they do not correspond to individual authors. However, our filtering mechanisms applied before analysis help minimize their impact on modeling.
+
+Additional limitations are discussed in a qualitative error analysis conducted as part of our evaluation of the code-contributing non-author sub-sample in @sec-appendix-cc-na-error-analysis.
+
+### Dataset Characteristics and Repository Types {#sec-appendix-dataset-char}
+
+Our compiled dataset appears to contain a mix of repository types, varying from analysis script repositories to software tools and likely some "code dumps" (where code is copied to a new repository immediately before publication). This diversity is reflected in the commit duration patterns across different publication types. The median commit duration for repositories in our analysis is:
+
+- 53 days for preprints
+- 114 days for research articles
+- 282 days for software articles
+
+Complete statistics on commit durations, including count, mean, and quantile details, are available in @tbl-commit-duration-distributions.
+
+```{python}
+#| label: tbl-commit-duration-distributions
+#| tbl-cap: "Commit duration (in days) distributions for different publication types. Only includes article-repository pairs with a most recent commit no later than 90 days after publication and excludes publications from research teams in the top 3% of total author sizes."
+
+commit_dist_plotting_data = team_comp_no_push_after_pub.copy()
+commit_dist_plotting_data = commit_dist_plotting_data.sort_values(
+    "article_type",
+)
+commit_dist_plotting_data["repo_commit_duration"] = commit_dist_plotting_data["repo_commit_duration"] * 365.25
+
+# Cast count, min, and max to int
+commit_dist_plotting_data.groupby(
+    ["article_type"],
+)["repo_commit_duration"].describe(
+    percentiles=[0.1, 0.25, 0.5, 0.75, 0.9],
+).astype(int)
+```
+
+## Distributions of Author-Developer-Account Prediction Confidence
+
+```{python}
+#| label: fig-dist-of-author-dev-pred-confidence
+#| fig-cap: "Distribution of author-developer-account prediction confidence scores. The plot on the left shows the distribution of all prediction confidence scores. The plot on the right shows the distribution of prediction confidence scores for author-developer-account pairs with a confidence score greater than or equal to 0.97."
+
+# Create a reduced copy of researcher_dev_links
+reduced_researcher_dev_links = (
+    researcher_dev_links.copy().sort_values(
+        by="predictive_model_confidence",
+        ascending=False,
+    )
+    .drop_duplicates(
+        subset=["developer_account_id"],
+        keep="first",
+    )
+    .drop_duplicates(
+        subset=["researcher_id"],
+        keep="first",
+    )
+)
+
+# Select columns of interest, change column names, and merge
+merged_reduced_researcher_dev_links = (
+    reduced_researcher_dev_links[
+        [
+            "researcher_id",
+            "developer_account_id",
+            "predictive_model_confidence",
+        ]
+    ]
+    .rename(
+        columns={
+            "predictive_model_confidence": "confidence",
+        },
+    )
+    .merge(
+        researchers.copy()[["id", "name"]].rename(
+            columns={
+                "id": "researcher_id",
+                "name": "researcher_name",
+            },
+        ),
+        on="researcher_id",
+    )
+    .merge(
+        devs.copy()[["id", "username", "name"]].rename(
+            columns={
+                "id": "developer_account_id",
+                "username": "dev_username",
+                "name": "dev_provided_name",
+            },
+        ),
+        on="developer_account_id",
+    )
+)[[
+    "researcher_name",
+    "dev_username",
+    "dev_provided_name",
+    "confidence",
+]]
+
+thresholded_reduced_researcher_dev_links = (
+    merged_reduced_researcher_dev_links.copy().loc[
+        merged_reduced_researcher_dev_links["confidence"] >= 0.97
+    ]
+)
+
+# Caluclate how much data was removed
+count_removed_from_conf_thresh = len(
+    merged_reduced_researcher_dev_links
+) - len(thresholded_reduced_researcher_dev_links)
+pct_removed_from_conf_thresh = round(
+    (
+        1 - (len(thresholded_reduced_researcher_dev_links) / len(merged_reduced_researcher_dev_links))
+    ) * 100,
+    1,
+)
+
+print_ready_count_removed_from_conf_thresh = "{:,}".format(
+    count_removed_from_conf_thresh
+)
+
+# Add new column to "merged_reduced_researcher_dev_links" df that is "set" and has "full" as value
+merged_reduced_researcher_dev_links["set"] = "full"
+print_ready_count_merged_reduced_researcher_dev_links = "{:,}".format(
+    len(merged_reduced_researcher_dev_links)
+)
+# Add new column to "thresholded_reduced_researcher_dev_links" df that is "set" and has "thresholded" as value
+thresholded_reduced_researcher_dev_links["set"] = "threshold"
+
+# Concatenate the two dataframes
+full_and_thresh = pd.concat(
+    [
+        merged_reduced_researcher_dev_links,
+        thresholded_reduced_researcher_dev_links,
+    ],
+    ignore_index=True,
+).reset_index(drop=True)
+
+# Create plot
+g = sns.displot(
+    full_and_thresh,
+    x="confidence",
+    kind="ecdf",
+    col="set",
+    hue="set",
+    facet_kws={"sharex": False},
+    legend=False,
+)
+
+# Set titles
+g.set_titles(col_template="{col_name} set")
+g.fig.tight_layout()
+```
+
+Thresholding the predictive model confidence at 0.97 resulted in a \~`{python} pct_removed_from_conf_thresh`% (n=`{python} print_ready_count_removed_from_conf_thresh`) reduction in the number of author-developer-account pairs (from an unfiltered total of `{python} print_ready_count_merged_reduced_researcher_dev_links` author-developer-account pairs). This threshold was chosen to ensure a high level of confidence in the matches while retaining a large number of pairs for analysis.
+
+## Filtered Dataset Description for Article-Citation, Author-Position, and Author-Correspondence Analysis
+
+::: {.content-visible when-format="html"}
+```{python}
+#| label: tbl-team-comp-no-push-after-pub-counts
+#| tbl-cap: "Counts of article-repository pairs, authors, and developers for research teams. Only includes research teams from article-repository pairs with a most recent commit no later than 90 days after publication and excludes research teams in the top 3% of total author sizes."
+
+team_comp_no_push_after_pub_counts_html = _get_html_for_counts_table(
+    domain_stats=team_comp_no_push_after_pub_counts_domain,
+    doc_type_stats=team_comp_no_push_after_pub_counts_article_type,
+    access_stats=team_comp_no_push_after_pub_counts_open_access,
+    data_source_stats=team_comp_no_push_after_pub_counts_dataset_source,
+    total_article_repo_pairs=team_comp_no_push_after_pub_total_pairs,
+    total_authors=team_comp_no_push_after_pub_total_authors,
+    total_devs=team_comp_no_push_after_pub_total_devs,
+)
+
+IPython.display.HTML(team_comp_no_push_after_pub_counts_html)
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{python}
+team_comp_no_push_after_pub_counts_latex = _get_latex_for_counts_table(
+    caption=(
+        "Counts of article-repository pairs, authors, and developers for research teams. "
+        "Only includes research teams from article-repository pairs with a "
+        "most recent commit no later than 90 days after publication and excludes "
+        "research teams in the top 3\% of total author sizes."
+    ),
+    label="tbl-team-comp-no-push-after-pub-counts",
+    domain_stats=team_comp_no_push_after_pub_counts_domain,
+    doc_type_stats=team_comp_no_push_after_pub_counts_article_type,
+    access_stats=team_comp_no_push_after_pub_counts_open_access,
+    data_source_stats=team_comp_no_push_after_pub_counts_dataset_source,
+    total_article_repo_pairs=team_comp_no_push_after_pub_total_pairs,
+    total_authors=team_comp_no_push_after_pub_total_authors,
+    total_devs=team_comp_no_push_after_pub_total_devs,
+)
+
+IPython.display.Latex(team_comp_no_push_after_pub_counts_latex)
+```
+
+:::
+
+### Distributions of Team Composition
+
+@tbl-team-composition-counts provides detailed statistics on the composition of research teams across different domains, article types, and open access statuses.
+
+::: {.content-visible when-format="html"}
+```{python}
+#| label: tbl-team-composition-counts
+#| tbl-cap: "Mean and Standard Deviation of Non-Code-Contributing Authors (NCC-A), Code-Contributing Authors (CC-A), and Code-Contributing Non-Authors (CC-NA) Research Team Members by Domain, Article Type, and Open Access Status. Only includes research teams from article-repository pairs with repositories that have programming language files, a most recent commit no later than 90 days after publication, and excludes research teams in the top 3% of total author sizes."
+
+# Construct multi-row span HTML table
+# Columns should be: "Authors", "Code Contributing Authors", "Non-Author Code Contributors"
+# Rows should be:
+# "Open Access Status", "Domain", "Article Type"
+
+# HTML templates
+count_piece_inital_row_template = """
+<tr>
+  <td rowspan="{n_rows}">{row_name}</td>
+  <td>{value_name}</td>
+  <td>{n_authors}</td>
+  <td>{n_author_non_devs}</td>
+  <td>{n_author_devs}</td>
+  <td>{n_non_author_devs}</td>
+</tr>
+""".strip()
+
+count_piece_bolded_row_template = """
+<tr>
+  <td rowspan="{n_rows}"><b>{row_name}</b></td>
+  <td><b>{value_name}</b></td>
+  <td><b>{n_authors}</b></td>
+  <td><b>{n_author_non_devs}</b></td>
+  <td><b>{n_author_devs}</b></td>
+  <td><b>{n_non_author_devs}</b></td>
+</tr>
+""".strip()
+
+count_piece_subsequent_row_template = """
+<tr>
+  <td>{value_name}</td>
+  <td>{n_authors}</td>
+  <td>{n_author_non_devs}</td>
+  <td>{n_author_devs}</td>
+  <td>{n_non_author_devs}</td>
+</tr>
+""".strip()
+
+# Iter over stats portions (and total)
+count_portions_html = []
+for key, count_table in control_var_tables.items():
+    count_portion_html = []
+    for i, control_value in enumerate(count_table["Subset"].unique()):
+        if i == 0:
+            if control_value == "":  # empty control value is for the "Overall" table
+                count_portion_html.append(
+                    count_piece_bolded_row_template.format(
+                        n_rows=len(count_table),
+                        row_name=key,
+                        value_name=control_value,
+                        n_authors=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "Total Authors",
+                        ].iloc[0],
+                        n_author_non_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "NCC-A",
+                        ].iloc[0],
+                        n_author_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "CC-A",
+                        ].iloc[0],
+                        n_non_author_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "CC-NA",
+                        ].iloc[0],
+                    )
+                )
+            else:
+                count_portion_html.append(
+                    count_piece_inital_row_template.format(
+                        n_rows=len(count_table),
+                        row_name=key,
+                        value_name=control_value,
+                        n_authors=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "Total Authors",
+                        ].iloc[0],
+                        n_author_non_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "NCC-A",
+                        ].iloc[0],
+                        n_author_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "CC-A",
+                        ].iloc[0],
+                        n_non_author_devs=count_table.loc[
+                            count_table["Subset"] == control_value,
+                            "CC-NA",
+                        ].iloc[0],
+                    )
+                )
+        else:
+            count_portion_html.append(
+                count_piece_subsequent_row_template.format(
+                    value_name=control_value,
+                    n_authors=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "Total Authors",
+                    ].iloc[0],
+                    n_author_non_devs=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "NCC-A",
+                    ].iloc[0],
+                    n_author_devs=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "CC-A",
+                    ].iloc[0],
+                    n_non_author_devs=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "CC-NA",
+                    ].iloc[0],
+                )
+            )
+
+    count_portions_html.append("\n".join(count_portion_html))
+
+# Concat and wrap in table
+count_table_html = f"""
+<table>
+  <tr>
+    <th><b>Control</b></th>
+    <th><b>Subset</b></th>
+    <th><b>Total Authors</b></th>
+    <th><b>NCC-A</b></th>
+    <th><b>CC-A</b></th>
+    <th><b>CC-NA</b></th>
+  </tr>
+  {" ".join(count_portions_html)}
+</table>
+""".strip()
+
+IPython.display.HTML(count_table_html)
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{python}
+# LaTeX templates
+count_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\cellcolor{{gray!10}}{value_name} & \\cellcolor{{gray!10}}{n_authors} & \\cellcolor{{gray!10}}{n_author_non_devs} & \\cellcolor{{gray!10}}{n_author_devs} & \\cellcolor{{gray!10}}{n_non_author_devs} \\\\"""
+
+count_piece_bolded_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\textbf{{{value_name}}} & \\textbf{{{n_authors}}} & \\textbf{{{n_author_non_devs}}} & \\textbf{{{n_author_devs}}} & \\textbf{{{n_non_author_devs}}} \\\\"""
+
+count_piece_subsequent_row_template = """    & {color_cmd}{value_name} & {color_cmd}{n_authors} & {color_cmd}{n_author_non_devs} & {color_cmd}{n_author_devs} & {color_cmd}{n_non_author_devs} \\\\"""
+
+# Table header and footer templates
+table_header = """\\begin{table}
+\\centering
+\\small
+\\caption{Mean and Standard Deviation of Non-Code-Contributing Authors (NCC-A), Code-Contributing Authors (CC-A), and Code-Contributing Non-Authors (CC-NA) Research Team Members by Domain, Article Type, and Open Access Status. Only includes research teams from article-repository pairs with repositories that have programming language files, a most recent commit no later than 90 days after publication, and excludes research teams in the top $3\%$ of total author sizes.}
+\\label{tbl-team-composition-counts}
+\\begin{tabular}{llrrrr}
+\\toprule\\textbf{Control} & \\textbf{Subset} & \\textbf{Total Authors} & \\textbf{NCC-A} & \\textbf{CC-A} & \\textbf{CC-NA} \\\\
+\\midrule"""
+
+table_footer = """\\bottomrule
+\\end{tabular}
+\\end{table}"""
+
+# Generate table content
+count_portions_latex = []
+for key, count_table in control_var_tables.items():
+    count_portion_latex = []
+    
+    # Get unique control values
+    control_values = count_table["Subset"].unique()
+
+    # Handle overall
+    if key == "Overall":
+        count_portion_latex.append(
+            count_piece_bolded_row_template.format(
+                n_rows=1,
+                row_name=key,
+                value_name="",
+                n_authors=total_auths,
+                n_author_non_devs=total_auth_non_devs,
+                n_author_devs=total_auth_devs,
+                n_non_author_devs=total_non_auth_devs,
+            ).rstrip()
+        )
+    
+    else:
+        # First row with category label
+        first_value = control_values[0]
+        count_portion_latex.append(
+            count_piece_initial_row_template.format(
+                n_rows=len(control_values),
+                row_name=key,
+                value_name=first_value,
+                n_authors=count_table.loc[
+                    count_table["Subset"] == first_value,
+                    "Total Authors",
+                ].iloc[0],
+                n_author_non_devs=count_table.loc[
+                    count_table["Subset"] == first_value,
+                    "NCC-A",
+                ].iloc[0],
+                n_author_devs=count_table.loc[
+                    count_table["Subset"] == first_value,
+                    "CC-A",
+                ].iloc[0],
+                n_non_author_devs=count_table.loc[
+                    count_table["Subset"] == first_value,
+                    "CC-NA",
+                ].iloc[0],
+            ).rstrip()
+        )
+        
+        # Subsequent rows with alternating colors
+        for i, control_value in enumerate(control_values[1:]):
+            color_cmd = "\\cellcolor{gray!10}" if i % 2 == 1 else ""
+            count_portion_latex.append(
+                count_piece_subsequent_row_template.format(
+                    color_cmd=color_cmd,
+                    value_name=control_value,
+                    n_authors=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "Total Authors",
+                    ].iloc[0],
+                    n_author_non_devs=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "NCC-A",
+                    ].iloc[0],
+                    n_author_devs=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "CC-A",
+                    ].iloc[0],
+                    n_non_author_devs=count_table.loc[
+                        count_table["Subset"] == control_value,
+                        "CC-NA",
+                    ].iloc[0],
+                ).rstrip()
+            )
+
+    section_latex = "\n".join(count_portion_latex)
+    
+    if key != list(control_var_tables.keys())[-1]:  # Don't add midrule after last section
+        section_latex += "\\midrule"
+    count_portions_latex.append(section_latex)
+
+# Combine all parts
+count_table_latex = f"""{table_header}
+{"\n".join(count_portions_latex)}
+{table_footer}"""
+
+IPython.display.Latex(count_table_latex)
+```
+:::
+
+## Additional Analysis of Code-Contributing Non-Authors {#sec-appendix-additional-cc-na-analysis}
+
+### Sample Construction and Labeling
+
+To better understand the nature and extent of contributions made by code-contributing non-authors in our dataset, we conducted a detailed analysis using a random sample of 200 individuals from our filtered dataset used in other analyses (@tbl-team-comp-no-push-after-pub-counts). Our analysis combined qualitative labeling of contribution types with quantitative analysis of commit activity, additions, and deletions made by these contributors to their respective article-repository pairs.
+
+#### Annotation Process
+
+Two independent annotators labeled each of the 200 code-contributing non-authors across three dimensions after completing two rounds of trial labeling on 20 cases to establish agreement. The final labeling criteria were:
+
+**Contribution Type**:
+
+- _"docs"_: Contributors who only modified documentation files (README, LICENSE, etc.) or made changes limited to code comments.
+- _"code"_: Contributors who modified actual code files (.py, .R, .js, etc.) with substantive changes or modified code support files (requirements.txt, pyproject.toml, package.json, etc.). Contributors who made code and documentation changes were labeled "code."
+- _"other"_: Contributors whose changes did not fit the above categories, including those who committed to upstream forks or merged code without authoring it.
+
+**Author Matching Assessment**:
+
+- _"yes"_: Contributors who should have been matched to an author (missed classification).
+- _"no"_: Contributors correctly classified as non-authors.
+- _"unclear"_: Cases with insufficient information for determination.
+
+**Bot Account Detection**:
+
+- _"yes"_: Automated accounts (GitHub Actions, Dependabot, etc.).
+- _"no"_: Human users.
+
+After establishing near perfect agreement for contribution type (κ=0.89), and perfect agreement for author matching assessment and bot account detection (κ=1.0), each annotator independently labeled 90 contributors— the final sample of 200 created by combining both sets plus the 20 cases used for criteria development.
+
+#### Quantitative Metrics
+
+For each code-contributing non-author, we collected commit activity data using the GitHub API contributor stats endpoint:
+
+- **Number of Commits**: The total number of commits made by the code contributor to the article-repository pair.
+- **Number of Additions**: The total number of lines of code added by the code contributor to the article-repository pair.
+- **Number of Deletions**: The total number of lines of code deleted by the code contributor to the article-repository pair.
+- **Number of Total Repository Commits**: The total number of commits made to the article-repository pair, regardless of code contributor.
+- **Number of Total Repository Additions**: The number of lines of code added to the article-repository pair, regardless of code contributor.
+- **Number of Total Repository Deletions**: The total number of lines of code deleted from the article-repository pair, regardless of code contributor.
+
+We additionally calculated the absolute change for each code contributor as the sum of additions and deletions, which provides a measure of the total impact of their contributions. Further, we normalized these metrics by the total number of commits, additions, deletions, and absolute changes made to the article-repository pair, regardless of code contributor. This normalization allows us to compare the relative contribution of each code-contributing non-author to the overall amount of changes to the repository.
+
+### Results
+
+```{python}
+initial_set = pd.read_csv(EXTRA_DATA_PATH / "cc-na-initial-resolved-set.csv")
+eva_set = pd.read_csv(EXTRA_DATA_PATH / "cc-na-eva.csv")
+nic_set = pd.read_csv(EXTRA_DATA_PATH / "cc-na-nic.csv")
+nic_set["is_bot_account"] = "no"
+nic_set = nic_set.drop(
+    columns=[col for col in nic_set.columns if col.startswith("Unnamed:")]
+)
+
+# Combine the datasets
+combined_set = pd.concat(
+    [initial_set, eva_set, nic_set], ignore_index=True
+).reset_index(drop=True)
+```
+
+We find that \~39% (n=78) of code-contributing non-authors were correctly classified as non-authors, \~30.5% (n=61) were unclear due to insufficient profile information, and \~30.5% (n=61) appeared to be missed classifications that should have been matched to authors. Only two accounts (\~1%) were identified as bot accounts.
+
+When broken out by contribution type, we find that:
+
+- _"true non-authors" (n=78)_: 59 contributed code, 13 contributed documentation, and 4 contributed some other type of change
+- _"missed classifications" (n=61)_: 49 contributed code, 12 contributed documentation, and 0 contributed some other type of change
+- _"unclear" (n=61)_: 50 contributed code, 8 contributed documentation, and 3 contributed some other type of change
+
+@tbl-true-cc-na-commit-stats and @tbl-unclear-cc-na-commit-stats present commit statistics for true non-authors and unclear cases, respectively. Among true non-authors making code contributions, the top quartile (75th percentile and above) contributed \~10.7% of total repository commits and \~14.4% of absolute changes (additions + deletions). The unclear cases showed substantially higher contribution levels. Code contributors in this group comprised \~50.5% of total repository commits and \~41.7% of repository absolute changes, even at the 25th percentile.
+
+```{python}
+def _get_stats_for_author_cls(
+    data: pd.DataFrame, author_cls: str | list[str], repo_owner_filter: str = "all"
+) -> pd.DataFrame:
+    # Get repo owner from repository_url
+    data["repo_owner"] = data["repository_url"].str.split("/").str[3].str.lower()
+    # Get contributor name from developer_account_url
+    data["contributor_name"] = (
+        data["developer_account_url"].str.split("/").str[3].str.lower()
+    )
+
+    # Handle ignore_repo_owners
+    if repo_owner_filter == "none":
+        # Filter out rows where repo_owner == contributor_name
+        data = data.loc[data["repo_owner"] != data["contributor_name"]].copy()
+    elif repo_owner_filter == "only":
+        # Filter to only rows where repo_owner == contributor_name
+        data = data.loc[data["repo_owner"] == data["contributor_name"]].copy()
+    # If repo_owner_filter is "all", do nothing
+
+    # Filter to author cls
+    if isinstance(author_cls, str):
+        # If author_cls is a string, filter to that single class
+        data = data.loc[data["is_actually_author"] == author_cls].copy()
+    elif isinstance(author_cls, list):
+        # If author_cls is a list, filter to those classes
+        data = data.loc[data["is_actually_author"].isin(author_cls)].copy()
+
+    # Scope down to just is_actually_author == author_cls
+    # And which contribution type is "code"
+    # Take the quantiles, mean, and std of their commits (n_commits)
+    # divided by total commits (total_repo_commits)
+    commit_stats = (
+        data.loc[
+            (data["is_bot_account"] == "no")
+            & (data["contrib_type"] == "code")
+        ]
+        .dropna(subset=["n_commits", "total_repo_commits"])
+        .apply(lambda x: x["n_commits"] / x["total_repo_commits"], axis=1)
+        .describe()
+        .round(3)
+    )
+
+    # Same thing but for n_additions and total_repo_additions
+    addition_stats = (
+        data.loc[
+            (data["is_bot_account"] == "no")
+            & (data["contrib_type"] == "code")
+            & (data["total_repo_additions"] > 0)
+        ]
+        .dropna(subset=["n_additions", "total_repo_additions"])
+        .apply(lambda x: x["n_additions"] / x["total_repo_additions"], axis=1)
+        .describe()
+        .round(3)
+    )
+
+    # Same thing but with n_deletions and total_repo_deletions
+    deletion_stats = (
+        data.loc[
+            (data["is_bot_account"] == "no")
+            & (data["contrib_type"] == "code")
+            & (data["total_repo_deletions"] > 0)
+        ]
+        .dropna(subset=["n_deletions", "total_repo_deletions"])
+        .apply(lambda x: x["n_deletions"] / x["total_repo_deletions"], axis=1)
+        .describe()
+        .round(3)
+    )
+
+    # Combine n_additions and n_deletions into a single column
+    # Combined total additions and deletions into a single column
+    data["n_additions_deletions"] = data["n_additions"].fillna(0) + data[
+        "n_deletions"
+    ].fillna(0)
+    data["total_repo_additions_deletions"] = data["total_repo_additions"].fillna(
+        0
+    ) + data["total_repo_deletions"].fillna(0)
+    # Calculate the ratio of additions and deletions to total repo additions and deletions
+    abs_stats = (
+        data.loc[
+            (data["is_bot_account"] == "no")
+            & (data["contrib_type"] == "code")
+            & (data["total_repo_additions_deletions"] > 0)
+        ]
+        .dropna(subset=["n_additions_deletions", "total_repo_additions_deletions"])
+        .apply(
+            lambda x: x["n_additions_deletions"] / x["total_repo_additions_deletions"],
+            axis=1,
+        )
+        .describe()
+        .round(3)
+    )
+
+    # Create frame
+    stats_frame = pd.DataFrame(
+        {
+            "commit_stats": commit_stats,
+            "addition_stats": addition_stats,
+            "deletion_stats": deletion_stats,
+            "abs_stats": abs_stats,
+        }
+    ).T
+
+    # Remove "count" from columns
+    stats_frame = stats_frame.drop(columns=["count"])
+
+    return stats_frame
+```
+
+```{python}
+#| label: tbl-true-cc-na-commit-stats
+#| tbl-cap: "Commit statistics for code-contributing non-authors labeled as true non-authors. Statistics are calculated as the proportion of commits, additions, deletions, and absolute changes made by the code-contributing non-author to the total commits, additions, deletions, and absolute changes made to the article-repository pair, regardless of code-contributor."
+
+_get_stats_for_author_cls(
+    data=combined_set,
+    author_cls="no",
+    repo_owner_filter="all",
+)
+```
+
+```{python}
+#| label: tbl-unclear-cc-na-commit-stats
+#| tbl-cap: "Commit statistics for code-contributing non-authors labeled as unclear. Statistics are calculated as the proportion of commits, additions, deletions, and absolute changes made by the code-contributing non-author to the total commits, additions, deletions, and absolute changes made to the article-repository pair, regardless of code-contributor."
+
+_get_stats_for_author_cls(
+    data=combined_set,
+    author_cls="unclear",
+    repo_owner_filter="all",
+)
+```
+
+We observed a notable pattern where very few true non-authors (n=4) were repository owners, while \~49.2% of unclear cases (n=30) owned the repositories they contributed to. This suggests that many unclear contributors were likely primary code authors who could not be matched due to limited profile information. When excluding repository owners from the unclear group (@tbl-unclear-cc-na-commit-stats-no-repo-owner), the median contribution drops to \~34.6% of total commits and \~12.7% of absolute changes, though this still represents substantial technical involvement.
+
+```{python}
+#| label: tbl-unclear-cc-na-commit-stats-no-repo-owner
+#| tbl-cap: "Commit statistics for code-contributing non-authors labeled as unclear, excluding repository owners. Statistics are calculated as the proportion of commits, additions, deletions, and absolute changes made by the code-contributing non-author to the total commits, additions, deletions, and absolute changes made to the article-repository pair, regardless of code-contributor."
+
+_get_stats_for_author_cls(
+    data=combined_set,
+    author_cls="unclear",
+    repo_owner_filter="none",
+)
+```
+
+Our analysis provides evidence that code-contributing non-authors represent a heterogeneous group with varying contribution levels. While defining "substantial" contribution worthy of authorship remains challenging, our findings reveal a clear mix of legitimate non-authors and potentially missed classifications, with both groups often contributing meaningful portions of repository commits and code changes.
+
+Our sample size of 200 limits generalizability to the full population of code-contributing non-authors. Additionally, the manual annotation process introduces potential subjectivity despite our established criteria, and our reliance on publicly available GitHub profiles may systematically underestimate contributions from developers with minimal profile information.
+
+### Qualitative Error Analysis of Missed Classifications {#sec-appendix-cc-na-error-analysis}
+
+To better understand why certain code-contributing non-authors were missed classifications, we conducted a qualitative error analysis of the 61 contributors labeled as such. We identified several common themes:
+
+1. **Limited Information from Text Alone**: The original dataset for model training and evaluation was constructed using only text-based features from author names and developer information. However, for this extended examination, annotators utilized the full code-contributor profile, including linked websites or linked ORCID profiles. This was done because we wanted to understand the nature of missed classifications (with more time and information to make a classification) rather than strictly replicating the model's text-only approach. From text alone, many of these missed classifications would have been very challenging to identify. This highlights a limitation in our current model, and a potential area for future work, such as incorporating details from linked websites or other contextual information to improve matching performance.
+2. **Name Variations and Cultural Differences**: The model performed better with Anglo-Saxon names, while names from other cultures were more likely to be missed. This suggests possible bias in the training data and a clear area for future work.
+3. **Additional Unrelated Text in Names**: When usernames or display names contained longer phrases or unrelated words, the model tended to classify them as no-match, even if there were strong indicators of a match. For example, a username such as "awesome_computational_biologist_john_d" paired with an author name "John Doe" might be missed due to the additional text in the username.
+4. **Significant Differences Between Username and Author Name**: The model struggled when there were substantial differences between the username and author name, such as when an individual provides a chosen name in their GitHub profile that differed significantly from their authorship name. Most commonly this occurred when an individual used a chosen "English" name in their GitHub profile that was very different from their authorship name.
+
+These themes highlight areas for potential improvement in the model, such as incorporating more diverse training data and exploring additional features that could capture cultural name variations and contextual information.
+
+## Article Citation Linear Model Results
+
+::: {.content-visible when-format="html"}
+```{python}
+#| label: tbl-article-composition-overall
+#| tbl-cap: "Article citations by code contributorship of the research team. Generalized linear model fit with negative binomial distribution and log link function."
+
+article_cited_by_count_models["no-control"].summary()
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{python}
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    article_cited_by_count_models["no-control"],
+    tbl_cap=(
+        "Article citations by code contributorship of the research team. "
+        "Generalized linear model fit with negative binomial distribution "
+        "and log link function. Significant p-values are indicated with asterisks: "
+        "p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)"
+    ),
+    tbl_label="tbl-article-composition-overall",
+)
+
+IPython.display.Latex(model_results_latex)
+```
+:::
+
+::: {.content-visible when-format="html"}
+```{python}
+#| label: tbl-article-composition-oa-status
+#| tbl-cap: "Article citations by code contributorship of the research team controlled by open access status. Generalized linear model fit with negative binomial distribution and log link function."
+
+article_cited_by_count_models["Is Open Access"].summary()
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{python}
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    article_cited_by_count_models["Is Open Access"],
+    tbl_cap=(
+        "Article citations by code contributorship of the research team "
+        "controlled by open access status. Generalized linear model fit "
+        "with negative binomial distribution and log link function. "
+        "Significant p-values are indicated with asterisks: "
+        "p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)"
+    ),
+    tbl_label="tbl-article-composition-oa-status",
+)
+
+IPython.display.Latex(model_results_latex)
+```
+:::
+
+::: {.content-visible when-format="html"}
+```{python}
+#| label: tbl-article-composition-domain
+#| tbl-cap: "Article citations by code contributorship of the research team controlled by domain. Generalized linear model fit with negative binomial distribution and log link function."
+
+article_cited_by_count_models["Domain"].summary()
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{python}
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    article_cited_by_count_models["Domain"],
+    tbl_cap=(
+        "Article citations by code contributorship of the research team "
+        "controlled by domain. "
+        "Generalized linear model fit with negative binomial distribution "
+        "and log link function. Significant p-values are indicated with asterisks: "
+        "p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)"
+    ),
+    tbl_label="tbl-article-composition-domain",
+)
+
+IPython.display.Latex(model_results_latex)
+```
+:::
+
+::: {.content-visible when-format="html"}
+```{python}
+#| label: tbl-article-composition-type
+#| tbl-cap: "Article citations by code contributorship of the research team controlled by article type. Generalized linear model fit with negative binomial distribution and log link function."
+
+article_cited_by_count_models["Article Type"].summary()
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{python}
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    article_cited_by_count_models["Article Type"],
+    tbl_cap=(
+        "Article citations by code contributorship of the research team "
+        "controlled by article type. "
+        "Generalized linear model fit with negative binomial distribution "
+        "and log link function. Significant p-values are indicated with asterisks: "
+        "p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)"
+    ),
+    tbl_label="tbl-article-composition-type",
+)
+
+# Slightly scale down S12 to ensure it fits on the page.
+model_results_latex = model_results_latex.replace(
+    "\\begin{tabular}{l*{6}{r}}",
+    "\\resizebox{0.95\\textwidth}{!}{%\n\\begin{tabular}{l*{6}{r}}",
+    1,
+).replace(
+    "\\end{tabular}",
+    "\\end{tabular}\n}",
+    1,
+)
+
+IPython.display.Latex(model_results_latex)
+```
+:::
+
+## Post-Hoc Tests for Coding vs Non-Coding Authors by Position
+
+::: {.content-visible when-format="html"}
+```{python}
+#| label: tbl-post-hoc-tests-on-author-positions
+#| tbl-cap: "Counts of Code-Contributing Authors ('Coding') and Total Authors by Position and Bonferroni Corrected p-values from Post-Hoc Binomial Tests. Significant p-values are indicated with asterisks: p < 0.05 (`*`), p < 0.01 (`**`), p < 0.001 (`***`)."
+
+def create_multirow_html_table(
+    dataframes_dict: dict[str, pd.DataFrame],
+    split_var: str,
+):
+    # HTML templates for rows
+    initial_row_for_control_template = """
+    <tr>
+        <td rowspan="{n_control_rows}"><b>{control}</b></td>
+        <td rowspan="{n_subset_rows}"><b>{subset}</b></td>
+        <td>{split_val}</td>
+        <td>{coding}</td>
+        <td>{total}</td>
+        <td>{p_value}</td>
+    </tr>
+    """.strip()
+
+    initial_row_for_subset_template = """
+    <tr>
+        <td rowspan="{n_subset_rows}"><b>{subset}</b></td>
+        <td>{split_val}</td>
+        <td>{coding}</td>
+        <td>{total}</td>
+        <td>{p_value}</td>
+    </tr>
+    """.strip()
+
+    subsequent_row_template = """
+    <tr>
+        <td>{split_val}</td>
+        <td>{coding}</td>
+        <td>{total}</td>
+        <td>{p_value}</td>
+    </tr>
+    """.strip()
+
+    # Generate table rows
+    all_rows = []
+    
+    for control, df in dataframes_dict.items():
+        rows_for_control = []
+        # Group by subset to handle the spans
+        for subset_name, subset_group in df.groupby("Subset"):
+            subset_rows = []
+            for idx, row in subset_group.iterrows():
+                # Format p-value
+                p_value = f"{row['p']:.3f}" if row['p'] >= 0.001 else "0.000"
+                if row["p"] < 0.001:
+                    p_value = f"{p_value}***"
+                elif row["p"] < 0.01:
+                    p_value = f"{p_value}**"
+                elif row["p"] < 0.05:
+                    p_value = f"{p_value}*"
+                
+                row_data = {
+                    "control": control,
+                    "subset": subset_name,
+                    "split_val": row[split_var],
+                    "coding": row["Coding"],
+                    "total": row["Total"],
+                    "p_value": p_value,
+                    "n_subset_rows": len(subset_group),
+                    "n_control_rows": len(df),
+                }
+                
+                if len(rows_for_control) == 0 and len(subset_rows) == 0:
+                    subset_rows.append(initial_row_for_control_template.format(**row_data))
+                elif len(subset_rows) == 0:
+                    subset_rows.append(initial_row_for_subset_template.format(**row_data))
+                else:
+                    subset_rows.append(subsequent_row_template.format(**row_data))
+            
+            rows_for_control.extend(subset_rows)
+
+        all_rows.extend(rows_for_control)
+
+    # Create the final HTML table
+    table_html = f"""
+    <table>
+        <tr>
+            <th><b>Control</b></th>
+            <th><b>Subset</b></th>
+            <th><b>{split_var.replace('_', ' ').title()}</b></th>
+            <th><b>Coding</b></th>
+            <th><b>Total</b></th>
+            <th><b>p</b></th>
+        </tr>
+        {'\n'.join(all_rows)}
+    </table>
+    """.strip()
+    
+    return table_html
+
+IPython.display.HTML(
+    create_multirow_html_table(
+        {
+            "Domain": domain_code_char,
+            "Article Type": article_type_code_char,
+            "Open Access Status": open_access_status_code_char,
+            "Overall": overall_code_char,
+        },
+        split_var="Position",
+    )
+)
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{python}
+def create_multirow_latex_table(
+    dataframes_dict: dict[str, pd.DataFrame],
+    caption: str,
+    label: str,
+    split_var: str,
+):
+    # LaTeX templates for rows
+    initial_row_for_control_template = """    \\multirow{{{n_control_rows}}}{{*}}{{\\textbf{{{control}}}}} & \\multirow{{{n_subset_rows}}}{{*}}{{\\textbf{{{subset}}}}} & {color}{split_val} & {color}{coding} & {color}{total} & {color}{p_value} \\\\"""
+
+    initial_row_for_subset_template = """    & \\multirow{{{n_subset_rows}}}{{*}}{{\\textbf{{{subset}}}}} & {color}{split_val} & {color}{coding} & {color}{total} & {color}{p_value} \\\\"""
+
+    subsequent_row_template = """    & & {color}{split_val} & {color}{coding} & {color}{total} & {color}{p_value} \\\\"""
+
+    # Table header and footer templates
+    table_header = """\\begin{table}
+\\centering
+\\small
+\\caption{%s}
+\\label{%s}
+\\begin{tabular}{llllrr}
+\\toprule
+\\textbf{Control} & \\textbf{Subset} & \\textbf{%s} & \\textbf{Coding} & \\textbf{Total} & \\textbf{p} \\\\
+\\midrule""" % (caption, label, split_var.replace('_', ' ').title())
+
+    table_footer = """\\bottomrule
+\\end{tabular}
+\\end{table}"""
+
+    # Generate table rows
+    all_rows = []
+    overall_row_count = 0  # Counter for all rows to handle coloring
+    
+    for control, df in dataframes_dict.items():
+        rows_for_control = []
+        # Group by subset to handle the spans
+        for subset_name, subset_group in df.groupby("Subset"):
+            subset_rows = []
+            for idx, row in subset_group.iterrows():
+                # Format p-value with significance stars
+                p_value = f"{row['p']:.3f}" if row['p'] >= 0.001 else "0.000"
+                if row["p"] < 0.001:
+                    p_value = f"{p_value}$^{{***}}$"
+                elif row["p"] < 0.01:
+                    p_value = f"{p_value}$^{{**}}$"
+                elif row["p"] < 0.05:
+                    p_value = f"{p_value}$^{{*}}$"
+                
+                # Add cell color for odd-numbered rows
+                color = "\\cellcolor{gray!10}" if overall_row_count % 2 == 1 else ""
+                
+                row_data = {
+                    "control": control,
+                    "subset": subset_name,
+                    "split_val": row[split_var],
+                    "coding": row["Coding"],
+                    "total": row["Total"],
+                    "p_value": p_value,
+                    "n_subset_rows": len(subset_group),
+                    "n_control_rows": len(df),
+                    "color": color
+                }
+                
+                if len(rows_for_control) == 0 and len(subset_rows) == 0:
+                    subset_rows.append(initial_row_for_control_template.format(**row_data))
+                elif len(subset_rows) == 0:
+                    subset_rows.append(initial_row_for_subset_template.format(**row_data))
+                else:
+                    subset_rows.append(subsequent_row_template.format(**row_data))
+                
+                overall_row_count += 1
+            
+            rows_for_control.extend(subset_rows)
+            
+        # Add midrule between controls (except after the last control)
+        if control != list(dataframes_dict.keys())[-1]:
+            rows_for_control.append("    \\midrule")
+            
+        all_rows.extend(rows_for_control)
+
+    # Combine all parts
+    latex_table = f"""{table_header}
+{chr(10).join(all_rows)}
+{table_footer}"""
+    
+    return latex_table
+
+IPython.display.Latex(
+    create_multirow_latex_table(
+        {
+            "Domain": domain_code_char,
+            "Article Type": article_type_code_char,
+            "Open Access Status": open_access_status_code_char,
+            "Overall": overall_code_char,
+        },
+        caption="Counts of Code-Contributing Authors ('Coding') and Total Authors by Position and Bonferroni Corrected p-values from Post-Hoc Binomial Tests. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***).",
+        label="tbl-post-hoc-tests-on-author-positions",
+        split_var="Position",
+    )
+)
+```
+:::
+
+Counts of authors in @tbl-post-hoc-tests-on-author-positions may differ slightly from counts in @tbl-team-comp-no-push-after-pub-counts. @tbl-team-comp-no-push-after-pub-counts counts unique authors, while @tbl-post-hoc-tests-on-author-positions counts unique author-document pairs (i.e., the same author may appear in multiple documents).
+
+## Post-Hoc Tests for Coding vs Non-Coding Authors by Corresponding Status
+
+::: {.content-visible when-format="html"}
+```{python}
+#| label: tbl-post-hoc-tests-on-corresponding-status
+#| tbl-cap: "Counts of Code-Contributing Authors ('Coding') and Total Authors by Corresponding Status and Bonferroni Corrected p-values from Post-Hoc Binomial Tests. Significant p-values are indicated with asterisks: p < 0.05 (`*`), p < 0.01 (`**`), p < 0.001 (`***`)."
+
+IPython.display.HTML(
+    create_multirow_html_table(
+        {
+            "Domain": domain_code_corresponding,
+            "Article Type": article_type_code_corresponding,
+            "Open Access Status": open_access_status_code_corresponding,
+            "Overall": overall_code_corresponding,
+        },
+        split_var="Is Corresponding",
+    )
+)
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{python}
+IPython.display.Latex(
+    create_multirow_latex_table(
+        {
+            "Domain": domain_code_corresponding,
+            "Article Type": article_type_code_corresponding,
+            "Open Access Status": open_access_status_code_corresponding,
+            "Overall": overall_code_corresponding,
+        },
+        caption="Counts of Code-Contributing Authors ('Coding') and Total Authors by Corresponding Status and Bonferroni Corrected p-values from Post-Hoc Binomial Tests. Significant p-values are indicated with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***).",
+        label="tbl-post-hoc-tests-on-corresponding-status",
+        split_var="Is Corresponding",
+    )
+)
+```
+:::
+
+Counts of authors in @tbl-post-hoc-tests-on-corresponding-status may differ slightly from counts in @tbl-team-comp-no-push-after-pub-counts. @tbl-team-comp-no-push-after-pub-counts counts unique authors, while @tbl-post-hoc-tests-on-corresponding-status counts unique author-document pairs (i.e., the same author may appear in multiple documents).
+
+## Filtered Dataset Description for h-Index Analysis
+
+```{python}
+def _get_counts_by_column_for_h_index_data(
+    df: pd.DataFrame,
+    column_name: str,
+) -> list[dict[str, int]]:
+    counts = []
+    for value in df[column_name].unique():
+        subset = df.loc[df[column_name] == value]
+
+        # Append counts
+        counts.append({
+            column_name: value,
+            "n_authors": subset["researcher_id"].nunique(),
+            "n_any_coding": int(subset["any_coding"].sum()),
+            "n_majority_coding": int(subset["majority_coding"].sum()),
+            "n_always_coding": int(subset["always_coding"].sum()),
+        })
+
+    return counts
+
+h_index_domain_stats = _get_counts_by_column_for_h_index_data(
+    researchers_w_3_docs_and_coded_agg,
+    "common_domain",
+)
+h_index_article_type_stats = _get_counts_by_column_for_h_index_data(
+    researchers_w_3_docs_and_coded_agg,
+    "common_article_type",
+)
+h_index_author_position_stats = _get_counts_by_column_for_h_index_data(
+    researchers_w_3_docs_and_coded_agg,
+    "common_author_position",
+)
+
+h_index_total_authors = researchers_w_3_docs_and_coded_agg["researcher_id"].nunique()
+h_index_n_any_coding = int(researchers_w_3_docs_and_coded_agg["any_coding"].sum())
+h_index_n_majority_coding = int(researchers_w_3_docs_and_coded_agg["majority_coding"].sum())
+h_index_n_always_coding = int(researchers_w_3_docs_and_coded_agg["always_coding"].sum())
+```
+
+::: {.content-visible when-format="html"}
+```{python}
+#| label: tbl-h-index-counts
+#| tbl-cap: "Counts of Total Authors, n Any Coding Authors, n Majority Coding Authors, and n Always Coding Authors by Common Domain, Document Type, and Author Position. Authors are only included if they have three or more publications within our dataset and are associated with no more than three developer accounts, with each association having a predicted model confidence of at least 97%."
+
+# Construct multi-row span HTML table
+# Columns should be: "n_authors", "n_any_coding", "n_majority_coding", "n_always_coding"
+# Rows should be:
+# "By Common Domain", "By Common Document Type", "By Common Author Position" and "Total"
+
+# HTML templates
+stats_piece_inital_row_template = """
+<tr>
+<td rowspan="{n_rows}">{row_name}</td>
+<td>{value_name}</td>
+<td>{n_authors}</td>
+<td>{n_any_coding}</td>
+<td>{n_majority_coding}</td>
+<td>{n_always_coding}</td>
+</tr>
+""".strip()
+
+stats_piece_subsequent_row_template = """
+<tr>
+<td>{value_name}</td>
+<td>{n_authors}</td>
+<td>{n_any_coding}</td>
+<td>{n_majority_coding}</td>
+<td>{n_always_coding}</td>
+</tr>
+""".strip()
+
+# Iter over stats portions (and total)
+stats_portions_html = []
+for stats_portion, stats_name, value_key in [
+    (h_index_domain_stats, "<b>By Commmon Domain</b>", "common_domain"),
+    (h_index_article_type_stats, "<b>By Document Type</b>", "common_article_type"),
+    (h_index_author_position_stats, "<b>By Author Position</b>", "common_author_position"),
+    (
+        [
+            {
+                "empty": "",
+                "n_authors": f"<b>{h_index_total_authors}</b>",
+                "n_any_coding": f"<b>{h_index_n_any_coding}</b>",
+                "n_majority_coding": f"<b>{h_index_n_majority_coding}</b>",
+                "n_always_coding": f"<b>{h_index_n_always_coding}</b>",
+            }
+        ],
+        "<b>Total</b>",
+        "empty",
+    ),
+]:
+    # Order by value_key
+    if value_key != "empty":
+        stats_portion = sorted(
+            stats_portion, key=lambda x: x[value_key]
+        )
+
+    stats_portion_html = []
+    for i, stats_piece in enumerate(stats_portion):
+        if i == 0:
+            stats_portion_html.append(
+                stats_piece_inital_row_template.format(
+                    n_rows=len(stats_portion),
+                    row_name=stats_name,
+                    value_name=stats_piece[value_key].title(),
+                    n_authors=stats_piece["n_authors"],
+                    n_any_coding=stats_piece["n_any_coding"],
+                    n_majority_coding=stats_piece["n_majority_coding"],
+                    n_always_coding=stats_piece["n_always_coding"],
+                )
+            )
+        else:
+            stats_portion_html.append(
+                stats_piece_subsequent_row_template.format(
+                    value_name=stats_piece[value_key].title(),
+                    n_authors=stats_piece["n_authors"],
+                    n_any_coding=stats_piece["n_any_coding"],
+                    n_majority_coding=stats_piece["n_majority_coding"],
+                    n_always_coding=stats_piece["n_always_coding"],
+                )
+            )
+
+    stats_portions_html.append("\n".join(stats_portion_html))
+
+# Concat and wrap in table
+stats_table_html = f"""
+<table>
+<tr>
+    <th><b>Category</b></th>
+    <th><b>Subset</b></th>
+    <th><b>Total Authors</b></th>
+    <th><b>Any Code</b></th>
+    <th><b>Majority Code</b></th>
+    <th><b>Always Code</b></th>
+</tr>
+{" ".join(stats_portions_html)}
+</table>
+""".strip()
+
+IPython.display.HTML(stats_table_html)
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{python}
+# LaTeX templates
+stats_piece_initial_row_template = """    \\multirow{{{n_rows}}}{{*}}{{\\textbf{{{row_name}}}}} & \\cellcolor{{gray!10}}{value_name} & \\cellcolor{{gray!10}}{n_authors} & \\cellcolor{{gray!10}}{n_any_coding} & \\cellcolor{{gray!10}}{n_majority_coding} & \\cellcolor{{gray!10}}{n_always_coding} \\\\"""
+
+stats_piece_subsequent_row_template = """    & {value_name} & {n_authors} & {n_any_coding} & {n_majority_coding} & {n_always_coding} \\\\"""
+
+caption = (
+    "Counts of Total Authors, n Any Coding Authors, n Majority Coding Authors, "
+    "and n Always Coding Authors by Common Domain, Document Type, "
+    "and Author Position. Authors are only included if they have three "
+    "or more publications within our dataset and are associated with "
+    "no more than three developer accounts, with each association "
+    "having a predicted model confidence of at least 97\%."
+)
+label = "tbl-h-index-counts"
+
+# Table header and footer templates
+table_header_start = """\\begin{{table}}
+\\centering
+\\small
+\\caption{{{caption}}}
+\\label{{{label}}}
+\\resizebox{{\\textwidth}}{{!}}{{%
+\\begin{{tabular}}{{llrrrr}}
+\\toprule
+\\textbf{{Category}} & \\textbf{{Subset}} & \\textbf{{Total Authors}} & \\textbf{{Any Code}} & \\textbf{{Majority Code}} & \\textbf{{Always Code}} \\\\
+\\midrule""".format(
+    caption=caption,
+    label=label,
+)
+
+table_footer = """\\bottomrule
+\\end{tabular}
+}
+\\end{table}"""
+
+# Generate table content
+stats_portions_latex = []
+for stats_portion, stats_name, value_key in [
+    (h_index_domain_stats, "By Commmon Domain", "common_domain"),
+    (h_index_article_type_stats, "By Document Type", "common_article_type"),
+    (h_index_author_position_stats, "By Author Position", "common_author_position"),
+    (
+        [
+            {
+                "empty": "",
+                "n_authors": h_index_total_authors,
+                "n_any_coding": h_index_n_any_coding,
+                "n_majority_coding": h_index_n_majority_coding,
+                "n_always_coding": h_index_n_always_coding,
+            }
+        ],
+        "Total",
+        "empty",
+    ),
+]:
+    # Order by value_key
+    if value_key != "empty":
+        stats_portion = sorted(
+            stats_portion, key=lambda x: x[value_key]
+        )
+
+    stats_portion_latex = []
+    if stats_name == "Total":
+        stats_portion_latex.append(
+            f"    \\textbf{{Total}} & & \\textbf{{{stats_portion[0]['n_authors']}}} & \\textbf{{{stats_portion[0]['n_any_coding']}}} & \\textbf{{{stats_portion[0]['n_majority_coding']}}} & \\textbf{{{stats_portion[0]['n_always_coding']}}} \\\\"
+        )
+    else:
+        # Add the first row with the category label and colored cells
+        first_piece = stats_portion[0]
+        stats_portion_latex.append(
+            stats_piece_initial_row_template.format(
+                n_rows=len(stats_portion),
+                row_name=stats_name,
+                value_name=first_piece[value_key].title(),
+                n_authors=first_piece["n_authors"],
+                n_any_coding=first_piece["n_any_coding"],
+                n_majority_coding=first_piece["n_majority_coding"],
+                n_always_coding=first_piece["n_always_coding"],
+            ).rstrip()
+        )
+        
+        # Add subsequent rows with alternating colors
+        for i, stats_piece in enumerate(stats_portion[1:]):
+            color_cmd = "\\cellcolor{gray!10}" if i % 2 == 1 else ""
+            stats_portion_latex.append(
+                f"    & {color_cmd}{stats_piece[value_key]} & {color_cmd}{stats_piece['n_authors']} & {color_cmd}{stats_piece['n_any_coding']} & {color_cmd}{stats_piece['n_majority_coding']} & {color_cmd}{stats_piece['n_always_coding']} \\\\"
+            )
+
+    section_latex = "\n".join(stats_portion_latex)
+    if stats_name != "Total":
+        section_latex += "\\midrule"
+    stats_portions_latex.append(section_latex)
+
+# Combine all parts
+stats_table_latex = f"""{table_header_start}
+{"\n".join(stats_portions_latex)}
+{table_footer}"""
+
+IPython.display.Latex(stats_table_latex)
+```
+:::
+
+## h-Index Linear Model Results
+
+```{python}
+def compute_researcher_level_models(
+    y_col: str,
+    data: pd.DataFrame,
+    glm_family: sm.families.Family,
+) -> dict[str, sm.GLM]:
+    # Remove all "zero" y_col authors
+    no_outliers = data[data[y_col] > 0].copy()
+
+    # Remove outliers
+    no_outliers = no_outliers[
+        no_outliers[y_col].between(
+            no_outliers[y_col].quantile(0.03),
+            no_outliers[y_col].quantile(0.97),
+        )
+    ].copy()
+
+    # Replace names
+    no_outliers = no_outliers.rename(
+        columns={
+            "works_count": "Works Count",
+            "any_coding": "Any Coding",
+            "majority_coding": "Majority Coding",
+            "always_coding": "Always Coding",
+        }
+    )
+
+    # Replace other names (except const.) by removing `_` and title casing
+    no_outliers = no_outliers.rename(
+        columns=lambda x: x.replace("_", " ").title() if x not in ["const", y_col] else x
+    )
+
+    # Common features to use in all models
+    required_features = [
+        y_col,
+        "Works Count",
+        "Any Coding",
+        "Majority Coding",
+        "Always Coding",
+    ]
+
+    # Iter over different control variables and create models for each
+    models = {}
+    for control_var in [
+        "no-control",
+        "Common Author Position",
+        "Common Article Type",
+        "Common Domain",
+    ]:
+        if control_var != "no-control":
+            # Get control variable list
+            control_variables = [
+                col for col in no_outliers.columns if col.startswith(control_var)
+            ]
+
+            # Create control variable subset of the data
+            control_var_subset = no_outliers[required_features + control_variables].copy()
+
+            # Create interactions
+            for coding_status_col in ["Any Coding", "Majority Coding", "Always Coding"]:
+                for control_col in control_variables:
+                    control_var_subset[f"{coding_status_col} × {control_col}"] = (
+                        control_var_subset[coding_status_col]
+                        * control_var_subset[control_col]
+                    )
+        else:
+            control_var_subset = no_outliers[required_features].copy()
+
+        # Drop inf and nan
+        control_var_subset = control_var_subset.replace(
+            [float("inf"), -float("inf")], float("nan")
+        ).dropna()
+
+        # Create x and y
+        y = control_var_subset[y_col]
+        x = control_var_subset.drop(columns=[y_col])
+        x = sm.add_constant(x)
+
+        # Fit model
+        model = sm.GLM(y, x, family=glm_family).fit()
+        models[control_var] = model
+
+    return models
+
+# Create models for h_index
+author_h_index_models = compute_researcher_level_models(
+    "h_index",
+    researchers_w_3_docs_and_coded_agg_dummies,
+    glm_family=sm.families.Gaussian(sm.families.links.Log()),
+)
+```
+
+::: {.content-visible when-format="html"}
+```{python}
+#| label: tbl-researcher-coding-status-no-control
+#| tbl-cap: "Code-contributing authors h-index by coding status. Generalized linear model fit with Gaussian distribution and log link function."
+
+author_h_index_models["no-control"].summary()
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{python}
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    author_h_index_models["no-control"],
+    tbl_cap=(
+        "Code-contributing authors h-index by coding status. "
+        "Generalized linear model fit with Gaussian distribution "
+        "and log link function. Significant p-values are indicated "
+        "with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)."
+    ),
+    tbl_label="tbl-researcher-coding-status-no-control",
+)
+
+IPython.display.Latex(model_results_latex)
+```
+:::
+
+::: {.content-visible when-format="html"}
+```{python}
+#| label: tbl-researcher-coding-status-author-position
+#| tbl-cap: "Code-contributing authors h-index by coding status controlled by most freq. author position. Generalized linear model fit with Gaussian distribution and log link function."
+
+author_h_index_models["Common Author Position"].summary()
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{python}
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    author_h_index_models["Common Author Position"],
+    tbl_cap=(
+        "Code-contributing authors h-index by coding status "
+        "controlled by most freq. author position. "
+        "Generalized linear model fit with Gaussian distribution and log link function. "
+        "Significant p-values are indicated "
+        "with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)."
+    ),
+    tbl_label="tbl-researcher-coding-status-author-position",
+)
+
+# Slightly scale down S17 to ensure it fits on the page.
+model_results_latex = model_results_latex.replace(
+    "\\begin{tabular}{l*{6}{r}}",
+    "\\resizebox{0.95\\textwidth}{!}{%\n\\begin{tabular}{l*{6}{r}}",
+    1,
+).replace(
+    "\\end{tabular}",
+    "\\end{tabular}\n}",
+    1,
+)
+
+IPython.display.Latex(model_results_latex)
+```
+:::
+
+::: {.content-visible when-format="html"}
+```{python}
+#| label: tbl-researcher-coding-status-domain
+#| tbl-cap: "Code-contributing authors h-index by coding status controlled by most freq. domain. Generalized linear model fit with Gaussian distribution and log link function."
+
+author_h_index_models["Common Domain"].summary()
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{python}
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    author_h_index_models["Common Domain"],
+    tbl_cap=(
+        "Code-contributing authors h-index by coding status "
+        "controlled by most freq. domain. "
+        "Generalized linear model fit with Gaussian distribution and log link function. "
+        "Significant p-values are indicated "
+        "with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)."
+    ),
+    tbl_label="tbl-researcher-coding-status-domain",
+)
+
+# Slightly scale down S18 to ensure it fits on the page.
+model_results_latex = model_results_latex.replace(
+    "\\begin{tabular}{l*{6}{r}}",
+    "\\resizebox{0.95\\textwidth}{!}{%\n\\begin{tabular}{l*{6}{r}}",
+    1,
+).replace(
+    "\\end{tabular}",
+    "\\end{tabular}\n}",
+    1,
+)
+
+IPython.display.Latex(model_results_latex)
+```
+:::
+
+::: {.content-visible when-format="html"}
+```{python}
+#| label: tbl-researcher-coding-status-article-type
+#| tbl-cap: "Code-contributing authors h-index by coding status controlled by most freq. article type. Generalized linear model fit with Gaussian distribution and log link function."
+
+author_h_index_models["Common Article Type"].summary()
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{python}
+model_results_latex, model_results_df = convert_model_results_to_printable_pdf_ready(
+    author_h_index_models["Common Article Type"],
+    tbl_cap=(
+        "Code-contributing authors h-index by coding status "
+        "controlled by most freq. article type. "
+        "Generalized linear model fit with Gaussian distribution and log link function. "
+        "Significant p-values are indicated "
+        "with asterisks: p < 0.05 (*), p < 0.01 (**), p < 0.001 (***)."
+    ),
+    tbl_label="tbl-researcher-coding-status-article-type",
+)
+
+# Slightly scale down S19 to ensure it fits on the page.
+model_results_latex = model_results_latex.replace(
+    "\\begin{tabular}{l*{6}{r}}",
+    "\\resizebox{0.95\\textwidth}{!}{%\n\\begin{tabular}{l*{6}{r}}",
+    1,
+).replace(
+    "\\end{tabular}",
+    "\\end{tabular}\n}",
+    1,
+)
+
+IPython.display.Latex(model_results_latex)
+```
+:::
+
+## Study Differences from Preregistration
+
+### Analysis of Article Field Weighted Citation Impact (FWCI) and Code Contribution
+
+```{python}
+count_docs_missing_fwci = len(merged_doc_repo_links_documents.loc[
+    merged_doc_repo_links_documents["fwci"].isnull()
+])
+percent_docs_missing_fwci = round(
+    count_docs_missing_fwci / len(merged_doc_repo_links_documents) * 100,
+    1,
+)
+```
+
+In our pre-registered analysis plan (<https://osf.io/fc74m>), we initially stated that we would additionally investigate the relationship between an article's Field Weighted Citation Impact (FWCI) and the number of code contributors to the project. We decided against this analysis as the FWCI metric was only available from OpenAlex for `{python} percent_docs_missing_fwci`% (n=`{python} count_docs_missing_fwci`) articles from the `rs-graph-v1` dataset at the time of data processing. In addition, our analysis of the relationship between article citations and the number of code contributors to the project already includes the articles domain and duration since publication providing similar control.
+
+### Analysis of Project Duration and Percentage Code-Contributors Who Are Authors
+
+In our pre-registered analysis plan (<https://osf.io/fc74m>), we initially hypothesized that there would be a positive relationship between project duration and authorship recognition. Specifically, we posited that sustained technical engagement and scientific recognition might be meaningfully related, with longer project durations potentially leading to higher rates of code-contributor authorship. We saw repository histories as providing a unique opportunity to examine this relationship, leading us to hypothesize that projects with longer commit durations would be associated with higher percentages of developers receiving authorship recognition (pre-registered as H2).
+
+```{python}
+team_comp_no_push_after_pub_for_duration = team_comp_no_push_after_pub.copy()
+
+# Calculate ratio
+team_comp_no_push_after_pub_for_duration["pct_devs_authors"] = (
+    team_comp_no_push_after_pub_for_duration["n_author_devs"]
+    / (
+        team_comp_no_push_after_pub_for_duration["n_author_devs"]
+        + team_comp_no_push_after_pub_for_duration["n_non_author_devs"]
+    )
+)
+
+# Drop inf and nan
+team_comp_no_push_after_pub_for_duration = (
+    team_comp_no_push_after_pub_for_duration.replace(
+        [float("inf"), -float("inf")], float("nan")
+    ).dropna()
+)
+
+# Remove negative "repo_commit_duration" repos
+team_comp_no_push_after_pub_for_duration = team_comp_no_push_after_pub_for_duration[
+    team_comp_no_push_after_pub_for_duration["repo_commit_duration"] >= 0
+]
+
+# Run pearson correlation
+non_author_to_author_dev_pearson_results = pearsonr(
+    team_comp_no_push_after_pub_for_duration["pct_devs_authors"],
+    team_comp_no_push_after_pub_for_duration["repo_commit_duration"],
+)
+
+pearson_rho = f"{non_author_to_author_dev_pearson_results[0]:.2f}"
+```
+
+However, our analysis found no evidence to support this hypothesis. When examining the relationship between a repository's commit duration and the percentage of developers who receive authorship recognition, we found no significant correlation (r = `{python} pearson_rho`, p = n.s.). This suggests that the length of time a project has been in development has no meaningful relationship with the proportion of developers who are recognized as authors.
+
+We ultimately decided to exclude this analysis for two key methodological reasons. First, our approach of using repository-level commit duration as a proxy for individual contribution patterns proved too coarse-grained. A more precise analysis would need to examine individual-level contribution durations and patterns rather than overall project length. Second, our method did not account for the varying levels of contribution that different developers make to a repository. Simply correlating overall project duration with authorship rates fails to capture the nuanced ways that sustained, meaningful technical contributions might influence authorship decisions.
+
+These limitations suggest potential directions for future work that could more rigorously examine the relationship between long-term technical engagement and scientific recognition. Such work could benefit from a more granular analysis of individual contribution patterns, incorporating measures of contribution significance and sustainability rather than just temporal duration.
+
+# References {-}
+
+::: {#refs}
+:::

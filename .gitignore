@@ -126,6 +126,7 @@ index.ipynb
 index.md
 index_files/
 index.tex
+publications/**/*_files/*
 
 # Project specific
 joss-short-paper-details.parquet
@@ -146,6 +147,7 @@ elsarticle-harv.bst
 elsarticle.cls
 qss-code-authors.spl
 qss-code-authors.tex
+supplementary-material.tex
 
 # Ignore all files in the data/files/ directory
 rs_graph/data/files/*

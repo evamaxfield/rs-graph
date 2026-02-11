@@ -3,6 +3,7 @@ project:
   output-dir: _build
   render:
     - "qss-code-authors.qmd"
+    - "supplementary-material.qmd"
     - "!extra-notebooks/"
     - "!extra-data/"
     - "!arxiv-qss-code-authors.tex"

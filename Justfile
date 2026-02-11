@@ -139,9 +139,12 @@ docker-run:
 # Publications management
 
 # hot-reload quarto doc
-quarto-serve project="qss-code-authors":
-	-quarto preview {{justfile_directory()}}/publications/{{project}}/qss-code-authors.qmd
+quarto-serve:
+	-quarto preview {{justfile_directory()}}/publications/qss-code-authors/qss-code-authors.qmd
 
-# render quarto doc
-quarto-render project="qss-code-authors":
-	-quarto render {{justfile_directory()}}/publications/{{project}}/qss-code-authors.qmd
+# render both manuscript and supplementary material
+quarto-render:
+	-quarto render {{justfile_directory()}}/publications/qss-code-authors/qss-code-authors.qmd
+	-quarto render {{justfile_directory()}}/publications/qss-code-authors/supplementary-material.qmd
+	python {{justfile_directory()}}/publications/qss-code-authors/cleanup-tex.py --input {{justfile_directory()}}/publications/qss-code-authors/qss-code-authors.tex
+	python {{justfile_directory()}}/publications/qss-code-authors/cleanup-tex.py --input {{justfile_directory()}}/publications/qss-code-authors/supplementary-material.tex
