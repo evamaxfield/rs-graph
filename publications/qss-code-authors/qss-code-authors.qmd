@@ -39,8 +39,8 @@ number-sections: true
 
 ## Citation Style Language
 # See https://github.com/citation-style-language/styles for more options
-# We default to PNAS (Proceedings of the National Academy of Sciences)
-# csl: support/acm-proceedings.csl
+# Use APA style for citations and reference formatting.
+csl: apa.csl
 
 ## Specific for target format
 format:
@@ -57,6 +57,7 @@ format:
 
   elsevier-pdf:
     keep-tex: true
+    cite-method: citeproc
     toc: false
     execute:
       echo: false
@@ -72,7 +73,7 @@ format:
           \floatplacement{table}{H}
         
     journal:
-      cite-style: authoryear
+      cite-style: number
       name: "in-progress"
       model: "3p"
       layout: "onecolumn"
@@ -2870,7 +2871,7 @@ This research was supported by grants from the National Science Foundation's (NS
 
 The software and code used to train, evaluate, and apply the author-developer account matching model is available at: <https://github.com/evamaxfield/sci-soft-models> (<https://doi.org/10.5281/zenodo.17401863>). The software and code used to gather, process, and analyze the dataset of linked scientific articles and code repositories and their associated contributors and metadata is available at: <https://github.com/evamaxfield/rs-graph> (<https://doi.org/10.5281/zenodo.17401960>). The compiled rs-graph-v1 dataset, as well as data required for model training and evaluation, is available at: <https://doi.org/10.7910/DVN/KPYVI1>. Certain portions of the compiled rs-graph-v1 dataset, and the model training and evaluation datasets contain linked personal data (e.g., author names, developer account usernames) and are only available by request.
 
-# References
+# References {-}
 
 ::: {#refs}
 :::

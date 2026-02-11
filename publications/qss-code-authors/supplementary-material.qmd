@@ -1,10 +1,12 @@
 ---
 title: "Supplementary Material: Code Contribution and Credit in Science"
 bibliography: supplementary-material.bib
+csl: apa.csl
 number-sections: true
 format:
   pdf:
     keep-tex: true
+    cite-method: citeproc
     toc: false
     execute:
       echo: false
@@ -1854,7 +1856,7 @@ We ultimately decided to exclude this analysis for two key methodological reason
 
 These limitations suggest potential directions for future work that could more rigorously examine the relationship between long-term technical engagement and scientific recognition. Such work could benefit from a more granular analysis of individual contribution patterns, incorporating measures of contribution significance and sustainability rather than just temporal duration.
 
-# References
+# References {-}
 
 ::: {#refs}
 :::
