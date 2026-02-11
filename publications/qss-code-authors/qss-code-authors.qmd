@@ -565,7 +565,7 @@ Next, we build upon these general findings to motivate three specific hypotheses
 
 ## H1: Research Team Composition and Scientific Attention
 
-In collaborative settings, experimental and theoretical research often receives more citations than methods-focused contributions, with the exception being when methods represent foundational shifts in a field [@Aksnes2006CitationRA; @LIU2023101432; @Chen2024ExploringSC]. Software is often positioned as a methodological contribution and, as a result, can be found in some of the highest-cited papers of the 21st century [@jin2015significance; @hampton2013big; @hasselbring2024researchsoftwarecategories].
+In collaborative settings, experimental and theoretical research often receives more citations than methods-focused contributions, with the exception being when methods represent foundational shifts in a field [@Aksnes2006CitationRA; @LIU2023101432; @Chen2024ExploringSC]. Software is often positioned as a methodological contribution and, as a result, can be found in some of the highest-cited papers of the 21st century [@jin2015significance; @hampton2013big; @researchsoftwareclassifications].
 
 Prior work also establishes a positive relationship between team size and citation count, where larger and more diverse teams produce higher-impact scientific work [@Franceschet2010TheEO; @Larivire2014TeamSM; @yoo2024interaction]. Research in empirical software studies similarly finds that larger development teams tend to create more reliable software with fewer defects [@Wyss2023NothingBut, @herbsleb2003empirical], though this comes at the expense of slower development cycles. These findings suggest that team size may be particularly important in scientific software development, where technical robustness and reproducibility remain gold standards [@milewicz2018talk].
 
@@ -2847,11 +2847,11 @@ Our findings point to several directions for future research on the changing nat
 
 Despite their growing importance, the persistent under-recognition of software contributions suggests a need for structural interventions in how we conceptualize and reward scientific work. Building upon efforts like CRediT [@brand2015beyond], future work should investigate potential policy changes to better align institutional incentives with the diverse spectrum of contributions that drive modern scientific progress. However, as the example of CRediT demonstrates, even well-intentioned taxonomies may reproduce existing hierarchies or create new forms of inequality if they fail to address underlying power dynamics in scientific communities. The challenge is not merely technical but social: creating recognition systems that simultaneously support innovation, ensure appropriate credit, maintain research integrity, and foster equitable participation in an increasingly computational scientific enterprise.
 
-# Acknowledgments
+# Acknowledgments {-}
 
 We thank our anonymous reviewers for their helpful feedback. We especially thank Molly Blank, Shahan Ali Memnon, David Farr, and Jevin West for their valuable insights at multiple stages of this research.
 
-# Author Contributions
+# Author Contributions {-}
 
 Eva Maxfield Brown: Conceptualization, Data Curation, Formal Analysis, Investigation, Methodology, Software, Validation, Visualization, Writing - original draft, Writing - review & editing.
 
@@ -2859,15 +2859,15 @@ Isaac Slaughter: Formal Analysis, Visualization, Writing - review & editing.
 
 Nicholas Weber: Conceptualization, Data Curation, Formal Analysis, Funding Acquisition, Investigation, Methodology, Project Administration, Resources, Supervision, Writing - original draft, Writing - review & editing.
 
-# Competing Interests
+# Competing Interests {-}
 
 The authors have no competing interests.
 
-# Funding Information
+# Funding Information {-}
 
 This research was supported by grants from the National Science Foundation's (NSF) Office of Advanced Cyberinfrastructure (OAC-2211275) and the Sloan Foundation (G-2022-19347).
 
-# Data Availability
+# Data Availability {-}
 
 The software and code used to train, evaluate, and apply the author-developer account matching model is available at: <https://github.com/evamaxfield/sci-soft-models> (<https://doi.org/10.5281/zenodo.17401863>). The software and code used to gather, process, and analyze the dataset of linked scientific articles and code repositories and their associated contributors and metadata is available at: <https://github.com/evamaxfield/rs-graph> (<https://doi.org/10.5281/zenodo.17401960>). The compiled rs-graph-v1 dataset, as well as data required for model training and evaluation, is available at: <https://doi.org/10.7910/DVN/KPYVI1>. Certain portions of the compiled rs-graph-v1 dataset, and the model training and evaluation datasets contain linked personal data (e.g., author names, developer account usernames) and are only available by request.
 
