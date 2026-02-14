@@ -496,12 +496,13 @@ def _get_unique_and_highest_confidence_prediction_results(
 
 def _store_prediction_results(
     prediction_results: list[types.MatchedAuthorArticleAndDeveloperRepositoryPair],
+    iteration: int,
 ) -> None:
-    storage_file = Path("snowball-sampling-discovery-predictions.csv")
+    storage_file = Path("snowball-sampling-discovery-predictions.parquet")
 
     # Check if exists
     if storage_file.exists():
-        existing_results_df = pl.read_csv(storage_file)
+        existing_results_df = pl.read_parquet(storage_file)
         existing_results = existing_results_df.to_dicts()
     else:
         existing_results = []
@@ -512,6 +513,10 @@ def _store_prediction_results(
             "article_doi": result.article_doi,
             "repository_identifier": f"https://github.com/{result.repository_identifier}",
             "confidence": result.matched_details.confidence,
+            "author_developer_link_id": result.author_developer_link_id,
+            "iteration": iteration,
+            "model_name": result.matched_details.model_name,
+            "model_version": result.matched_details.model_version,
         }
         for result in prediction_results
     ]
@@ -519,9 +524,9 @@ def _store_prediction_results(
     # Combine existing and new results
     combined_results = existing_results + new_results
 
-    # Save to CSV
+    # Save to parquet
     combined_results_df = pl.DataFrame(combined_results)
-    combined_results_df.write_csv(storage_file)
+    combined_results_df.write_parquet(storage_file)
 
 
 def _process_matched_article(
@@ -607,6 +612,7 @@ def _process_matched_repository(
 
 def _prep_updated_article_repository_details_for_storage_type(
     matched_pair: types.MatchedAuthorArticleAndDeveloperRepositoryPair,
+    iteration: int,
 ) -> types.ExpandedRepositoryDocumentPair:
     return types.ExpandedRepositoryDocumentPair(
         source=f"snowball-sampling-discovery-v{rs_graph_version}",
@@ -631,6 +637,7 @@ def _prep_updated_article_repository_details_for_storage_type(
             model_version=matched_pair.matched_details.model_version,
             model_confidence=matched_pair.matched_details.confidence,
         ),
+        iteration=iteration,
     )
 
 
@@ -639,6 +646,7 @@ def _prep_updated_article_repository_details_for_storage_type(
 )
 def _snowball_sampling_discovery_flow(
     author_developer_links: list[db_utils.HydratedAuthorDeveloperLink],
+    iteration: int,
     article_respository_allowed_datetime_difference_negative_td: timedelta,
     article_respository_allowed_datetime_difference_positive_td: timedelta,
     article_repository_matching_batch_size: int,
@@ -852,6 +860,7 @@ def _snowball_sampling_discovery_flow(
     print("Storing prediction results...")
     _store_prediction_results(
         prediction_results=prediction_results,
+        iteration=iteration,
     )
 
     # Process all articles
@@ -878,6 +887,7 @@ def _snowball_sampling_discovery_flow(
     ready_for_storage = [
         _prep_updated_article_repository_details_for_storage_type(
             matched_pair=ggf,
+            iteration=iteration,
         )
         for ggf in gathered_github_futures
         if not isinstance(ggf, types.ErrorResult)
@@ -1042,7 +1052,9 @@ def snowball_sampling_discovery(
     )
     link_ids_df = pl.read_parquet(researcher_developer_account_links_parquet_file)
     link_ids: list[int] = link_ids_df["researcher_developer_account_link_id"].to_list()
+    iteration: int = link_ids_df["iteration"][0]
     print(f"Found {len(link_ids)} researcher-developer-account link IDs in parquet file.")
+    print(f"Iteration: {iteration}")
 
     # Hydrate the links from the database
     print("Hydrating researcher-developer-account links from the database...")
@@ -1078,6 +1090,7 @@ def snowball_sampling_discovery(
             # Start the flow
             _snowball_sampling_discovery_flow(
                 author_developer_links=author_developer_link_batch,
+                iteration=iteration,
                 article_respository_allowed_datetime_difference_negative_td=(
                     article_respository_allowed_datetime_difference_negative_td
                 ),

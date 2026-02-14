@@ -336,6 +336,7 @@ def store_full_details(  # noqa: C901
                     document_id=pair.open_alex_results.document_model.id,
                     repository_id=pair.github_results.repository_model.id,
                     dataset_source_id=pair.open_alex_results.dataset_source_model.id,
+                    iteration=pair.iteration,
                 )
                 _get_or_add_and_flush(model=d_r, session=session)
             else:
@@ -346,6 +347,7 @@ def store_full_details(  # noqa: C901
                     predictive_model_name=pair.document_repository_link_metadata.model_name,
                     predictive_model_version=pair.document_repository_link_metadata.model_version,
                     predictive_model_confidence=pair.document_repository_link_metadata.model_confidence,
+                    iteration=pair.iteration,
                 )
                 _get_or_add_and_flush(model=d_r, session=session)
 
@@ -450,6 +452,7 @@ def store_full_details_task(
             pair.snowball_sampling_discovery_source_author_developer_link_id
         )
         result.document_repository_link_metadata = pair.document_repository_link_metadata
+        result.iteration = pair.iteration
         result.open_alex_processing_time_seconds = pair.open_alex_processing_time_seconds
         result.github_processing_time_seconds = pair.github_processing_time_seconds
         result.store_article_and_repository_time_seconds = end_time - start_time

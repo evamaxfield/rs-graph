@@ -125,6 +125,7 @@ class ExpandedRepositoryDocumentPair(DataClassJsonMixin):
     # Processing metadata
     snowball_sampling_discovery_source_author_developer_link_id: int | None = None
     document_repository_link_metadata: DocumentRepositoryLinkMetadata | None = None
+    iteration: int | None = None
     open_alex_processing_time_seconds: float | None = None
     github_processing_time_seconds: float | None = None
 
@@ -144,6 +145,7 @@ class StoredRepositoryDocumentPair(DataClassJsonMixin):
     # Processing metadata
     snowball_sampling_discovery_source_author_developer_link_id: int | None = None
     document_repository_link_metadata: DocumentRepositoryLinkMetadata | None = None
+    iteration: int | None = None
     open_alex_processing_time_seconds: float | None = None
     github_processing_time_seconds: float | None = None
     store_article_and_repository_time_seconds: float | None = None
