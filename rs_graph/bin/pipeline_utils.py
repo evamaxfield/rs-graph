@@ -24,10 +24,8 @@ def _get_small_cpu_api_cluster(
     use_coiled: bool,
     coiled_region: str,
     keepalive: str = "15m",
-    software_env_name: str | None = None,
 ) -> dict:
     return {
-        "software": software_env_name,
         "keepalive": keepalive,
         "vm_type": "t4g.large",
         # One worker per token to avoid rate limiting
@@ -47,10 +45,8 @@ def _get_basic_gpu_cluster_config(
     use_coiled: bool,
     coiled_region: str,
     keepalive: str = "15m",
-    software_env_name: str | None = None,
 ) -> dict:
     return {
-        "software": software_env_name,
         "keepalive": keepalive,
         "vm_type": "g4dn.xlarge",
         "n_workers": [1, 12],
@@ -126,18 +122,3 @@ def _load_elsevier_api_keys(
     tokens_list = tokens_file["keys"].values()
 
     return tokens_list
-
-
-def _load_coiled_software_envs(
-    coiled_software_envs_file: str,
-) -> dict[str, str] | None:
-    # Load software envs
-    try:
-        with open(coiled_software_envs_file) as f:
-            envs_file = yaml.safe_load(f)
-
-        return envs_file["envs"]
-
-    except FileNotFoundError:
-        print(f"Coiled software envs file not found at path: {coiled_software_envs_file}")
-        return None

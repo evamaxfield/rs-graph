@@ -21,7 +21,6 @@ from rs_graph.bin.pipeline_utils import (
     DEFAULT_OPEN_ALEX_EMAILS_FILE,
     _get_basic_gpu_cluster_config,
     _get_small_cpu_api_cluster,
-    _load_coiled_software_envs,
     _load_open_alex_emails,
     _wrap_func_with_coiled_prefect_task,
 )
@@ -110,6 +109,9 @@ def _flatten_and_check_articles_in_db(
 ) -> list[types.AuthorArticleDetails | types.FilteredResult | types.ErrorResult]:
     possible_count = 0
     to_process_count = 0
+    no_doi_count = 0
+    ignorable_doi_count = 0
+    already_in_db_count = 0
     flattened_results: list[
         types.AuthorArticleDetails | types.FilteredResult | types.ErrorResult
     ] = []
@@ -123,6 +125,7 @@ def _flatten_and_check_articles_in_db(
                 else:
                     possible_count += 1
                     if item.open_alex_results_models.document_model.doi is None:
+                        no_doi_count += 1
                         filtered_result = types.FilteredResult(
                             source=item.researcher_open_alex_id,
                             identifier=item.open_alex_results_models.document_model.title,
@@ -134,6 +137,7 @@ def _flatten_and_check_articles_in_db(
                         span in item.open_alex_results_models.document_model.doi.lower()
                         for span in ignorable_doi_spans
                     ):
+                        ignorable_doi_count += 1
                         filtered_result = types.FilteredResult(
                             source=item.researcher_open_alex_id,
                             identifier=item.open_alex_results_models.document_model.doi,
@@ -149,6 +153,7 @@ def _flatten_and_check_articles_in_db(
                             use_prod=use_prod,
                         )
                         if exists_in_db:
+                            already_in_db_count += 1
                             filtered_result = types.FilteredResult(
                                 source=item.researcher_open_alex_id,
                                 identifier=item.open_alex_results_models.document_model.doi,
@@ -159,7 +164,13 @@ def _flatten_and_check_articles_in_db(
                             to_process_count += 1
                             flattened_results.append(item)
 
-    print(f"Filtered out {possible_count - to_process_count} author-articles already in DB.")
+    total_filtered = no_doi_count + ignorable_doi_count + already_in_db_count
+    print(
+        f"Filtered {total_filtered} of {possible_count} author-articles: "
+        f"{no_doi_count} no DOI, {ignorable_doi_count} ignorable DOI, "
+        f"{already_in_db_count} already in DB. "
+        f"{to_process_count} to process."
+    )
 
     return flattened_results
 
@@ -264,9 +275,21 @@ def _combine_to_possible_pairs(  # noqa: C901
         elif isinstance(item, types.ErrorResult):
             errored_developer_repositories.append(item)
 
+    # Log observability info
+    print(f"Author-developer links with articles: {len(author_articles_lut)}")
+    print(f"Author-developer links with repos: {len(developer_repositories_lut)}")
+    if errored_author_articles:
+        print(f"WARNING: {len(errored_author_articles)} errored author-article results.")
+    if errored_developer_repositories:
+        print(f"WARNING: {len(errored_developer_repositories)} errored developer-repo results.")
+
     # Find common author_developer_link_ids
     common_author_developer_link_ids = set(author_articles_lut.keys()).intersection(
         set(developer_repositories_lut.keys())
+    )
+    print(
+        f"Author-developer links with both articles AND repos: "
+        f"{len(common_author_developer_link_ids)}"
     )
 
     # Combine author articles and developer repositories for common author_developer_link_ids
@@ -370,6 +393,7 @@ def _replace_enriched_repositories_in_possible_combinations(
 ) -> list[types.UncheckedPossibleAuthorArticleAndDeveloperRepositoryPair]:
     # Create a lookup of repository_identifier to enriched repository
     enriched_repos_lut: dict[str, types.DeveloperRepositoryDetails] = {}
+    enrichment_error_count = 0
     for item in enriched_repositories:
         if isinstance(item, types.DeveloperRepositoryDetails):
             repo_identifier = (
@@ -377,6 +401,11 @@ def _replace_enriched_repositories_in_possible_combinations(
                 f"{item.github_result_models.repository_model.name}"
             )
             enriched_repos_lut[repo_identifier] = item
+        elif isinstance(item, types.ErrorResult):
+            enrichment_error_count += 1
+
+    if enrichment_error_count > 0:
+        print(f"WARNING: {enrichment_error_count} repository enrichments failed.")
 
     # Replace developer repositories in unchecked_possible_combinations with enriched ones
     updated_combinations: list[
@@ -396,10 +425,12 @@ def _replace_enriched_repositories_in_possible_combinations(
                 )
             )
 
-    assert all(
-        isinstance(combination, types.UncheckedPossibleAuthorArticleAndDeveloperRepositoryPair)
-        for combination in updated_combinations
-    ), "Not all combinations were successfully updated."
+    dropped_count = len(unchecked_possible_combinations) - len(updated_combinations)
+    if dropped_count > 0:
+        print(
+            f"WARNING: {dropped_count} combinations dropped "
+            f"due to failed repository enrichment."
+        )
 
     print(f"{len(updated_combinations)} combinations to match.")
 
@@ -412,6 +443,13 @@ def _create_batches_for_matching(
     ],
     batch_size: int,
 ) -> list[list[types.AuthorArticleAndDeveloperRepositoryPairPreppedForMatching]]:
+    error_count = sum(1 for item in prepped_combinations if isinstance(item, types.ErrorResult))
+    if error_count > 0:
+        print(
+            f"WARNING: {error_count} prepped combinations were errors "
+            f"and will be skipped for matching."
+        )
+
     batches: list[list[types.AuthorArticleAndDeveloperRepositoryPairPreppedForMatching]] = []
     current_batch: list[types.AuthorArticleAndDeveloperRepositoryPairPreppedForMatching] = []
     for item in prepped_combinations:
@@ -435,7 +473,7 @@ def _filter_to_only_success_predictions(
 ) -> list[types.MatchedAuthorArticleAndDeveloperRepositoryPair]:
     # Flatten results
     flattened_results: list[types.MatchedAuthorArticleAndDeveloperRepositoryPair] = []
-    errors = []
+    errors: list[types.ErrorResult] = []
     for batch_result in matched_results:
         if isinstance(batch_result, types.ErrorResult):
             errors.append(batch_result)
@@ -443,20 +481,28 @@ def _filter_to_only_success_predictions(
             for item in batch_result:
                 flattened_results.append(item)
 
+    if errors:
+        print(f"WARNING: {len(errors)} batch prediction errors:")
+        for err in errors:
+            print(f"  - {err.identifier}: {err.error}")
+
     return flattened_results
 
 
 def _get_unique_and_highest_confidence_prediction_results(
     prediction_results: list[types.MatchedAuthorArticleAndDeveloperRepositoryPair],
 ) -> list[types.MatchedAuthorArticleAndDeveloperRepositoryPair]:
-    # Create LUT of unique key to prediction result
-    results_lut = {
-        (
-            result.article_doi,
-            result.repository_identifier,
-        ): result
-        for result in prediction_results
-    }
+    # Create LUT of unique key to prediction result, keeping highest confidence
+    results_lut: dict[
+        tuple[str, str], types.MatchedAuthorArticleAndDeveloperRepositoryPair
+    ] = {}
+    for result in prediction_results:
+        key = (result.article_doi, result.repository_identifier)
+        if (
+            key not in results_lut
+            or result.matched_details.confidence > results_lut[key].matched_details.confidence
+        ):
+            results_lut[key] = result
 
     # Convert all results to polars dataframe with
     # article_doi, repository_identifier, confidence
@@ -658,9 +704,6 @@ def _snowball_sampling_discovery_flow(
     cycled_github_tokens: GitHubTokensCycler,
     open_alex_emails: list[str],
     semantic_scholar_api_key: str | None,
-    coiled_software_envs: dict[str, str] | None,
-    cache_coiled_software_envs: bool,
-    coiled_software_envs_file: str,
 ) -> None:
     # Workers is the number of github tokens
     n_github_tokens = len(cycled_github_tokens)
@@ -679,7 +722,6 @@ def _snowball_sampling_discovery_flow(
             n_workers=n_open_alex_emails,
             use_coiled=use_coiled,
             coiled_region=coiled_region,
-            software_env_name="package-sync-49802be2a88402f01f48cec991bd301a",
         ),
     )
     wrapped_get_repositories_for_developer = _wrap_func_with_coiled_prefect_task(
@@ -689,7 +731,6 @@ def _snowball_sampling_discovery_flow(
             n_workers=n_github_tokens,
             use_coiled=use_coiled,
             coiled_region=coiled_region,
-            software_env_name="package-sync-49802be2a88402f01f48cec991bd301a",
         ),
     )
     wrapped_enrich_repository = _wrap_func_with_coiled_prefect_task(
@@ -699,7 +740,6 @@ def _snowball_sampling_discovery_flow(
             n_workers=n_github_tokens,
             use_coiled=use_coiled,
             coiled_region=coiled_region,
-            software_env_name="package-sync-49802be2a88402f01f48cec991bd301a",
         ),
     )
     wrapped_match_prepped_pair = _wrap_func_with_coiled_prefect_task(
@@ -708,7 +748,6 @@ def _snowball_sampling_discovery_flow(
         coiled_kwargs=_get_basic_gpu_cluster_config(
             use_coiled=use_coiled,
             coiled_region=coiled_region,
-            software_env_name="package-sync-03ee32789d90159bf532a979364b3917",
         ),
         environ={
             "HF_TOKEN": os.environ["HF_TOKEN"],
@@ -722,7 +761,6 @@ def _snowball_sampling_discovery_flow(
             n_workers=n_open_alex_emails,
             use_coiled=use_coiled,
             coiled_region=coiled_region,
-            software_env_name="package-sync-49802be2a88402f01f48cec991bd301a",
         ),
     )
     process_github_wrapped_task = _wrap_func_with_coiled_prefect_task(
@@ -732,7 +770,6 @@ def _snowball_sampling_discovery_flow(
             n_workers=n_github_tokens,
             use_coiled=use_coiled,
             coiled_region=coiled_region,
-            software_env_name="package-sync-49802be2a88402f01f48cec991bd301a",
         ),
     )
     match_devs_and_researchers_wrapped_task = _wrap_func_with_coiled_prefect_task(
@@ -741,7 +778,6 @@ def _snowball_sampling_discovery_flow(
         coiled_kwargs=_get_basic_gpu_cluster_config(
             use_coiled=use_coiled,
             coiled_region=coiled_region,
-            software_env_name="package-sync-03ee32789d90159bf532a979364b3917",
         ),
     )
 
@@ -976,9 +1012,6 @@ def snowball_sampling_discovery(
     coiled_region: str = "us-west-2",
     github_tokens_file: str = DEFAULT_GITHUB_TOKENS_FILE,
     open_alex_emails_file: str = DEFAULT_OPEN_ALEX_EMAILS_FILE,
-    coiled_software_envs_file: str = ".coiled-software-envs.yml",
-    use_cached_coiled_software_envs: bool = False,
-    cache_coiled_software_envs: bool = False,
 ) -> None:
     """
     Discover new article-repository pairs via snowball sampling.
@@ -993,12 +1026,6 @@ def snowball_sampling_discovery(
 
     # Get open alex emails
     open_alex_emails = _load_open_alex_emails(open_alex_emails_file)
-
-    # Load coiled software envs
-    if use_cached_coiled_software_envs:
-        coiled_software_envs = _load_coiled_software_envs(coiled_software_envs_file)
-    else:
-        coiled_software_envs = None
 
     # Get semantic scholar API key
     try:
@@ -1106,9 +1133,6 @@ def snowball_sampling_discovery(
                 cycled_github_tokens=cycled_github_tokens,
                 open_alex_emails=open_alex_emails,
                 semantic_scholar_api_key=semantic_scholar_api_key,
-                coiled_software_envs=coiled_software_envs,
-                cache_coiled_software_envs=cache_coiled_software_envs,
-                coiled_software_envs_file=coiled_software_envs_file,
             )
 
         except Exception as e:
