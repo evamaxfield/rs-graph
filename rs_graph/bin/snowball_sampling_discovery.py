@@ -955,8 +955,8 @@ def snowball_sampling_discovery(
             "to process."
         ),
     ),
-    article_repository_allowed_datetime_difference_positive: str = "374 days",
-    article_repository_allowed_datetime_difference_negative: str = "326 days",
+    article_repository_allowed_datetime_difference_positive: str = "556 days",
+    article_repository_allowed_datetime_difference_negative: str = "73 days",
     author_developer_links_batch_size: int = 4,
     article_repository_matching_batch_size: int = 24,
     ignore_forks: bool = True,

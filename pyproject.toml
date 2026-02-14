@@ -107,6 +107,7 @@ rs-graph-data = "rs_graph.bin.data:main"
 rs-graph-prelinked-dataset-ingestion = "rs_graph.bin.prelinked_dataset_ingestion:main"
 rs-graph-snowball-sampling-discovery = "rs_graph.bin.snowball_sampling_discovery:main"
 rs-graph-alternate-doi-discovery = "rs_graph.bin.alternate_doi_discovery:main"
+rs-graph-generate-snowball-sampling-input = "rs_graph.bin.generate_snowball_sampling_input:main"
 
 # build settings
 # https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html
