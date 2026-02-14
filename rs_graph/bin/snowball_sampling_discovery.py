@@ -4,6 +4,7 @@ import itertools
 import os
 import time
 import traceback
+from collections import Counter
 from datetime import datetime, timedelta
 
 import polars as pl
@@ -46,19 +47,12 @@ def _summarize_errors(errors: list[types.ErrorResult], label: str) -> None:
 
     for step, step_errors in step_groups.items():
         print(f"  step='{step}': {len(step_errors)} errors")
-        # Group by error type (full first line of error string)
-        error_type_groups: dict[str, list[types.ErrorResult]] = {}
-        for err in step_errors:
-            key = err.error.split("\n")[0].strip()
-            error_type_groups.setdefault(key, []).append(err)
-
-        for error_type, group in sorted(error_type_groups.items(), key=lambda x: -len(x[1])):
-            print(f"    {error_type}: {len(group)}")
-            # Print up to 2 sample errors with full details
-            for sample in group[:2]:
-                print(f"      --- Sample (identifier={sample.identifier}) ---")
-                print(f"      Error: {sample.error}")
-                print(f"      Traceback:\n{sample.traceback}")
+        # Count by error type (first line of error string, before ':')
+        error_types = Counter(
+            err.error.split("\n")[0].split(":")[0].strip() for err in step_errors
+        )
+        for error_type, count in error_types.most_common():
+            print(f"    {error_type}: {count}")
 
 
 def _get_author_articles_for_researcher(
