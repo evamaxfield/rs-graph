@@ -36,12 +36,20 @@ def generate_snowball_sampling_input(
     ),
     researcher_developer_links_filter_confidence_threshold: float = 0.97,
     researcher_developer_links_duration_since_last_process_filter: str | None = None,
+    top_unique: bool = True,
     use_prod: bool = False,
+    overwrite: bool = False,
 ) -> None:
     """
     Generate a parquet file of researcher-developer account link IDs
     for use as input to the snowball sampling discovery pipeline.
     """
+    output_path = DATA_FILES_DIR / f"snowball-sampling-batch-iteration-{iteration}.parquet"
+    if output_path.exists() and not overwrite:
+        raise FileExistsError(
+            f"Output file already exists: {output_path}. Use --overwrite to replace it."
+        )
+
     engine = get_engine(use_prod=use_prod)
 
     with Session(engine) as session:
@@ -90,13 +98,26 @@ def generate_snowball_sampling_input(
                 "researcher_name": researcher.name,
                 "researcher_orcid": researcher.orcid,
                 "developer_account_username": developer_account.username,
+                "predictive_model_confidence": link.predictive_model_confidence,
+                "researcher_id": link.researcher_id,
+                "developer_account_id": link.developer_account_id,
             }
         )
 
     df = pl.DataFrame(rows)
 
+    # Deduplicate to one link per researcher and one link per developer,
+    # keeping the highest-confidence link in each case.
+    if top_unique:
+        df = (
+            df.sort("predictive_model_confidence", descending=True)
+            .unique(subset=["researcher_id"], keep="first")
+            .unique(subset=["developer_account_id"], keep="first")
+        )
+
+    df = df.drop("predictive_model_confidence", "researcher_id", "developer_account_id")
+
     # Write to parquet
-    output_path = DATA_FILES_DIR / f"snowball-sampling-batch-iteration-{iteration}.parquet"
     df.write_parquet(output_path)
 
     print(f"Wrote {len(df)} researcher-developer links to {output_path}")
