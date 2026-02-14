@@ -55,9 +55,7 @@ def generate_snowball_sampling_input(
             .join(db_models.Researcher)
             .join(db_models.DeveloperAccount)
             .where(
-                col(
-                    db_models.ResearcherDeveloperAccountLink.predictive_model_confidence
-                )
+                col(db_models.ResearcherDeveloperAccountLink.predictive_model_confidence)
                 >= researcher_developer_links_filter_confidence_threshold
             )
         )
