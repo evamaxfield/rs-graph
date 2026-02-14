@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Callable
 from datetime import date, datetime
 from typing import Any, ClassVar
 
 from sqlalchemy import Column, DateTime, func
 from sqlmodel import Field, SQLModel, UniqueConstraint
+
+from rs_graph.utils.identifier_normalization import normalize_doi
 
 # Define naming convention for all constraints
 convention = {
@@ -21,17 +22,6 @@ convention = {
 
 # Apply the naming convention to SQLModel's metadata
 SQLModel.metadata.naming_convention = convention
-
-
-DOI_PREFIX_PATTERN = re.compile(
-    r"^(?:https?://(?:dx\.)?doi\.org/|doi:)",
-    flags=re.IGNORECASE,
-)
-
-
-def normalize_doi(value: str) -> str:
-    """Normalize DOI-like values to their canonical DOI-only form."""
-    return DOI_PREFIX_PATTERN.sub("", value.strip(), count=1)
 
 
 def _is_attrdict_like(value: Any) -> bool:

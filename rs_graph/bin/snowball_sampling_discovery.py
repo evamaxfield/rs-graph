@@ -4,9 +4,7 @@ import itertools
 import os
 import time
 import traceback
-from collections import Counter
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import polars as pl
 import typer
@@ -25,6 +23,7 @@ from rs_graph.bin.pipeline_utils import (
     _load_open_alex_emails,
     _wrap_func_with_coiled_prefect_task,
 )
+from rs_graph.data import DATA_FILES_DIR
 from rs_graph.db import utils as db_utils
 from rs_graph.enrichment import article, entity_matching, github
 from rs_graph.utils.dt_and_td import parse_timedelta
@@ -47,12 +46,19 @@ def _summarize_errors(errors: list[types.ErrorResult], label: str) -> None:
 
     for step, step_errors in step_groups.items():
         print(f"  step='{step}': {len(step_errors)} errors")
-        # Count by error type (first line of error string, before ':')
-        error_types = Counter(
-            err.error.split("\n")[0].split(":")[0].strip() for err in step_errors
-        )
-        for error_type, count in error_types.most_common():
-            print(f"    {error_type}: {count}")
+        # Group by error type (full first line of error string)
+        error_type_groups: dict[str, list[types.ErrorResult]] = {}
+        for err in step_errors:
+            key = err.error.split("\n")[0].strip()
+            error_type_groups.setdefault(key, []).append(err)
+
+        for error_type, group in sorted(error_type_groups.items(), key=lambda x: -len(x[1])):
+            print(f"    {error_type}: {len(group)}")
+            # Print up to 2 sample errors with full details
+            for sample in group[:2]:
+                print(f"      --- Sample (identifier={sample.identifier}) ---")
+                print(f"      Error: {sample.error}")
+                print(f"      Traceback:\n{sample.traceback}")
 
 
 def _get_author_articles_for_researcher(
@@ -566,7 +572,7 @@ def _store_prediction_results(
     prediction_results: list[types.MatchedAuthorArticleAndDeveloperRepositoryPair],
     iteration: int,
 ) -> None:
-    storage_file = Path("snowball-sampling-discovery-predictions.parquet")
+    storage_file = DATA_FILES_DIR / "snowball-sampling-discovery-predictions.parquet"
 
     # Check if exists
     if storage_file.exists():
@@ -601,7 +607,9 @@ def _update_processed_links_cache(
     iteration: int,
     link_counts: dict[int, int],
 ) -> None:
-    cache_file = Path(f"snowball-sampling-processed-links-iteration-{iteration}.parquet")
+    cache_file = (
+        DATA_FILES_DIR / f"snowball-sampling-processed-links-iteration-{iteration}.parquet"
+    )
 
     # Check if exists
     if cache_file.exists():
@@ -1159,7 +1167,9 @@ def snowball_sampling_discovery(
     )
 
     # Check for already-processed links from a prior run of this iteration
-    cache_file = Path(f"snowball-sampling-processed-links-iteration-{iteration}.parquet")
+    cache_file = (
+        DATA_FILES_DIR / f"snowball-sampling-processed-links-iteration-{iteration}.parquet"
+    )
     if cache_file.exists():
         already_processed_df = pl.read_parquet(cache_file)
         already_processed_ids: set[int] = set(

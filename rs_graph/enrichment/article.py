@@ -17,6 +17,7 @@ import requests
 
 from .. import types
 from ..db import models as db_models
+from ..utils.identifier_normalization import normalize_doi
 
 #######################################################################################
 
@@ -166,6 +167,9 @@ def get_updated_doi_from_semantic_scholar(
     semantic_scholar_api_key: str,
 ) -> str:
     try:
+        # Normalize DOI (strip https://doi.org/ prefix if present)
+        doi = normalize_doi(doi)
+
         # Handle searchable ID
         if "arxiv" in doi.lower():
             search_id = doi.lower().split("arxiv.")[-1]
