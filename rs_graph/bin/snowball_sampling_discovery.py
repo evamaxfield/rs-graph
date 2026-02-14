@@ -4,6 +4,7 @@ import itertools
 import os
 import time
 import traceback
+from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -33,6 +34,25 @@ from rs_graph.utils.dt_and_td import parse_timedelta
 app = typer.Typer()
 
 ###############################################################################
+
+
+def _summarize_errors(errors: list[types.ErrorResult], label: str) -> None:
+    """Print a structured summary of errors grouped by step and error type."""
+    print(f"WARNING: {len(errors)} errored {label} results.")
+
+    # Group by step
+    step_groups: dict[str, list[types.ErrorResult]] = {}
+    for err in errors:
+        step_groups.setdefault(err.step, []).append(err)
+
+    for step, step_errors in step_groups.items():
+        print(f"  step='{step}': {len(step_errors)} errors")
+        # Count by error type (first line of error string, before ':')
+        error_types = Counter(
+            err.error.split("\n")[0].split(":")[0].strip() for err in step_errors
+        )
+        for error_type, count in error_types.most_common():
+            print(f"    {error_type}: {count}")
 
 
 def _get_author_articles_for_researcher(
@@ -279,9 +299,9 @@ def _combine_to_possible_pairs(  # noqa: C901
     print(f"Author-developer links with articles: {len(author_articles_lut)}")
     print(f"Author-developer links with repos: {len(developer_repositories_lut)}")
     if errored_author_articles:
-        print(f"WARNING: {len(errored_author_articles)} errored author-article results.")
+        _summarize_errors(errored_author_articles, "author-article")
     if errored_developer_repositories:
-        print(f"WARNING: {len(errored_developer_repositories)} errored developer-repo results.")
+        _summarize_errors(errored_developer_repositories, "developer-repo")
 
     # Find common author_developer_link_ids
     common_author_developer_link_ids = set(author_articles_lut.keys()).intersection(
@@ -577,6 +597,34 @@ def _store_prediction_results(
     combined_results_df.write_parquet(storage_file)
 
 
+def _update_processed_links_cache(
+    iteration: int,
+    link_counts: dict[int, int],
+) -> None:
+    cache_file = Path(f"snowball-sampling-processed-links-iteration-{iteration}.parquet")
+
+    # Check if exists
+    if cache_file.exists():
+        existing_df = pl.read_parquet(cache_file)
+        existing_rows = existing_df.to_dicts()
+    else:
+        existing_rows = []
+
+    # Prepare new rows
+    new_rows = [
+        {
+            "researcher_developer_account_link_id": link_id,
+            "document_repository_links_created": count,
+        }
+        for link_id, count in link_counts.items()
+    ]
+
+    # Combine and save
+    combined_rows = existing_rows + new_rows
+    combined_df = pl.DataFrame(combined_rows)
+    combined_df.write_parquet(cache_file)
+
+
 def _process_matched_article(
     matched_pair: types.MatchedAuthorArticleAndDeveloperRepositoryPair,
     open_alex_email: str,
@@ -706,7 +754,7 @@ def _snowball_sampling_discovery_flow(
     cycled_github_tokens: GitHubTokensCycler,
     open_alex_emails: list[str],
     semantic_scholar_api_key: str | None,
-) -> None:
+) -> dict[int, int]:
     # Workers is the number of github tokens
     n_github_tokens = len(cycled_github_tokens)
 
@@ -947,7 +995,14 @@ def _snowball_sampling_discovery_flow(
                 pair=rfs,
                 use_prod=use_prod,
             )
-            stored_pairs.append(stored_pair)
+            if isinstance(stored_pair, types.ErrorResult):
+                print(
+                    f"Error storing full details for "
+                    f"author-developer link ID "
+                    f"{stored_pair.source}: {stored_pair.traceback}"
+                )
+            else:
+                stored_pairs.append(stored_pair)
             time.sleep(0.25)
 
     # Match devs and researchers
@@ -982,6 +1037,17 @@ def _snowball_sampling_discovery_flow(
             use_prod=use_prod,
         )
         time.sleep(0.25)
+
+    # Count document-repository links created per source author-developer link
+    doc_repo_link_counts: dict[int, int] = {
+        adl.author_developer_link_id: 0 for adl in author_developer_links
+    }
+    for sp in stored_pairs:
+        source_id = sp.snowball_sampling_discovery_source_author_developer_link_id
+        if source_id is not None and source_id in doc_repo_link_counts:
+            doc_repo_link_counts[source_id] += 1
+
+    return doc_repo_link_counts
 
 
 #######################################################################################
@@ -1092,6 +1158,22 @@ def snowball_sampling_discovery(
         use_prod=use_prod,
     )
 
+    # Check for already-processed links from a prior run of this iteration
+    cache_file = Path(f"snowball-sampling-processed-links-iteration-{iteration}.parquet")
+    if cache_file.exists():
+        already_processed_df = pl.read_parquet(cache_file)
+        already_processed_ids: set[int] = set(
+            already_processed_df["researcher_developer_account_link_id"].to_list()
+        )
+        original_count = len(hydrated_author_developer_links)
+        hydrated_author_developer_links = [
+            link
+            for link in hydrated_author_developer_links
+            if link.author_developer_link_id not in already_processed_ids
+        ]
+        skipped_count = original_count - len(hydrated_author_developer_links)
+        print(f"Skipped {skipped_count} already-processed links (from cache: {cache_file}).")
+
     # Iter over author-developer links in batches
     print(f"Processing {len(hydrated_author_developer_links)} author-developer links...")
     add_remainder_batch = (
@@ -1110,14 +1192,16 @@ def snowball_sampling_discovery(
         desc="Author-Developer Link Batches",
         total=total_n_batches,
     ):
-        try:
-            author_developer_link_batch = hydrated_author_developer_links[
-                author_developer_index : author_developer_index
-                + author_developer_links_batch_size
-            ]
+        author_developer_link_batch = hydrated_author_developer_links[
+            author_developer_index : author_developer_index + author_developer_links_batch_size
+        ]
+        batch_link_counts: dict[int, int] = {
+            link.author_developer_link_id: 0 for link in author_developer_link_batch
+        }
 
+        try:
             # Start the flow
-            _snowball_sampling_discovery_flow(
+            batch_link_counts = _snowball_sampling_discovery_flow(
                 author_developer_links=author_developer_link_batch,
                 iteration=iteration,
                 article_respository_allowed_datetime_difference_negative_td=(
@@ -1144,7 +1228,12 @@ def snowball_sampling_discovery(
             )
             print("Error:", str(e))
             print(traceback.format_exc())
-            continue
+
+        finally:
+            _update_processed_links_cache(
+                iteration=iteration,
+                link_counts=batch_link_counts,
+            )
 
         time.sleep(10)
 
