@@ -573,8 +573,8 @@ class Repository(StrippedSQLModel, table=True):
     default_branch: str | None = Field(default=None, index=True, nullable=True)
     license: str | None = Field(default=None, index=True, nullable=True)
     processed_at_sha: str | None = Field(default=None, index=True, nullable=True)
-    creation_datetime: datetime | None = Field(default=None, index=True)
-    last_pushed_datetime: datetime | None = Field(default=None, index=True)
+    creation_datetime: datetime | None = Field(default=None, index=True, nullable=False)
+    last_pushed_datetime: datetime | None = Field(default=None, index=True, nullable=False)
 
     # Updates
     created_datetime: datetime | None = Field(
