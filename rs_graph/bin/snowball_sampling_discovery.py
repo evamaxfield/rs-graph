@@ -308,9 +308,11 @@ def _combine_to_possible_pairs(  # noqa: C901
                     month=article_published_date.month,
                     day=article_published_date.day,
                 )
-                repo_created_dt: datetime = (
+                repo_created_dt = (
                     developer_repository.github_result_models.repository_model.creation_datetime
                 )
+                if repo_created_dt is None:
+                    continue
 
                 # Remove timezone info for comparison
                 if article_published_dt.tzinfo is not None:

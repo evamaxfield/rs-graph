@@ -22,7 +22,7 @@ repos:
         entry: ty check
         language: system
         types: [python]
-        exclude: ^(migrations/|rapidfuzz-example\.py)
+        exclude: ^(migrations/|notebooks/|rapidfuzz-example\.py)
 
   # Notebooks
   - repo: https://github.com/nbQA-dev/nbQA

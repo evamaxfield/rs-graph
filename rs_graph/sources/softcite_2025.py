@@ -83,7 +83,7 @@ def _prep_softcite_2025_data_for_annotation(data_dir: str | Path) -> None:
         )
 
         # Get the unique GitHub URLs from the mentions
-        purpose_selection_with_github_urls = (
+        purpose_selection_with_github_urls: pl.DataFrame = (  # type: ignore
             mentions.filter(
                 pl.col("url_raw").str.len_chars() > 0,
                 pl.col("context_full_text").str.contains(pl.col("url_raw"), literal=True),
@@ -211,7 +211,7 @@ def _prep_softcite_2025_data_for_use(data_dir: str | Path) -> None:
     )
 
     # Filter mentions for GitHub URLs, join with purpose assessments and papers
-    filtered_data = (
+    filtered_data: pl.DataFrame = (  # type: ignore
         mentions.filter(
             pl.col("url_raw").str.len_chars() > 0,
             pl.col("context_full_text").str.contains(pl.col("url_raw"), literal=True),

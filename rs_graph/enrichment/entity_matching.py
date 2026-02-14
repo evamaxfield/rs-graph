@@ -59,6 +59,12 @@ def match_devs_and_researchers(
             researcher_name = matched_dev_author.author
 
             # Create formal link
+            assert researcher_name_to_researcher_model[researcher_name].id is not None, (
+                f"Researcher model for {researcher_name} does not have an ID"
+            )
+            assert dev_username_to_dev_model[dev_username].id is not None, (
+                f"Developer account model for {dev_username} does not have an ID"
+            )
             linked_researcher_dev_account = db_models.ResearcherDeveloperAccountLink(
                 researcher_id=researcher_name_to_researcher_model[researcher_name].id,
                 developer_account_id=dev_username_to_dev_model[dev_username].id,

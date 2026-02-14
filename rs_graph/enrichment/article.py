@@ -433,7 +433,7 @@ def process_article(  # noqa: C901
                     open_alex_work, "open_access", "oa_status", default="unknown"
                 ),
                 primary_location_id=primary_location.id if primary_location else None,
-                best_oa_location_id=best_oa_location.id if best_oa_location else None,
+                best_open_access_location_id=best_oa_location.id if best_oa_location else None,
             )
 
             # Create the abstract

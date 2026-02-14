@@ -101,8 +101,12 @@ class DatasetSource(StrippedSQLModel, table=True):
     name: str = Field(unique=True)
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class Source(StrippedSQLModel, table=True):
@@ -119,8 +123,12 @@ class Source(StrippedSQLModel, table=True):
     host_organization_open_alex_id: str | None = None
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class Location(StrippedSQLModel, table=True):
@@ -131,6 +139,7 @@ class Location(StrippedSQLModel, table=True):
     landing_page_url: str | None = Field(index=True)
     pdf_url: str | None = Field(index=True)
     source_id: int | None = Field(
+        default=None,
         foreign_key="source.id",
         index=True,
         nullable=True,
@@ -145,8 +154,12 @@ class Location(StrippedSQLModel, table=True):
     version: str | None = Field(index=True)
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class Document(StrippedSQLModel, table=True):
@@ -172,12 +185,14 @@ class Document(StrippedSQLModel, table=True):
 
     # Foreign Keys
     primary_location_id: int | None = Field(
+        default=None,
         foreign_key="location.id",
         index=True,
         nullable=True,
         ondelete="CASCADE",
     )
     best_open_access_location_id: int | None = Field(
+        default=None,
         foreign_key="location.id",
         index=True,
         nullable=True,
@@ -185,8 +200,12 @@ class Document(StrippedSQLModel, table=True):
     )
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class DocumentAlternateDOI(StrippedSQLModel, table=True):
@@ -207,13 +226,18 @@ class DocumentAlternateDOI(StrippedSQLModel, table=True):
     document_id: int = Field(
         foreign_key="document.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
     doi: str = Field(unique=True)
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class DocumentAbstract(StrippedSQLModel, table=True):
@@ -223,9 +247,10 @@ class DocumentAbstract(StrippedSQLModel, table=True):
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    document_id: int = Field(
+    document_id: int | None = Field(
         foreign_key="document.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
 
@@ -235,8 +260,12 @@ class DocumentAbstract(StrippedSQLModel, table=True):
     content: str | None = None
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class Topic(StrippedSQLModel, table=True):
@@ -256,8 +285,12 @@ class Topic(StrippedSQLModel, table=True):
     domain_open_alex_id: str
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class DocumentTopic(StrippedSQLModel, table=True):
@@ -267,14 +300,16 @@ class DocumentTopic(StrippedSQLModel, table=True):
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    document_id: int = Field(
+    document_id: int | None = Field(
         foreign_key="document.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
-    topic_id: int = Field(
+    topic_id: int | None = Field(
         foreign_key="topic.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
 
@@ -284,8 +319,12 @@ class DocumentTopic(StrippedSQLModel, table=True):
     score: float = Field(index=True)
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class Researcher(StrippedSQLModel, table=True):
@@ -305,8 +344,12 @@ class Researcher(StrippedSQLModel, table=True):
     two_year_mean_citedness: float = Field(index=True)
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class DocumentContributor(StrippedSQLModel, table=True):
@@ -316,14 +359,16 @@ class DocumentContributor(StrippedSQLModel, table=True):
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    researcher_id: int = Field(
+    researcher_id: int | None = Field(
         foreign_key="researcher.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
-    document_id: int = Field(
+    document_id: int | None = Field(
         foreign_key="document.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
 
@@ -334,8 +379,12 @@ class DocumentContributor(StrippedSQLModel, table=True):
     is_corresponding: bool = Field(index=True)
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class Institution(StrippedSQLModel, table=True):
@@ -352,8 +401,12 @@ class Institution(StrippedSQLModel, table=True):
     ror: str | None = Field(index=True, nullable=True)
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class DocumentContributorInstitution(StrippedSQLModel, table=True):
@@ -366,19 +419,28 @@ class DocumentContributorInstitution(StrippedSQLModel, table=True):
     document_contributor_id: int = Field(
         foreign_key="document_contributor.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
-    institution_id: int = Field(
+    institution_id: int | None = Field(
+        default=None,
         foreign_key="institution.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
 
     __table_args__ = (UniqueConstraint("document_contributor_id", "institution_id"),)
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(), server_default=func.now()),
+    )
+    updated_datetime: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(), onupdate=func.now()),
+    )
 
 
 class Funder(StrippedSQLModel, table=True):
@@ -392,8 +454,12 @@ class Funder(StrippedSQLModel, table=True):
     name: str = Field(index=True)
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class FundingInstance(StrippedSQLModel, table=True):
@@ -403,9 +469,10 @@ class FundingInstance(StrippedSQLModel, table=True):
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    funder_id: int = Field(
+    funder_id: int | None = Field(
         foreign_key="funder.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
     award_id: str = Field(index=True)
@@ -413,8 +480,14 @@ class FundingInstance(StrippedSQLModel, table=True):
     __table_args__ = (UniqueConstraint("funder_id", "award_id"),)
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(), server_default=func.now()),
+    )
+    updated_datetime: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(), onupdate=func.now()),
+    )
 
 
 class DocumentFundingInstance(StrippedSQLModel, table=True):
@@ -427,19 +500,25 @@ class DocumentFundingInstance(StrippedSQLModel, table=True):
     document_id: int = Field(
         foreign_key="document.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
     funding_instance_id: int = Field(
         foreign_key="funding_instance.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
 
     __table_args__ = (UniqueConstraint("document_id", "funding_instance_id"),)
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class CodeHost(StrippedSQLModel, table=True):
@@ -454,8 +533,12 @@ class CodeHost(StrippedSQLModel, table=True):
     name: str = Field(unique=True, index=True)
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class Repository(StrippedSQLModel, table=True):
@@ -465,9 +548,10 @@ class Repository(StrippedSQLModel, table=True):
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    code_host_id: int = Field(
+    code_host_id: int | None = Field(
         foreign_key="code_host.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
     owner: str
@@ -477,24 +561,28 @@ class Repository(StrippedSQLModel, table=True):
 
     # Data
     description: str | None = None
-    is_fork: bool = Field(index=True)
-    forks_count: int = Field(index=True)
-    stargazers_count: int = Field(index=True)
-    watchers_count: int = Field(index=True)
-    open_issues_count: int = Field(index=True)
-    commits_count: int | None = Field(index=True)
+    is_fork: bool = Field(default=False, index=True)
+    forks_count: int = Field(default=0, index=True)
+    stargazers_count: int = Field(default=0, index=True)
+    watchers_count: int = Field(default=0, index=True)
+    open_issues_count: int = Field(default=0, index=True)
+    commits_count: int | None = Field(default=None, index=True)
     size_kb: int
-    topics: str | None = Field(nullable=True)
-    primary_language: str | None = Field(index=True, nullable=True)
-    default_branch: str | None = Field(index=True, nullable=True)
-    license: str | None = Field(index=True, nullable=True)
-    processed_at_sha: str | None = Field(index=True, nullable=True)
-    creation_datetime: datetime = Field(index=True)
-    last_pushed_datetime: datetime = Field(index=True)
+    topics: str | None = Field(default=None, nullable=True)
+    primary_language: str | None = Field(default=None, index=True, nullable=True)
+    default_branch: str | None = Field(default=None, index=True, nullable=True)
+    license: str | None = Field(default=None, index=True, nullable=True)
+    processed_at_sha: str | None = Field(default=None, index=True, nullable=True)
+    creation_datetime: datetime | None = Field(default=None, index=True)
+    last_pushed_datetime: datetime | None = Field(default=None, index=True)
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class RepositoryReadme(StrippedSQLModel, table=True):
@@ -504,9 +592,10 @@ class RepositoryReadme(StrippedSQLModel, table=True):
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    repository_id: int = Field(
+    repository_id: int | None = Field(
         foreign_key="repository.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
 
@@ -516,8 +605,12 @@ class RepositoryReadme(StrippedSQLModel, table=True):
     content: str | None = None
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class RepositoryLanguage(StrippedSQLModel, table=True):
@@ -527,9 +620,10 @@ class RepositoryLanguage(StrippedSQLModel, table=True):
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    repository_id: int = Field(
+    repository_id: int | None = Field(
         foreign_key="repository.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
     language: str = Field(index=True)
@@ -540,8 +634,12 @@ class RepositoryLanguage(StrippedSQLModel, table=True):
     bytes_of_code: int
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class RepositoryFile(StrippedSQLModel, table=True):
@@ -551,9 +649,10 @@ class RepositoryFile(StrippedSQLModel, table=True):
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    repository_id: int = Field(
+    repository_id: int | None = Field(
         foreign_key="repository.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
     path: str = Field(index=True)
@@ -565,8 +664,12 @@ class RepositoryFile(StrippedSQLModel, table=True):
     bytes_of_code: int
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class DeveloperAccount(StrippedSQLModel, table=True):
@@ -578,9 +681,10 @@ class DeveloperAccount(StrippedSQLModel, table=True):
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    code_host_id: int = Field(
+    code_host_id: int | None = Field(
         foreign_key="code_host.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
     username: str
@@ -592,8 +696,12 @@ class DeveloperAccount(StrippedSQLModel, table=True):
     email: str | None = None
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class RepositoryContributor(StrippedSQLModel, table=True):
@@ -603,14 +711,16 @@ class RepositoryContributor(StrippedSQLModel, table=True):
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    repository_id: int = Field(
+    repository_id: int | None = Field(
         foreign_key="repository.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
-    developer_account_id: int = Field(
+    developer_account_id: int | None = Field(
         foreign_key="developer_account.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
 
@@ -619,8 +729,12 @@ class RepositoryContributor(StrippedSQLModel, table=True):
     # TODO: add "total commits" field
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 # TODO: Store basic repository commit details
@@ -640,11 +754,13 @@ class DocumentRepositoryLink(StrippedSQLModel, table=True):
     document_id: int = Field(
         foreign_key="document.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
     repository_id: int = Field(
         foreign_key="repository.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
 
@@ -654,6 +770,7 @@ class DocumentRepositoryLink(StrippedSQLModel, table=True):
     dataset_source_id: int = Field(
         foreign_key="dataset_source.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
     iteration: int | None = Field(default=None, index=True)
@@ -662,8 +779,12 @@ class DocumentRepositoryLink(StrippedSQLModel, table=True):
     predictive_model_confidence: float | None = None
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
 
 
 class ResearcherDeveloperAccountLink(StrippedSQLModel, table=True):
@@ -673,14 +794,16 @@ class ResearcherDeveloperAccountLink(StrippedSQLModel, table=True):
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
-    researcher_id: int = Field(
+    researcher_id: int | None = Field(
         foreign_key="researcher.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
-    developer_account_id: int = Field(
+    developer_account_id: int | None = Field(
         foreign_key="developer_account.id",
         index=True,
+        nullable=False,
         ondelete="CASCADE",
     )
 
@@ -697,5 +820,9 @@ class ResearcherDeveloperAccountLink(StrippedSQLModel, table=True):
     )
 
     # Updates
-    created_datetime: datetime = Field(sa_column=Column(DateTime(), server_default=func.now()))
-    updated_datetime: datetime = Field(sa_column=Column(DateTime(), onupdate=func.now()))
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )

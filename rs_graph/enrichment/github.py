@@ -190,6 +190,8 @@ def process_github_repo(  # noqa: C901
             for language, bytes_of_code in repo_languages.items():
                 repo_language_models.append(
                     db_models.RepositoryLanguage(
+                        # Placeholder, to be updated after repo model is created
+                        repository_id=None,
                         language=language,
                         bytes_of_code=bytes_of_code,
                     )
@@ -217,6 +219,8 @@ def process_github_repo(  # noqa: C901
 
                 # Create model
                 repo_readme_model = db_models.RepositoryReadme(
+                    # Placeholder, to be updated after repo model is created
+                    repository_id=None,
                     content=repo_readme,
                 )
         else:
@@ -343,6 +347,8 @@ def process_github_repo(  # noqa: C901
                 for file in tree_results["tree"]:
                     repo_file_models.append(
                         db_models.RepositoryFile(
+                            # Placeholder, to be updated after repo model is created
+                            repository_id=None,
                             path=file["path"],
                             tree_type=file["type"],
                             bytes_of_code=file.get("size", 0),
@@ -376,6 +382,8 @@ def process_github_repo(  # noqa: C901
 
                 # Create the repository contributor
                 repo_contributor = db_models.RepositoryContributor(
+                    # Placeholder, to be updated after repo and dev account models are created
+                    repository_id=repo_model.id,
                     developer_account_id=dev_account.id,
                 )
 
