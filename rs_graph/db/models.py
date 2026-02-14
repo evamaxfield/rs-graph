@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from collections.abc import Callable
 from datetime import date, datetime
 from typing import Any, ClassVar
 
@@ -19,6 +21,17 @@ convention = {
 
 # Apply the naming convention to SQLModel's metadata
 SQLModel.metadata.naming_convention = convention
+
+
+DOI_PREFIX_PATTERN = re.compile(
+    r"^(?:https?://(?:dx\.)?doi\.org/|doi:)",
+    flags=re.IGNORECASE,
+)
+
+
+def normalize_doi(value: str) -> str:
+    """Normalize DOI-like values to their canonical DOI-only form."""
+    return DOI_PREFIX_PATTERN.sub("", value.strip(), count=1)
 
 
 def _is_attrdict_like(value: Any) -> bool:
@@ -40,9 +53,12 @@ class StripMixin:
 
     Subclasses can define FIELDS_TO_LOWER as a tuple of field names that should
     be lowercased for consistency (e.g., DOIs, usernames, repository names).
+    Subclasses can also define FIELDS_TO_CUSTOM_NORMALIZATION_FUNC_LUT to apply
+    custom per-field string normalization functions.
     """
 
     FIELDS_TO_LOWER: ClassVar[tuple[str, ...]] = ()
+    FIELDS_TO_CUSTOM_NORMALIZATION_FUNC_LUT: ClassVar[dict[str, Callable[[str], str]]] = {}
 
     def __init__(self, **data: Any):
         for field, value in data.items():
@@ -55,7 +71,11 @@ class StripMixin:
                 data[field] = None
             # Strip whitespace from strings
             elif isinstance(value, str):
-                data[field] = value.strip()
+                cleaned_value = value.strip()
+                normalization_func = self.FIELDS_TO_CUSTOM_NORMALIZATION_FUNC_LUT.get(field)
+                if normalization_func is not None:
+                    cleaned_value = normalization_func(cleaned_value)
+                data[field] = cleaned_value
 
             # Lowercase specific fields for consistency
             if field in self.FIELDS_TO_LOWER and isinstance(data[field], str):
@@ -133,6 +153,7 @@ class Document(StrippedSQLModel, table=True):
     """Stores paper, report, or other academic document details."""
 
     FIELDS_TO_LOWER = ("doi",)
+    FIELDS_TO_CUSTOM_NORMALIZATION_FUNC_LUT = {"doi": normalize_doi}
 
     # Primary Keys / Uniqueness
     id: int | None = Field(default=None, primary_key=True)
@@ -177,6 +198,7 @@ class DocumentAlternateDOI(StrippedSQLModel, table=True):
     """
 
     FIELDS_TO_LOWER = ("doi",)
+    FIELDS_TO_CUSTOM_NORMALIZATION_FUNC_LUT = {"doi": normalize_doi}
 
     __tablename__ = "document_alternate_doi"
 

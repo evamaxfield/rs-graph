@@ -87,20 +87,6 @@ class ProcessingTimes:
 ###############################################################################
 
 
-def _normalize_doi(doi: str) -> str:
-    """Normalize a DOI for comparison."""
-    return (
-        doi.lower()
-        .strip()
-        .replace("https://doi.org/", "")
-        .replace("http://doi.org/", "")
-        .replace("http://dx.doi.org/", "")
-        .replace("https://dx.doi.org/", "")
-        .replace("doi:", "")
-        .strip()
-    )
-
-
 def _get_doi_from_semantic_scholar(
     doi: str,
     api_key: str | None = None,
@@ -111,12 +97,14 @@ def _get_doi_from_semantic_scholar(
     Returns the DOI that Semantic Scholar has on file, which may differ
     from the input DOI if Semantic Scholar has resolved it to a different version.
     """
+    normalized_doi = db_models.normalize_doi(doi).lower().strip()
+
     # Handle arXiv IDs
-    if "arxiv" in doi.lower():
-        search_id = doi.lower().split("arxiv.")[-1]
+    if "arxiv" in normalized_doi:
+        search_id = normalized_doi.split("arxiv.")[-1]
         search_string = f"ARXIV:{search_id}"
     else:
-        search_string = f"DOI:{doi}"
+        search_string = f"DOI:{normalized_doi}"
 
     url = f"https://api.semanticscholar.org/graph/v1/paper/{search_string}"
     headers = {}
@@ -161,9 +149,8 @@ def _get_dois_from_openalex(
     _increment_call_count_and_check(open_alex_email_count=open_alex_email_count)
 
     # Normalize DOI for query
-    query_doi = doi.lower()
-    if "doi.org" not in query_doi:
-        query_doi = f"https://doi.org/{query_doi}"
+    query_doi = db_models.normalize_doi(doi).lower().strip()
+    query_doi = f"https://doi.org/{query_doi}"
 
     try:
         print("Querying OpenAlex for DOI:", query_doi)
@@ -176,12 +163,12 @@ def _get_dois_from_openalex(
         # Get the primary DOI
         print("Parsing OpenAlex work for DOIs...")
         if work.get("doi"):
-            dois.append(work["doi"].replace("https://doi.org/", ""))
+            dois.append(db_models.normalize_doi(work["doi"]).lower().strip())
 
         # Check for DOI in ids field
         if work.get("ids"):
             if work["ids"].get("doi"):
-                doi_from_ids = work["ids"]["doi"].replace("https://doi.org/", "")
+                doi_from_ids = db_models.normalize_doi(work["ids"]["doi"]).lower().strip()
                 if doi_from_ids not in dois:
                     dois.append(doi_from_ids)
 
@@ -205,7 +192,7 @@ def discover_alternate_dois(
     start_time = time.time()
 
     try:
-        original_normalized = _normalize_doi(doc_info.doi)
+        original_normalized = db_models.normalize_doi(doc_info.doi).lower().strip()
         alternate_dois: set[str] = set()
         print(f"Discovering alternates for DOI: {doc_info.doi}")
 
@@ -215,7 +202,7 @@ def discover_alternate_dois(
             doc_info.doi,
             api_key=semantic_scholar_api_key,
         )
-        ss_doi_normalized = _normalize_doi(ss_doi) if ss_doi else None
+        ss_doi_normalized = db_models.normalize_doi(ss_doi).lower().strip() if ss_doi else None
 
         # Query OpenAlex
         print("About to query OpenAlex...")
@@ -231,7 +218,7 @@ def discover_alternate_dois(
             alternate_dois.add(ss_doi_normalized)
 
         for oa_doi in oa_dois:
-            oa_doi_normalized = _normalize_doi(oa_doi)
+            oa_doi_normalized = db_models.normalize_doi(oa_doi).lower().strip()
             if oa_doi_normalized != original_normalized:
                 alternate_dois.add(oa_doi_normalized)
 

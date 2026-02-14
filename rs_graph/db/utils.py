@@ -547,6 +547,7 @@ def check_pair_exists(
 
     # Check we have already processed to repo parts
     assert pair.repo_parts is not None
+    normalized_doi = db_models.normalize_doi(pair.paper_doi).lower().strip()
 
     # Create a session
     with Session(engine) as session:
@@ -559,14 +560,14 @@ def check_pair_exists(
 
         # Document
         document_stmt = select(db_models.Document).where(
-            db_models.Document.doi == pair.paper_doi
+            db_models.Document.doi == normalized_doi
         )
         document_model = session.exec(document_stmt).first()
 
         # Check for document alternate doi
         if document_model is None:
             document_stmt = select(db_models.DocumentAlternateDOI).where(
-                db_models.DocumentAlternateDOI.doi == pair.paper_doi
+                db_models.DocumentAlternateDOI.doi == normalized_doi
             )
             document_alternate_doi_model = session.exec(document_stmt).first()
 
@@ -804,8 +805,8 @@ def check_article_in_db(
     # Get the engine
     engine = get_engine(use_prod=use_prod)
 
-    # Lowercase and strip all inputs
-    article_doi = article_doi.lower().strip()
+    # Normalize DOI variants (e.g., https://doi.org/...) and lowercase
+    article_doi = db_models.normalize_doi(article_doi).lower().strip()
 
     # Create a session
     document_found = False
