@@ -518,9 +518,9 @@ def _run_alternate_doi_discovery(
             discover_alternate_dois,
             coiled_kwargs=pipeline_utils._get_small_cpu_api_cluster(
                 # TODO:
-                # Hardcoded to 8 workers because I know it can handle it
+                # Hardcoded to 10 workers because I know it can handle it
                 # Ideally will go back to dynamic based on number of tokens
-                n_workers=8,
+                n_workers=10,
                 use_coiled=use_coiled,
                 coiled_region=coiled_region,
             ),

@@ -243,9 +243,9 @@ def _prelinked_dataset_ingestion_flow(
                 article.process_article_task,
                 coiled_kwargs=_get_small_cpu_api_cluster(
                     # TODO:
-                    # Hardcoded to 8 workers for now since I know it can handle that
+                    # Hardcoded to 10 workers for now since I know it can handle that
                     # In the future, should be based on number of tokens
-                    n_workers=8,
+                    n_workers=10,
                     use_coiled=use_coiled,
                     coiled_region=coiled_region,
                 ),

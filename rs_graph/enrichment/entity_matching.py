@@ -4,11 +4,32 @@ from __future__ import annotations
 
 import time
 import traceback
+import os
+from functools import lru_cache
 
 from sci_soft_models import binary_article_repo_em, dev_author_em
 
 from .. import types
 from ..db import models as db_models
+
+HF_CACHE_DIR = os.getenv("HF_CACHE_DIR", "/tmp/hf-cache")
+# Set this to "1" for strictly offline
+HF_LOCAL_FILES_ONLY = os.getenv("HF_LOCAL_FILES_ONLY", "0") == "1"
+
+@lru_cache(maxsize=1)
+def _get_dev_author_model():
+    return dev_author_em.load_dev_author_em_model(
+        cache_dir=HF_CACHE_DIR,
+        local_files_only=HF_LOCAL_FILES_ONLY,
+    )
+
+@lru_cache(maxsize=1)
+def _get_article_repo_model():
+    return binary_article_repo_em.load_binary_article_repository_em_model(
+        model_choice="optimized",
+        cache_dir=HF_CACHE_DIR,
+        local_files_only=HF_LOCAL_FILES_ONLY,
+    )
 
 ###############################################################################
 
@@ -49,6 +70,7 @@ def match_devs_and_researchers(
         matches = dev_author_em.match_devs_and_authors(
             devs=list(dev_username_to_dev_details.values()),
             authors=list(researcher_name_to_researcher_model.keys()),
+            loaded_dev_author_em_model=_get_dev_author_model(),
         )
 
         # Create the linked pairs
@@ -179,7 +201,9 @@ def match_articles_and_repositories(
                 pair.inference_ready_pair for pair in inference_ready_article_repository_pairs
             ],
             model_choice="optimized",
-        )
+            loaded_binary_article_repo_em_model=_get_article_repo_model(),
+)
+
 
         # Results LUT
         results_lut = {

@@ -768,9 +768,9 @@ def _snowball_sampling_discovery_flow(
         coiled_func_name="open_alex_cluster",
         coiled_kwargs=_get_small_cpu_api_cluster(
             # TODO
-            # Hardcoded to 8 workers because I know it can handle that
+            # Hardcoded to 10 workers because I know it can handle that
             # But should actually utilize the number of tokens available
-            n_workers=8,
+            n_workers=10,
             use_coiled=use_coiled,
             coiled_region=coiled_region,
         ),
