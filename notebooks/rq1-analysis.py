@@ -716,9 +716,7 @@ g = sns.displot(
 
 # Update the subplot titles
 g.set_titles("{col_name}")
-g.figure.savefig(
-    RESULTS_DIR / "fwci_fwsi_distributions.png", bbox_inches="tight", dpi=300
-)
+g.figure.savefig(RESULTS_DIR / "fwci_fwsi_distributions.png", bbox_inches="tight", dpi=300)
 
 
 # ## Date Relationships
@@ -866,6 +864,7 @@ g.figure.savefig(
 
 
 # ## Network Coverage
+
 
 def build_coauthorship_network(
     df: pl.DataFrame, sample_size: int | None = None
