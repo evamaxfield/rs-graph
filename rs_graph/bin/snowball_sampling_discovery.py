@@ -1008,7 +1008,7 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
             print(
                 f"Error preparing article-repository pair for storage for "
                 f"author-developer link ID "
-                f"{rfs.source}: {rfs.traceback}"
+                f"{rfs.source}: {rfs.error}"
             )
 
         else:
@@ -1020,7 +1020,7 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
                 print(
                     f"Error storing full details for "
                     f"author-developer link ID "
-                    f"{stored_pair.source}: {stored_pair.traceback}"
+                    f"{stored_pair.source}: {stored_pair.error}"
                 )
             else:
                 stored_pairs.append(stored_pair)
@@ -1040,7 +1040,7 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
         if isinstance(drf, types.ErrorResult):
             print(
                 f"Error matching dev-researcher link for author-developer link ID "
-                f"{drf.source}: {drf.traceback}"
+                f"{drf.source}: {drf.error}"
             )
         else:
             stored_dev_researcher = db_utils.store_dev_researcher_em_links(
