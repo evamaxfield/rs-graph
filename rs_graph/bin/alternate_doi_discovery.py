@@ -41,7 +41,7 @@ from rs_graph.utils.identifier_normalization import normalize_doi
 
 app = typer.Typer()
 
-DEFAULT_OPEN_ALEX_EMAILS_FILE = ".open-alex-emails.yml"
+DEFAULT_OPEN_ALEX_TOKENS_FILE = ".open-alex-tokens.yml"
 
 ###############################################################################
 
@@ -135,8 +135,7 @@ def _get_doi_from_semantic_scholar(
 
 def _get_dois_from_openalex(
     doi: str,
-    open_alex_email: str,
-    open_alex_email_count: int,
+    open_alex_token: str,
 ) -> list[str]:
     """
     Query OpenAlex for all DOI variants of a work.
@@ -146,8 +145,8 @@ def _get_dois_from_openalex(
     """
     import pyalex
 
-    _setup_open_alex(open_alex_email=open_alex_email)
-    _increment_call_count_and_check(open_alex_email_count=open_alex_email_count)
+    _setup_open_alex(open_alex_token=open_alex_token)
+    _increment_call_count_and_check()
 
     # Normalize DOI for query
     query_doi = normalize_doi(doi).lower().strip()
@@ -181,8 +180,7 @@ def _get_dois_from_openalex(
 
 def discover_alternate_dois(
     doc_info: DocumentDOIInfo,
-    open_alex_email: str,
-    open_alex_email_count: int,
+    open_alex_token: str,
     semantic_scholar_api_key: str | None = None,
 ) -> AlternateDOIResult | ErrorResult:
     """
@@ -209,8 +207,7 @@ def discover_alternate_dois(
         print("About to query OpenAlex...")
         oa_dois = _get_dois_from_openalex(
             doc_info.doi,
-            open_alex_email=open_alex_email,
-            open_alex_email_count=open_alex_email_count,
+            open_alex_token=open_alex_token,
         )
 
         # Collect alternates (any DOI that differs from the original)
@@ -349,15 +346,13 @@ def store_alternate_dois(
 )
 def discover_alternate_dois_task(
     doc_info: DocumentDOIInfo,
-    open_alex_email: str,
-    open_alex_email_count: int,
+    open_alex_token: str,
     semantic_scholar_api_key: str | None = None,
 ) -> AlternateDOIResult | ErrorResult:
     """Prefect task wrapper for discover_alternate_dois."""
     return discover_alternate_dois(
         doc_info=doc_info,
-        open_alex_email=open_alex_email,
-        open_alex_email_count=open_alex_email_count,
+        open_alex_token=open_alex_token,
         semantic_scholar_api_key=semantic_scholar_api_key,
     )
 
@@ -404,7 +399,7 @@ def alternate_doi_discovery_flow(
     use_prod: bool = False,
     use_coiled: bool = False,
     coiled_region: str = "us-west-2",
-    open_alex_emails_file: str = DEFAULT_OPEN_ALEX_EMAILS_FILE,
+    open_alex_tokens_file: str = DEFAULT_OPEN_ALEX_TOKENS_FILE,
     semantic_scholar_api_key: str | None = None,
     batch_size: int = 50,
     limit: int | None = None,
@@ -416,7 +411,7 @@ def alternate_doi_discovery_flow(
         use_prod: Whether to use production database
         use_coiled: Whether to use Coiled for distributed execution
         coiled_region: AWS region for Coiled cluster
-        open_alex_emails_file: Path to OpenAlex emails YAML file
+        open_alex_tokens_file: Path to OpenAlex tokens YAML file
         semantic_scholar_api_key: Semantic Scholar API key
         batch_size: Number of documents to process per batch
         limit: Maximum number of documents to process (None for all)
@@ -426,7 +421,7 @@ def alternate_doi_discovery_flow(
         use_prod=use_prod,
         use_coiled=use_coiled,
         coiled_region=coiled_region,
-        open_alex_emails_file=open_alex_emails_file,
+        open_alex_tokens_file=open_alex_tokens_file,
         semantic_scholar_api_key=semantic_scholar_api_key,
         batch_size=batch_size,
         limit=limit,
@@ -436,8 +431,7 @@ def alternate_doi_discovery_flow(
 def _process_batches(
     doc_infos: list[DocumentDOIInfo],
     discover_task: Task,
-    cycled_emails: itertools.cycle,
-    n_open_alex_emails: int,
+    cycled_tokens: itertools.cycle,
     semantic_scholar_api_key: str | None,
     use_prod: bool,
     batch_size: int,
@@ -457,8 +451,7 @@ def _process_batches(
         # Discover alternate DOIs
         discovery_futures = discover_task.map(
             doc_info=batch,
-            open_alex_email=[next(cycled_emails) for _ in range(len(batch))],
-            open_alex_email_count=unmapped(n_open_alex_emails),
+            open_alex_token=[next(cycled_tokens) for _ in range(len(batch))],
             semantic_scholar_api_key=unmapped(semantic_scholar_api_key),
         )
 
@@ -495,18 +488,18 @@ def _run_alternate_doi_discovery(
     use_prod: bool,
     use_coiled: bool,
     coiled_region: str,
-    open_alex_emails_file: str,
+    open_alex_tokens_file: str,
     semantic_scholar_api_key: str | None,
     batch_size: int,
     limit: int | None,
 ) -> None:
     """Run the alternate DOI discovery process."""
     # Load credentials
-    open_alex_emails = pipeline_utils._load_open_alex_emails(open_alex_emails_file)
-    n_open_alex_emails = len(open_alex_emails)
-    cycled_emails = itertools.cycle(open_alex_emails)
+    open_alex_tokens = pipeline_utils._load_open_alex_tokens(open_alex_tokens_file)
+    n_open_alex_tokens = len(open_alex_tokens)
+    cycled_tokens = itertools.cycle(open_alex_tokens)
 
-    print(f"Loaded {n_open_alex_emails} OpenAlex emails")
+    print(f"Loaded {n_open_alex_tokens} OpenAlex tokens")
     ss_status = "loaded" if semantic_scholar_api_key else "not configured"
     print(f"Semantic Scholar API key: {ss_status}")
 
@@ -524,7 +517,10 @@ def _run_alternate_doi_discovery(
         discover_task = pipeline_utils._wrap_func_with_coiled_prefect_task(
             discover_alternate_dois,
             coiled_kwargs=pipeline_utils._get_small_cpu_api_cluster(
-                n_workers=n_open_alex_emails,
+                # TODO:
+                # Hardcoded to 8 workers because I know it can handle it
+                # Ideally will go back to dynamic based on number of tokens
+                n_workers=8,
                 use_coiled=use_coiled,
                 coiled_region=coiled_region,
             ),
@@ -536,8 +532,7 @@ def _run_alternate_doi_discovery(
     all_results, processing_times, total_alternates_found, total_errors = _process_batches(
         doc_infos=doc_infos,
         discover_task=discover_task,
-        cycled_emails=cycled_emails,
-        n_open_alex_emails=n_open_alex_emails,
+        cycled_tokens=cycled_tokens,
         semantic_scholar_api_key=semantic_scholar_api_key,
         use_prod=use_prod,
         batch_size=batch_size,
@@ -568,7 +563,7 @@ def alternate_doi_discovery(
     use_prod: bool = False,
     use_coiled: bool = False,
     coiled_region: str = "us-west-2",
-    open_alex_emails_file: str = DEFAULT_OPEN_ALEX_EMAILS_FILE,
+    open_alex_tokens_file: str = DEFAULT_OPEN_ALEX_TOKENS_FILE,
     batch_size: int = 50,
     limit: int | None = None,
 ) -> None:
@@ -587,7 +582,7 @@ def alternate_doi_discovery(
         use_prod=use_prod,
         use_coiled=use_coiled,
         coiled_region=coiled_region,
-        open_alex_emails_file=open_alex_emails_file,
+        open_alex_tokens_file=open_alex_tokens_file,
         semantic_scholar_api_key=semantic_scholar_api_key,
         batch_size=batch_size,
         limit=limit,

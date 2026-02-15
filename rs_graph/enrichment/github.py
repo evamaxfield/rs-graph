@@ -72,7 +72,7 @@ def _get_user_info_from_login(
     user_info = api.users.get_by_username(username=login)
 
     # Sleep to avoid API limits
-    time.sleep(0.85)
+    time.sleep(0.75)
 
     # Store info
     return RepoContributorInfoSimple(
@@ -104,7 +104,7 @@ def get_repo_contributors(
     )
 
     # Sleep to avoid API limits
-    time.sleep(0.85)
+    time.sleep(0.75)
 
     # Get user infos
     _get_user_partial = partial(
@@ -163,7 +163,7 @@ def process_github_repo(  # noqa: C901
             )
 
             # Sleep to avoid API limits
-            time.sleep(0.85)
+            time.sleep(0.75)
 
             if existing_repo_data:
                 # Update existing repo data with new info
@@ -183,7 +183,7 @@ def process_github_repo(  # noqa: C901
             )
 
             # Sleep to avoid API limits
-            time.sleep(0.85)
+            time.sleep(0.75)
 
             # For each language, create a repository language
             repo_language_models = []
@@ -215,7 +215,7 @@ def process_github_repo(  # noqa: C901
 
             finally:
                 # Sleep to avoid API limits
-                time.sleep(0.85)
+                time.sleep(0.75)
 
                 # Create model
                 repo_readme_model = db_models.RepositoryReadme(
@@ -290,7 +290,7 @@ def process_github_repo(  # noqa: C901
 
             finally:
                 # Sleep to avoid API limits
-                time.sleep(0.85)
+                time.sleep(0.75)
         else:
             processed_at_sha = None
             commits_count = None
@@ -361,7 +361,7 @@ def process_github_repo(  # noqa: C901
 
             finally:
                 # Sleep to avoid API limits
-                time.sleep(0.85)
+                time.sleep(0.75)
         else:
             repo_file_models = None
 
@@ -521,7 +521,7 @@ def get_github_repos_for_developer(
 
         developer_repos = []
         for page in repo_pager:
-            time.sleep(0.85)  # Sleep to avoid API limits
+            time.sleep(0.75)  # Sleep to avoid API limits
             developer_repos.extend(page)
 
         # Get the GitHub response object

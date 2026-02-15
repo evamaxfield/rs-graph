@@ -18,10 +18,10 @@ from rs_graph import __version__ as rs_graph_version
 from rs_graph import types
 from rs_graph.bin.pipeline_utils import (
     DEFAULT_GITHUB_TOKENS_FILE,
-    DEFAULT_OPEN_ALEX_EMAILS_FILE,
+    DEFAULT_OPEN_ALEX_TOKENS_FILE,
     _get_basic_gpu_cluster_config,
     _get_small_cpu_api_cluster,
-    _load_open_alex_emails,
+    _load_open_alex_tokens,
     _wrap_func_with_coiled_prefect_task,
 )
 from rs_graph.data import DATA_FILES_DIR
@@ -58,15 +58,13 @@ def _summarize_errors(errors: list[types.ErrorResult], label: str) -> None:
 def _get_author_articles_for_researcher(
     author_developer_link_id: int,
     researcher_open_alex_id: str,
-    open_alex_email: str,
-    open_alex_email_count: int,
+    open_alex_token: str,
     semantic_scholar_api_key: str,
 ) -> list[types.AuthorArticleDetails | types.ErrorResult] | types.ErrorResult:
     # Get the articles for the researcher
     researcher_articles = article.get_articles_for_researcher(
         researcher_open_alex_id=researcher_open_alex_id,
-        open_alex_email=open_alex_email,
-        open_alex_email_count=open_alex_email_count,
+        open_alex_token=open_alex_token,
         semantic_scholar_api_key=semantic_scholar_api_key,
     )
 
@@ -629,8 +627,7 @@ def _update_processed_links_cache(
 
 def _process_matched_article(
     matched_pair: types.MatchedAuthorArticleAndDeveloperRepositoryPair,
-    open_alex_email: str,
-    open_alex_email_count: int,
+    open_alex_token: str,
     semantic_scholar_api_key: str,
 ) -> types.MatchedAuthorArticleAndDeveloperRepositoryPair | types.ErrorResult:
     # Try getting the rest of the data
@@ -638,8 +635,7 @@ def _process_matched_article(
     updated_open_alex_results = article.process_article(
         paper_doi=matched_pair.article_doi,
         source=f"snowball-sampling-discovery-v{rs_graph_version}",
-        open_alex_email=open_alex_email,
-        open_alex_email_count=open_alex_email_count,
+        open_alex_token=open_alex_token,
         semantic_scholar_api_key=semantic_scholar_api_key,
         existing_pyalex_work=matched_pair.author_article.pyalex_work,  # type: ignore[arg-type]
         existing_open_alex_results=matched_pair.author_article.open_alex_results_models,
@@ -754,24 +750,27 @@ def _snowball_sampling_discovery_flow(
     use_coiled: bool,
     coiled_region: str,
     cycled_github_tokens: GitHubTokensCycler,
-    open_alex_emails: list[str],
+    open_alex_tokens: list[str],
     semantic_scholar_api_key: str | None,
 ) -> dict[int, int]:
     # Workers is the number of github tokens
     n_github_tokens = len(cycled_github_tokens)
 
-    # Get an infinite cycle of open alex emails
-    cycled_open_alex_emails = itertools.cycle(open_alex_emails)
+    # Get an infinite cycle of open alex tokens
+    cycled_open_alex_tokens = itertools.cycle(open_alex_tokens)
 
-    # Get the number of open alex emails
-    n_open_alex_emails = len(open_alex_emails)
+    # Get the number of open alex tokens
+    n_open_alex_tokens = len(open_alex_tokens)
 
     # Preconstruct all wrapped tasks
     wrapped_get_articles_for_researcher = _wrap_func_with_coiled_prefect_task(
         _get_author_articles_for_researcher,
         coiled_func_name="open_alex_cluster",
         coiled_kwargs=_get_small_cpu_api_cluster(
-            n_workers=n_open_alex_emails,
+            # TODO
+            # Hardcoded to 8 workers because I know it can handle that
+            # But should actually utilize the number of tokens available
+            n_workers=8,
             use_coiled=use_coiled,
             coiled_region=coiled_region,
         ),
@@ -810,7 +809,7 @@ def _snowball_sampling_discovery_flow(
         _process_matched_article,
         coiled_func_name="open_alex_cluster",
         coiled_kwargs=_get_small_cpu_api_cluster(
-            n_workers=n_open_alex_emails,
+            n_workers=n_open_alex_tokens,
             use_coiled=use_coiled,
             coiled_region=coiled_region,
         ),
@@ -833,7 +832,8 @@ def _snowball_sampling_discovery_flow(
         ),
     )
 
-    # Get each authors articles
+    # Submit both article and repo fetches concurrently
+    # (they use independent APIs and clusters)
     print("Getting each author's articles from Open Alex...")
     author_articles = wrapped_get_articles_for_researcher.map(
         author_developer_link_id=[
@@ -842,22 +842,12 @@ def _snowball_sampling_discovery_flow(
         researcher_open_alex_id=[
             link.researcher_open_alex_id for link in author_developer_links
         ],
-        open_alex_email=[
-            next(cycled_open_alex_emails) for _ in range(len(author_developer_links))
+        open_alex_token=[
+            next(cycled_open_alex_tokens) for _ in range(len(author_developer_links))
         ],
-        open_alex_email_count=unmapped(n_open_alex_emails),
         semantic_scholar_api_key=unmapped(semantic_scholar_api_key),
     )
 
-    # Drop existing articles already stored in the database
-    print("Filtering out articles already in the database...")
-    flattened_author_articles = _flatten_and_check_articles_in_db(
-        all_author_articles_and_errors=[aa.result() for aa in author_articles],
-        use_prod=use_prod,
-        ignorable_doi_spans=ignorable_doi_spans,
-    )
-
-    # Get each developer's repositories
     print("Getting each developer's repositories from GitHub...")
     developer_repositories = wrapped_get_repositories_for_developer.map(
         author_developer_link_id=[
@@ -869,7 +859,14 @@ def _snowball_sampling_discovery_flow(
         github_api_key=[next(cycled_github_tokens) for _ in range(len(author_developer_links))],
     )
 
-    # Drop existing repositories already stored in the database
+    # Now collect results from both (they've been running in parallel)
+    print("Filtering out articles already in the database...")
+    flattened_author_articles = _flatten_and_check_articles_in_db(
+        all_author_articles_and_errors=[aa.result() for aa in author_articles],
+        use_prod=use_prod,
+        ignorable_doi_spans=ignorable_doi_spans,
+    )
+
     print("Filtering out repositories already in the database...")
     flattened_developer_repositories = _flatten_and_check_repositories_in_db(
         all_developer_repositories_and_errors=[dr.result() for dr in developer_repositories],
@@ -955,8 +952,7 @@ def _snowball_sampling_discovery_flow(
     print("Getting extended article data for predicted pairs...")
     updated_article_processing_futures = process_article_wrapped_task.map(
         matched_pair=prediction_results,
-        open_alex_email=[next(cycled_open_alex_emails) for _ in range(len(prediction_results))],
-        open_alex_email_count=unmapped(n_open_alex_emails),
+        open_alex_token=[next(cycled_open_alex_tokens) for _ in range(len(prediction_results))],
         semantic_scholar_api_key=unmapped(semantic_scholar_api_key),
     )
 
@@ -1005,7 +1001,7 @@ def _snowball_sampling_discovery_flow(
                 )
             else:
                 stored_pairs.append(stored_pair)
-            time.sleep(0.25)
+            time.sleep(0.1)
 
     # Match devs and researchers
     print("Matching developers and researchers...")
@@ -1029,7 +1025,7 @@ def _snowball_sampling_discovery_flow(
                 use_prod=use_prod,
             )
             stored_dev_researchers.append(stored_dev_researcher)
-            time.sleep(0.25)
+            time.sleep(0.1)
 
     # Note that we have now processed this author-developer link
     print("Marking snowball source author-developer links as processed...")
@@ -1038,7 +1034,7 @@ def _snowball_sampling_discovery_flow(
             link_id=adl.author_developer_link_id,
             use_prod=use_prod,
         )
-        time.sleep(0.25)
+        time.sleep(0.1)
 
     # Count document-repository links created per source author-developer link
     doc_repo_link_counts: dict[int, int] = {
@@ -1073,7 +1069,7 @@ def snowball_sampling_discovery(
     ),
     article_repository_allowed_datetime_difference_positive: str = "556 days",
     article_repository_allowed_datetime_difference_negative: str = "73 days",
-    author_developer_links_batch_size: int = 4,
+    author_developer_links_batch_size: int = 16,
     article_repository_matching_batch_size: int = 24,
     ignore_forks: bool = True,
     ignorable_doi_spans: list[str] = ignorable_doi_spans_default,
@@ -1081,7 +1077,7 @@ def snowball_sampling_discovery(
     use_coiled: bool = False,
     coiled_region: str = "us-west-2",
     github_tokens_file: str = DEFAULT_GITHUB_TOKENS_FILE,
-    open_alex_emails_file: str = DEFAULT_OPEN_ALEX_EMAILS_FILE,
+    open_alex_tokens_file: str = DEFAULT_OPEN_ALEX_TOKENS_FILE,
 ) -> None:
     """
     Discover new article-repository pairs via snowball sampling.
@@ -1094,8 +1090,8 @@ def snowball_sampling_discovery(
     # Load environment variables
     load_dotenv()
 
-    # Get open alex emails
-    open_alex_emails = _load_open_alex_emails(open_alex_emails_file)
+    # Get open alex tokens
+    open_alex_tokens = _load_open_alex_tokens(open_alex_tokens_file)
 
     # Get semantic scholar API key
     try:
@@ -1112,8 +1108,8 @@ def snowball_sampling_discovery(
     # Workers is the number of github tokens
     n_github_tokens = len(cycled_github_tokens)
 
-    # Get the number of open alex emails
-    n_open_alex_emails = len(open_alex_emails)
+    # Get the number of open alex tokens
+    n_open_alex_tokens = len(open_alex_tokens)
 
     # Parse timedeltas
     article_respository_allowed_datetime_difference_negative_td = (
@@ -1139,7 +1135,7 @@ def snowball_sampling_discovery(
     print(f"Use Coiled: {use_coiled}")
     print(f"Coiled Region: {coiled_region}")
     print(f"GitHub Token Count: {n_github_tokens}")
-    print(f"Open Alex Email Count: {n_open_alex_emails}")
+    print(f"Open Alex Token Count: {n_open_alex_tokens}")
     print("-" * 80)
 
     # Read the parquet file to get the link IDs
@@ -1221,7 +1217,7 @@ def snowball_sampling_discovery(
                 use_coiled=use_coiled,
                 coiled_region=coiled_region,
                 cycled_github_tokens=cycled_github_tokens,
-                open_alex_emails=open_alex_emails,
+                open_alex_tokens=open_alex_tokens,
                 semantic_scholar_api_key=semantic_scholar_api_key,
             )
 
@@ -1239,7 +1235,7 @@ def snowball_sampling_discovery(
                 link_counts=batch_link_counts,
             )
 
-        time.sleep(10)
+        time.sleep(1)
 
 
 ###############################################################################

@@ -12,7 +12,7 @@ from prefect import Task, task
 
 DEFAULT_RESULTS_DIR = Path("processing-results")
 DEFAULT_GITHUB_TOKENS_FILE = ".github-tokens.yml"
-DEFAULT_OPEN_ALEX_EMAILS_FILE = ".open-alex-emails.yml"
+DEFAULT_OPEN_ALEX_TOKENS_FILE = ".open-alex-tokens.yml"
 DEFAULT_ELSEVIER_API_KEYS_FILE = ".elsevier-api-keys.yml"
 DEFAULT_ERRORS_CACHE_FILE = DEFAULT_RESULTS_DIR / "errors-cache.parquet"
 
@@ -49,7 +49,7 @@ def _get_basic_gpu_cluster_config(
     return {
         "keepalive": keepalive,
         "vm_type": "g4dn.xlarge",
-        "n_workers": [1, 12],
+        "n_workers": [4, 12],
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
         "region": coiled_region,
@@ -86,23 +86,22 @@ def _wrap_func_with_coiled_prefect_task(
     return wrapped_func
 
 
-def _load_open_alex_emails(
-    open_alex_emails_file: str,
+def _load_open_alex_tokens(
+    open_alex_tokens_file: str,
 ) -> list[str]:
-    # Load emails
+    # Load tokens
     try:
-        with open(open_alex_emails_file) as f:
-            emails_file = yaml.safe_load(f)
+        with open(open_alex_tokens_file) as f:
+            tokens_file = yaml.safe_load(f)
 
     except FileNotFoundError as e:
         raise FileNotFoundError(
-            f"Open Alex emails file not found at path: {open_alex_emails_file}"
+            f"Open Alex tokens file not found at path: {open_alex_tokens_file}"
         ) from e
 
-    # Get emails
-    emails_list = emails_file["emails"].values()
-
-    return emails_list
+    # Get tokens
+    tokens_dict = tokens_file["tokens"]
+    return [token_details["token"] for _user, token_details in tokens_dict.items()]
 
 
 def _load_elsevier_api_keys(

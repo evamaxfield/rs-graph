@@ -150,6 +150,7 @@ elsarticle-harv.bst
 elsarticle.cls
 qss-code-authors.spl
 stored-queries.sql
+.open-alex-tokens.yml
 
 # Ignored data files
 rs_graph/data/files/*

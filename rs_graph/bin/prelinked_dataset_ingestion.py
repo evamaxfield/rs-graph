@@ -24,12 +24,12 @@ from rs_graph.bin.pipeline_utils import (
     DEFAULT_ELSEVIER_API_KEYS_FILE,
     DEFAULT_ERRORS_CACHE_FILE,
     DEFAULT_GITHUB_TOKENS_FILE,
-    DEFAULT_OPEN_ALEX_EMAILS_FILE,
+    DEFAULT_OPEN_ALEX_TOKENS_FILE,
     DEFAULT_RESULTS_DIR,
     _get_basic_gpu_cluster_config,
     _get_small_cpu_api_cluster,
     _load_elsevier_api_keys,
-    _load_open_alex_emails,
+    _load_open_alex_tokens,
     _wrap_func_with_coiled_prefect_task,
 )
 from rs_graph.db import utils as db_utils
@@ -151,7 +151,7 @@ def _prelinked_dataset_ingestion_flow(
     source: str,
     use_prod: bool,
     github_tokens_file: str,
-    open_alex_emails: list[str],
+    open_alex_tokens: list[str],
     semantic_scholar_api_key: str,
     elsevier_api_keys: list[str],
     use_coiled: bool,
@@ -167,11 +167,11 @@ def _prelinked_dataset_ingestion_flow(
     # Workers is the number of github tokens
     n_github_tokens = len(cycled_github_tokens)
 
-    # Get an infinite cycle of open alex emails
-    cycled_open_alex_emails = itertools.cycle(open_alex_emails)
+    # Get an infinite cycle of open alex tokens
+    cycled_open_alex_tokens = itertools.cycle(open_alex_tokens)
 
-    # Get the number of open alex emails
-    n_open_alex_emails = len(open_alex_emails)
+    # Get the number of open alex tokens
+    n_open_alex_tokens = len(open_alex_tokens)
 
     # Print dataset and coiled status
     print("-" * 80)
@@ -182,7 +182,7 @@ def _prelinked_dataset_ingestion_flow(
     print(f"Coiled Region: {coiled_region}")
     print(f"Batch Size: {batch_size}")
     print(f"GitHub Token Count: {n_github_tokens}")
-    print(f"Open Alex Email Count: {n_open_alex_emails}")
+    print(f"Open Alex Token Count: {n_open_alex_tokens}")
     print(f"Elsevier API Key Count: {len(elsevier_api_keys)}")
     print("-" * 80)
 
@@ -193,7 +193,7 @@ def _prelinked_dataset_ingestion_flow(
         github_tokens=cycled_github_tokens._gh_tokens,
         elsevier_api_keys=elsevier_api_keys,
         semantic_scholar_api_key=semantic_scholar_api_key,
-        open_alex_emails=open_alex_emails,
+        open_alex_tokens=open_alex_tokens,
     )
 
     # Filter dataset
@@ -242,15 +242,17 @@ def _prelinked_dataset_ingestion_flow(
             process_article_wrapped_task = _wrap_func_with_coiled_prefect_task(
                 article.process_article_task,
                 coiled_kwargs=_get_small_cpu_api_cluster(
-                    n_workers=n_open_alex_emails,
+                    # TODO:
+                    # Hardcoded to 8 workers for now since I know it can handle that
+                    # In the future, should be based on number of tokens
+                    n_workers=8,
                     use_coiled=use_coiled,
                     coiled_region=coiled_region,
                 ),
             )
             article_processing_futures = process_article_wrapped_task.map(
                 pair=chunk,
-                open_alex_email=[next(cycled_open_alex_emails) for _ in range(len(chunk))],
-                open_alex_email_count=unmapped(n_open_alex_emails),
+                open_alex_token=[next(cycled_open_alex_tokens) for _ in range(len(chunk))],
                 semantic_scholar_api_key=unmapped(semantic_scholar_api_key),
             )
 
@@ -430,7 +432,7 @@ def prelinked_dataset_ingestion(
     use_coiled: bool = False,
     coiled_region: str = "us-west-2",
     github_tokens_file: str = DEFAULT_GITHUB_TOKENS_FILE,
-    open_alex_emails_file: str = DEFAULT_OPEN_ALEX_EMAILS_FILE,
+    open_alex_tokens_file: str = DEFAULT_OPEN_ALEX_TOKENS_FILE,
     elsevier_api_keys_file: str = DEFAULT_ELSEVIER_API_KEYS_FILE,
     batch_size: int = 50,
     filter_prior_errors: bool = True,
@@ -472,8 +474,8 @@ def prelinked_dataset_ingestion(
     # Ignore prefect task introspection warnings
     os.environ["PREFECT_TASK_INTROSPECTION_WARN_THRESHOLD"] = "0"
 
-    # Load Open Alex emails
-    open_alex_emails = _load_open_alex_emails(open_alex_emails_file)
+    # Load Open Alex tokens
+    open_alex_tokens = _load_open_alex_tokens(open_alex_tokens_file)
 
     # Load Elsevier API keys
     elsevier_api_keys = _load_elsevier_api_keys(elsevier_api_keys_file)
@@ -483,7 +485,7 @@ def prelinked_dataset_ingestion(
         source=source,
         use_prod=use_prod,
         github_tokens_file=github_tokens_file,
-        open_alex_emails=open_alex_emails,
+        open_alex_tokens=open_alex_tokens,
         semantic_scholar_api_key=semantic_scholar_api_key,
         elsevier_api_keys=elsevier_api_keys,
         use_coiled=use_coiled,
