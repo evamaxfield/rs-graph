@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import time
 import traceback
-import os
 from functools import lru_cache
 
 from sci_soft_models import binary_article_repo_em, dev_author_em
@@ -16,12 +16,14 @@ HF_CACHE_DIR = os.getenv("HF_CACHE_DIR", "/tmp/hf-cache")
 # Set this to "1" for strictly offline
 HF_LOCAL_FILES_ONLY = os.getenv("HF_LOCAL_FILES_ONLY", "0") == "1"
 
+
 @lru_cache(maxsize=1)
 def _get_dev_author_model():
     return dev_author_em.load_dev_author_em_model(
         cache_dir=HF_CACHE_DIR,
         local_files_only=HF_LOCAL_FILES_ONLY,
     )
+
 
 @lru_cache(maxsize=1)
 def _get_article_repo_model():
@@ -30,6 +32,7 @@ def _get_article_repo_model():
         cache_dir=HF_CACHE_DIR,
         local_files_only=HF_LOCAL_FILES_ONLY,
     )
+
 
 ###############################################################################
 
@@ -202,8 +205,7 @@ def match_articles_and_repositories(
             ],
             model_choice="optimized",
             loaded_binary_article_repo_em_model=_get_article_repo_model(),
-)
-
+        )
 
         # Results LUT
         results_lut = {
