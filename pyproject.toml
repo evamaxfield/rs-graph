@@ -75,7 +75,6 @@ pipeline = [
   "gcsfs>=2023.10.0",
   "ghapi>=1,<2",
   "gh-tokens-loader>=0.1,<0.2",
-  "msgspec>=0.18,<0.21",
   "numpy>=1,<3",
   "parse>=1,<2",
   "pandas>=1,<3",

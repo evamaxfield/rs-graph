@@ -62,7 +62,7 @@ def _wrap_func_with_coiled_prefect_task(
     coiled_func_name: str | None = None,
     coiled_kwargs: dict[str, Any] | None = None,
     environ: dict[str, str] | None = None,
-    timeout_seconds: int = 600,  # 10 minutes
+    timeout_seconds: int = 1200,  # 20 minutes
 ) -> Task:
     if coiled_kwargs is None:
         coiled_kwargs = {}
