@@ -13,15 +13,12 @@ from .. import types
 from ..db import models as db_models
 
 HF_CACHE_DIR = os.getenv("HF_CACHE_DIR", "/tmp/hf-cache")
-# Set this to "1" for strictly offline
-HF_LOCAL_FILES_ONLY = os.getenv("HF_LOCAL_FILES_ONLY", "0") == "1"
 
 
 @lru_cache(maxsize=1)
 def _get_dev_author_model():
     return dev_author_em.load_dev_author_em_model(
         cache_dir=HF_CACHE_DIR,
-        local_files_only=HF_LOCAL_FILES_ONLY,
     )
 
 
@@ -30,7 +27,6 @@ def _get_article_repo_model():
     return binary_article_repo_em.load_binary_article_repository_em_model(
         model_choice="optimized",
         cache_dir=HF_CACHE_DIR,
-        local_files_only=HF_LOCAL_FILES_ONLY,
     )
 
 
