@@ -567,31 +567,35 @@ def _store_prediction_results(
     storage_file = DATA_FILES_DIR / "snowball-sampling-discovery-predictions.parquet"
 
     # Check if exists
+    existing_results_df: pl.DataFrame | None
     if storage_file.exists():
         existing_results_df = pl.read_parquet(storage_file)
-        existing_results = existing_results_df.to_dicts()
     else:
-        existing_results = []
+        existing_results_df = None
 
     # Prepare new results for storage
-    new_results = [
-        {
-            "article_doi": result.article_doi,
-            "repository_identifier": f"https://github.com/{result.repository_identifier}",
-            "confidence": result.matched_details.confidence,
-            "author_developer_link_id": result.author_developer_link_id,
-            "iteration": iteration,
-            "model_name": result.matched_details.model_name,
-            "model_version": result.matched_details.model_version,
-        }
-        for result in prediction_results
-    ]
+    new_results = pl.DataFrame(
+        [
+            {
+                "article_doi": result.article_doi,
+                "repository_identifier": f"https://github.com/{result.repository_identifier}",
+                "confidence": result.matched_details.confidence,
+                "author_developer_link_id": result.author_developer_link_id,
+                "iteration": iteration,
+                "model_name": result.matched_details.model_name,
+                "model_version": result.matched_details.model_version,
+            }
+            for result in prediction_results
+        ]
+    )
 
     # Combine existing and new results
-    combined_results = existing_results + new_results
+    if existing_results_df is None:
+        combined_results_df = new_results
+    else:
+        combined_results_df = pl.concat([existing_results_df, new_results])
 
     # Save to parquet
-    combined_results_df = pl.DataFrame(combined_results)
     combined_results_df.write_parquet(storage_file)
 
 
@@ -661,12 +665,9 @@ def _process_matched_article(
 
 
 def _process_matched_repository(
-    matched_pair: types.MatchedAuthorArticleAndDeveloperRepositoryPair | types.ErrorResult,
+    matched_pair: types.MatchedAuthorArticleAndDeveloperRepositoryPair,
     github_api_key: str,
 ) -> types.MatchedAuthorArticleAndDeveloperRepositoryPair | types.ErrorResult:
-    if isinstance(matched_pair, types.ErrorResult):
-        return matched_pair
-
     # Try getting the rest of the data
     updated_github_results = github.process_github_repo(
         source=f"snowball-sampling-discovery-v{rs_graph_version}",
@@ -738,7 +739,7 @@ def _prep_updated_article_repository_details_for_storage_type(
 @flow(
     log_prints=True,
 )
-def _snowball_sampling_discovery_flow(
+def _snowball_sampling_discovery_flow(  # noqa: C901
     author_developer_links: list[db_utils.HydratedAuthorDeveloperLink],
     iteration: int,
     article_respository_allowed_datetime_difference_negative_td: timedelta,
@@ -949,6 +950,8 @@ def _snowball_sampling_discovery_flow(
     )
 
     # Process all articles
+    # Submit both article and repo processing in parallel
+    # (they use independent APIs and clusters)
     print("Getting extended article data for predicted pairs...")
     updated_article_processing_futures = process_article_wrapped_task.map(
         matched_pair=prediction_results,
@@ -956,26 +959,46 @@ def _snowball_sampling_discovery_flow(
         semantic_scholar_api_key=unmapped(semantic_scholar_api_key),
     )
 
-    # Process github
     print("Getting extended repository data for predicted pairs...")
     updated_github_futures = process_github_wrapped_task.map(
-        matched_pair=[uapf.result() for uapf in updated_article_processing_futures],
-        github_api_key=[
-            next(cycled_github_tokens) for _ in range(len(updated_article_processing_futures))
-        ],
+        matched_pair=prediction_results,
+        github_api_key=[next(cycled_github_tokens) for _ in range(len(prediction_results))],
     )
 
-    # Convert to expanded pair type
-    print("Preparing updated article-repository details for storage...")
-    gathered_github_futures = [ugf.result() for ugf in updated_github_futures]
-    ready_for_storage = [
-        _prep_updated_article_repository_details_for_storage_type(
-            matched_pair=ggf,
-            iteration=iteration,
+    # Collect both sets of results (they've been running in parallel)
+    print("Collecting and merging article + repository processing results...")
+    gathered_article_results = [uapf.result() for uapf in updated_article_processing_futures]
+    gathered_repo_results = [ugf.result() for ugf in updated_github_futures]
+
+    # Merge: take article data from article results, repo data from repo results
+    ready_for_storage = []
+    for article_result, repo_result in zip(
+        gathered_article_results, gathered_repo_results, strict=True
+    ):
+        if isinstance(article_result, types.ErrorResult):
+            print(
+                f"Error processing article for "
+                f"{article_result.identifier}: {article_result.error}"
+            )
+            continue
+        if isinstance(repo_result, types.ErrorResult):
+            print(f"Error processing repo for {repo_result.identifier}: {repo_result.error}")
+            continue
+
+        merged_pair = types.MatchedAuthorArticleAndDeveloperRepositoryPair(
+            author_developer_link_id=article_result.author_developer_link_id,
+            article_doi=article_result.article_doi,
+            repository_identifier=article_result.repository_identifier,
+            author_article=article_result.author_article,
+            developer_repository=repo_result.developer_repository,
+            matched_details=article_result.matched_details,
         )
-        for ggf in gathered_github_futures
-        if not isinstance(ggf, types.ErrorResult)
-    ]
+        ready_for_storage.append(
+            _prep_updated_article_repository_details_for_storage_type(
+                matched_pair=merged_pair,
+                iteration=iteration,
+            )
+        )
 
     # Store everything
     print("Storing full details of article-repository pairs...")
@@ -1001,7 +1024,7 @@ def _snowball_sampling_discovery_flow(
                 )
             else:
                 stored_pairs.append(stored_pair)
-            time.sleep(0.1)
+            time.sleep(0.05)
 
     # Match devs and researchers
     print("Matching developers and researchers...")
@@ -1025,7 +1048,7 @@ def _snowball_sampling_discovery_flow(
                 use_prod=use_prod,
             )
             stored_dev_researchers.append(stored_dev_researcher)
-            time.sleep(0.1)
+            time.sleep(0.05)
 
     # Note that we have now processed this author-developer link
     print("Marking snowball source author-developer links as processed...")
@@ -1034,7 +1057,7 @@ def _snowball_sampling_discovery_flow(
             link_id=adl.author_developer_link_id,
             use_prod=use_prod,
         )
-        time.sleep(0.1)
+        time.sleep(0.05)
 
     # Count document-repository links created per source author-developer link
     doc_repo_link_counts: dict[int, int] = {
