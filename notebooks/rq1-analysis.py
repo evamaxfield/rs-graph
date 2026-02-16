@@ -1,4 +1,8 @@
+import json
+import logging
 import random
+from collections import defaultdict
+from itertools import combinations
 from pathlib import Path
 
 import colormaps as cmaps
@@ -8,22 +12,327 @@ import numpy as np
 import polars as pl
 import rustworkx as rx
 import seaborn as sns
+import typer
 from tqdm import tqdm
 
+from rs_graph.bin.typer_utils import setup_logger
 from rs_graph.db import constants as db_constants
 
-# Setup plotting style
+###############################################################################
+# Constants
+###############################################################################
+
 PALETTE = cmaps.bold._colors.tolist()
-sns.set_palette(PALETTE)
 
-# Plotting/Data Selection constants
-DEFAULT_TOP_N = 9
+FEATURE_NAME_TO_VIZ_NAME_LUT = {
+    "document_fwci": "Document FWCI",
+    "repository_fwsi": "Repository FWSI",
+    "document_cited_by_count": "Document Cited By Count",
+    "repository_stargazers_count": "Repository Stargazers Count",
+    "document_n_authors": "Document Number of Authors",
+    "repository_n_contributors": "Repository Number of Contributors",
+    "repository_n_files": "Repository Number of Files",
+    "repository_commits_count": "Repository Commits Count",
+}
 
-# Output directory for saved plots
-RESULTS_DIR = Path(__file__).parent / "rq1-results"
-RESULTS_DIR.mkdir(exist_ok=True)
+OVER_TIME_METRICS_TO_VIZ_NAME_LUT = {
+    "repository_commit_duration_days": "Repository Commit Duration (Days)",
+    "repository_size_kb": "Repository Size (KB)",
+    "repository_commits_count": "Repository Commits Count",
+    "repository_n_files": "Repository Number of Files",
+}
 
-#######################################################################################
+FIELD_LANGUAGE_TITLE_LUT = {
+    "document_field_name_top_n_plus_other": "Field Counts",
+    "field_count": "Field Count over Time",
+    "repository_primary_language_top_n_plus_other": "Primary Language Counts",
+    "language_count": "Primary Language Count over Time",
+}
+
+DATE_FEATURES_TO_VIZ_NAME_LUT = {
+    "repository_creation_datetime": "Repository Creation Date",
+    "document_publication_date": "Document Publication Date",
+    "repository_last_pushed_datetime": "Repository Last Pushed Date",
+}
+
+LIFECYCLE_RELEASE_WINDOW_DAYS = 30
+LIFECYCLE_LONG_MAINTENANCE_DAYS = 365
+
+###############################################################################
+# Logger & App
+###############################################################################
+
+log = logging.getLogger(__name__)
+app = typer.Typer()
+
+###############################################################################
+# Private helpers
+###############################################################################
+
+
+def _add_top_n_other_column(
+    df: pl.DataFrame,
+    source_col: str,
+    n: int,
+) -> tuple[pl.DataFrame, list[str], str]:
+    """Get top-N values of *source_col*, add a new column mapping the rest to 'Other'.
+
+    Returns (modified_df, top_values_list, new_col_name).
+    """
+    top_values = (
+        df.filter(pl.col(source_col).is_not_null())[source_col]
+        .value_counts(sort=True)
+        .head(n)[source_col]
+        .to_list()
+    )
+    new_col = f"{source_col}_top_n_plus_other"
+    df = df.with_columns(
+        pl.when(pl.col(source_col).is_in(top_values))
+        .then(pl.col(source_col))
+        .otherwise(pl.lit("Other"))
+        .alias(new_col)
+    )
+    return df, top_values, new_col
+
+
+def _filter_finite(df: pl.DataFrame, cols: list[str]) -> pl.DataFrame:
+    """Keep rows where every column in *cols* is not-null, not-NaN, and finite."""
+    exprs = []
+    for c in cols:
+        exprs.extend(
+            [
+                pl.col(c).is_not_null(),
+                pl.col(c).is_not_nan(),
+                pl.col(c).is_finite(),
+            ]
+        )
+    return df.filter(*exprs)
+
+
+def _add_45_degree_line(
+    ax: plt.Axes,
+    x_series: pl.Series,
+    y_series: pl.Series,
+) -> None:
+    """Draw a dashed red 45-degree reference line spanning the range of two date series."""
+    x_dates = x_series.dt.date()
+    y_dates = y_series.dt.date()
+    min_date = min(x_dates.min(), y_dates.min())
+    max_date = max(x_dates.max(), y_dates.max())
+    ax.plot(
+        [min_date, max_date],
+        [min_date, max_date],
+        color="red",
+        linestyle="--",
+    )
+
+
+def _plot_fwci_fwsi_point_data(row: dict, color: str, ax: plt.Axes) -> None:
+    """Annotate a single point on the FWCI-vs-FWSI scatter plot."""
+    doc_title_parts = row["document_title"].split()
+    doc_title_short = (
+        " ".join(doc_title_parts[:4]) + "..."
+        if len(doc_title_parts) > 4
+        else row["document_title"]
+    )
+    point_label = f"{doc_title_short} -- {row['repository_owner']}/{row['repository_name']}"
+    ax.text(
+        row["document_fwci_log10"] + 0.1,
+        row["repository_fwsi_log10"] - 0.02,
+        point_label,
+        fontsize=8,
+        color=color,
+    )
+    ax.plot(
+        row["document_fwci_log10"],
+        row["repository_fwsi_log10"],
+        "o",
+        color=color,
+    )
+
+
+def _compute_spearman_rho(x: np.ndarray, y: np.ndarray) -> float:
+    """Compute Spearman rho using rank correlation (without SciPy dependency)."""
+    if len(x) < 2 or len(y) < 2:
+        return float("nan")
+
+    x_rank = pl.Series("x", x).rank("average").to_numpy()
+    y_rank = pl.Series("y", y).rank("average").to_numpy()
+
+    if np.std(x_rank) == 0 or np.std(y_rank) == 0:
+        return float("nan")
+
+    return float(np.corrcoef(x_rank, y_rank)[0, 1])
+
+
+def _fit_simple_linear_regression(x: np.ndarray, y: np.ndarray) -> dict[str, float]:
+    """Fit y = intercept + slope * x and return coefficients and R^2."""
+    if len(x) < 2 or len(y) < 2:
+        return {
+            "slope": float("nan"),
+            "intercept": float("nan"),
+            "r_squared": float("nan"),
+        }
+
+    x_mean = float(np.mean(x))
+    y_mean = float(np.mean(y))
+    x_var = float(np.sum((x - x_mean) ** 2))
+
+    if x_var == 0:
+        return {
+            "slope": float("nan"),
+            "intercept": y_mean,
+            "r_squared": float("nan"),
+        }
+
+    slope = float(np.sum((x - x_mean) * (y - y_mean)) / x_var)
+    intercept = y_mean - slope * x_mean
+
+    y_hat = intercept + slope * x
+    ss_tot = float(np.sum((y - y_mean) ** 2))
+    ss_res = float(np.sum((y - y_hat) ** 2))
+    r_squared = float("nan") if ss_tot == 0 else 1.0 - (ss_res / ss_tot)
+
+    return {
+        "slope": slope,
+        "intercept": intercept,
+        "r_squared": r_squared,
+    }
+
+
+def _kaplan_meier_curve(
+    durations: np.ndarray,
+    event_observed: np.ndarray,
+) -> pl.DataFrame:
+    """Compute a Kaplan-Meier survival curve from durations and event indicators.
+
+    event_observed: 1 means event observed (maintenance ended), 0 means right-censored.
+    """
+    if len(durations) == 0:
+        return pl.DataFrame(
+            {
+                "duration_days": pl.Series([], dtype=pl.Int64),
+                "survival_probability": pl.Series([], dtype=pl.Float64),
+                "at_risk": pl.Series([], dtype=pl.Int64),
+                "events": pl.Series([], dtype=pl.Int64),
+                "censored": pl.Series([], dtype=pl.Int64),
+            }
+        )
+
+    order = np.argsort(durations)
+    durations_sorted = durations[order]
+    events_sorted = event_observed[order]
+
+    unique_times = np.unique(durations_sorted)
+    n_at_risk = len(durations_sorted)
+    survival = 1.0
+
+    rows: list[dict[str, float | int]] = []
+
+    for t in unique_times:
+        mask = durations_sorted == t
+        d_i = int(np.sum(events_sorted[mask]))
+        n_i = int(np.sum(mask))
+        c_i = n_i - d_i
+
+        if n_at_risk > 0:
+            survival *= 1.0 - (d_i / n_at_risk)
+
+        rows.append(
+            {
+                "duration_days": int(t),
+                "survival_probability": float(survival),
+                "at_risk": int(n_at_risk),
+                "events": d_i,
+                "censored": c_i,
+            }
+        )
+
+        n_at_risk -= n_i
+
+    return pl.DataFrame(rows)
+
+
+def _build_coauthorship_graph(
+    doc_contribs: pl.DataFrame,
+) -> tuple[rx.PyGraph, dict[int, int], dict[int, int]]:
+    """Build a simple (deduplicated) co-authorship graph from document contributors."""
+    graph: rx.PyGraph = rx.PyGraph()
+    node_to_idx: dict[int, int] = {}
+    idx_to_node: dict[int, int] = {}
+    edge_seen: set[tuple[int, int]] = set()
+
+    if doc_contribs.height == 0:
+        return graph, node_to_idx, idx_to_node
+
+    for _, group in tqdm(
+        doc_contribs.group_by("document_id"),
+        total=doc_contribs["document_id"].n_unique(),
+        desc="Building co-authorship network",
+    ):
+        researcher_ids = sorted(set(group["researcher_id"].to_list()))
+
+        for rid in researcher_ids:
+            if rid not in node_to_idx:
+                idx = graph.add_node(rid)
+                node_to_idx[rid] = idx
+                idx_to_node[idx] = rid
+
+        for rid_a, rid_b in combinations(researcher_ids, 2):
+            idx_a = node_to_idx[rid_a]
+            idx_b = node_to_idx[rid_b]
+            edge = (idx_a, idx_b) if idx_a < idx_b else (idx_b, idx_a)
+
+            if edge not in edge_seen:
+                graph.add_edge(edge[0], edge[1], 1)
+                edge_seen.add(edge)
+
+    return graph, node_to_idx, idx_to_node
+
+
+def _get_author_developer_pairs_connected_to_pairs(pair_links: pl.DataFrame) -> pl.DataFrame:
+    """Return matched author-developer pairs connected to provided doc-repo pairs.
+
+    Expects `pair_links` to include `document_id`, `repository_id`, and optionally `iteration`.
+    """
+    required_cols = {"document_id", "repository_id"}
+    if not required_cols.issubset(pair_links.columns):
+        raise ValueError("pair_links must include document_id and repository_id")
+
+    pair_cols = [
+        c for c in ["document_id", "repository_id", "iteration"] if c in pair_links.columns
+    ]
+
+    pair_links = pair_links.select(pair_cols).unique()
+
+    doc_contribs = (
+        _read_table("document_contributor").select("document_id", "researcher_id").unique()
+    )
+    repo_contribs = (
+        _read_table("repository_contributor")
+        .select("repository_id", "developer_account_id")
+        .unique()
+    )
+    researcher_dev_links = (
+        _read_table("researcher_developer_account_link")
+        .select("researcher_id", "developer_account_id")
+        .unique()
+    )
+
+    connected_pairs = (
+        pair_links.join(doc_contribs, on="document_id", how="inner")
+        .join(researcher_dev_links, on="researcher_id", how="inner")
+        .join(repo_contribs, on=["repository_id", "developer_account_id"], how="inner")
+        .select([*pair_cols, "researcher_id", "developer_account_id"])
+        .unique()
+    )
+
+    return connected_pairs
+
+
+###############################################################################
+# Data loading
+###############################################################################
 
 
 def _read_table(table: str) -> pl.DataFrame:
@@ -36,7 +345,8 @@ def _read_table(table: str) -> pl.DataFrame:
 
 def load_pairs(sample_size: int | None = None) -> pl.DataFrame:
     """Load document-repository pairs with all relevant metadata."""
-    # Read all the tables we need
+    log.debug("Reading database tables...")
+
     dataset_sources = _read_table("dataset_source")
     docs = _read_table("document")
     repos = _read_table("repository")
@@ -44,7 +354,7 @@ def load_pairs(sample_size: int | None = None) -> pl.DataFrame:
     doc_topics = _read_table("document_topic")
     topics = _read_table("topic")
 
-    # Drop to unique doc and unique repo in pairs
+    # Keep one canonical pair per document and repository for RQ1 analyses.
     pairs = pairs.unique(
         subset="document_id",
         keep="none",
@@ -53,8 +363,8 @@ def load_pairs(sample_size: int | None = None) -> pl.DataFrame:
         keep="none",
     )
 
-    # Apply sampling if requested
     if sample_size is not None:
+        log.debug("Sampling %d pairs...", sample_size)
         sampled_doc_ids = (
             pairs.select("document_id")
             .unique()
@@ -62,13 +372,11 @@ def load_pairs(sample_size: int | None = None) -> pl.DataFrame:
         )
         pairs = pairs.filter(pl.col("document_id").is_in(sampled_doc_ids["document_id"]))
 
-    # Load contributor/institution data
     doc_contribs = _read_table("document_contributor")
     doc_contrib_institutions = _read_table("document_contributor_institution")
     institutions = _read_table("institution")
 
-    # Process authorship team countries
-    doc_author_countries = (
+    doc_author_country_rows = (
         doc_contribs.select(
             pl.col("id").alias("document_contributor_id"),
             pl.col("researcher_id"),
@@ -88,27 +396,51 @@ def load_pairs(sample_size: int | None = None) -> pl.DataFrame:
             pl.when(pl.col("country_code").is_null())
             .then(pl.lit("Unknown"))
             .otherwise(pl.col("country_code"))
-        )
-        .group_by("document_id")
-        .agg(
-            pl.len().alias("document_n_authors"),
-            pl.when(pl.col("country_code").n_unique() == 1)
-            .then(pl.col("country_code").first())
-            .otherwise(pl.lit("Multiple")),
-        )
-        .with_columns(
-            pl.when(pl.col("country_code").is_null())
-            .then(pl.lit("Unknown"))
-            .otherwise(pl.col("country_code"))
             .alias("country_code")
         )
     )
 
-    # Get repo contributors count
+    doc_author_country_entropy = (
+        doc_author_country_rows.group_by(["document_id", "country_code"])
+        .agg(pl.len().alias("author_count"))
+        .with_columns(
+            (pl.col("author_count") / pl.col("author_count").sum().over("document_id")).alias(
+                "country_share"
+            )
+        )
+        .with_columns(
+            (-(pl.col("country_share") * pl.col("country_share").log())).alias(
+                "entropy_component"
+            )
+        )
+        .group_by("document_id")
+        .agg(
+            pl.col("entropy_component").sum().alias("document_author_country_entropy"),
+            pl.col("country_code").n_unique().alias("document_n_unique_author_countries"),
+            pl.when(pl.col("country_code").n_unique() == 1)
+            .then(pl.col("country_code").first())
+            .otherwise(pl.lit("Multiple"))
+            .alias("country_code"),
+        )
+    )
+
+    doc_author_countries = (
+        doc_author_country_rows.group_by("document_id")
+        .agg(pl.len().alias("document_n_authors"))
+        .join(doc_author_country_entropy, on="document_id", how="left")
+        .with_columns(
+            pl.col("document_author_country_entropy").fill_null(0.0),
+            pl.col("document_n_unique_author_countries").fill_null(0),
+            pl.when(pl.col("country_code").is_null())
+            .then(pl.lit("Unknown"))
+            .otherwise(pl.col("country_code"))
+            .alias("country_code"),
+        )
+    )
+
     repo_contribs = _read_table("repository_contributor")
     repo_contribs = repo_contribs.group_by("repository_id").len("repository_n_contributors")
 
-    # Get repo file count
     repo_files = _read_table("repository_file")
     repo_file_counts = (
         repo_files.filter(pl.col("tree_type") == "blob")
@@ -119,19 +451,18 @@ def load_pairs(sample_size: int | None = None) -> pl.DataFrame:
         )
     )
 
-    # Get repo language breakdown
     repo_languages = _read_table("repository_language")
     repo_language_counts = repo_languages.group_by("repository_id").agg(
         pl.len().alias("repository_n_languages"),
         pl.col("bytes_of_code").sum().alias("repository_total_language_bytes"),
     )
 
-    # Join all tables
     result = (
         pairs.select(
             "document_id",
             "repository_id",
             "dataset_source_id",
+            "iteration",
             pl.col("predictive_model_confidence").alias("document_repository_link_confidence"),
         )
         .join(
@@ -204,11 +535,20 @@ def load_pairs(sample_size: int | None = None) -> pl.DataFrame:
                     - pl.col("repository_creation_datetime")
                 ).dt.total_days()
             ).alias("repository_commit_duration_days"),
+            (
+                (
+                    pl.col("document_publication_date") - pl.col("repository_creation_datetime")
+                ).dt.total_days()
+            ).alias("days_from_repo_creation_to_publication"),
+            (
+                (
+                    pl.col("repository_last_pushed_datetime")
+                    - pl.col("document_publication_date")
+                ).dt.total_days()
+            ).alias("days_from_publication_to_last_push"),
         )
     )
 
-    # Calculate field-year-type normalized stargazer count (FWSI)
-    # First, determine the expected stars for each field-year-type combination
     field_year_type_expected_stars = result.group_by(
         [
             "document_field_name",
@@ -219,53 +559,45 @@ def load_pairs(sample_size: int | None = None) -> pl.DataFrame:
         pl.col("repository_stargazers_count").mean().alias("expected_stars"),
     )
 
-    # Join back to result
     result = result.join(
         field_year_type_expected_stars,
         on=["document_field_name", "document_publication_year", "document_type"],
         how="left",
     )
 
-    # Calculate FWSI (Field-Weighted Star Impact)
     result = result.with_columns(
-        pl.when(pl.col("expected_stars").is_not_null())
+        pl.when((pl.col("expected_stars").is_not_null()) & (pl.col("expected_stars") > 0))
         .then(pl.col("repository_stargazers_count") / pl.col("expected_stars"))
         .otherwise(pl.lit(None))
         .alias("repository_fwsi")
     ).drop("expected_stars")
 
+    log.debug("Loaded %d pairs", result.height)
     return result
 
 
-pairs = load_pairs()
-pairs
+###############################################################################
+# Analysis / plotting functions
+###############################################################################
 
 
-# ## Descriptive Stats
+def print_descriptive_stats(pairs: pl.DataFrame, results_dir: Path) -> None:
+    """Print field value counts and save a descriptive-statistics CSV."""
+    field_data = pairs.filter(
+        pl.col("document_field_name").is_not_null(),
+        pl.col("document_field_name") != "",
+    )
+    log.debug(
+        "Field value counts:\n%s",
+        field_data["document_field_name"].value_counts(sort=True),
+    )
 
-field_count_plot_data = pairs.filter(
-    pl.col("document_field_name").is_not_null(),
-    pl.col("document_field_name") != "",
-)
-
-print(field_count_plot_data["document_field_name"].value_counts(sort=True))
-
-# Countplot of field
-sns.countplot(
-    data=field_count_plot_data,
-    y="document_field_name",
-    order=field_count_plot_data["document_field_name"].value_counts(sort=True)[
-        "document_field_name"
-    ],
-)
-plt.savefig(RESULTS_DIR / "field_countplot.png", bbox_inches="tight", dpi=300)
-
-# Get mean, std, 25th, 50th, 75th percentiles for selected fields
-pairs[
-    [
+    metrics = [
         "document_cited_by_count",
         "document_fwci",
         "document_n_authors",
+        "document_n_unique_author_countries",
+        "document_author_country_entropy",
         "repository_stargazers_count",
         "repository_fwsi",
         "repository_commits_count",
@@ -274,723 +606,1424 @@ pairs[
         "repository_n_languages",
         "repository_size_kb",
         "repository_commit_duration_days",
+        "days_from_repo_creation_to_publication",
+        "days_from_publication_to_last_push",
     ]
-].describe(percentiles=[0.25, 0.5, 0.75]).filter(
-    pl.col("statistic").is_in(["mean", "std", "25%", "50%", "75%"]),
-).transpose(include_header=True, header_name="metric", column_names="statistic")
+    metrics = [m for m in metrics if m in pairs.columns]
 
-# Plot features by top N fields + Other
-top_nine_fields = (
-    pairs.filter(
+    stats_df = (
+        pairs[metrics]
+        .describe(percentiles=[0.25, 0.5, 0.75])
+        .filter(pl.col("statistic").is_in(["mean", "std", "25%", "50%", "75%", "min", "max"]))
+        .transpose(include_header=True, header_name="metric", column_names="statistic")
+    )
+
+    stats_df.write_csv(results_dir / "descriptive_stats.csv")
+    log.debug("Saved descriptive_stats.csv")
+
+
+def plot_field_countplot(pairs: pl.DataFrame, results_dir: Path) -> None:
+    """Horizontal countplot of document fields."""
+    field_data = pairs.filter(
         pl.col("document_field_name").is_not_null(),
-    )["document_field_name"]
-    .value_counts(sort=True)
-    .head(DEFAULT_TOP_N)["document_field_name"]
-    .to_list()
-)
-pairs = pairs.with_columns(
-    pl.when(pl.col("document_field_name").is_in(top_nine_fields))
-    .then(pl.col("document_field_name"))
-    .otherwise(pl.lit("Other"))
-    .alias("document_field_name_top_nine_plus_other")
-)
+        pl.col("document_field_name") != "",
+    )
 
-# Select features then unpivot for plotting
-features_to_plot = [
-    "document_fwci",
-    "repository_fwsi",
-    "document_cited_by_count",
-    "repository_stargazers_count",
-    "document_n_authors",
-    "repository_n_contributors",
-    "repository_n_files",
-    "repository_commits_count",
-]
-features_melted = pairs.select(
-    [
+    fig, ax = plt.subplots(figsize=(9, 7))
+    sns.countplot(
+        data=field_data,
+        y="document_field_name",
+        order=field_data["document_field_name"].value_counts(sort=True)["document_field_name"],
+        ax=ax,
+    )
+    fig.savefig(results_dir / "field_countplot.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
+def plot_features_by_field(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+    top_n: int,
+) -> None:
+    """4x2 boxplots of key features by top-N fields + Other."""
+    pairs, top_fields, field_col = _add_top_n_other_column(pairs, "document_field_name", top_n)
+    field_hue_order = [*top_fields, "Other"]
+
+    features_to_plot = list(FEATURE_NAME_TO_VIZ_NAME_LUT.keys())
+
+    features_melted = pairs.select(
         "document_id",
         "repository_id",
-        "document_field_name_top_nine_plus_other",
+        field_col,
         *features_to_plot,
-    ]
-).unpivot(
-    on=features_to_plot,
-    variable_name="feature",
-    value_name="value",
-    index=["document_id", "repository_id", "document_field_name_top_nine_plus_other"],
-)
-
-FEATURE_NAME_TO_VIZ_NAME_LUT = {
-    "document_fwci": "Document FWCI",
-    "repository_fwsi": "Repository FWSI",
-    "document_cited_by_count": "Document Cited By Count",
-    "repository_stargazers_count": "Repository Stargazers Count",
-    "document_n_authors": "Document Number of Authors",
-    "repository_n_contributors": "Repository Number of Contributors",
-    "repository_n_files": "Repository Number of Files",
-    "repository_commits_count": "Repository Commits Count",
-}
-
-# Add a feature name sort value for consistent ordering
-features_melted = features_melted.with_columns(
-    pl.col("feature")
-    .map_elements(
-        lambda x: list(FEATURE_NAME_TO_VIZ_NAME_LUT.keys()).index(x),
-        return_dtype=pl.Int32,
+    ).unpivot(
+        on=features_to_plot,
+        variable_name="feature",
+        value_name="value",
+        index=["document_id", "repository_id", field_col],
     )
-    .alias("feature_sort_order")
-)
-features_melted = features_melted.sort("feature_sort_order").drop("feature_sort_order")
 
-# Get consistent hue order across plots
-field_hue_order = [*top_nine_fields, "Other"]
+    sort_map = {name: i for i, name in enumerate(FEATURE_NAME_TO_VIZ_NAME_LUT)}
+    features_melted = features_melted.with_columns(
+        pl.col("feature")
+        .replace(sort_map, default=None, return_dtype=pl.Int32)
+        .alias("feature_sort_order")
+    )
+    features_melted = features_melted.sort("feature_sort_order").drop("feature_sort_order")
 
-# Setup figure and axes
-fig, axes = plt.subplots(
-    nrows=4,
-    ncols=2,
-    figsize=(20, 10),
-    constrained_layout=True,
-)
-for ax, ((feature_name,), group_df) in zip(
-    axes.flat, features_melted.group_by("feature", maintain_order=True), strict=True
-):
-    # Determine order by median value
-    y_order = (
-        group_df.group_by("document_field_name_top_nine_plus_other")
-        .agg(
-            pl.col("value").median().alias("median_value"),
-            pl.col("value").mean().alias("mean_value"),
+    fig, axes = plt.subplots(
+        nrows=4,
+        ncols=2,
+        figsize=(20, 10),
+        constrained_layout=True,
+    )
+    for ax, ((feature_name,), group_df) in zip(
+        axes.flat, features_melted.group_by("feature", maintain_order=True), strict=True
+    ):
+        y_order = (
+            group_df.group_by(field_col)
+            .agg(
+                pl.col("value").median().alias("median_value"),
+                pl.col("value").mean().alias("mean_value"),
+            )
+            .sort(
+                ["median_value", "mean_value", field_col],
+                descending=True,
+            )[field_col]
+            .to_list()
         )
-        .sort(
-            ["median_value", "mean_value", "document_field_name_top_nine_plus_other"],
-            descending=True,
-        )["document_field_name_top_nine_plus_other"]
+
+        sns.boxplot(
+            data=group_df,
+            y=field_col,
+            x="value",
+            hue=field_col,
+            hue_order=field_hue_order,
+            order=y_order,
+            ax=ax,
+            showfliers=False,
+        )
+        ax.set_ylabel("")
+        ax.set_xlabel("")
+        ax.tick_params(axis="y", labelsize=10)
+        ax.set_title(FEATURE_NAME_TO_VIZ_NAME_LUT.get(feature_name, feature_name), fontsize=16)
+
+    fig.tight_layout(h_pad=3.0)
+    fig.savefig(results_dir / "features_by_field_boxplots.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
+def plot_pairs_over_time(pairs: pl.DataFrame, results_dir: Path) -> None:
+    """Countplot of pairs by publication year."""
+    fig, ax = plt.subplots(figsize=(11, 4))
+    sns.countplot(
+        data=pairs.filter(pl.col("document_publication_year") > 2010),
+        x="document_publication_year",
+        ax=ax,
+    )
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+    fig.savefig(results_dir / "pairs_over_time.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
+def plot_iteration_expansion(results_dir: Path) -> None:
+    """Plot growth by mining iteration for pairs and author-developer pairs."""
+    links = _read_table("document_repository_link")
+    dataset_sources = _read_table("dataset_source")
+
+    links = links.join(
+        dataset_sources.select(
+            pl.col("id").alias("dataset_source_id"),
+            pl.col("name").alias("dataset_source_name"),
+        ),
+        on="dataset_source_id",
+        how="left",
+    )
+
+    shared_links = links.filter(pl.col("dataset_source_name") != "snowball-sampling-discovery")
+    mined_links = links.filter(
+        pl.col("dataset_source_name") == "snowball-sampling-discovery",
+        pl.col("iteration").is_not_null(),
+    )
+
+    shared_pair_count = shared_links.select("document_id", "repository_id").unique().height
+
+    mined_pairs_by_iteration = (
+        mined_links.select("document_id", "repository_id", "iteration")
+        .unique()
+        .group_by("iteration")
+        .agg(pl.len().alias("new_article_repository_pairs"))
+        .sort("iteration")
+    )
+
+    shared_author_dev_count = (
+        _get_author_developer_pairs_connected_to_pairs(
+            shared_links.select("document_id", "repository_id").unique()
+        )
+        .select("researcher_id", "developer_account_id")
+        .unique()
+        .height
+    )
+
+    mined_author_dev_links = _get_author_developer_pairs_connected_to_pairs(
+        mined_links.select("document_id", "repository_id", "iteration").unique()
+    )
+
+    new_author_dev_by_iteration = (
+        mined_author_dev_links.group_by("researcher_id", "developer_account_id")
+        .agg(pl.col("iteration").min().alias("iteration"))
+        .group_by("iteration")
+        .agg(pl.len().alias("new_author_developer_pairs"))
+        .sort("iteration")
+    )
+
+    if mined_pairs_by_iteration.height == 0 and new_author_dev_by_iteration.height == 0:
+        log.warning("No mined iterations found. Skipping iteration expansion plots.")
+        summary = {
+            "shared_seed_article_repository_pairs": int(shared_pair_count),
+            "shared_seed_author_developer_pairs": int(shared_author_dev_count),
+            "iterations_found": 0,
+        }
+        with open(results_dir / "iteration_expansion_summary.json", "w") as f:
+            json.dump(summary, f, indent=2)
+        return
+
+    iterations = (
+        pl.concat(
+            [
+                mined_pairs_by_iteration.select("iteration"),
+                new_author_dev_by_iteration.select("iteration"),
+            ]
+        )
+        .unique()
+        .sort("iteration")
+    )
+
+    growth_df = (
+        iterations.join(mined_pairs_by_iteration, on="iteration", how="left")
+        .join(new_author_dev_by_iteration, on="iteration", how="left")
+        .with_columns(
+            pl.col("new_article_repository_pairs").fill_null(0).cast(pl.Int64),
+            pl.col("new_author_developer_pairs").fill_null(0).cast(pl.Int64),
+        )
+        .with_columns(
+            (
+                pl.col("new_article_repository_pairs").cum_sum() + pl.lit(shared_pair_count)
+            ).alias("cumulative_article_repository_pairs"),
+            (
+                pl.col("new_author_developer_pairs").cum_sum() + pl.lit(shared_author_dev_count)
+            ).alias("cumulative_author_developer_pairs"),
+        )
+        .sort("iteration")
+    )
+
+    seed_row = pl.DataFrame(
+        {
+            "iteration": [0],
+            "new_article_repository_pairs": [0],
+            "new_author_developer_pairs": [0],
+            "cumulative_article_repository_pairs": [shared_pair_count],
+            "cumulative_author_developer_pairs": [shared_author_dev_count],
+        }
+    )
+    growth_with_seed_df = pl.concat([seed_row, growth_df], how="vertical").sort("iteration")
+
+    growth_df.write_csv(results_dir / "iteration_expansion_growth.csv")
+    growth_with_seed_df.write_csv(results_dir / "iteration_expansion_growth_with_seed.csv")
+
+    summary = {
+        "shared_seed_article_repository_pairs": int(shared_pair_count),
+        "shared_seed_author_developer_pairs": int(shared_author_dev_count),
+        "iterations_found": int(growth_df.height),
+        "final_cumulative_article_repository_pairs": int(
+            growth_with_seed_df["cumulative_article_repository_pairs"].max()
+        ),
+        "final_cumulative_author_developer_pairs": int(
+            growth_with_seed_df["cumulative_author_developer_pairs"].max()
+        ),
+    }
+    with open(results_dir / "iteration_expansion_summary.json", "w") as f:
+        json.dump(summary, f, indent=2)
+
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(16, 6), constrained_layout=True)
+
+    sns.barplot(
+        data=growth_df,
+        x="iteration",
+        y="new_article_repository_pairs",
+        ax=axes[0],
+        color=PALETTE[0],
+    )
+    ax0_twin = axes[0].twinx()
+    sns.lineplot(
+        data=growth_with_seed_df,
+        x="iteration",
+        y="cumulative_article_repository_pairs",
+        marker="o",
+        ax=ax0_twin,
+        color=PALETTE[1],
+    )
+    axes[0].set_xlabel("Mining Iteration")
+    axes[0].set_ylabel("New Article-Repository Pairs")
+    ax0_twin.set_ylabel("Cumulative Article-Repository Pairs")
+    axes[0].set_title("Article-Repository Pair Expansion")
+
+    sns.barplot(
+        data=growth_df,
+        x="iteration",
+        y="new_author_developer_pairs",
+        ax=axes[1],
+        color=PALETTE[2],
+    )
+    ax1_twin = axes[1].twinx()
+    sns.lineplot(
+        data=growth_with_seed_df,
+        x="iteration",
+        y="cumulative_author_developer_pairs",
+        marker="o",
+        ax=ax1_twin,
+        color=PALETTE[3],
+    )
+    axes[1].set_xlabel("Mining Iteration")
+    axes[1].set_ylabel("New Author-Developer Pairs")
+    ax1_twin.set_ylabel("Cumulative Author-Developer Pairs")
+    axes[1].set_title("Author-Developer Pair Expansion")
+
+    fig.savefig(results_dir / "iteration_expansion.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
+def plot_field_and_language_counts(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+    top_n: int,
+) -> None:
+    """2x2 grid: field/language counts and counts over time."""
+    pairs, top_fields, field_col = _add_top_n_other_column(pairs, "document_field_name", top_n)
+    field_hue_order = [*top_fields, "Other"]
+
+    pairs, top_langs, lang_col = _add_top_n_other_column(
+        pairs, "repository_primary_language", top_n
+    )
+    lang_hue_order = [*top_langs, "Other"]
+
+    fig, axes = plt.subplots(
+        nrows=2,
+        ncols=2,
+        figsize=(20, 10),
+        constrained_layout=True,
+    )
+
+    sns.countplot(
+        data=pairs,
+        x=field_col,
+        order=pairs[field_col].value_counts(sort=True)[field_col],
+        hue=field_col,
+        hue_order=field_hue_order,
+        ax=axes[0, 0],
+    )
+
+    sns.lineplot(
+        data=pairs.group_by([field_col, "document_publication_year"])
+        .agg(pl.len().alias("field_count"))
+        .filter(pl.col("document_publication_year") < 2025),
+        x="document_publication_year",
+        y="field_count",
+        hue=field_col,
+        hue_order=field_hue_order,
+        ax=axes[0, 1],
+        legend=False,
+    )
+
+    sns.countplot(
+        data=pairs,
+        x=lang_col,
+        order=pairs[lang_col].value_counts(sort=True)[lang_col],
+        hue=lang_col,
+        hue_order=lang_hue_order,
+        ax=axes[1, 0],
+    )
+
+    sns.lineplot(
+        data=pairs.group_by([lang_col, "document_publication_year"])
+        .agg(pl.len().alias("language_count"))
+        .filter(pl.col("document_publication_year") < 2025),
+        x="document_publication_year",
+        y="language_count",
+        hue=lang_col,
+        hue_order=lang_hue_order,
+        ax=axes[1, 1],
+        legend=False,
+    )
+
+    for ax in axes.flat:
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+        feature_name = ax.get_xlabel()
+        feature_name = (
+            ax.get_ylabel() if feature_name == "document_publication_year" else feature_name
+        )
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+        ax.set_title(FIELD_LANGUAGE_TITLE_LUT.get(feature_name, feature_name), fontsize=16)
+
+    fig.tight_layout(h_pad=3.0)
+    fig.savefig(results_dir / "field_and_language_counts.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
+def plot_repo_metrics_over_time(pairs: pl.DataFrame, results_dir: Path) -> None:
+    """Bar charts of repository metrics over time using seaborn's default mean estimator."""
+    over_time_metrics = list(OVER_TIME_METRICS_TO_VIZ_NAME_LUT.keys())
+
+    over_time_df = pairs.filter(
+        pl.col("document_publication_year") < 2025,
+        pl.col("document_publication_year") > 2010,
+    ).unpivot(
+        on=over_time_metrics,
+        variable_name="metric",
+        value_name="mean_value",
+        index=["document_publication_year"],
+    )
+
+    g = sns.catplot(
+        data=over_time_df,
+        x="document_publication_year",
+        y="mean_value",
+        hue="metric",
+        col="metric",
+        col_wrap=2,
+        kind="bar",
+        sharey=False,
+        legend=False,
+    )
+
+    g.set_titles("{col_name}")
+    for i, ax in enumerate(g.axes):
+        for label in ax.get_xticklabels():
+            label.set_rotation(45)
+            label.set_ha("right")
+        ax.set_xlabel("")
+        ax.set_ylabel("Mean Value")
+        ax.set_title(OVER_TIME_METRICS_TO_VIZ_NAME_LUT.get(over_time_metrics[i]), fontsize=16)
+
+    g.figure.tight_layout(h_pad=3.0)
+    g.figure.savefig(results_dir / "repo_metrics_over_time.png", bbox_inches="tight", dpi=300)
+    plt.close(g.figure)
+
+
+def plot_geographic_diversity_depth(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+    top_n: int,
+) -> None:
+    """Analyze geographic diversity depth using unique-country counts and entropy."""
+    geo_df = pairs.select(
+        "document_id",
+        "document_field_name",
+        "document_publication_year",
+        "document_n_unique_author_countries",
+        "document_author_country_entropy",
+    ).filter(
+        pl.col("document_n_unique_author_countries").is_not_null(),
+        pl.col("document_author_country_entropy").is_not_null(),
+        pl.col("document_publication_year") > 2010,
+        pl.col("document_publication_year") < 2025,
+    )
+
+    if geo_df.height == 0:
+        log.warning(
+            "No geographic diversity data available. Skipping geographic diversity plots."
+        )
+        return
+
+    geo_df, top_fields, field_col = _add_top_n_other_column(
+        geo_df, "document_field_name", top_n
+    )
+
+    geo_df = geo_df.with_columns(
+        pl.when(pl.col("document_n_unique_author_countries") >= 10)
+        .then(pl.lit("10+"))
+        .otherwise(pl.col("document_n_unique_author_countries").cast(pl.Int64).cast(pl.Utf8))
+        .alias("author_country_count_bin")
+    )
+
+    bin_order = [
+        b
+        for b in [*map(str, range(1, 10)), "10+"]
+        if b in geo_df["author_country_count_bin"].unique().to_list()
+    ]
+
+    summary_df = (
+        geo_df.group_by(field_col)
+        .agg(
+            pl.len().alias("n_pairs"),
+            pl.col("document_n_unique_author_countries").mean().alias("mean_unique_countries"),
+            pl.col("document_n_unique_author_countries")
+            .median()
+            .alias("median_unique_countries"),
+            pl.col("document_author_country_entropy").mean().alias("mean_country_entropy"),
+            pl.col("document_author_country_entropy").median().alias("median_country_entropy"),
+        )
+        .sort("n_pairs", descending=True)
+    )
+    summary_df.write_csv(results_dir / "geographic_diversity_summary.csv")
+
+    yearly_geo_df = (
+        geo_df.group_by("document_publication_year")
+        .agg(
+            pl.col("document_n_unique_author_countries").mean().alias("mean_unique_countries"),
+            pl.col("document_author_country_entropy").mean().alias("mean_country_entropy"),
+        )
+        .sort("document_publication_year")
+    )
+
+    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(18, 10), constrained_layout=True)
+
+    sns.countplot(
+        data=geo_df,
+        x="author_country_count_bin",
+        order=bin_order,
+        ax=axes[0, 0],
+    )
+    axes[0, 0].set_title("Unique Author-Team Countries per Pair")
+    axes[0, 0].set_xlabel("Unique Countries in Author Team")
+    axes[0, 0].set_ylabel("Pair Count")
+
+    field_order = (
+        geo_df.group_by(field_col)
+        .agg(pl.col("document_author_country_entropy").median().alias("med_entropy"))
+        .sort("med_entropy", descending=True)[field_col]
         .to_list()
     )
-
     sns.boxplot(
-        data=group_df,
-        y="document_field_name_top_nine_plus_other",
-        x="value",
-        hue="document_field_name_top_nine_plus_other",
-        hue_order=field_hue_order,
-        order=y_order,
-        ax=ax,
+        data=geo_df,
+        y=field_col,
+        x="document_author_country_entropy",
+        order=field_order,
         showfliers=False,
+        ax=axes[0, 1],
     )
+    axes[0, 1].set_title("Author-Team Country Entropy by Field")
+    axes[0, 1].set_xlabel("Country Entropy")
+    axes[0, 1].set_ylabel("")
 
-    # Remove axis labels
-    ax.set_ylabel("")
-    ax.set_xlabel("")
-
-    # Make y-axis tick labels smaller
-    ax.tick_params(axis="y", labelsize=10)
-
-    # Set title
-    ax.set_title(FEATURE_NAME_TO_VIZ_NAME_LUT.get(feature_name, feature_name), fontsize=16)
-
-# Add more whitespace between subplots vertically
-fig.tight_layout(h_pad=3.0)
-fig.savefig(RESULTS_DIR / "features_by_field_boxplots.png", bbox_inches="tight", dpi=300)
-
-# Plot count of pairs over time
-ax = sns.countplot(
-    data=pairs.filter(
-        pl.col("document_publication_year") > 2010,
-    ),
-    x="document_publication_year",
-)
-
-# Rotate x-axis labels for readability
-_ = ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
-ax.figure.savefig(RESULTS_DIR / "pairs_over_time.png", bbox_inches="tight", dpi=300)
-
-# We want to plot two features normally: field name, primary language
-# Then we want to also plot the top 9 fields + other over time
-# And, we want to plot the top 9 primary languages + other over time
-
-# Easiest method for doing this is probably fig axes and then add each plot individually
-fig, axes = plt.subplots(
-    nrows=2,
-    ncols=2,
-    figsize=(20, 10),
-    constrained_layout=True,
-)
-
-feature_to_title_lut = {
-    "document_field_name_top_nine_plus_other": "Field Counts",
-    "field_count": "Field Count over Time",
-    "repository_primary_language_top_nine_plus_other": "Primary Language Counts",
-    "language_count": "Primary Language Count over Time",
-}
-
-# Field name normal
-sns.countplot(
-    data=pairs,
-    x="document_field_name_top_nine_plus_other",
-    order=pairs["document_field_name_top_nine_plus_other"].value_counts(sort=True)[
-        "document_field_name_top_nine_plus_other"
-    ],
-    hue="document_field_name_top_nine_plus_other",
-    hue_order=field_hue_order,
-    ax=axes[0, 0],
-)
-
-# Field name over time
-sns.lineplot(
-    data=pairs.group_by(
-        ["document_field_name_top_nine_plus_other", "document_publication_year"]
+    sns.lineplot(
+        data=yearly_geo_df,
+        x="document_publication_year",
+        y="mean_unique_countries",
+        marker="o",
+        ax=axes[1, 0],
     )
-    .agg(pl.len().alias("field_count"))
-    .filter(
-        pl.col("document_publication_year") < 2025,
-    ),
-    x="document_publication_year",
-    y="field_count",
-    hue="document_field_name_top_nine_plus_other",
-    hue_order=field_hue_order,
-    ax=axes[0, 1],
-    legend=False,
-)
+    axes[1, 0].set_title("Mean Unique Author-Team Countries Over Time")
+    axes[1, 0].set_xlabel("Publication Year")
+    axes[1, 0].set_ylabel("Mean Unique Countries")
 
-# Add column for top N primary languages + other
-top_nine_languages = (
-    pairs.filter(pl.col("repository_primary_language").is_not_null())[
-        "repository_primary_language"
-    ]
-    .value_counts(sort=True)
-    .head(DEFAULT_TOP_N)["repository_primary_language"]
-    .to_list()
-)
-top_nine_languages_hue_order = [*top_nine_languages, "Other"]
-pairs = pairs.with_columns(
-    pl.when(pl.col("repository_primary_language").is_in(top_nine_languages))
-    .then(pl.col("repository_primary_language"))
-    .otherwise(pl.lit("Other"))
-    .alias("repository_primary_language_top_nine_plus_other")
-)
-
-# Primary language normal
-sns.countplot(
-    data=pairs,
-    x="repository_primary_language_top_nine_plus_other",
-    order=pairs["repository_primary_language_top_nine_plus_other"].value_counts(sort=True)[
-        "repository_primary_language_top_nine_plus_other"
-    ],
-    hue="repository_primary_language_top_nine_plus_other",
-    hue_order=top_nine_languages_hue_order,
-    ax=axes[1, 0],
-)
-
-# Primary language over time
-sns.lineplot(
-    data=pairs.group_by(
-        ["repository_primary_language_top_nine_plus_other", "document_publication_year"]
+    sns.lineplot(
+        data=yearly_geo_df,
+        x="document_publication_year",
+        y="mean_country_entropy",
+        marker="o",
+        ax=axes[1, 1],
     )
-    .agg(pl.len().alias("language_count"))
-    .filter(
-        pl.col("document_publication_year") < 2025,
-    ),
-    x="document_publication_year",
-    y="language_count",
-    hue="repository_primary_language_top_nine_plus_other",
-    hue_order=top_nine_languages_hue_order,
-    ax=axes[1, 1],
-    legend=False,
-)
+    axes[1, 1].set_title("Mean Author-Team Country Entropy Over Time")
+    axes[1, 1].set_xlabel("Publication Year")
+    axes[1, 1].set_ylabel("Mean Country Entropy")
 
-for ax in axes.flat:
-    # Rotate all x-tick labels for readability
-    _ = ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+    for ax in axes[1, :]:
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
 
-    # Remove axis labels
-    feature_name = ax.get_xlabel()
-    feature_name = (
-        ax.get_ylabel() if feature_name == "document_publication_year" else feature_name
-    )
-    ax.set_xlabel("")
-    ax.set_ylabel("")
-
-    # Set title
-    ax.set_title(feature_to_title_lut.get(feature_name, feature_name), fontsize=16)
-
-fig.tight_layout(h_pad=3.0)
-fig.savefig(RESULTS_DIR / "field_and_language_counts.png", bbox_inches="tight", dpi=300)
-
-# Plot median repository commit duration, size, commits, and number of files over time
-over_time_metrics = [
-    "repository_commit_duration_days",
-    "repository_size_kb",
-    "repository_commits_count",
-    "repository_n_files",
-]
-
-over_time_metrics_to_viz_name_lut = {
-    "repository_commit_duration_days": "Repository Commit Duration (Days)",
-    "repository_size_kb": "Repository Size (KB)",
-    "repository_commits_count": "Repository Commits Count",
-    "repository_n_files": "Repository Number of Files",
-}
-
-over_time_df = pairs.filter(
-    pl.col("document_publication_year") < 2025,
-    pl.col("document_publication_year") > 2010,
-)
-
-over_time_df = over_time_df.unpivot(
-    on=over_time_metrics,
-    variable_name="metric",
-    value_name="median_value",
-    index=["document_publication_year"],
-)
-
-g = sns.catplot(
-    data=over_time_df,
-    x="document_publication_year",
-    y="median_value",
-    hue="metric",
-    col="metric",
-    col_wrap=2,
-    kind="bar",
-    sharey=False,
-    legend=False,
-)
-
-# Set titles and labels
-g.set_titles("{col_name}")
-
-# Rotate x-axis labels for readability
-for i, ax in enumerate(g.axes):
-    for label in ax.get_xticklabels():
-        label.set_rotation(45)
-        label.set_ha("right")
-    ax.set_xlabel("")
-    ax.set_ylabel("Median Value")
-    ax.set_title(over_time_metrics_to_viz_name_lut.get(over_time_metrics[i]), fontsize=16)
-
-g.figure.tight_layout(h_pad=3.0)
-g.figure.savefig(RESULTS_DIR / "repo_metrics_over_time.png", bbox_inches="tight", dpi=300)
+    fig.savefig(results_dir / "geographic_diversity_depth.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
 
 
-# ## FWCI vs FWSI
-
-# FWCI vs FWSI scatter plot with top points labeled
-fwci_fwsi_plot_data = (
-    pairs.filter(
-        pl.col("document_fwci").is_not_null(),
-        pl.col("repository_fwsi").is_not_null(),
-        pl.col("document_fwci").is_not_nan(),
-        pl.col("repository_fwsi").is_not_nan(),
-        pl.col("document_fwci").is_finite(),
-        pl.col("repository_fwsi").is_finite(),
-    )
-    .with_columns(
+def plot_fwci_vs_fwsi(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+    top_n: int,
+) -> None:
+    """FWCI-vs-FWSI scatter, labeling, distributions, and relationship statistics."""
+    fwci_fwsi_plot_data = _filter_finite(
+        pairs,
+        ["document_fwci", "repository_fwsi"],
+    ).with_columns(
         (pl.lit(1) + pl.col("document_fwci")).log10().alias("document_fwci_log10"),
         (pl.lit(1) + pl.col("repository_fwsi")).log10().alias("repository_fwsi_log10"),
     )
-    .filter(
-        pl.col("document_fwci_log10").is_not_null(),
-        pl.col("repository_fwsi_log10").is_not_null(),
-        pl.col("document_fwci_log10").is_not_nan(),
-        pl.col("repository_fwsi_log10").is_not_nan(),
-        pl.col("document_fwci_log10").is_finite(),
-        pl.col("repository_fwsi_log10").is_finite(),
-    )
-)
-
-fwci_fwsi_ax = sns.scatterplot(
-    data=fwci_fwsi_plot_data,
-    x="document_fwci_log10",
-    y="repository_fwsi_log10",
-    alpha=0.1,
-)
-
-
-def _plot_fwci_fwsi_point_data(row: dict, color: str, ax: plt.Axes) -> None:
-    doc_title_parts = row["document_title"].split()
-    doc_title_short = (
-        " ".join(doc_title_parts[:4]) + "..."
-        if len(doc_title_parts) > 4
-        else row["document_title"]
-    )
-    point_label = f"{doc_title_short} -- {row['repository_owner']}/{row['repository_name']}"
-    ax.text(
-        row["document_fwci_log10"] + 0.1,
-        row["repository_fwsi_log10"] - 0.02,
-        point_label,
-        fontsize=8,
-        color=color,
-    )
-    ax.plot(
-        row["document_fwci_log10"],
-        row["repository_fwsi_log10"],
-        "o",
-        color=color,
+    fwci_fwsi_plot_data = _filter_finite(
+        fwci_fwsi_plot_data,
+        ["document_fwci_log10", "repository_fwsi_log10"],
     )
 
+    if fwci_fwsi_plot_data.height == 0:
+        log.warning("No finite FWCI/FWSI rows available. Skipping FWCI/FWSI plots.")
+        return
 
-# Label the top two points by document FWCI
-top_fwci_points = fwci_fwsi_plot_data.sort("document_fwci_log10", descending=True).head(2)
-print(
-    top_fwci_points[
-        [
-            "document_fwci_log10",
-            "document_title",
-            "repository_owner",
-            "repository_name",
-        ]
+    x = fwci_fwsi_plot_data["document_fwci_log10"].to_numpy()
+    y = fwci_fwsi_plot_data["repository_fwsi_log10"].to_numpy()
+
+    spearman_rho = _compute_spearman_rho(x, y)
+    pearson_r = float(np.corrcoef(x, y)[0, 1]) if len(x) > 1 else float("nan")
+    regression = _fit_simple_linear_regression(x, y)
+
+    relationship_stats = {
+        "n_pairs": int(fwci_fwsi_plot_data.height),
+        "spearman_rho": float(spearman_rho),
+        "pearson_r": float(pearson_r),
+        "slope": float(regression["slope"]),
+        "intercept": float(regression["intercept"]),
+        "r_squared": float(regression["r_squared"]),
+    }
+    with open(results_dir / "fwci_fwsi_relationship_stats.json", "w") as f:
+        json.dump(relationship_stats, f, indent=2)
+
+    fwci_fwsi_with_fields, top_fields, field_col = _add_top_n_other_column(
+        fwci_fwsi_plot_data,
+        "document_field_name",
+        top_n,
+    )
+
+    field_relationship_rows: list[dict[str, float | int | str]] = []
+    for field_name in top_fields:
+        field_df = fwci_fwsi_with_fields.filter(pl.col(field_col) == field_name)
+        if field_df.height < 25:
+            continue
+
+        field_x = field_df["document_fwci_log10"].to_numpy()
+        field_y = field_df["repository_fwsi_log10"].to_numpy()
+        field_reg = _fit_simple_linear_regression(field_x, field_y)
+
+        field_relationship_rows.append(
+            {
+                "field": field_name,
+                "n_pairs": int(field_df.height),
+                "spearman_rho": float(_compute_spearman_rho(field_x, field_y)),
+                "pearson_r": float(np.corrcoef(field_x, field_y)[0, 1])
+                if len(field_x) > 1
+                else float("nan"),
+                "slope": float(field_reg["slope"]),
+                "intercept": float(field_reg["intercept"]),
+                "r_squared": float(field_reg["r_squared"]),
+            }
+        )
+
+    if field_relationship_rows:
+        pl.DataFrame(field_relationship_rows).sort("n_pairs", descending=True).write_csv(
+            results_dir / "fwci_fwsi_field_relationship_stats.csv"
+        )
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+    sns.scatterplot(
+        data=fwci_fwsi_plot_data,
+        x="document_fwci_log10",
+        y="repository_fwsi_log10",
+        alpha=0.1,
+        ax=ax,
+    )
+
+    if np.isfinite(regression["slope"]):
+        x_line = np.linspace(float(np.min(x)), float(np.max(x)), 200)
+        y_line = regression["intercept"] + regression["slope"] * x_line
+        ax.plot(x_line, y_line, color="black", linestyle="--", linewidth=2)
+
+    labeled_frames: list[pl.DataFrame] = []
+
+    top_fwci_points = fwci_fwsi_plot_data.sort("document_fwci_log10", descending=True).head(2)
+    colors = ["red", "blue"]
+    for row, color in zip(top_fwci_points.iter_rows(named=True), colors, strict=False):
+        _plot_fwci_fwsi_point_data(row, color, ax)
+    labeled_frames.append(top_fwci_points)
+
+    top_fwsi_points = fwci_fwsi_plot_data.sort("repository_fwsi_log10", descending=True).head(2)
+    colors = ["green", "orange"]
+    for row, color in zip(top_fwsi_points.iter_rows(named=True), colors, strict=False):
+        _plot_fwci_fwsi_point_data(row, color, ax)
+    labeled_frames.append(top_fwsi_points)
+
+    fwci_fwsi_plot_data = fwci_fwsi_plot_data.with_columns(
+        (pl.col("document_fwci_log10") * pl.col("repository_fwsi_log10")).alias(
+            "fwci_fwsi_product_log10"
+        )
+    )
+    selected_product_points = fwci_fwsi_plot_data.sort(
+        "fwci_fwsi_product_log10", descending=True
+    ).head(2)
+    colors = ["brown", "purple"]
+    for row, color in zip(selected_product_points.iter_rows(named=True), colors, strict=False):
+        _plot_fwci_fwsi_point_data(row, color, ax)
+    labeled_frames.append(selected_product_points)
+
+    ax.set_title(
+        f"FWCI vs FWSI (log10): Spearman rho={spearman_rho:.3f}, R^2={regression['r_squared']:.3f}"
+    )
+
+    fig.savefig(results_dir / "fwci_vs_fwsi_scatter.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+    labeled_cols = [
+        "document_title",
+        "document_doi",
+        "repository_owner",
+        "repository_name",
+        "document_fwci_log10",
+        "repository_fwsi_log10",
     ]
-)
-colors = ["red", "blue"]
-for row in top_fwci_points.iter_rows(named=True):
-    _plot_fwci_fwsi_point_data(row, colors.pop(0), fwci_fwsi_ax)
+    all_labeled = pl.concat(
+        [f.select([c for c in labeled_cols if c in f.columns]) for f in labeled_frames]
+    ).unique()
+    all_labeled.write_csv(results_dir / "fwci_fwsi_labeled_points.csv")
+    log.debug("Saved fwci_fwsi_labeled_points.csv")
 
-# Label the top two points by repository FWSI
-top_fwsi_points = fwci_fwsi_plot_data.sort("repository_fwsi_log10", descending=True)[[0, 4]]
-print(
-    top_fwsi_points[
-        [
-            "repository_fwsi_log10",
-            "document_title",
-            "repository_owner",
-            "repository_name",
-        ]
-    ]
-)
-colors = ["green", "orange"]
-for row in top_fwsi_points.iter_rows(named=True):
-    _plot_fwci_fwsi_point_data(row, colors.pop(0), fwci_fwsi_ax)
-
-# Find a repo with high product of FWCI and FWSI
-fwci_fwsi_plot_data = fwci_fwsi_plot_data.with_columns(
-    (pl.col("document_fwci_log10") * pl.col("repository_fwsi_log10")).alias(
-        "fwci_fwsi_product_log10"
-    )
-)
-selected_fwci_fwsi_points = fwci_fwsi_plot_data.sort(
-    "fwci_fwsi_product_log10", descending=True
-)[[1, 4]]
-print(
-    selected_fwci_fwsi_points[
-        [
-            "fwci_fwsi_product_log10",
-            "document_title",
-            "repository_owner",
-            "repository_name",
-        ]
-    ]
-)
-colors = ["brown", "purple"]
-for row in selected_fwci_fwsi_points.iter_rows(named=True):
-    _plot_fwci_fwsi_point_data(row, colors.pop(0), fwci_fwsi_ax)
-fwci_fwsi_ax.figure.savefig(
-    RESULTS_DIR / "fwci_vs_fwsi_scatter.png", bbox_inches="tight", dpi=300
-)
-
-# Unpivot the plot data to only include doc id, repo id, fwci_log10, fwsi_log10
-fwci_fwsi_plot_data_melted = fwci_fwsi_plot_data.select(
-    [
+    fwci_fwsi_melted = fwci_fwsi_plot_data.select(
         "document_id",
         "repository_id",
         "document_fwci_log10",
         "repository_fwsi_log10",
-    ]
-).unpivot(
-    on=["document_fwci_log10", "repository_fwsi_log10"],
-    index=["document_id", "repository_id"],
-    variable_name="metric",
-    value_name="log10_value",
-)
+    ).unpivot(
+        on=["document_fwci_log10", "repository_fwsi_log10"],
+        index=["document_id", "repository_id"],
+        variable_name="metric",
+        value_name="log10_value",
+    )
 
-# Plot the distribution of FWCI and FWSI log10 values
-g = sns.displot(
-    data=fwci_fwsi_plot_data_melted,
-    x="log10_value",
-    hue="metric",
-    col="metric",
-    bins=20,
-    stat="proportion",
-    legend=False,
-)
-
-# Update the subplot titles
-g.set_titles("{col_name}")
-g.figure.savefig(RESULTS_DIR / "fwci_fwsi_distributions.png", bbox_inches="tight", dpi=300)
+    g = sns.displot(
+        data=fwci_fwsi_melted,
+        x="log10_value",
+        hue="metric",
+        col="metric",
+        bins=20,
+        stat="proportion",
+        legend=False,
+    )
+    g.set_titles("{col_name}")
+    g.figure.savefig(results_dir / "fwci_fwsi_distributions.png", bbox_inches="tight", dpi=300)
+    plt.close(g.figure)
 
 
-# ## Date Relationships
-
-# Two plots, one for repo creation vs publication date and one for
-# publication date vs most recent push date
-date_relationships_df = pairs.select(
-    [
+def plot_date_relationships(pairs: pl.DataFrame, results_dir: Path) -> None:
+    """Scatter plots of date relationships and day-difference distributions."""
+    date_df = pairs.select(
         "document_publication_date",
         "repository_creation_datetime",
         "repository_last_pushed_datetime",
-    ]
-).filter(
-    pl.col("document_publication_date").dt.year() < 2025,
-    pl.col("document_publication_date").dt.year() > 2010,
-    pl.col("repository_creation_datetime").dt.year() < 2025,
-    pl.col("repository_creation_datetime").dt.year() > 2010,
-    pl.col("repository_last_pushed_datetime").dt.year() > 2010,
-)
-
-# Create fig axes for 2 plots
-fig, axes = plt.subplots(
-    nrows=1,
-    ncols=2,
-    figsize=(15, 7),
-    constrained_layout=True,
-)
-
-sns.scatterplot(
-    data=date_relationships_df,
-    x="document_publication_date",
-    y="repository_creation_datetime",
-    alpha=0.1,
-    ax=axes[0],
-)
-
-# Add 45 degree line
-min_date = min(
-    date_relationships_df["document_publication_date"].min(),
-    date_relationships_df["repository_creation_datetime"].dt.date().min(),
-)
-max_date = max(
-    date_relationships_df["document_publication_date"].max(),
-    date_relationships_df["repository_creation_datetime"].dt.date().max(),
-)
-_ = axes[0].plot(
-    [min_date, max_date],
-    [min_date, max_date],
-    color="red",
-    linestyle="--",
-)
-
-sns.scatterplot(
-    data=date_relationships_df,
-    x="repository_last_pushed_datetime",
-    y="document_publication_date",
-    alpha=0.1,
-    ax=axes[1],
-)
-axes[1].invert_yaxis()
-
-# Add 45 degree line
-min_date = min(
-    date_relationships_df["document_publication_date"].min(),
-    date_relationships_df["repository_last_pushed_datetime"].dt.date().min(),
-)
-max_date = max(
-    date_relationships_df["document_publication_date"].max(),
-    date_relationships_df["repository_last_pushed_datetime"].dt.date().max(),
-)
-_ = axes[1].plot(
-    [min_date, max_date],
-    [min_date, max_date],
-    color="red",
-    linestyle="--",
-)
-
-features_to_viz_name_lut = {
-    "repository_creation_datetime": "Repository Creation Date",
-    "document_publication_date": "Document Publication Date",
-    "repository_last_pushed_datetime": "Repository Last Pushed Date",
-}
-
-for ax in axes.flat:
-    # Remove axis labels
-    x_label = ax.get_xlabel()
-    y_label = ax.get_ylabel()
-    ax.set_xlabel(features_to_viz_name_lut.get(x_label, x_label))
-    ax.set_ylabel(features_to_viz_name_lut.get(y_label, y_label))
-
-# Tighten layout
-fig.tight_layout(w_pad=3.0)
-fig.savefig(RESULTS_DIR / "date_relationships_scatter.png", bbox_inches="tight", dpi=300)
-
-# Create the same plot but as distribution of "Days from X to Y"
-date_relationships_days_df = (
-    date_relationships_df.with_columns(
-        (
-            (
-                pl.col("document_publication_date") - pl.col("repository_creation_datetime")
-            ).dt.total_days()
-        ).alias("days_from_repo_creation_to_publication"),
-        (
-            (
-                pl.col("repository_last_pushed_datetime") - pl.col("document_publication_date")
-            ).dt.total_days()
-        ).alias("days_from_publication_to_last_push"),
+    ).filter(
+        pl.col("document_publication_date").dt.year() < 2025,
+        pl.col("document_publication_date").dt.year() > 2010,
+        pl.col("repository_creation_datetime").dt.year() < 2025,
+        pl.col("repository_creation_datetime").dt.year() > 2010,
+        pl.col("repository_last_pushed_datetime").dt.year() > 2010,
     )
-    .select(
-        [
+
+    if date_df.height == 0:
+        log.warning("No date-relationship rows available. Skipping date relationship plots.")
+        return
+
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15, 7), constrained_layout=True)
+
+    sns.scatterplot(
+        data=date_df,
+        x="document_publication_date",
+        y="repository_creation_datetime",
+        alpha=0.1,
+        ax=axes[0],
+    )
+    _add_45_degree_line(
+        axes[0],
+        date_df["document_publication_date"],
+        date_df["repository_creation_datetime"],
+    )
+
+    sns.scatterplot(
+        data=date_df,
+        x="repository_last_pushed_datetime",
+        y="document_publication_date",
+        alpha=0.1,
+        ax=axes[1],
+    )
+    axes[1].invert_yaxis()
+    _add_45_degree_line(
+        axes[1],
+        date_df["repository_last_pushed_datetime"],
+        date_df["document_publication_date"],
+    )
+
+    for ax in axes.flat:
+        x_label = ax.get_xlabel()
+        y_label = ax.get_ylabel()
+        ax.set_xlabel(DATE_FEATURES_TO_VIZ_NAME_LUT.get(x_label, x_label))
+        ax.set_ylabel(DATE_FEATURES_TO_VIZ_NAME_LUT.get(y_label, y_label))
+
+    fig.tight_layout(w_pad=3.0)
+    fig.savefig(results_dir / "date_relationships_scatter.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+    date_days_df = (
+        date_df.with_columns(
+            (
+                (
+                    pl.col("document_publication_date") - pl.col("repository_creation_datetime")
+                ).dt.total_days()
+            ).alias("days_from_repo_creation_to_publication"),
+            (
+                (
+                    pl.col("repository_last_pushed_datetime")
+                    - pl.col("document_publication_date")
+                ).dt.total_days()
+            ).alias("days_from_publication_to_last_push"),
+        )
+        .select(
             "days_from_repo_creation_to_publication",
             "days_from_publication_to_last_push",
-        ]
+        )
+        .unpivot(
+            on=[
+                "days_from_repo_creation_to_publication",
+                "days_from_publication_to_last_push",
+            ],
+            index=[],
+            variable_name="date_difference_type",
+            value_name="days_difference",
+        )
     )
-    .unpivot(
-        on=[
-            "days_from_repo_creation_to_publication",
-            "days_from_publication_to_last_push",
-        ],
-        index=[],
-        variable_name="date_difference_type",
-        value_name="days_difference",
+
+    if date_days_df.height == 0:
+        return
+
+    g = sns.displot(
+        data=date_days_df.filter(
+            pl.col("days_difference") > date_days_df["days_difference"].quantile(0.01),
+            pl.col("days_difference") < date_days_df["days_difference"].quantile(0.99),
+        ),
+        x="days_difference",
+        hue="date_difference_type",
+        col="date_difference_type",
+        bins=20,
+        stat="proportion",
+        legend=False,
     )
-)
-
-g = sns.displot(
-    data=date_relationships_days_df.filter(
-        pl.col("days_difference")
-        > date_relationships_days_df["days_difference"].quantile(0.01),
-        pl.col("days_difference")
-        < date_relationships_days_df["days_difference"].quantile(0.99),
-    ),
-    x="days_difference",
-    hue="date_difference_type",
-    col="date_difference_type",
-    bins=20,
-    stat="proportion",
-    legend=False,
-)
-
-g.set_titles("{col_name}")
-g.figure.savefig(
-    RESULTS_DIR / "date_difference_distributions.png", bbox_inches="tight", dpi=300
-)
+    g.set_titles("{col_name}")
+    g.figure.savefig(
+        results_dir / "date_difference_distributions.png", bbox_inches="tight", dpi=300
+    )
+    plt.close(g.figure)
 
 
-# ## Network Coverage
+def plot_lifecycle_and_survival(pairs: pl.DataFrame, results_dir: Path) -> None:
+    """Analyze lifecycle archetypes and maintenance survival after publication."""
+    lifecycle_df = pairs.select(
+        "document_id",
+        "repository_id",
+        "document_publication_date",
+        "repository_creation_datetime",
+        "repository_last_pushed_datetime",
+        "days_from_repo_creation_to_publication",
+        "days_from_publication_to_last_push",
+    ).filter(
+        pl.col("document_publication_date").is_not_null(),
+        pl.col("repository_creation_datetime").is_not_null(),
+        pl.col("repository_last_pushed_datetime").is_not_null(),
+        pl.col("days_from_repo_creation_to_publication").is_not_null(),
+        pl.col("days_from_publication_to_last_push").is_not_null(),
+    )
+
+    if lifecycle_df.height == 0:
+        log.warning("No lifecycle rows available. Skipping lifecycle/survival analyses.")
+        return
+
+    lifecycle_df = lifecycle_df.with_columns(
+        pl.when(
+            pl.col("days_from_repo_creation_to_publication") > LIFECYCLE_RELEASE_WINDOW_DAYS
+        )
+        .then(pl.lit("Created well before publication"))
+        .when(pl.col("days_from_repo_creation_to_publication") < -LIFECYCLE_RELEASE_WINDOW_DAYS)
+        .then(pl.lit("Created after publication"))
+        .otherwise(pl.lit("Created around publication"))
+        .alias("creation_timing"),
+        pl.when(pl.col("days_from_publication_to_last_push") <= 0)
+        .then(pl.lit("No post-publication maintenance"))
+        .when(pl.col("days_from_publication_to_last_push") <= LIFECYCLE_LONG_MAINTENANCE_DAYS)
+        .then(pl.lit("Short-term post-publication maintenance"))
+        .otherwise(pl.lit("Long-term post-publication maintenance"))
+        .alias("maintenance_timing"),
+    ).with_columns(
+        pl.concat_str(["creation_timing", pl.lit(" | "), "maintenance_timing"]).alias(
+            "lifecycle_archetype"
+        )
+    )
+
+    lifecycle_counts = (
+        lifecycle_df.group_by("lifecycle_archetype")
+        .agg(pl.len().alias("n_pairs"))
+        .sort("n_pairs", descending=True)
+    )
+    lifecycle_counts.write_csv(results_dir / "lifecycle_archetype_counts.csv")
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    sns.barplot(
+        data=lifecycle_counts,
+        y="lifecycle_archetype",
+        x="n_pairs",
+        ax=ax,
+    )
+    ax.set_title("Repository Lifecycle and Maintenance Archetypes")
+    ax.set_xlabel("Pair Count")
+    ax.set_ylabel("")
+    fig.savefig(results_dir / "lifecycle_archetypes.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+    survival_df = lifecycle_df.filter(
+        pl.col("days_from_publication_to_last_push") >= 0
+    ).with_columns(
+        pl.col("days_from_publication_to_last_push").cast(pl.Int64).alias("duration_days")
+    )
+
+    if survival_df.height < 2:
+        log.warning("Insufficient rows for survival analysis after publication.")
+        return
+
+    data_cutoff_date = survival_df["repository_last_pushed_datetime"].max()
+    censor_window_days = 30
+
+    survival_df = survival_df.with_columns(
+        (pl.lit(data_cutoff_date) - pl.col("repository_last_pushed_datetime"))
+        .dt.total_days()
+        .alias("days_from_last_push_to_cutoff")
+    ).with_columns(
+        pl.when(pl.col("days_from_last_push_to_cutoff") <= censor_window_days)
+        .then(pl.lit(0))
+        .otherwise(pl.lit(1))
+        .alias("event_observed")
+    )
+
+    km_frames: list[pl.DataFrame] = []
+    km_summary: list[dict[str, float | int | str | None]] = []
+
+    def _append_km(group_name: str, group_df: pl.DataFrame) -> None:
+        durations = group_df["duration_days"].to_numpy()
+        events = group_df["event_observed"].to_numpy()
+        curve = _kaplan_meier_curve(durations, events)
+        if curve.height == 0:
+            return
+
+        curve = curve.with_columns(pl.lit(group_name).alias("group"))
+        km_frames.append(curve)
+
+        median_candidates = curve.filter(pl.col("survival_probability") <= 0.5)
+        median_days = (
+            int(median_candidates["duration_days"].min())
+            if median_candidates.height > 0
+            else None
+        )
+        km_summary.append(
+            {
+                "group": group_name,
+                "n_pairs": int(group_df.height),
+                "event_rate": float(group_df["event_observed"].mean()),
+                "median_survival_days": median_days,
+            }
+        )
+
+    _append_km("Overall", survival_df)
+
+    for (creation_timing,), group_df in survival_df.group_by(
+        "creation_timing", maintain_order=True
+    ):
+        if group_df.height >= 50:
+            _append_km(str(creation_timing), group_df)
+
+    if not km_frames:
+        log.warning("No KM curves produced.")
+        return
+
+    km_curve_df = pl.concat(km_frames, how="vertical")
+    km_curve_df.write_csv(results_dir / "publication_maintenance_survival_curve.csv")
+
+    with open(results_dir / "publication_maintenance_survival_summary.json", "w") as f:
+        json.dump(km_summary, f, indent=2)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for (group_name,), group_curve in km_curve_df.group_by("group", maintain_order=True):
+        x_vals = group_curve["duration_days"].to_list()
+        y_vals = group_curve["survival_probability"].to_list()
+        ax.step(x_vals, y_vals, where="post", label=str(group_name))
+
+    ax.set_title("Post-Publication Maintenance Survival")
+    ax.set_xlabel("Days from Publication to Last Push")
+    ax.set_ylabel("Survival Probability (Still Maintained)")
+    ax.set_ylim(0, 1.01)
+    ax.legend()
+    fig.savefig(
+        results_dir / "publication_maintenance_survival.png", bbox_inches="tight", dpi=300
+    )
+    plt.close(fig)
 
 
-def build_coauthorship_network(
-    df: pl.DataFrame, sample_size: int | None = None
-) -> tuple[rx.PyGraph, dict[int, int], dict[int, int], pl.DataFrame]:
-    """Build a co-authorship network from document contributors using rustworkx.
-
-    Returns:
-        Tuple of (graph, node_to_idx mapping, idx_to_node mapping, doc contribs DataFrame).
-    """
+def analyze_network_coverage(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+    n_iterations: int,
+) -> None:
+    """Build co-authorship graph, compute component stats and shortest paths; save JSON."""
     doc_contribs = _read_table("document_contributor")
-
-    # Filter to documents in our dataset
-    doc_ids_in_dataset = df["document_id"].unique().to_list()
+    doc_ids_in_dataset = pairs["document_id"].unique().to_list()
     doc_contribs = doc_contribs.filter(pl.col("document_id").is_in(doc_ids_in_dataset))
 
-    # Apply sampling if requested
-    if sample_size is not None:
-        sampled_doc_ids = (
-            doc_contribs.select("document_id")
-            .unique()
-            .sample(n=min(sample_size, len(doc_ids_in_dataset)), seed=42)
-        )
-        doc_contribs = doc_contribs.filter(
-            pl.col("document_id").is_in(sampled_doc_ids["document_id"])
-        )
+    graph, _, _ = _build_coauthorship_graph(doc_contribs)
 
-    # Build rustworkx graph
-    coauthorship_graph = rx.PyGraph()
-    node_to_idx: dict[int, int] = {}  # researcher_id -> rustworkx node index
-    idx_to_node: dict[int, int] = {}  # rustworkx node index -> researcher_id
-
-    # Add nodes and edges
-    for _, group in tqdm(
-        doc_contribs.group_by("document_id"),
-        total=doc_contribs["document_id"].n_unique(),
-        desc="Building co-authorship network",
-    ):
-        # Add nodes for all authors
-        for author in group.iter_rows(named=True):
-            this_author_researcher_id = author["researcher_id"]
-            if this_author_researcher_id not in node_to_idx:
-                rx_node_idx = coauthorship_graph.add_node(this_author_researcher_id)
-                node_to_idx[this_author_researcher_id] = rx_node_idx
-                idx_to_node[rx_node_idx] = this_author_researcher_id
-
-        # Add edges between co-authors
-        for a1 in group.iter_rows(named=True):
-            author_one_researcher_id = a1["researcher_id"]
-            for a2 in group.iter_rows(named=True):
-                author_two_researcher_id = a2["researcher_id"]
-                if author_one_researcher_id == author_two_researcher_id:
-                    continue
-
-                # Add edge
-                # Lookup node indices
-                node_idx_1 = node_to_idx[author_one_researcher_id]
-                node_idx_2 = node_to_idx[author_two_researcher_id]
-                coauthorship_graph.add_edge(node_idx_1, node_idx_2, 1)
-
-    print("Network built:")
-    print(f"Nodes (authors): {coauthorship_graph.num_nodes():,}")
-    print(f"Edges (co-authorships): {coauthorship_graph.num_edges():,}")
-
-    return coauthorship_graph, node_to_idx, idx_to_node, doc_contribs
-
-
-coauthorship_graph, node_to_idx, idx_to_node, doc_contribs = build_coauthorship_network(pairs)
-
-components = rx.connected_components(coauthorship_graph)
-component_sizes = sorted([len(c) for c in components], reverse=True)
-
-total_nodes = coauthorship_graph.num_nodes()
-largest_component_size = component_sizes[0] if component_sizes else 0
-coverage = largest_component_size / total_nodes if total_nodes > 0 else 0
-
-print(f"\nTotal number of components: {len(components):,}")
-print(f"Total authors (nodes): {total_nodes:,}")
-print(f"Largest component size: {largest_component_size:,}")
-print(f"Coverage (largest / total): {coverage:.2%}")
-
-print("\nComponent size distribution:")
-print(f"  Largest 5: {component_sizes[:5]}")
-print(f"  Isolates (size 1): {component_sizes.count(1):,}")
-print(f"  Size 2-10: {sum(1 for s in component_sizes if 2 <= s <= 10):,}")
-print(f"  Size 11-100: {sum(1 for s in component_sizes if 11 <= s <= 100):,}")
-print(f"  Size >100: {sum(1 for s in component_sizes if s > 100):,}")
-
-N_ITERATIONS = 5000
-
-# Get the largest connected component
-largest_cc = max(components, key=len)
-largest_cc_nodes = list(largest_cc)
-
-# Create subgraph for largest component
-coauthorship_graph_largest_component = coauthorship_graph.subgraph(largest_cc_nodes)
-
-print("\nAnalyzing largest connected component:")
-print(f"  Nodes: {coauthorship_graph_largest_component.num_nodes():,}")
-print(f"  Edges: {coauthorship_graph_largest_component.num_edges():,}")
-print()
-
-# Get all node indices for sampling
-subgraph_indices = list(range(coauthorship_graph_largest_component.num_nodes()))
-
-# Iteration Loop
-dijkstra_lengths = []
-for _ in tqdm(range(N_ITERATIONS), desc="Getting random shortest paths"):
-    # Randomly select two distinct nodes
-    source, target = random.sample(subgraph_indices, 2)
-
-    # Dijkstra Shortest Path
-    # Returns a dictionary {target_node: length}
-    dijkstra_res = rx.dijkstra_shortest_path_lengths(
-        coauthorship_graph_largest_component,
-        source,
-        lambda _: 1,  # Weight function (1 = unweighted/hops)
-        goal=target,
+    log.info(
+        "Network built: %s nodes, %s edges",
+        f"{graph.num_nodes():,}",
+        f"{graph.num_edges():,}",
     )
-    dijkstra_lengths.append(dijkstra_res[target])
 
-# Calculate Statistics
-dijkstra_vec = np.array(dijkstra_lengths)
+    components = rx.connected_components(graph) if graph.num_nodes() > 0 else []
+    component_sizes = sorted([len(c) for c in components], reverse=True)
 
-print()
-print("--- Results ---")
-print(f"Valid paths found: {len(dijkstra_vec)}")
-print(f"  Mean:   {np.mean(dijkstra_vec):.4f}")
-print(f"  Std:    {np.std(dijkstra_vec):.4f}")
-print(f"  Median: {np.median(dijkstra_vec):.4f}")
+    total_nodes = graph.num_nodes()
+    largest_component_size = component_sizes[0] if component_sizes else 0
+    coverage = largest_component_size / total_nodes if total_nodes > 0 else 0
+
+    network_stats = {
+        "total_components": len(components),
+        "total_nodes": total_nodes,
+        "largest_component_size": largest_component_size,
+        "coverage_pct": round(coverage * 100, 2),
+        "largest_5": component_sizes[:5],
+        "isolates_size_1": component_sizes.count(1),
+        "size_2_to_10": sum(1 for s in component_sizes if 2 <= s <= 10),
+        "size_11_to_100": sum(1 for s in component_sizes if 11 <= s <= 100),
+        "size_gt_100": sum(1 for s in component_sizes if s > 100),
+    }
+    log.info("Network coverage: %.2f%%", coverage * 100)
+
+    with open(results_dir / "network_coverage.json", "w") as f:
+        json.dump(network_stats, f, indent=2)
+    log.debug("Saved network_coverage.json")
+
+    if not components:
+        path_stats = {
+            "valid_paths": 0,
+            "mean": float("nan"),
+            "std": float("nan"),
+            "median": float("nan"),
+        }
+        with open(results_dir / "shortest_path_stats.json", "w") as f:
+            json.dump(path_stats, f, indent=2)
+        log.warning("No graph components available for shortest-path analysis.")
+        return
+
+    largest_cc = max(components, key=len)
+    subgraph = graph.subgraph(list(largest_cc))
+
+    log.info(
+        "Largest component: %s nodes, %s edges",
+        f"{subgraph.num_nodes():,}",
+        f"{subgraph.num_edges():,}",
+    )
+
+    if subgraph.num_nodes() < 2:
+        path_stats = {
+            "valid_paths": 0,
+            "mean": float("nan"),
+            "std": float("nan"),
+            "median": float("nan"),
+        }
+        with open(results_dir / "shortest_path_stats.json", "w") as f:
+            json.dump(path_stats, f, indent=2)
+        log.warning("Largest component has <2 nodes; skipping shortest-path sampling.")
+        return
+
+    subgraph_indices = list(range(subgraph.num_nodes()))
+    dijkstra_lengths: list[int] = []
+    for _ in tqdm(range(n_iterations), desc="Getting random shortest paths"):
+        source, target = random.sample(subgraph_indices, 2)
+        dijkstra_res = rx.dijkstra_shortest_path_lengths(
+            subgraph,
+            source,
+            lambda _: 1,
+            goal=target,
+        )
+        dijkstra_lengths.append(dijkstra_res[target])
+
+    dijkstra_vec = np.array(dijkstra_lengths)
+    path_stats = {
+        "valid_paths": len(dijkstra_vec),
+        "mean": round(float(np.mean(dijkstra_vec)), 4),
+        "std": round(float(np.std(dijkstra_vec)), 4),
+        "median": round(float(np.median(dijkstra_vec)), 4),
+        "p10": round(float(np.quantile(dijkstra_vec, 0.10)), 4),
+        "p90": round(float(np.quantile(dijkstra_vec, 0.90)), 4),
+    }
+    log.info(
+        "Shortest paths — mean: %.4f, std: %.4f, median: %.4f",
+        path_stats["mean"],
+        path_stats["std"],
+        path_stats["median"],
+    )
+
+    with open(results_dir / "shortest_path_stats.json", "w") as f:
+        json.dump(path_stats, f, indent=2)
+    log.debug("Saved shortest_path_stats.json")
+
+
+def analyze_network_role_by_code_contribution_status(  # noqa: C901
+    pairs: pl.DataFrame,
+    results_dir: Path,
+    n_iterations: int,
+) -> None:
+    """Analyze network role of authors split by code-contribution status."""
+    doc_ids_in_dataset = pairs["document_id"].unique().to_list()
+    doc_contribs = _read_table("document_contributor").filter(
+        pl.col("document_id").is_in(doc_ids_in_dataset)
+    )
+
+    graph, _, idx_to_node = _build_coauthorship_graph(doc_contribs)
+
+    if graph.num_nodes() == 0:
+        log.warning("No network nodes available for code-contribution status analysis.")
+        return
+
+    code_contrib_researcher_ids = set(
+        _get_author_developer_pairs_connected_to_pairs(
+            pairs.select("document_id", "repository_id").unique()
+        )["researcher_id"]
+        .unique()
+        .to_list()
+    )
+
+    degree_rows: list[dict[str, int | bool]] = []
+    for idx in range(graph.num_nodes()):
+        rid = idx_to_node[idx]
+        degree_rows.append(
+            {
+                "researcher_id": int(rid),
+                "degree": int(graph.degree(idx)),
+                "is_code_contributor": bool(rid in code_contrib_researcher_ids),
+            }
+        )
+
+    degree_df = pl.DataFrame(degree_rows)
+    degree_df.write_csv(results_dir / "network_degree_by_code_contribution_status.csv")
+
+    degree_summary = degree_df.group_by("is_code_contributor").agg(
+        pl.len().alias("n_authors"),
+        pl.col("degree").mean().alias("mean_degree"),
+        pl.col("degree").median().alias("median_degree"),
+        pl.col("degree").quantile(0.25).alias("degree_q25"),
+        pl.col("degree").quantile(0.75).alias("degree_q75"),
+    )
+    degree_summary.write_csv(results_dir / "network_degree_status_summary.csv")
+
+    edge_type_counts = {
+        "contributor_contributor": 0,
+        "contributor_non_contributor": 0,
+        "non_contributor_non_contributor": 0,
+    }
+
+    edge_list = graph.edge_list() if hasattr(graph, "edge_list") else []
+    for idx_u, idx_v in edge_list:
+        u_is_contrib = idx_to_node[idx_u] in code_contrib_researcher_ids
+        v_is_contrib = idx_to_node[idx_v] in code_contrib_researcher_ids
+
+        if u_is_contrib and v_is_contrib:
+            edge_type_counts["contributor_contributor"] += 1
+        elif u_is_contrib or v_is_contrib:
+            edge_type_counts["contributor_non_contributor"] += 1
+        else:
+            edge_type_counts["non_contributor_non_contributor"] += 1
+
+    components = rx.connected_components(graph)
+    largest_cc = max(components, key=len) if components else []
+    largest_cc_researchers = {idx_to_node[idx] for idx in largest_cc}
+
+    path_lengths_by_status: defaultdict[str, list[int]] = defaultdict(list)
+    if len(largest_cc) >= 2:
+        subgraph = graph.subgraph(list(largest_cc))
+        subgraph_indices = list(range(subgraph.num_nodes()))
+
+        for _ in tqdm(
+            range(n_iterations),
+            desc="Shortest paths by code-contribution status",
+        ):
+            source, target = random.sample(subgraph_indices, 2)
+            dijkstra_res = rx.dijkstra_shortest_path_lengths(
+                subgraph,
+                source,
+                lambda _: 1,
+                goal=target,
+            )
+            path_len = dijkstra_res[target]
+
+            source_rid = subgraph[source]
+            target_rid = subgraph[target]
+            source_is_contrib = source_rid in code_contrib_researcher_ids
+            target_is_contrib = target_rid in code_contrib_researcher_ids
+
+            if source_is_contrib and target_is_contrib:
+                key = "contributor-contributor"
+            elif source_is_contrib or target_is_contrib:
+                key = "contributor-non_contributor"
+            else:
+                key = "non_contributor-non_contributor"
+
+            path_lengths_by_status[key].append(path_len)
+
+    path_summary_rows: list[dict[str, float | int | str]] = []
+    path_plot_rows: list[dict[str, float | str]] = []
+    for key, values in path_lengths_by_status.items():
+        if not values:
+            continue
+        vec = np.array(values)
+        path_summary_rows.append(
+            {
+                "status_pair": key,
+                "n_paths": len(vec),
+                "mean": float(np.mean(vec)),
+                "median": float(np.median(vec)),
+                "std": float(np.std(vec)),
+            }
+        )
+        path_plot_rows.extend(
+            [{"status_pair": key, "shortest_path_length": float(v)} for v in values]
+        )
+
+    if path_summary_rows:
+        pl.DataFrame(path_summary_rows).write_csv(
+            results_dir / "network_shortest_path_by_code_contribution_status.csv"
+        )
+
+    role_summary = {
+        "total_authors": int(graph.num_nodes()),
+        "code_contributor_authors": len(code_contrib_researcher_ids),
+        "pct_code_contributor_authors": round(
+            100 * len(code_contrib_researcher_ids) / graph.num_nodes(), 2
+        ),
+        "largest_component_size": len(largest_cc_researchers),
+        "largest_component_code_contributor_pct": round(
+            100
+            * len(largest_cc_researchers.intersection(code_contrib_researcher_ids))
+            / len(largest_cc_researchers),
+            2,
+        )
+        if largest_cc_researchers
+        else 0,
+        "edge_type_counts": edge_type_counts,
+    }
+
+    with open(results_dir / "network_code_contribution_role_summary.json", "w") as f:
+        json.dump(role_summary, f, indent=2)
+
+    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(18, 10), constrained_layout=True)
+
+    sns.boxplot(
+        data=degree_df.with_columns(
+            pl.when(pl.col("is_code_contributor"))
+            .then(pl.lit("Code Contributor"))
+            .otherwise(pl.lit("Non Contributor"))
+            .alias("status_label")
+        ),
+        x="status_label",
+        y="degree",
+        showfliers=False,
+        ax=axes[0, 0],
+    )
+    axes[0, 0].set_title("Degree Distribution by Code-Contribution Status")
+    axes[0, 0].set_xlabel("")
+    axes[0, 0].set_ylabel("Node Degree")
+
+    edge_mix_df = pl.DataFrame(
+        {
+            "edge_type": list(edge_type_counts.keys()),
+            "count": list(edge_type_counts.values()),
+        }
+    )
+    sns.barplot(data=edge_mix_df, x="edge_type", y="count", ax=axes[0, 1])
+    axes[0, 1].set_title("Edge Mix by Code-Contribution Status")
+    axes[0, 1].set_xlabel("")
+    axes[0, 1].set_ylabel("Edge Count")
+    axes[0, 1].set_xticklabels(axes[0, 1].get_xticklabels(), rotation=30, ha="right")
+
+    if path_plot_rows:
+        path_plot_df = pl.DataFrame(path_plot_rows)
+        sns.boxplot(
+            data=path_plot_df,
+            x="status_pair",
+            y="shortest_path_length",
+            showfliers=False,
+            ax=axes[1, 0],
+        )
+        axes[1, 0].set_title("Shortest Path by Status Pair")
+        axes[1, 0].set_xlabel("")
+        axes[1, 0].set_ylabel("Shortest Path Length")
+        axes[1, 0].set_xticklabels(axes[1, 0].get_xticklabels(), rotation=30, ha="right")
+    else:
+        axes[1, 0].text(0.5, 0.5, "Insufficient path data", ha="center", va="center")
+        axes[1, 0].set_axis_off()
+
+    try:
+        if hasattr(rx, "spring_layout") and len(largest_cc) >= 2:
+            sample_nodes = list(largest_cc)
+            max_nodes_for_plot = 250
+            if len(sample_nodes) > max_nodes_for_plot:
+                sample_nodes = random.sample(sample_nodes, max_nodes_for_plot)
+
+            sample_subgraph = graph.subgraph(sample_nodes)
+            layout = rx.spring_layout(sample_subgraph, seed=42)
+            if isinstance(layout, dict):
+                coords = {i: layout[i] for i in range(sample_subgraph.num_nodes())}
+            else:
+                coords = {i: layout[i] for i in range(len(layout))}
+
+            for idx_u, idx_v in (
+                sample_subgraph.edge_list() if hasattr(sample_subgraph, "edge_list") else []
+            ):
+                x_vals = [coords[idx_u][0], coords[idx_v][0]]
+                y_vals = [coords[idx_u][1], coords[idx_v][1]]
+                axes[1, 1].plot(x_vals, y_vals, color="lightgray", linewidth=0.25, alpha=0.5)
+
+            xs: list[float] = []
+            ys: list[float] = []
+            colors: list[str] = []
+            for idx in range(sample_subgraph.num_nodes()):
+                rid = sample_subgraph[idx]
+                xs.append(coords[idx][0])
+                ys.append(coords[idx][1])
+                colors.append("#1f77b4" if rid in code_contrib_researcher_ids else "#ff7f0e")
+
+            axes[1, 1].scatter(xs, ys, c=colors, s=14, alpha=0.85)
+            axes[1, 1].set_title("Sampled Co-Authorship Network Colored by Contribution Status")
+            axes[1, 1].set_xticks([])
+            axes[1, 1].set_yticks([])
+            axes[1, 1].set_xlabel("")
+            axes[1, 1].set_ylabel("")
+
+            legend_handles = [
+                plt.Line2D(
+                    [0],
+                    [0],
+                    marker="o",
+                    color="w",
+                    markerfacecolor="#1f77b4",
+                    label="Code Contributor",
+                    markersize=6,
+                ),
+                plt.Line2D(
+                    [0],
+                    [0],
+                    marker="o",
+                    color="w",
+                    markerfacecolor="#ff7f0e",
+                    label="Non Contributor",
+                    markersize=6,
+                ),
+            ]
+            axes[1, 1].legend(handles=legend_handles, loc="best")
+        else:
+            axes[1, 1].text(0.5, 0.5, "spring_layout unavailable", ha="center", va="center")
+            axes[1, 1].set_axis_off()
+    except Exception as exc:  # pragma: no cover
+        log.warning("Failed to render sampled network layout: %s", exc)
+        axes[1, 1].text(0.5, 0.5, "Failed to render network layout", ha="center", va="center")
+        axes[1, 1].set_axis_off()
+
+    fig.savefig(
+        results_dir / "network_code_contribution_role.png", bbox_inches="tight", dpi=300
+    )
+    plt.close(fig)
+
+
+###############################################################################
+# CLI
+###############################################################################
+
+
+@app.command()
+def analyze(
+    top_n: int = typer.Option(9, help="Number of top categories (rest grouped as 'Other')."),
+    n_shortest_path_iterations: int = typer.Option(
+        200, help="Random shortest path iterations for network analysis."
+    ),
+    sample_size: int | None = typer.Option(
+        None, help="Sample this many pairs for faster analysis."
+    ),
+    debug: bool = typer.Option(False, help="Enable debug logging."),
+) -> None:
+    """Run the full RQ1 analysis pipeline."""
+    setup_logger(debug=debug)
+
+    results_dir = Path(__file__).parent / "rq1-results"
+    results_dir.mkdir(exist_ok=True)
+
+    sns.set_palette(PALETTE)
+
+    total_steps = 14
+    step = 0
+
+    step += 1
+    log.info("Step %d/%d: Loading pairs...", step, total_steps)
+    pairs = load_pairs(sample_size=sample_size)
+
+    step += 1
+    log.info("Step %d/%d: Descriptive statistics...", step, total_steps)
+    print_descriptive_stats(pairs, results_dir)
+
+    step += 1
+    log.info("Step %d/%d: Field countplot...", step, total_steps)
+    plot_field_countplot(pairs, results_dir)
+
+    step += 1
+    log.info("Step %d/%d: Features by field boxplots...", step, total_steps)
+    plot_features_by_field(pairs, results_dir, top_n)
+
+    step += 1
+    log.info("Step %d/%d: Pairs over time...", step, total_steps)
+    plot_pairs_over_time(pairs, results_dir)
+
+    step += 1
+    log.info("Step %d/%d: Iteration expansion...", step, total_steps)
+    plot_iteration_expansion(results_dir)
+
+    step += 1
+    log.info("Step %d/%d: Field and language counts...", step, total_steps)
+    plot_field_and_language_counts(pairs, results_dir, top_n)
+
+    step += 1
+    log.info("Step %d/%d: Repository metrics over time...", step, total_steps)
+    plot_repo_metrics_over_time(pairs, results_dir)
+
+    step += 1
+    log.info("Step %d/%d: Geographic diversity depth...", step, total_steps)
+    plot_geographic_diversity_depth(pairs, results_dir, top_n)
+
+    step += 1
+    log.info("Step %d/%d: FWCI vs FWSI analysis...", step, total_steps)
+    plot_fwci_vs_fwsi(pairs, results_dir, top_n)
+
+    step += 1
+    log.info("Step %d/%d: Date relationships...", step, total_steps)
+    plot_date_relationships(pairs, results_dir)
+
+    step += 1
+    log.info("Step %d/%d: Lifecycle and survival analyses...", step, total_steps)
+    plot_lifecycle_and_survival(pairs, results_dir)
+
+    step += 1
+    log.info("Step %d/%d: Network coverage...", step, total_steps)
+    analyze_network_coverage(pairs, results_dir, n_shortest_path_iterations)
+
+    step += 1
+    log.info("Step %d/%d: Network role by code-contribution status...", step, total_steps)
+    analyze_network_role_by_code_contribution_status(
+        pairs,
+        results_dir,
+        n_shortest_path_iterations,
+    )
+
+    log.info("Analysis complete.")
+
+
+def main() -> None:
+    app()
+
+
+if __name__ == "__main__":
+    app()

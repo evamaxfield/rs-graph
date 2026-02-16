@@ -56,6 +56,8 @@ modeling = [
   "sci-soft-models @ file:///Users/evamaxfield/active/research/sci-soft-models",
   "seaborn>=0.13,<0.14",
   "statsmodels>=0.14,<0.15",
+  "tqdm>=4,<5",
+  "typer>=0.15",
 ]
 data = [
   "dataclasses-json>=0.6,<0.7",
