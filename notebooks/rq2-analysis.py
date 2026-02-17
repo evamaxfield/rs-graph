@@ -9,11 +9,13 @@ import colormaps as cmaps
 import connectorx  # noqa: F401
 import matplotlib.pyplot as plt
 import numpy as np
+import pingouin as pg
 import polars as pl
 import rustworkx as rx
 import seaborn as sns
 import typer
-from scipy.stats import chi2_contingency, mannwhitneyu
+from scipy.stats import chi2_contingency
+from scipy.stats.contingency import association
 from tqdm import tqdm
 
 from rs_graph.bin.typer_utils import setup_logger
@@ -49,6 +51,25 @@ CATEGORICAL_FEATURES = [
     "document_type",
     "repository_primary_language",
 ]
+
+FEATURE_DISPLAY_NAMES: dict[str, str] = {
+    "document_fwci_log1p": "Article FWCI (log)",
+    "repository_fwsi_log1p": "Repo FWSI (log)",
+    "document_cited_by_count_log1p": "Citations (log)",
+    "repository_stargazers_count_log1p": "Repo Stars (log)",
+    "repository_commits_count_log1p": "Repo Commits (log)",
+    "repository_size_kb_log1p": "Repo Size KB (log)",
+    "repository_n_contributors": "Repo Contributors",
+    "repository_n_files": "Repo Files",
+    "days_from_repo_creation_to_publication": "Days Repo Created to Publication",
+    "days_from_publication_to_last_push": "Days Publication to Last Push",
+    "document_publication_year": "Publication Year",
+    "document_n_authors": "Number of Authors",
+    "repository_commit_duration_days": "Repo Commit Duration (days)",
+    "document_field_name": "Research Field",
+    "document_type": "Document Type",
+    "repository_primary_language": "Primary Language",
+}
 
 ###############################################################################
 # Logger & App
@@ -523,21 +544,6 @@ def load_rq2_pairs(
 ###############################################################################
 
 
-def _rank_biserial_correlation(u_stat: float, n1: int, n2: int) -> float:
-    """Rank-biserial correlation as effect size for Mann-Whitney U."""
-    return 1 - (2 * u_stat) / (n1 * n2)
-
-
-def _cramers_v(contingency_table: np.ndarray) -> float:
-    """Cramer's V effect size from a contingency table."""
-    chi2 = chi2_contingency(contingency_table)[0]
-    n = contingency_table.sum()
-    min_dim = min(contingency_table.shape) - 1
-    if min_dim == 0 or n == 0:
-        return 0.0
-    return float(np.sqrt(chi2 / (n * min_dim)))
-
-
 def _effect_magnitude(val: float) -> str:
     """Classify absolute effect size magnitude."""
     val = abs(val)
@@ -577,8 +583,10 @@ def run_feature_comparison(  # noqa: C901
             log.warning("Skipping %s: too few non-null values.", col_name)
             continue
 
-        u_stat, p_val = mannwhitneyu(shared_vals, mined_vals, alternative="two-sided")
-        r = _rank_biserial_correlation(u_stat, len(shared_vals), len(mined_vals))
+        mwu_result = pg.mwu(shared_vals, mined_vals, alternative="two-sided")
+        u_stat = float(mwu_result["U-val"].iloc[0])
+        p_val = float(mwu_result["p-val"].iloc[0])
+        r = float(mwu_result["RBC"].iloc[0])
         p_bonf = min(p_val * n_numeric_tests, 1.0)
 
         numeric_rows.append(
@@ -630,7 +638,7 @@ def run_feature_comparison(  # noqa: C901
         table = crosstab.select(value_cols).to_numpy()
 
         chi2, p_val, dof, _ = chi2_contingency(table)
-        v = _cramers_v(table)
+        v = association(table, method="cramer")
         p_bonf = min(p_val * n_cat_tests, 1.0)
 
         cat_rows.append(
@@ -691,7 +699,8 @@ def run_feature_comparison(  # noqa: C901
     y_positions = list(range(effect_df.height))
     sizes = effect_df["effect_size"].to_list()
     labels = [
-        f"{row['feature']} {row['significance']}" for row in effect_df.iter_rows(named=True)
+        f"{FEATURE_DISPLAY_NAMES.get(row['feature'], row['feature'])} {row['significance']}"
+        for row in effect_df.iter_rows(named=True)
     ]
     colors = [PALETTE[0] if s >= 0 else PALETTE[1] for s in sizes]
 
@@ -715,8 +724,17 @@ def run_feature_comparison(  # noqa: C901
 
     for row in sig_numeric.iter_rows(named=True):
         feat = row["feature"]
+        display_name = FEATURE_DISPLAY_NAMES.get(feat, feat)
         shared_vals = shared[feat].drop_nulls().drop_nans().to_numpy()
         mined_vals = mined[feat].drop_nulls().drop_nans().to_numpy()
+
+        # Compute y-axis limits from 1st-99th percentile to avoid outlier distortion
+        all_vals = np.concatenate([shared_vals, mined_vals])
+        y_lo = float(np.percentile(all_vals, 1))
+        y_hi = float(np.percentile(all_vals, 99))
+        y_pad = (y_hi - y_lo) * 0.05
+        y_lo -= y_pad
+        y_hi += y_pad
 
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
@@ -738,23 +756,24 @@ def run_feature_comparison(  # noqa: C901
             inner="quartile",
             ax=ax1,
         )
-        ax1.set_title("Distribution Comparison")
+        ax1.set_ylim(y_lo, y_hi)
         ax1.set_xlabel("")
+        ax1.set_ylabel(display_name)
 
         # KDE overlay
         sns.kdeplot(shared_vals, label="Shared", color=PALETTE[0], ax=ax2)
         sns.kdeplot(mined_vals, label="Mined", color=PALETTE[1], ax=ax2)
         ax2.legend()
-        ax2.set_title("Density Overlay")
-        ax2.set_xlabel(feat)
+        ax2.set_xlabel(display_name)
 
         fig.suptitle(
-            f"{feat}\n"
+            f"{display_name}\n"
             f"Mann-Whitney U p={row['p_value']:.2e}, "
             f"rank-biserial r={row['rank_biserial_r']:.3f} "
             f"({row['effect_magnitude']})",
             fontsize=13,
         )
+        fig.subplots_adjust(top=0.85)
         fig.savefig(results_dir / f"dist-numeric-{feat}.png", bbox_inches="tight", dpi=300)
         plt.close(fig)
 
@@ -770,9 +789,18 @@ def run_feature_comparison(  # noqa: C901
 
         for i, row in enumerate(sig_numeric.iter_rows(named=True)):
             feat = row["feature"]
+            display_name = FEATURE_DISPLAY_NAMES.get(feat, feat)
             ax = axes_flat[i]
             shared_vals = shared[feat].drop_nulls().drop_nans().to_numpy()
             mined_vals = mined[feat].drop_nulls().drop_nans().to_numpy()
+
+            all_vals = np.concatenate([shared_vals, mined_vals])
+            y_lo = float(np.percentile(all_vals, 1))
+            y_hi = float(np.percentile(all_vals, 99))
+            y_pad = (y_hi - y_lo) * 0.05
+            y_lo -= y_pad
+            y_hi += y_pad
+
             plot_data = pl.DataFrame(
                 {
                     feat: np.concatenate([shared_vals, mined_vals]),
@@ -790,7 +818,9 @@ def run_feature_comparison(  # noqa: C901
                 inner="quartile",
                 ax=ax,
             )
-            ax.set_title(f"{feat}\nr={row['rank_biserial_r']:.3f}", fontsize=9)
+            ax.set_ylim(y_lo, y_hi)
+            ax.set_ylabel(display_name)
+            ax.set_title(f"{display_name}\nr={row['rank_biserial_r']:.3f}", fontsize=9)
             ax.set_xlabel("")
 
         # Hide unused axes
@@ -846,8 +876,9 @@ def run_feature_comparison(  # noqa: C901
         ax.set_xticklabels(categories, rotation=45, ha="right", fontsize=9)
         ax.set_ylabel("Proportion within group")
         ax.legend()
+        cat_display = FEATURE_DISPLAY_NAMES.get(cat_col, cat_col)
         ax.set_title(
-            f"{cat_col}\n"
+            f"{cat_display}\n"
             f"Chi-square p={row['p_value']:.2e}, "
             f"Cramer's V={row['cramers_v']:.3f} ({row['effect_magnitude']})",
             fontsize=13,
@@ -1203,17 +1234,15 @@ def analyze_network_components(  # noqa: C901
     pl.DataFrame(table_rows).write_csv(results_dir / "network-comparison-table.csv")
     log.info("Saved network-comparison-table.csv")
 
-    # --- Comparison bar chart (normalized to Full graph) ---
+    # --- Comparison bar chart ---
     fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(18, 6), constrained_layout=True)
 
     subset_labels = ["Shared", "Full", "Mined"]
     all_stats = [stats_shared, stats_full, stats_mined]
 
-    # Nodes: as % of Full
-    full_nodes = stats_full["total_nodes"]
-    node_pcts = [s["total_nodes"] / full_nodes * 100 for s in all_stats]
+    # Nodes
     node_raw = [s["total_nodes"] for s in all_stats]
-    bars = axes[0].bar(subset_labels, node_pcts, color=PALETTE[:3])
+    bars = axes[0].bar(subset_labels, node_raw, color=PALETTE[:3])
     for bar, raw in zip(bars, node_raw, strict=False):
         axes[0].text(
             bar.get_x() + bar.get_width() / 2,
@@ -1223,14 +1252,12 @@ def analyze_network_components(  # noqa: C901
             va="bottom",
             fontsize=10,
         )
-    axes[0].set_title("Total Nodes (% of Full)")
-    axes[0].set_ylabel("% of Full Graph")
+    axes[0].set_title("Total Nodes")
+    axes[0].set_ylabel("Count")
 
-    # Components: as % of Full
-    full_comps = stats_full["total_components"]
-    comp_pcts = [s["total_components"] / full_comps * 100 for s in all_stats]
+    # Components
     comp_raw = [s["total_components"] for s in all_stats]
-    bars = axes[1].bar(subset_labels, comp_pcts, color=PALETTE[:3])
+    bars = axes[1].bar(subset_labels, comp_raw, color=PALETTE[:3])
     for bar, raw in zip(bars, comp_raw, strict=False):
         axes[1].text(
             bar.get_x() + bar.get_width() / 2,
@@ -1240,8 +1267,8 @@ def analyze_network_components(  # noqa: C901
             va="bottom",
             fontsize=10,
         )
-    axes[1].set_title("Connected Components (% of Full)")
-    axes[1].set_ylabel("% of Full Graph")
+    axes[1].set_title("Connected Components")
+    axes[1].set_ylabel("Count")
 
     # Largest CC coverage (already a percentage)
     cov_vals = [s["coverage_pct"] for s in all_stats]
@@ -1277,37 +1304,39 @@ def _sample_shortest_paths(
     graph: rx.PyGraph,
     n_iterations: int,
     seed: int,
-) -> dict[str, float | int]:
-    """Sample random shortest paths from the largest connected component."""
+    desc: str = "Sampling shortest paths",
+) -> tuple[dict[str, float | int], list[int]]:
+    """Sample random shortest paths from the largest connected component.
+
+    Returns
+    -------
+    tuple
+        (stats_dict, raw_lengths) where raw_lengths can be used for plotting.
+    """
+    empty_stats: dict[str, float | int] = {
+        "valid_paths": 0,
+        "mean": float("nan"),
+        "std": float("nan"),
+        "median": float("nan"),
+        "p10": float("nan"),
+        "p90": float("nan"),
+    }
+
     components = rx.connected_components(graph) if graph.num_nodes() > 0 else []
     if not components:
-        return {
-            "valid_paths": 0,
-            "mean": float("nan"),
-            "std": float("nan"),
-            "median": float("nan"),
-            "p10": float("nan"),
-            "p90": float("nan"),
-        }
+        return empty_stats, []
 
     largest_cc = max(components, key=len)
     subgraph = graph.subgraph(list(largest_cc))
 
     if subgraph.num_nodes() < 2:
-        return {
-            "valid_paths": 0,
-            "mean": float("nan"),
-            "std": float("nan"),
-            "median": float("nan"),
-            "p10": float("nan"),
-            "p90": float("nan"),
-        }
+        return empty_stats, []
 
     rng = random.Random(seed)
     subgraph_indices = list(range(subgraph.num_nodes()))
     dijkstra_lengths: list[int] = []
 
-    for _ in range(n_iterations):
+    for _ in tqdm(range(n_iterations), desc=desc):
         source, target = rng.sample(subgraph_indices, 2)
         dijkstra_res = rx.dijkstra_shortest_path_lengths(
             subgraph,
@@ -1318,7 +1347,7 @@ def _sample_shortest_paths(
         dijkstra_lengths.append(dijkstra_res[target])
 
     vec = np.array(dijkstra_lengths)
-    return {
+    stats: dict[str, float | int] = {
         "largest_cc_nodes": int(subgraph.num_nodes()),
         "largest_cc_edges": int(subgraph.num_edges()),
         "valid_paths": len(vec),
@@ -1328,6 +1357,7 @@ def _sample_shortest_paths(
         "p10": round(float(np.quantile(vec, 0.10)), 4),
         "p90": round(float(np.quantile(vec, 0.90)), 4),
     }
+    return stats, dijkstra_lengths
 
 
 def analyze_shortest_paths(
@@ -1353,37 +1383,27 @@ def analyze_shortest_paths(
         contribs = all_doc_contribs.filter(pl.col("document_id").is_in(doc_ids))
         graph, _, _ = _build_coauthorship_graph(contribs)
 
-        path_stats = _sample_shortest_paths(graph, n_iterations, seed=42)
+        path_stats, raw_lengths = _sample_shortest_paths(
+            graph,
+            n_iterations,
+            seed=42,
+            desc=f"Shortest paths ({subset_name})",
+        )
 
         with open(results_dir / f"shortest-path-{subset_name}.json", "w") as f:
             json.dump(path_stats, f, indent=2)
 
         log.info("Shortest path stats (%s): %s", subset_name, path_stats)
 
-        # Collect raw path lengths for distribution plot
-        if path_stats["valid_paths"] > 0:
-            components = rx.connected_components(graph)
-            largest_cc = max(components, key=len)
-            subgraph = graph.subgraph(list(largest_cc))
-            rng = random.Random(42)
-            subgraph_indices = list(range(subgraph.num_nodes()))
-            lengths: list[int] = []
-            for _ in range(n_iterations):
-                source, target = rng.sample(subgraph_indices, 2)
-                dijkstra_res = rx.dijkstra_shortest_path_lengths(
-                    subgraph,
-                    source,
-                    lambda _: 1,
-                    goal=target,
-                )
-                lengths.append(dijkstra_res[target])
-            all_path_lengths[subset_name] = lengths
+        if raw_lengths:
+            all_path_lengths[subset_name] = raw_lengths
 
     # --- Distribution plot ---
+    subset_order = ["shared", "full", "mined"]
     if all_path_lengths:
         plot_rows: list[dict[str, str | int]] = []
-        for subset_name, lengths in all_path_lengths.items():
-            for length in lengths:
+        for subset_name in subset_order:
+            for length in all_path_lengths.get(subset_name, []):
                 plot_rows.append({"subset": subset_name, "shortest_path_length": length})
 
         plot_df = pl.DataFrame(plot_rows)
@@ -1394,7 +1414,9 @@ def analyze_shortest_paths(
             x="subset",
             y="shortest_path_length",
             hue="subset",
-            palette=PALETTE[: len(all_path_lengths)],
+            order=subset_order,
+            hue_order=subset_order,
+            palette=PALETTE[:3],
             showfliers=False,
             ax=ax,
         )
