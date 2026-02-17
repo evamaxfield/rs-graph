@@ -315,8 +315,16 @@ def _get_author_developer_pairs_connected_to_pairs(pair_links: pl.DataFrame) -> 
     )
     researcher_dev_links = (
         _read_table("researcher_developer_account_link")
+        .filter(
+            pl.col("predictive_model_confidence").is_null()
+            | (pl.col("predictive_model_confidence") >= 0.97)
+        )
         .select("researcher_id", "developer_account_id")
         .unique()
+    )
+    log.debug(
+        "Researcher-developer links after confidence filter (>= 0.97): %d",
+        researcher_dev_links.height,
     )
 
     connected_pairs = (
@@ -354,6 +362,13 @@ def load_pairs(sample_size: int | None = None) -> pl.DataFrame:
     doc_topics = _read_table("document_topic")
     topics = _read_table("topic")
 
+    # Drop predicted doc-repo pairs below confidence threshold
+    pairs = pairs.filter(
+        pl.col("predictive_model_confidence").is_null()
+        | (pl.col("predictive_model_confidence") >= 0.995)
+    )
+    log.info("Pairs after confidence filter (>= 0.995): %d", pairs.height)
+
     # Keep one canonical pair per document and repository for RQ1 analyses.
     pairs = pairs.unique(
         subset="document_id",
@@ -362,6 +377,7 @@ def load_pairs(sample_size: int | None = None) -> pl.DataFrame:
         subset="repository_id",
         keep="none",
     )
+    log.info("Unique canonical pairs: %d", pairs.height)
 
     if sample_size is not None:
         log.debug("Sampling %d pairs...", sample_size)
@@ -622,20 +638,38 @@ def print_descriptive_stats(pairs: pl.DataFrame, results_dir: Path) -> None:
     log.debug("Saved descriptive_stats.csv")
 
 
-def plot_field_countplot(pairs: pl.DataFrame, results_dir: Path) -> None:
-    """Horizontal countplot of document fields."""
+def plot_field_countplot(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+    top_n: int,
+) -> None:
+    """Horizontal countplot of document fields (top-N + Other)."""
     field_data = pairs.filter(
         pl.col("document_field_name").is_not_null(),
         pl.col("document_field_name") != "",
     )
+    field_data, top_fields, field_col = _add_top_n_other_column(
+        field_data, "document_field_name", top_n
+    )
+    field_order = [*top_fields, "Other"]
 
     fig, ax = plt.subplots(figsize=(9, 7))
     sns.countplot(
         data=field_data,
-        y="document_field_name",
-        order=field_data["document_field_name"].value_counts(sort=True)["document_field_name"],
+        y=field_col,
+        order=field_order,
+        hue=field_col,
+        hue_order=field_order,
+        legend=False,
         ax=ax,
     )
+    ax.set_title(
+        f"Document Count by Academic Field (Top {top_n} + Other)\n"
+        "(Each pair assigned its top-scoring OpenAlex topic field)",
+        fontsize=13,
+    )
+    ax.set_xlabel("Count")
+    ax.set_ylabel("")
     fig.savefig(results_dir / "field_countplot.png", bbox_inches="tight", dpi=300)
     plt.close(fig)
 
@@ -666,7 +700,7 @@ def plot_features_by_field(
     sort_map = {name: i for i, name in enumerate(FEATURE_NAME_TO_VIZ_NAME_LUT)}
     features_melted = features_melted.with_columns(
         pl.col("feature")
-        .replace(sort_map, default=None, return_dtype=pl.Int32)
+        .replace_strict(sort_map, default=None, return_dtype=pl.Int32)
         .alias("feature_sort_order")
     )
     features_melted = features_melted.sort("feature_sort_order").drop("feature_sort_order")
@@ -674,8 +708,13 @@ def plot_features_by_field(
     fig, axes = plt.subplots(
         nrows=4,
         ncols=2,
-        figsize=(20, 10),
+        figsize=(20, 12),
         constrained_layout=True,
+    )
+    fig.suptitle(
+        f"Key Document and Repository Features by Academic Field (Top {top_n} + Other)\n"
+        "Boxplots show median and IQR; outliers removed for clarity",
+        fontsize=16,
     )
     for ax, ((feature_name,), group_df) in zip(
         axes.flat, features_melted.group_by("feature", maintain_order=True), strict=True
@@ -708,21 +747,79 @@ def plot_features_by_field(
         ax.tick_params(axis="y", labelsize=10)
         ax.set_title(FEATURE_NAME_TO_VIZ_NAME_LUT.get(feature_name, feature_name), fontsize=16)
 
-    fig.tight_layout(h_pad=3.0)
     fig.savefig(results_dir / "features_by_field_boxplots.png", bbox_inches="tight", dpi=300)
     plt.close(fig)
 
 
 def plot_pairs_over_time(pairs: pl.DataFrame, results_dir: Path) -> None:
     """Countplot of pairs by publication year."""
+    plot_data = pairs.filter(
+        pl.col("document_publication_year") > 2010,
+        pl.col("document_publication_year") < 2025,
+    ).with_columns(pl.col("document_publication_year").cast(pl.Int32))
+
     fig, ax = plt.subplots(figsize=(11, 4))
     sns.countplot(
-        data=pairs.filter(pl.col("document_publication_year") > 2010),
+        data=plot_data,
         x="document_publication_year",
+        hue="document_publication_year",
+        palette="viridis",
+        legend=False,
         ax=ax,
     )
-    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+    ax.set_title(
+        "Document-Repository Pairs by Publication Year\n"
+        "(Number of unique article-repository pairs published each year)",
+        fontsize=14,
+    )
+    ax.set_xlabel("Publication Year")
+    ax.set_ylabel("Number of Pairs")
+    ax.tick_params(axis="x", rotation=45)
     fig.savefig(results_dir / "pairs_over_time.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
+def plot_pairs_over_time_by_field(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+    top_n: int,
+) -> None:
+    """Line plot of pairs by publication year, split by academic field."""
+    plot_data = pairs.filter(
+        pl.col("document_publication_year") > 2010,
+        pl.col("document_publication_year") < 2025,
+    ).with_columns(pl.col("document_publication_year").cast(pl.Int32))
+
+    plot_data, top_fields, field_col = _add_top_n_other_column(
+        plot_data, "document_field_name", top_n
+    )
+    field_hue_order = [*top_fields, "Other"]
+
+    field_year_counts = (
+        plot_data.group_by([field_col, "document_publication_year"])
+        .agg(pl.len().alias("count"))
+        .sort("document_publication_year")
+    )
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+    sns.lineplot(
+        data=field_year_counts,
+        x="document_publication_year",
+        y="count",
+        hue=field_col,
+        hue_order=field_hue_order,
+        marker="o",
+        ax=ax,
+    )
+    ax.set_title(
+        f"Document-Repository Pairs Over Time by Academic Field (Top {top_n} + Other)\n"
+        "(Each line shows the number of pairs published per year for a given field)",
+        fontsize=13,
+    )
+    ax.set_xlabel("Publication Year")
+    ax.set_ylabel("Number of Pairs")
+    ax.legend(title="Field", bbox_to_anchor=(1.05, 1), loc="upper left")
+    fig.savefig(results_dir / "pairs_over_time_by_field.png", bbox_inches="tight", dpi=300)
     plt.close(fig)
 
 
@@ -845,6 +942,10 @@ def plot_iteration_expansion(results_dir: Path) -> None:
     with open(results_dir / "iteration_expansion_summary.json", "w") as f:
         json.dump(summary, f, indent=2)
 
+    # Cast iteration to int to avoid categorical-units warnings
+    growth_df = growth_df.with_columns(pl.col("iteration").cast(pl.Int32))
+    growth_with_seed_df = growth_with_seed_df.with_columns(pl.col("iteration").cast(pl.Int32))
+
     fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(16, 6), constrained_layout=True)
 
     sns.barplot(
@@ -866,7 +967,11 @@ def plot_iteration_expansion(results_dir: Path) -> None:
     axes[0].set_xlabel("Mining Iteration")
     axes[0].set_ylabel("New Article-Repository Pairs")
     ax0_twin.set_ylabel("Cumulative Article-Repository Pairs")
-    axes[0].set_title("Article-Repository Pair Expansion")
+    axes[0].set_title(
+        "Article-Repository Pair Expansion\n"
+        "(Bars = new pairs per iteration; line = cumulative total starting from seed pairs)",
+        fontsize=12,
+    )
 
     sns.barplot(
         data=growth_df,
@@ -887,7 +992,11 @@ def plot_iteration_expansion(results_dir: Path) -> None:
     axes[1].set_xlabel("Mining Iteration")
     axes[1].set_ylabel("New Author-Developer Pairs")
     ax1_twin.set_ylabel("Cumulative Author-Developer Pairs")
-    axes[1].set_title("Author-Developer Pair Expansion")
+    axes[1].set_title(
+        "Author-Developer Pair Expansion\n"
+        "(Bars = new matched pairs per iteration; line = cumulative total)",
+        fontsize=12,
+    )
 
     fig.savefig(results_dir / "iteration_expansion.png", bbox_inches="tight", dpi=300)
     plt.close(fig)
@@ -923,10 +1032,17 @@ def plot_field_and_language_counts(
         ax=axes[0, 0],
     )
 
-    sns.lineplot(
-        data=pairs.group_by([field_col, "document_publication_year"])
+    field_over_time = (
+        pairs.filter(
+            pl.col("document_publication_year") > 2010,
+            pl.col("document_publication_year") < 2025,
+        )
+        .with_columns(pl.col("document_publication_year").cast(pl.Int32))
+        .group_by([field_col, "document_publication_year"])
         .agg(pl.len().alias("field_count"))
-        .filter(pl.col("document_publication_year") < 2025),
+    )
+    sns.lineplot(
+        data=field_over_time,
         x="document_publication_year",
         y="field_count",
         hue=field_col,
@@ -944,10 +1060,17 @@ def plot_field_and_language_counts(
         ax=axes[1, 0],
     )
 
-    sns.lineplot(
-        data=pairs.group_by([lang_col, "document_publication_year"])
+    lang_over_time = (
+        pairs.filter(
+            pl.col("document_publication_year") > 2010,
+            pl.col("document_publication_year") < 2025,
+        )
+        .with_columns(pl.col("document_publication_year").cast(pl.Int32))
+        .group_by([lang_col, "document_publication_year"])
         .agg(pl.len().alias("language_count"))
-        .filter(pl.col("document_publication_year") < 2025),
+    )
+    sns.lineplot(
+        data=lang_over_time,
         x="document_publication_year",
         y="language_count",
         hue=lang_col,
@@ -957,7 +1080,7 @@ def plot_field_and_language_counts(
     )
 
     for ax in axes.flat:
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+        ax.tick_params(axis="x", rotation=45)
         feature_name = ax.get_xlabel()
         feature_name = (
             ax.get_ylabel() if feature_name == "document_publication_year" else feature_name
@@ -966,7 +1089,6 @@ def plot_field_and_language_counts(
         ax.set_ylabel("")
         ax.set_title(FIELD_LANGUAGE_TITLE_LUT.get(feature_name, feature_name), fontsize=16)
 
-    fig.tight_layout(h_pad=3.0)
     fig.savefig(results_dir / "field_and_language_counts.png", bbox_inches="tight", dpi=300)
     plt.close(fig)
 
@@ -975,14 +1097,18 @@ def plot_repo_metrics_over_time(pairs: pl.DataFrame, results_dir: Path) -> None:
     """Bar charts of repository metrics over time using seaborn's default mean estimator."""
     over_time_metrics = list(OVER_TIME_METRICS_TO_VIZ_NAME_LUT.keys())
 
-    over_time_df = pairs.filter(
-        pl.col("document_publication_year") < 2025,
-        pl.col("document_publication_year") > 2010,
-    ).unpivot(
-        on=over_time_metrics,
-        variable_name="metric",
-        value_name="mean_value",
-        index=["document_publication_year"],
+    over_time_df = (
+        pairs.filter(
+            pl.col("document_publication_year") < 2025,
+            pl.col("document_publication_year") > 2010,
+        )
+        .with_columns(pl.col("document_publication_year").cast(pl.Int32))
+        .unpivot(
+            on=over_time_metrics,
+            variable_name="metric",
+            value_name="mean_value",
+            index=["document_publication_year"],
+        )
     )
 
     g = sns.catplot(
@@ -999,14 +1125,10 @@ def plot_repo_metrics_over_time(pairs: pl.DataFrame, results_dir: Path) -> None:
 
     g.set_titles("{col_name}")
     for i, ax in enumerate(g.axes):
-        for label in ax.get_xticklabels():
-            label.set_rotation(45)
-            label.set_ha("right")
+        ax.tick_params(axis="x", rotation=45)
         ax.set_xlabel("")
-        ax.set_ylabel("Mean Value")
+        ax.set_ylabel("Mean Value (with 95% CI)")
         ax.set_title(OVER_TIME_METRICS_TO_VIZ_NAME_LUT.get(over_time_metrics[i]), fontsize=16)
-
-    g.figure.tight_layout(h_pad=3.0)
     g.figure.savefig(results_dir / "repo_metrics_over_time.png", bbox_inches="tight", dpi=300)
     plt.close(g.figure)
 
@@ -1017,17 +1139,21 @@ def plot_geographic_diversity_depth(
     top_n: int,
 ) -> None:
     """Analyze geographic diversity depth using unique-country counts and entropy."""
-    geo_df = pairs.select(
-        "document_id",
-        "document_field_name",
-        "document_publication_year",
-        "document_n_unique_author_countries",
-        "document_author_country_entropy",
-    ).filter(
-        pl.col("document_n_unique_author_countries").is_not_null(),
-        pl.col("document_author_country_entropy").is_not_null(),
-        pl.col("document_publication_year") > 2010,
-        pl.col("document_publication_year") < 2025,
+    geo_df = (
+        pairs.select(
+            "document_id",
+            "document_field_name",
+            "document_publication_year",
+            "document_n_unique_author_countries",
+            "document_author_country_entropy",
+        )
+        .filter(
+            pl.col("document_n_unique_author_countries").is_not_null(),
+            pl.col("document_author_country_entropy").is_not_null(),
+            pl.col("document_publication_year") > 2010,
+            pl.col("document_publication_year") < 2025,
+        )
+        .with_columns(pl.col("document_publication_year").cast(pl.Int32))
     )
 
     if geo_df.height == 0:
@@ -1083,6 +1209,10 @@ def plot_geographic_diversity_depth(
         data=geo_df,
         x="author_country_count_bin",
         order=bin_order,
+        hue="author_country_count_bin",
+        hue_order=bin_order,
+        palette="viridis",
+        legend=False,
         ax=axes[0, 0],
     )
     axes[0, 0].set_title("Unique Author-Team Countries per Pair")
@@ -1103,7 +1233,11 @@ def plot_geographic_diversity_depth(
         showfliers=False,
         ax=axes[0, 1],
     )
-    axes[0, 1].set_title("Author-Team Country Entropy by Field")
+    axes[0, 1].set_title(
+        "Author-Team Country Entropy by Field\n"
+        "(0 = single country, higher = more geographically diverse)",
+        fontsize=12,
+    )
     axes[0, 1].set_xlabel("Country Entropy")
     axes[0, 1].set_ylabel("")
 
@@ -1125,12 +1259,16 @@ def plot_geographic_diversity_depth(
         marker="o",
         ax=axes[1, 1],
     )
-    axes[1, 1].set_title("Mean Author-Team Country Entropy Over Time")
+    axes[1, 1].set_title(
+        "Mean Author-Team Country Entropy Over Time\n"
+        "(0 = all authors from one country, higher = more diverse)",
+        fontsize=12,
+    )
     axes[1, 1].set_xlabel("Publication Year")
     axes[1, 1].set_ylabel("Mean Country Entropy")
 
     for ax in axes[1, :]:
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+        ax.tick_params(axis="x", rotation=45)
 
     fig.savefig(results_dir / "geographic_diversity_depth.png", bbox_inches="tight", dpi=300)
     plt.close(fig)
@@ -1253,8 +1391,12 @@ def plot_fwci_vs_fwsi(
     labeled_frames.append(selected_product_points)
 
     ax.set_title(
-        f"FWCI vs FWSI (log10): Spearman rho={spearman_rho:.3f}, R^2={regression['r_squared']:.3f}"
+        "Field-Weighted Citation Impact (FWCI) vs Field-Weighted Star Impact (FWSI)\n"
+        f"log10(1+value); Spearman rho={spearman_rho:.3f}, R^2={regression['r_squared']:.3f}",
+        fontsize=13,
     )
+    ax.set_xlabel("Document FWCI (log10)")
+    ax.set_ylabel("Repository FWSI (log10)")
 
     fig.savefig(results_dir / "fwci_vs_fwsi_scatter.png", bbox_inches="tight", dpi=300)
     plt.close(fig)
@@ -1352,7 +1494,19 @@ def plot_date_relationships(pairs: pl.DataFrame, results_dir: Path) -> None:
         ax.set_xlabel(DATE_FEATURES_TO_VIZ_NAME_LUT.get(x_label, x_label))
         ax.set_ylabel(DATE_FEATURES_TO_VIZ_NAME_LUT.get(y_label, y_label))
 
-    fig.tight_layout(w_pad=3.0)
+    axes[0].set_title(
+        "Publication Date vs Repository Creation Date\n"
+        "(Below red line = repo created before publication;\n"
+        "above = repo created after publication)",
+        fontsize=11,
+    )
+    axes[1].set_title(
+        "Last Push vs Publication Date\n"
+        "(Above red line = last push after publication;\n"
+        "below = last push before publication)",
+        fontsize=11,
+    )
+
     fig.savefig(results_dir / "date_relationships_scatter.png", bbox_inches="tight", dpi=300)
     plt.close(fig)
 
@@ -1433,16 +1587,16 @@ def plot_lifecycle_and_survival(pairs: pl.DataFrame, results_dir: Path) -> None:
         pl.when(
             pl.col("days_from_repo_creation_to_publication") > LIFECYCLE_RELEASE_WINDOW_DAYS
         )
-        .then(pl.lit("Created well before publication"))
+        .then(pl.lit(f"Created >{LIFECYCLE_RELEASE_WINDOW_DAYS}d before pub"))
         .when(pl.col("days_from_repo_creation_to_publication") < -LIFECYCLE_RELEASE_WINDOW_DAYS)
-        .then(pl.lit("Created after publication"))
-        .otherwise(pl.lit("Created around publication"))
+        .then(pl.lit(f"Created >{LIFECYCLE_RELEASE_WINDOW_DAYS}d after pub"))
+        .otherwise(pl.lit(f"Created within {LIFECYCLE_RELEASE_WINDOW_DAYS}d of pub"))
         .alias("creation_timing"),
         pl.when(pl.col("days_from_publication_to_last_push") <= 0)
-        .then(pl.lit("No post-publication maintenance"))
+        .then(pl.lit("No post-pub maintenance (0d)"))
         .when(pl.col("days_from_publication_to_last_push") <= LIFECYCLE_LONG_MAINTENANCE_DAYS)
-        .then(pl.lit("Short-term post-publication maintenance"))
-        .otherwise(pl.lit("Long-term post-publication maintenance"))
+        .then(pl.lit(f"Short-term maintenance (1-{LIFECYCLE_LONG_MAINTENANCE_DAYS}d)"))
+        .otherwise(pl.lit(f"Long-term maintenance (>{LIFECYCLE_LONG_MAINTENANCE_DAYS}d)"))
         .alias("maintenance_timing"),
     ).with_columns(
         pl.concat_str(["creation_timing", pl.lit(" | "), "maintenance_timing"]).alias(
@@ -1457,14 +1611,22 @@ def plot_lifecycle_and_survival(pairs: pl.DataFrame, results_dir: Path) -> None:
     )
     lifecycle_counts.write_csv(results_dir / "lifecycle_archetype_counts.csv")
 
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(14, 6))
     sns.barplot(
         data=lifecycle_counts,
         y="lifecycle_archetype",
         x="n_pairs",
+        hue="lifecycle_archetype",
+        legend=False,
         ax=ax,
     )
-    ax.set_title("Repository Lifecycle and Maintenance Archetypes")
+    ax.set_title(
+        "Repository Lifecycle and Maintenance Archetypes\n"
+        f"(Creation timing: within/beyond {LIFECYCLE_RELEASE_WINDOW_DAYS}d of publication; "
+        f"maintenance: short-term <= {LIFECYCLE_LONG_MAINTENANCE_DAYS}d, "
+        f"long-term > {LIFECYCLE_LONG_MAINTENANCE_DAYS}d)",
+        fontsize=12,
+    )
     ax.set_xlabel("Pair Count")
     ax.set_ylabel("")
     fig.savefig(results_dir / "lifecycle_archetypes.png", bbox_inches="tight", dpi=300)
@@ -1546,10 +1708,18 @@ def plot_lifecycle_and_survival(pairs: pl.DataFrame, results_dir: Path) -> None:
         y_vals = group_curve["survival_probability"].to_list()
         ax.step(x_vals, y_vals, where="post", label=str(group_name))
 
-    ax.set_title("Post-Publication Maintenance Survival")
+    ax.set_title(
+        "Post-Publication Maintenance Survival (Kaplan-Meier)\n"
+        "(Probability that a repository is still being maintained N days after publication;\n"
+        "curves dropping faster indicate fields/archetypes where maintenance ends sooner)",
+        fontsize=12,
+    )
     ax.set_xlabel("Days from Publication to Last Push")
     ax.set_ylabel("Survival Probability (Still Maintained)")
     ax.set_ylim(0, 1.01)
+    # Cap x-axis to a readable range; most meaningful differences are within a few years
+    max_x = min(int(survival_df["duration_days"].quantile(0.95)), 3650)
+    ax.set_xlim(0, max_x)
     ax.legend()
     fig.savefig(
         results_dir / "publication_maintenance_survival.png", bbox_inches="tight", dpi=300
@@ -1814,21 +1984,29 @@ def analyze_network_role_by_code_contribution_status(  # noqa: C901
 
     fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(18, 10), constrained_layout=True)
 
+    degree_plot_df = degree_df.with_columns(
+        pl.when(pl.col("is_code_contributor"))
+        .then(pl.lit("Code Contributor"))
+        .otherwise(pl.lit("Non Contributor"))
+        .alias("status_label")
+    )
     sns.boxplot(
-        data=degree_df.with_columns(
-            pl.when(pl.col("is_code_contributor"))
-            .then(pl.lit("Code Contributor"))
-            .otherwise(pl.lit("Non Contributor"))
-            .alias("status_label")
-        ),
+        data=degree_plot_df,
         x="status_label",
         y="degree",
+        hue="status_label",
+        palette={"Code Contributor": "#1f77b4", "Non Contributor": "#ff7f0e"},
         showfliers=False,
+        legend=False,
         ax=axes[0, 0],
     )
-    axes[0, 0].set_title("Degree Distribution by Code-Contribution Status")
+    axes[0, 0].set_title(
+        "Co-Authorship Degree by Code-Contribution Status\n"
+        "(Degree = number of unique co-authors; higher = more collaborative)",
+        fontsize=11,
+    )
     axes[0, 0].set_xlabel("")
-    axes[0, 0].set_ylabel("Node Degree")
+    axes[0, 0].set_ylabel("Node Degree (# unique co-authors)")
 
     edge_mix_df = pl.DataFrame(
         {
@@ -1836,11 +2014,22 @@ def analyze_network_role_by_code_contribution_status(  # noqa: C901
             "count": list(edge_type_counts.values()),
         }
     )
-    sns.barplot(data=edge_mix_df, x="edge_type", y="count", ax=axes[0, 1])
-    axes[0, 1].set_title("Edge Mix by Code-Contribution Status")
+    sns.barplot(
+        data=edge_mix_df,
+        x="edge_type",
+        y="count",
+        hue="edge_type",
+        legend=False,
+        ax=axes[0, 1],
+    )
+    axes[0, 1].set_title(
+        "Edge Mix by Code-Contribution Status\n"
+        "(Co-authorship edges classified by contributor status of both endpoints)",
+        fontsize=11,
+    )
     axes[0, 1].set_xlabel("")
     axes[0, 1].set_ylabel("Edge Count")
-    axes[0, 1].set_xticklabels(axes[0, 1].get_xticklabels(), rotation=30, ha="right")
+    axes[0, 1].tick_params(axis="x", rotation=30)
 
     if path_plot_rows:
         path_plot_df = pl.DataFrame(path_plot_rows)
@@ -1851,10 +2040,14 @@ def analyze_network_role_by_code_contribution_status(  # noqa: C901
             showfliers=False,
             ax=axes[1, 0],
         )
-        axes[1, 0].set_title("Shortest Path by Status Pair")
+        axes[1, 0].set_title(
+            "Shortest Path Length by Status Pair\n"
+            "(Fewer hops = closer in co-authorship network)",
+            fontsize=11,
+        )
         axes[1, 0].set_xlabel("")
         axes[1, 0].set_ylabel("Shortest Path Length")
-        axes[1, 0].set_xticklabels(axes[1, 0].get_xticklabels(), rotation=30, ha="right")
+        axes[1, 0].tick_params(axis="x", rotation=30)
     else:
         axes[1, 0].text(0.5, 0.5, "Insufficient path data", ha="center", va="center")
         axes[1, 0].set_axis_off()
@@ -1940,7 +2133,7 @@ def analyze_network_role_by_code_contribution_status(  # noqa: C901
 def analyze(
     top_n: int = typer.Option(9, help="Number of top categories (rest grouped as 'Other')."),
     n_shortest_path_iterations: int = typer.Option(
-        200, help="Random shortest path iterations for network analysis."
+        5000, help="Random shortest path iterations for network analysis."
     ),
     sample_size: int | None = typer.Option(
         None, help="Sample this many pairs for faster analysis."
@@ -1958,63 +2151,70 @@ def analyze(
     total_steps = 14
     step = 0
 
+    def _step_dir(step_num: int) -> Path:
+        d = results_dir / f"step-{step_num}"
+        d.mkdir(exist_ok=True)
+        return d
+
     step += 1
     log.info("Step %d/%d: Loading pairs...", step, total_steps)
     pairs = load_pairs(sample_size=sample_size)
 
     step += 1
     log.info("Step %d/%d: Descriptive statistics...", step, total_steps)
-    print_descriptive_stats(pairs, results_dir)
+    print_descriptive_stats(pairs, _step_dir(step))
 
     step += 1
     log.info("Step %d/%d: Field countplot...", step, total_steps)
-    plot_field_countplot(pairs, results_dir)
+    plot_field_countplot(pairs, _step_dir(step), top_n)
 
     step += 1
     log.info("Step %d/%d: Features by field boxplots...", step, total_steps)
-    plot_features_by_field(pairs, results_dir, top_n)
+    plot_features_by_field(pairs, _step_dir(step), top_n)
 
     step += 1
     log.info("Step %d/%d: Pairs over time...", step, total_steps)
-    plot_pairs_over_time(pairs, results_dir)
+    sd = _step_dir(step)
+    plot_pairs_over_time(pairs, sd)
+    plot_pairs_over_time_by_field(pairs, sd, top_n)
 
     step += 1
     log.info("Step %d/%d: Iteration expansion...", step, total_steps)
-    plot_iteration_expansion(results_dir)
+    plot_iteration_expansion(_step_dir(step))
 
     step += 1
     log.info("Step %d/%d: Field and language counts...", step, total_steps)
-    plot_field_and_language_counts(pairs, results_dir, top_n)
+    plot_field_and_language_counts(pairs, _step_dir(step), top_n)
 
     step += 1
     log.info("Step %d/%d: Repository metrics over time...", step, total_steps)
-    plot_repo_metrics_over_time(pairs, results_dir)
+    plot_repo_metrics_over_time(pairs, _step_dir(step))
 
     step += 1
     log.info("Step %d/%d: Geographic diversity depth...", step, total_steps)
-    plot_geographic_diversity_depth(pairs, results_dir, top_n)
+    plot_geographic_diversity_depth(pairs, _step_dir(step), top_n)
 
     step += 1
     log.info("Step %d/%d: FWCI vs FWSI analysis...", step, total_steps)
-    plot_fwci_vs_fwsi(pairs, results_dir, top_n)
+    plot_fwci_vs_fwsi(pairs, _step_dir(step), top_n)
 
     step += 1
     log.info("Step %d/%d: Date relationships...", step, total_steps)
-    plot_date_relationships(pairs, results_dir)
+    plot_date_relationships(pairs, _step_dir(step))
 
     step += 1
     log.info("Step %d/%d: Lifecycle and survival analyses...", step, total_steps)
-    plot_lifecycle_and_survival(pairs, results_dir)
+    plot_lifecycle_and_survival(pairs, _step_dir(step))
 
     step += 1
     log.info("Step %d/%d: Network coverage...", step, total_steps)
-    analyze_network_coverage(pairs, results_dir, n_shortest_path_iterations)
+    analyze_network_coverage(pairs, _step_dir(step), n_shortest_path_iterations)
 
     step += 1
     log.info("Step %d/%d: Network role by code-contribution status...", step, total_steps)
     analyze_network_role_by_code_contribution_status(
         pairs,
-        results_dir,
+        _step_dir(step),
         n_shortest_path_iterations,
     )
 
