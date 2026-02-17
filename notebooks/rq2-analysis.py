@@ -12,9 +12,8 @@ import numpy as np
 import polars as pl
 import rustworkx as rx
 import seaborn as sns
-import statsmodels.api as sm
 import typer
-from statsmodels.stats.outliers_influence import variance_inflation_factor
+from scipy.stats import chi2_contingency, mannwhitneyu
 from tqdm import tqdm
 
 from rs_graph.bin.typer_utils import setup_logger
@@ -26,7 +25,7 @@ from rs_graph.db import constants as db_constants
 
 PALETTE = cmaps.bold._colors.tolist()
 
-SHARED_SOURCES = frozenset({"pwc", "plos", "joss", "softwarex", "softcite_2025"})
+SHARED_SOURCES = frozenset({"pwc", "plos", "joss", "softwarex"})
 MINED_SOURCES = frozenset({"snowball-sampling-discovery"})
 
 NUMERIC_FEATURES = [
@@ -229,6 +228,10 @@ def load_rq2_pairs(
         how="left",
     )
 
+    # Exclude softcite_2025 rows entirely (neither truly shared nor mined)
+    pairs = pairs.filter(~pl.col("dataset_source_name").str.contains("softcite_2025"))
+    log.info("Pairs after excluding softcite_2025: %d", pairs.height)
+
     # Assign pair_source_label per link row
     pairs = pairs.with_columns(
         pl.when(pl.col("dataset_source_name").is_in(list(SHARED_SOURCES)))
@@ -258,9 +261,7 @@ def load_rq2_pairs(
             .then(pl.lit("shared"))
             .otherwise(pl.lit("mined"))
             .alias("pair_source_label"),
-            pl.col("dataset_source_names")
-            .list.join(", ")
-            .alias("dataset_source_names_str"),
+            pl.col("dataset_source_names").list.join(", ").alias("dataset_source_names_str"),
         )
         .drop("source_labels", "dataset_source_names")
     )
@@ -334,9 +335,8 @@ def load_rq2_pairs(
         )
     )
 
-    doc_author_countries = (
-        doc_author_country_rows.group_by("document_id")
-        .agg(pl.len().alias("document_n_authors"))
+    doc_author_countries = doc_author_country_rows.group_by("document_id").agg(
+        pl.len().alias("document_n_authors")
     )
 
     repo_contribs = _read_table("repository_contributor")
@@ -485,250 +485,419 @@ def load_rq2_pairs(
     with open(results_dir / "rq2-pairs-schema.json", "w") as f:
         json.dump(schema_dict, f, indent=2)
 
+    # README explaining the dataset
+    readme_lines = [
+        "# rq2-pairs.parquet",
+        "",
+        "## What is this file?",
+        "",
+        "This is the assembled analysis dataset for RQ2. It joins",
+        "`document_repository_link` with document metadata (from `document`),",
+        "repository metadata (from `repository`), topic/field classifications,",
+        "author counts, contributor counts, file counts, provenance labels",
+        "(`pair_source_label`: shared vs mined), and derived features",
+        "(log transforms, FWSI, temporal durations).",
+        "",
+        "## Why persist it?",
+        "",
+        "1. **Downstream steps** (feature comparison, coverage, network analysis)",
+        "   read from this DataFrame rather than re-querying the database.",
+        "2. **Reproducibility**: The exact dataset used for analysis is preserved.",
+        "3. **Auditability**: The schema JSON and missingness CSV document the",
+        "   data shape and completeness at analysis time.",
+        "",
+        "## Schema",
+        "",
+        "See `rq2-pairs-schema.json` for the Polars dtype of each column.",
+        "See `rq2-missingness.csv` for null/NaN counts per column.",
+        "",
+    ]
+    with open(results_dir / "README.md", "w") as f:
+        f.write("\n".join(readme_lines))
+
     return result
 
 
 ###############################################################################
-# Workstream 2: Logistic Regression
+# Workstream 2: Univariate Feature Comparison
 ###############################################################################
 
 
-def _compute_auc(y_true: np.ndarray, y_score: np.ndarray) -> float:
-    """Compute AUC using the trapezoidal rule (no sklearn)."""
-    order = np.argsort(-y_score)
-    y_true_sorted = y_true[order]
-
-    n_pos = np.sum(y_true_sorted == 1)
-    n_neg = np.sum(y_true_sorted == 0)
-    if n_pos == 0 or n_neg == 0:
-        return float("nan")
-
-    tpr_prev = 0.0
-    fpr_prev = 0.0
-    tp = 0
-    fp = 0
-    auc = 0.0
-
-    for i in range(len(y_true_sorted)):
-        if y_true_sorted[i] == 1:
-            tp += 1
-        else:
-            fp += 1
-
-        tpr = tp / n_pos
-        fpr = fp / n_neg
-        auc += (fpr - fpr_prev) * (tpr + tpr_prev) / 2.0
-        tpr_prev = tpr
-        fpr_prev = fpr
-
-    return float(auc)
+def _rank_biserial_correlation(u_stat: float, n1: int, n2: int) -> float:
+    """Rank-biserial correlation as effect size for Mann-Whitney U."""
+    return 1 - (2 * u_stat) / (n1 * n2)
 
 
-def run_logistic_regression(
+def _cramers_v(contingency_table: np.ndarray) -> float:
+    """Cramer's V effect size from a contingency table."""
+    chi2 = chi2_contingency(contingency_table)[0]
+    n = contingency_table.sum()
+    min_dim = min(contingency_table.shape) - 1
+    if min_dim == 0 or n == 0:
+        return 0.0
+    return float(np.sqrt(chi2 / (n * min_dim)))
+
+
+def _effect_magnitude(val: float) -> str:
+    """Classify absolute effect size magnitude."""
+    val = abs(val)
+    if val < 0.1:
+        return "negligible"
+    if val < 0.3:
+        return "small"
+    if val < 0.5:
+        return "medium"
+    return "large"
+
+
+def run_feature_comparison(  # noqa: C901
     pairs: pl.DataFrame,
     results_dir: Path,
     top_n: int,
 ) -> None:
-    """Logistic regression to distinguish shared vs mined pairs."""
-    log.info("Starting logistic regression...")
+    """Univariate statistical tests comparing shared vs mined pairs."""
+    log.info("Starting univariate feature comparison...")
 
-    # Target: 1 = shared, 0 = mined
-    model_df = pairs.with_columns(
-        pl.when(pl.col("pair_source_label") == "shared")
-        .then(pl.lit(1))
-        .otherwise(pl.lit(0))
-        .alias("target")
-    )
-
-    n_shared = int(model_df.filter(pl.col("target") == 1).height)
-    n_mined = int(model_df.filter(pl.col("target") == 0).height)
+    shared = pairs.filter(pl.col("pair_source_label") == "shared")
+    mined = pairs.filter(pl.col("pair_source_label") == "mined")
+    n_shared = shared.height
+    n_mined = mined.height
     log.info("Class counts — shared: %d, mined: %d", n_shared, n_mined)
 
-    # --- Prepare numeric features ---
-    numeric_cols = [c for c in NUMERIC_FEATURES if c in model_df.columns]
+    # ── A. Numeric features: Mann-Whitney U tests ──
+    numeric_cols = [c for c in NUMERIC_FEATURES if c in pairs.columns]
+    n_numeric_tests = len(numeric_cols)
+    numeric_rows: list[dict[str, str | int | float]] = []
 
-    # Median impute numeric features
     for col_name in numeric_cols:
-        median_val = model_df[col_name].median()
-        if median_val is None:
-            median_val = 0.0
-        model_df = model_df.with_columns(pl.col(col_name).fill_null(median_val).fill_nan(median_val))
+        shared_vals = shared[col_name].drop_nulls().drop_nans().to_numpy()
+        mined_vals = mined[col_name].drop_nulls().drop_nans().to_numpy()
 
-    # Standardize numeric features
-    numeric_means: dict[str, float] = {}
-    numeric_stds: dict[str, float] = {}
-    for col_name in numeric_cols:
-        m = float(model_df[col_name].mean())  # type: ignore[arg-type]
-        s = float(model_df[col_name].std())  # type: ignore[arg-type]
-        if s == 0 or np.isnan(s):
-            s = 1.0
-        numeric_means[col_name] = m
-        numeric_stds[col_name] = s
-        model_df = model_df.with_columns(
-            ((pl.col(col_name) - m) / s).alias(col_name)
-        )
-
-    # --- Prepare categorical features ---
-    cat_dummies: list[str] = []
-    for cat_col in CATEGORICAL_FEATURES:
-        if cat_col not in model_df.columns:
+        if len(shared_vals) < 2 or len(mined_vals) < 2:
+            log.warning("Skipping %s: too few non-null values.", col_name)
             continue
-        model_df = model_df.with_columns(
-            pl.col(cat_col).fill_null("Unknown")
+
+        u_stat, p_val = mannwhitneyu(shared_vals, mined_vals, alternative="two-sided")
+        r = _rank_biserial_correlation(u_stat, len(shared_vals), len(mined_vals))
+        p_bonf = min(p_val * n_numeric_tests, 1.0)
+
+        numeric_rows.append(
+            {
+                "feature": col_name,
+                "n_shared": len(shared_vals),
+                "n_mined": len(mined_vals),
+                "median_shared": float(np.median(shared_vals)),
+                "median_mined": float(np.median(mined_vals)),
+                "mean_shared": float(np.mean(shared_vals)),
+                "mean_mined": float(np.mean(mined_vals)),
+                "u_statistic": float(u_stat),
+                "p_value": float(p_val),
+                "p_value_bonferroni": float(p_bonf),
+                "rank_biserial_r": round(r, 4),
+                "direction": "higher_in_shared" if r > 0 else "higher_in_mined",
+                "effect_magnitude": _effect_magnitude(r),
+            }
         )
-        model_df, _, top_col = _add_top_n_other_column(model_df, cat_col, top_n)
-        unique_vals = sorted(model_df[top_col].unique().to_list())
-        # Drop first value as reference level
-        if len(unique_vals) > 1:
-            reference = unique_vals[0]
-            for val in unique_vals[1:]:
-                dummy_name = f"{cat_col}__{val}"
-                model_df = model_df.with_columns(
-                    pl.when(pl.col(top_col) == val)
-                    .then(pl.lit(1.0))
-                    .otherwise(pl.lit(0.0))
-                    .alias(dummy_name)
-                )
-                cat_dummies.append(dummy_name)
-            log.debug("Categorical %s: reference=%s, dummies=%d", cat_col, reference, len(unique_vals) - 1)
 
-    all_features = numeric_cols + cat_dummies
+    numeric_df = pl.DataFrame(numeric_rows).sort("p_value")
+    numeric_df.write_csv(results_dir / "numeric-feature-tests.csv")
+    log.info("Saved numeric-feature-tests.csv (%d features)", numeric_df.height)
 
-    # Filter to finite rows for all features
-    model_df = _filter_finite(model_df, numeric_cols)
-    log.info("Rows after finite filter: %d", model_df.height)
+    # ── B. Categorical features: Chi-square tests ──
+    n_cat_tests = len(CATEGORICAL_FEATURES)
+    cat_rows: list[dict[str, str | int | float]] = []
 
-    if model_df.height < 50:
-        log.warning("Too few rows (%d) for logistic regression. Skipping.", model_df.height)
-        return
+    for cat_col in CATEGORICAL_FEATURES:
+        if cat_col not in pairs.columns:
+            continue
 
-    # Build design matrix
-    X = model_df.select(all_features).to_pandas().values.astype(np.float64)
-    y = model_df["target"].to_numpy().astype(np.float64)
+        work_df = pairs.with_columns(pl.col(cat_col).fill_null("Unknown"))
+        work_df, _, top_col = _add_top_n_other_column(work_df, cat_col, top_n)
 
-    # Add constant for intercept
-    X_with_const = sm.add_constant(X)
-    feature_names = ["const"] + all_features
+        # Build contingency table
+        crosstab = (
+            work_df.group_by(["pair_source_label", top_col])
+            .len()
+            .pivot(on=top_col, index="pair_source_label", values="len")
+            .fill_null(0)
+        )
 
-    # Fit logistic regression
-    try:
-        glm_model = sm.GLM(y, X_with_const, family=sm.families.Binomial())
-        glm_result = glm_model.fit()
-    except Exception as exc:
-        log.error("GLM fitting failed: %s", exc)
-        return
+        # Save crosstab
+        crosstab.write_csv(results_dir / f"categorical-{cat_col}-crosstab.csv")
 
-    log.info("GLM converged: %s", glm_result.converged)
+        # Extract matrix (rows = shared/mined, cols = category levels)
+        value_cols = [c for c in crosstab.columns if c != "pair_source_label"]
+        table = crosstab.select(value_cols).to_numpy()
 
-    # Extract coefficients
-    coef_df = pl.DataFrame(
-        {
-            "feature": feature_names,
-            "coefficient": glm_result.params.tolist(),
-            "std_err": glm_result.bse.tolist(),
-            "z_value": glm_result.tvalues.tolist(),
-            "p_value": glm_result.pvalues.tolist(),
-            "ci_lower": glm_result.conf_int()[:, 0].tolist(),
-            "ci_upper": glm_result.conf_int()[:, 1].tolist(),
-        }
-    ).with_columns(
-        pl.col("coefficient").exp().alias("odds_ratio"),
-        pl.col("ci_lower").exp().alias("or_ci_lower"),
-        pl.col("ci_upper").exp().alias("or_ci_upper"),
-    )
-    coef_df.write_csv(results_dir / "logreg-coefficients.csv")
-    log.info("Saved logreg-coefficients.csv")
+        chi2, p_val, dof, _ = chi2_contingency(table)
+        v = _cramers_v(table)
+        p_bonf = min(p_val * n_cat_tests, 1.0)
 
-    # Compute AUC
-    y_pred = glm_result.predict(X_with_const)
-    auc = _compute_auc(y, y_pred)
+        cat_rows.append(
+            {
+                "feature": cat_col,
+                "n_total": int(table.sum()),
+                "n_levels": len(value_cols),
+                "chi2": round(chi2, 2),
+                "dof": int(dof),
+                "p_value": float(p_val),
+                "p_value_bonferroni": float(p_bonf),
+                "cramers_v": round(v, 4),
+                "effect_magnitude": _effect_magnitude(v),
+            }
+        )
 
-    performance = {
-        "n_total": int(len(y)),
-        "n_shared": int(np.sum(y == 1)),
-        "n_mined": int(np.sum(y == 0)),
-        "auc": round(auc, 4),
-        "pseudo_r_squared": round(float(glm_result.pseudo_rsquared(kind="mcfadden")), 4),
-        "aic": round(float(glm_result.aic), 2),
-        "bic": round(float(glm_result.bic_llf), 2),
-        "converged": bool(glm_result.converged),
-    }
-    with open(results_dir / "logreg-performance.json", "w") as f:
-        json.dump(performance, f, indent=2)
+    cat_df = pl.DataFrame(cat_rows).sort("p_value")
+    cat_df.write_csv(results_dir / "categorical-feature-tests.csv")
+    log.info("Saved categorical-feature-tests.csv (%d features)", cat_df.height)
 
-    # VIF check (skip constant)
-    try:
-        vif_values = [variance_inflation_factor(X, i) for i in range(X.shape[1])]
-        vif_df = pl.DataFrame({"feature": all_features, "vif": vif_values})
-        vif_df.write_csv(results_dir / "logreg-vif.csv")
-        high_vif = vif_df.filter(pl.col("vif") > 10)
-        if high_vif.height > 0:
-            log.warning("High VIF features (>10):\n%s", high_vif)
-    except Exception as exc:
-        log.warning("VIF computation failed: %s", exc)
+    # ── C. Effect size dot plot ──
+    # Combine numeric (rank-biserial r) and categorical (Cramer's V) into one plot
+    effect_rows: list[dict[str, str | float]] = []
+    for row in numeric_df.iter_rows(named=True):
+        sig = "*" if row["p_value_bonferroni"] < 0.05 else ""
+        if row["p_value_bonferroni"] < 0.001:
+            sig = "***"
+        elif row["p_value_bonferroni"] < 0.01:
+            sig = "**"
+        effect_rows.append(
+            {
+                "feature": row["feature"],
+                "effect_size": row["rank_biserial_r"],
+                "abs_effect_size": abs(row["rank_biserial_r"]),
+                "test_type": "Mann-Whitney U",
+                "significance": sig,
+            }
+        )
+    for row in cat_df.iter_rows(named=True):
+        sig = "*" if row["p_value_bonferroni"] < 0.05 else ""
+        if row["p_value_bonferroni"] < 0.001:
+            sig = "***"
+        elif row["p_value_bonferroni"] < 0.01:
+            sig = "**"
+        effect_rows.append(
+            {
+                "feature": row["feature"],
+                "effect_size": row["cramers_v"],
+                "abs_effect_size": row["cramers_v"],
+                "test_type": "Chi-square",
+                "significance": sig,
+            }
+        )
 
-    # Forest plot of odds ratios (skip constant)
-    plot_df = coef_df.filter(pl.col("feature") != "const").sort("odds_ratio")
+    effect_df = pl.DataFrame(effect_rows).sort("abs_effect_size")
 
-    fig, ax = plt.subplots(figsize=(10, max(6, len(plot_df) * 0.35)))
-    y_positions = list(range(plot_df.height))
-    ors = plot_df["odds_ratio"].to_list()
-    ci_low = plot_df["or_ci_lower"].to_list()
-    ci_high = plot_df["or_ci_upper"].to_list()
-    labels = plot_df["feature"].to_list()
+    fig, ax = plt.subplots(figsize=(10, max(6, effect_df.height * 0.4)))
+    y_positions = list(range(effect_df.height))
+    sizes = effect_df["effect_size"].to_list()
+    labels = [
+        f"{row['feature']} {row['significance']}" for row in effect_df.iter_rows(named=True)
+    ]
+    colors = [PALETTE[0] if s >= 0 else PALETTE[1] for s in sizes]
 
-    ax.errorbar(
-        ors,
-        y_positions,
-        xerr=[
-            [o - lo for o, lo in zip(ors, ci_low)],
-            [hi - o for o, hi in zip(ors, ci_high)],
-        ],
-        fmt="o",
-        color="steelblue",
-        ecolor="gray",
-        capsize=3,
-    )
-    ax.axvline(x=1.0, color="red", linestyle="--", linewidth=1)
+    ax.barh(y_positions, sizes, color=colors, height=0.6)
+    ax.axvline(x=0, color="black", linestyle="-", linewidth=0.8)
     ax.set_yticks(y_positions)
     ax.set_yticklabels(labels, fontsize=9)
-    ax.set_xlabel("Odds Ratio (Shared vs Mined)")
+    ax.set_xlabel("Effect Size (rank-biserial r / Cramer's V)")
     ax.set_title(
-        "Logistic Regression: Odds Ratios for Shared vs Mined Pairs\n"
-        f"(AUC={auc:.3f}, N={len(y):,})",
+        "Feature Comparison: Shared vs Mined Pairs\n"
+        f"(N={n_shared + n_mined:,}; "
+        f"{n_shared:,} shared, {n_mined:,} mined)",
         fontsize=13,
     )
-    fig.savefig(results_dir / "logreg-coefficients-forest.png", bbox_inches="tight", dpi=300)
+    fig.savefig(results_dir / "effect-size-dotplot.png", bbox_inches="tight", dpi=300)
     plt.close(fig)
+    log.info("Saved effect-size-dotplot.png")
 
-    # Plain-language summary of top features
-    sig_features = coef_df.filter(
-        pl.col("feature") != "const",
-        pl.col("p_value") < 0.05,
-    ).sort("odds_ratio", descending=True)
+    # ── D. Distributional comparison plots for significant numeric features ──
+    sig_numeric = numeric_df.filter(pl.col("p_value_bonferroni") < 0.05)
 
-    lines = [
-        "# Logistic Regression: Top Features (Shared vs Mined)\n",
-        f"- **N**: {len(y):,} pairs ({int(np.sum(y == 1)):,} shared, {int(np.sum(y == 0)):,} mined)",
-        f"- **AUC**: {auc:.3f}",
-        f"- **Pseudo R-squared (McFadden)**: {performance['pseudo_r_squared']:.4f}",
-        "",
-        "## Significant Features (p < 0.05)\n",
-        "Features with OR > 1 are more associated with **shared** pairs;",
-        "features with OR < 1 are more associated with **mined** pairs.\n",
-    ]
-    for row in sig_features.iter_rows(named=True):
-        direction = "shared" if row["odds_ratio"] > 1 else "mined"
-        lines.append(
-            f"- **{row['feature']}**: OR={row['odds_ratio']:.3f} "
-            f"(95% CI: {row['or_ci_lower']:.3f}-{row['or_ci_upper']:.3f}), "
-            f"p={row['p_value']:.4f} — more associated with **{direction}** pairs"
+    for row in sig_numeric.iter_rows(named=True):
+        feat = row["feature"]
+        shared_vals = shared[feat].drop_nulls().drop_nans().to_numpy()
+        mined_vals = mined[feat].drop_nulls().drop_nans().to_numpy()
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+
+        # Violin plot
+        plot_data = pl.DataFrame(
+            {
+                feat: np.concatenate([shared_vals, mined_vals]),
+                "pair_source_label": (
+                    ["shared"] * len(shared_vals) + ["mined"] * len(mined_vals)
+                ),
+            }
+        ).to_pandas()
+        sns.violinplot(
+            data=plot_data,
+            x="pair_source_label",
+            y=feat,
+            hue="pair_source_label",
+            palette=[PALETTE[0], PALETTE[1]],
+            inner="quartile",
+            ax=ax1,
+        )
+        ax1.set_title("Distribution Comparison")
+        ax1.set_xlabel("")
+
+        # KDE overlay
+        sns.kdeplot(shared_vals, label="Shared", color=PALETTE[0], ax=ax2)
+        sns.kdeplot(mined_vals, label="Mined", color=PALETTE[1], ax=ax2)
+        ax2.legend()
+        ax2.set_title("Density Overlay")
+        ax2.set_xlabel(feat)
+
+        fig.suptitle(
+            f"{feat}\n"
+            f"Mann-Whitney U p={row['p_value']:.2e}, "
+            f"rank-biserial r={row['rank_biserial_r']:.3f} "
+            f"({row['effect_magnitude']})",
+            fontsize=13,
+        )
+        fig.savefig(results_dir / f"dist-numeric-{feat}.png", bbox_inches="tight", dpi=300)
+        plt.close(fig)
+
+    # Overview grid of all significant numeric features
+    if sig_numeric.height > 0:
+        n_feats = sig_numeric.height
+        ncols = min(3, n_feats)
+        nrows = (n_feats + ncols - 1) // ncols
+        fig, axes = plt.subplots(
+            nrows, ncols, figsize=(5 * ncols, 4 * nrows), constrained_layout=True
+        )
+        axes_flat = np.array(axes).flatten() if n_feats > 1 else [axes]
+
+        for i, row in enumerate(sig_numeric.iter_rows(named=True)):
+            feat = row["feature"]
+            ax = axes_flat[i]
+            shared_vals = shared[feat].drop_nulls().drop_nans().to_numpy()
+            mined_vals = mined[feat].drop_nulls().drop_nans().to_numpy()
+            plot_data = pl.DataFrame(
+                {
+                    feat: np.concatenate([shared_vals, mined_vals]),
+                    "pair_source_label": (
+                        ["shared"] * len(shared_vals) + ["mined"] * len(mined_vals)
+                    ),
+                }
+            ).to_pandas()
+            sns.violinplot(
+                data=plot_data,
+                x="pair_source_label",
+                y=feat,
+                hue="pair_source_label",
+                palette=[PALETTE[0], PALETTE[1]],
+                inner="quartile",
+                ax=ax,
+            )
+            ax.set_title(f"{feat}\nr={row['rank_biserial_r']:.3f}", fontsize=9)
+            ax.set_xlabel("")
+
+        # Hide unused axes
+        for j in range(n_feats, len(axes_flat)):
+            axes_flat[j].set_visible(False)
+
+        fig.suptitle("Significant Numeric Features: Shared vs Mined", fontsize=14)
+        fig.savefig(results_dir / "dist-numeric-overview.png", bbox_inches="tight", dpi=300)
+        plt.close(fig)
+        log.info("Saved dist-numeric-overview.png")
+
+    # ── Distributional comparison plots for significant categorical features ──
+    sig_cat = cat_df.filter(pl.col("p_value_bonferroni") < 0.05)
+
+    for row in sig_cat.iter_rows(named=True):
+        cat_col = row["feature"]
+        work_df = pairs.with_columns(pl.col(cat_col).fill_null("Unknown"))
+        work_df, _, top_col = _add_top_n_other_column(work_df, cat_col, top_n)
+
+        # Compute proportions within each group
+        props = (
+            work_df.group_by(["pair_source_label", top_col])
+            .len()
+            .with_columns(
+                (pl.col("len") / pl.col("len").sum().over("pair_source_label")).alias(
+                    "proportion"
+                )
+            )
+            .sort(top_col)
         )
 
-    with open(results_dir / "logreg-top-features.md", "w") as f:
+        fig, ax = plt.subplots(figsize=(12, 6))
+        props_pd = props.to_pandas()
+        categories = sorted(props_pd[top_col].unique())
+        x = np.arange(len(categories))
+        width = 0.35
+
+        shared_props = []
+        mined_props = []
+        for cat in categories:
+            s = props_pd[
+                (props_pd["pair_source_label"] == "shared") & (props_pd[top_col] == cat)
+            ]["proportion"]
+            shared_props.append(float(s.iloc[0]) if len(s) > 0 else 0)
+            m = props_pd[
+                (props_pd["pair_source_label"] == "mined") & (props_pd[top_col] == cat)
+            ]["proportion"]
+            mined_props.append(float(m.iloc[0]) if len(m) > 0 else 0)
+
+        ax.bar(x - width / 2, shared_props, width, label="Shared", color=PALETTE[0])
+        ax.bar(x + width / 2, mined_props, width, label="Mined", color=PALETTE[1])
+        ax.set_xticks(x)
+        ax.set_xticklabels(categories, rotation=45, ha="right", fontsize=9)
+        ax.set_ylabel("Proportion within group")
+        ax.legend()
+        ax.set_title(
+            f"{cat_col}\n"
+            f"Chi-square p={row['p_value']:.2e}, "
+            f"Cramer's V={row['cramers_v']:.3f} ({row['effect_magnitude']})",
+            fontsize=13,
+        )
+        fig.savefig(
+            results_dir / f"dist-categorical-{cat_col}.png",
+            bbox_inches="tight",
+            dpi=300,
+        )
+        plt.close(fig)
+
+    # ── E. Summary markdown ──
+    lines = [
+        "# Feature Comparison: Shared vs Mined Pairs\n",
+        f"- **N**: {n_shared + n_mined:,} pairs ({n_shared:,} shared, {n_mined:,} mined)",
+        "",
+        "## Numeric Features (Mann-Whitney U)\n",
+        "Positive rank-biserial r means higher in **shared**; "
+        "negative means higher in **mined**.\n",
+    ]
+    for row in numeric_df.sort("p_value").iter_rows(named=True):
+        sig = "**" if row["p_value_bonferroni"] < 0.05 else ""
+        lines.append(
+            f"- {sig}{row['feature']}{sig}: r={row['rank_biserial_r']:.3f} "
+            f"({row['effect_magnitude']}), "
+            f"p={row['p_value']:.2e} "
+            f"(Bonf: {row['p_value_bonferroni']:.2e}), "
+            f"median shared={row['median_shared']:.3f}, "
+            f"median mined={row['median_mined']:.3f}"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Categorical Features (Chi-square)\n",
+        ]
+    )
+    for row in cat_df.sort("p_value").iter_rows(named=True):
+        sig = "**" if row["p_value_bonferroni"] < 0.05 else ""
+        lines.append(
+            f"- {sig}{row['feature']}{sig}: Cramer's V={row['cramers_v']:.3f} "
+            f"({row['effect_magnitude']}), "
+            f"chi2={row['chi2']:.1f}, dof={row['dof']}, "
+            f"p={row['p_value']:.2e} (Bonf: {row['p_value_bonferroni']:.2e})"
+        )
+
+    with open(results_dir / "feature-comparison-summary.md", "w") as f:
         f.write("\n".join(lines) + "\n")
 
-    log.info("Logistic regression complete.")
+    log.info("Feature comparison complete.")
 
 
 ###############################################################################
@@ -763,9 +932,7 @@ def compute_coverage(
     full_links = pairs.select("document_id", "repository_id")
 
     shared_ad = _get_author_developer_pairs_connected_to_pairs(shared_links)
-    n_shared_ad = (
-        shared_ad.select("researcher_id", "developer_account_id").unique().height
-    )
+    n_shared_ad = shared_ad.select("researcher_id", "developer_account_id").unique().height
 
     full_ad = _get_author_developer_pairs_connected_to_pairs(full_links)
     n_full_ad = full_ad.select("researcher_id", "developer_account_id").unique().height
@@ -842,26 +1009,46 @@ def compute_coverage(
     fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(14, 6), constrained_layout=True)
 
     # Pair coverage bar
-    axes[0].bar(
+    bars_left = axes[0].bar(
         ["Shared", "Mined"],
         [n_shared, n_mined],
         color=[PALETTE[0], PALETTE[1]],
     )
-    axes[0].set_title(
-        "Article-Repository Pair Coverage\n"
-        f"(Shared: {overall_coverage['shared_pair_coverage']:.1%}, "
-        f"Mined: {overall_coverage['mined_pair_coverage']:.1%})",
-        fontsize=12,
-    )
+    for bar, val, pct in zip(
+        bars_left,
+        [n_shared, n_mined],
+        [overall_coverage["shared_pair_coverage"], overall_coverage["mined_pair_coverage"]],
+        strict=False,
+    ):
+        axes[0].text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f"{val:,}\n({pct:.1%})",
+            ha="center",
+            va="bottom",
+            fontsize=11,
+        )
+    axes[0].set_title("Article-Repository Pair Coverage", fontsize=12)
     axes[0].set_ylabel("Number of Pairs")
 
     # Author-developer coverage bar
     n_mined_only_ad = n_full_ad - n_shared_ad
-    axes[1].bar(
+    bars_right = axes[1].bar(
         ["Shared-only", "Mined-added"],
         [n_shared_ad, n_mined_only_ad],
         color=[PALETTE[0], PALETTE[1]],
     )
+    ad_total = n_full_ad
+    for bar, val in zip(bars_right, [n_shared_ad, n_mined_only_ad], strict=False):
+        pct = val / ad_total if ad_total > 0 else 0
+        axes[1].text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f"{val:,}\n({pct:.1%})",
+            ha="center",
+            va="bottom",
+            fontsize=11,
+        )
     axes[1].set_title(
         "Author-Developer Pair Coverage\n"
         f"(Shared covers {overall_coverage['shared_author_dev_coverage']:.1%} of full)",
@@ -907,7 +1094,7 @@ def _compute_graph_stats(
     }
 
 
-def analyze_network_components(
+def analyze_network_components(  # noqa: C901
     pairs: pl.DataFrame,
     results_dir: Path,
 ) -> None:
@@ -918,9 +1105,7 @@ def analyze_network_components(
 
     # Shared-only graph
     shared_doc_ids = (
-        pairs.filter(pl.col("pair_source_label") == "shared")["document_id"]
-        .unique()
-        .to_list()
+        pairs.filter(pl.col("pair_source_label") == "shared")["document_id"].unique().to_list()
     )
     shared_contribs = all_doc_contribs.filter(pl.col("document_id").is_in(shared_doc_ids))
     graph_shared, node_to_idx_shared, _ = _build_coauthorship_graph(shared_contribs)
@@ -938,9 +1123,7 @@ def analyze_network_components(
 
     # Mined-only graph
     mined_doc_ids = (
-        pairs.filter(pl.col("pair_source_label") == "mined")["document_id"]
-        .unique()
-        .to_list()
+        pairs.filter(pl.col("pair_source_label") == "mined")["document_id"].unique().to_list()
     )
     mined_contribs = all_doc_contribs.filter(pl.col("document_id").is_in(mined_doc_ids))
     graph_mined, _, _ = _build_coauthorship_graph(mined_contribs)
@@ -956,9 +1139,7 @@ def analyze_network_components(
     shared_components = (
         rx.connected_components(graph_shared) if graph_shared.num_nodes() > 0 else []
     )
-    full_components = (
-        rx.connected_components(graph_full) if graph_full.num_nodes() > 0 else []
-    )
+    full_components = rx.connected_components(graph_full) if graph_full.num_nodes() > 0 else []
 
     # Map researcher_id -> shared component index
     shared_rid_to_comp: dict[int, int] = {}
@@ -986,7 +1167,8 @@ def analyze_network_components(
         1 for shared_comps in full_comp_to_shared_comps.values() if len(shared_comps) > 1
     )
     n_shared_comps_merged = sum(
-        len(shared_comps) for shared_comps in full_comp_to_shared_comps.values()
+        len(shared_comps)
+        for shared_comps in full_comp_to_shared_comps.values()
         if len(shared_comps) > 1
     )
 
@@ -1005,36 +1187,74 @@ def analyze_network_components(
 
     log.info("Bridging summary: %s", bridging_summary)
 
-    # --- Comparison bar chart ---
+    # --- Save comparison table CSV ---
+    table_rows = []
+    for stats in [stats_shared, stats_full, stats_mined]:
+        table_rows.append(
+            {
+                "subset": stats["label"],
+                "total_nodes": stats["total_nodes"],
+                "total_edges": stats["total_edges"],
+                "total_components": stats["total_components"],
+                "largest_component_size": stats["largest_component_size"],
+                "coverage_pct": stats["coverage_pct"],
+            }
+        )
+    pl.DataFrame(table_rows).write_csv(results_dir / "network-comparison-table.csv")
+    log.info("Saved network-comparison-table.csv")
+
+    # --- Comparison bar chart (normalized to Full graph) ---
     fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(18, 6), constrained_layout=True)
 
     subset_labels = ["Shared", "Full", "Mined"]
     all_stats = [stats_shared, stats_full, stats_mined]
 
-    # Nodes and edges
-    axes[0].bar(
-        subset_labels,
-        [s["total_nodes"] for s in all_stats],
-        color=PALETTE[:3],
-    )
-    axes[0].set_title("Total Nodes")
-    axes[0].set_ylabel("Count")
+    # Nodes: as % of Full
+    full_nodes = stats_full["total_nodes"]
+    node_pcts = [s["total_nodes"] / full_nodes * 100 for s in all_stats]
+    node_raw = [s["total_nodes"] for s in all_stats]
+    bars = axes[0].bar(subset_labels, node_pcts, color=PALETTE[:3])
+    for bar, raw in zip(bars, node_raw, strict=False):
+        axes[0].text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f"{raw:,}",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+        )
+    axes[0].set_title("Total Nodes (% of Full)")
+    axes[0].set_ylabel("% of Full Graph")
 
-    # Components
-    axes[1].bar(
-        subset_labels,
-        [s["total_components"] for s in all_stats],
-        color=PALETTE[:3],
-    )
-    axes[1].set_title("Connected Components")
-    axes[1].set_ylabel("Count")
+    # Components: as % of Full
+    full_comps = stats_full["total_components"]
+    comp_pcts = [s["total_components"] / full_comps * 100 for s in all_stats]
+    comp_raw = [s["total_components"] for s in all_stats]
+    bars = axes[1].bar(subset_labels, comp_pcts, color=PALETTE[:3])
+    for bar, raw in zip(bars, comp_raw, strict=False):
+        axes[1].text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f"{raw:,}",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+        )
+    axes[1].set_title("Connected Components (% of Full)")
+    axes[1].set_ylabel("% of Full Graph")
 
-    # Largest CC coverage
-    axes[2].bar(
-        subset_labels,
-        [s["coverage_pct"] for s in all_stats],
-        color=PALETTE[:3],
-    )
+    # Largest CC coverage (already a percentage)
+    cov_vals = [s["coverage_pct"] for s in all_stats]
+    bars = axes[2].bar(subset_labels, cov_vals, color=PALETTE[:3])
+    for bar, val in zip(bars, cov_vals, strict=False):
+        axes[2].text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f"{val:.1f}%",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+        )
     axes[2].set_title("Largest Component Coverage (%)")
     axes[2].set_ylabel("Coverage (%)")
 
@@ -1042,9 +1262,7 @@ def analyze_network_components(
         "Co-Authorship Network Comparison: Shared vs Full vs Mined",
         fontsize=14,
     )
-    fig.savefig(
-        results_dir / "network-component-comparison.png", bbox_inches="tight", dpi=300
-    )
+    fig.savefig(results_dir / "network-component-comparison.png", bbox_inches="tight", dpi=300)
     plt.close(fig)
 
     log.info("Network component analysis complete.")
@@ -1176,7 +1394,7 @@ def analyze_shortest_paths(
             x="subset",
             y="shortest_path_length",
             hue="subset",
-            palette=PALETTE[:len(all_path_lengths)],
+            palette=PALETTE[: len(all_path_lengths)],
             showfliers=False,
             ax=ax,
         )
@@ -1200,82 +1418,125 @@ def analyze_shortest_paths(
 ###############################################################################
 
 
-def write_summary(results_dir: Path) -> None:
-    """Write a summary markdown file from saved result artifacts."""
+def write_summary(base_dir: Path, results_dir: Path) -> None:  # noqa: C901
+    """Write a summary markdown file from saved result artifacts.
+
+    Parameters
+    ----------
+    base_dir:
+        Root results directory containing step-{i}/ subdirectories.
+    results_dir:
+        Directory to write the summary file into (step-6/).
+    """
     lines = ["# RQ2 Analysis Summary\n"]
 
-    # Coverage
-    coverage_path = results_dir / "coverage-overall.json"
+    # Coverage (step-3)
+    coverage_path = base_dir / "step-3" / "coverage-overall.json"
     if coverage_path.exists():
         with open(coverage_path) as f:
             coverage = json.load(f)
-        lines.extend([
-            "## Coverage\n",
-            f"- **Total pairs**: {coverage['n_total_pairs']:,}",
-            f"- **Shared pairs**: {coverage['n_shared_pairs']:,} ({coverage['shared_pair_coverage']:.1%})",
-            f"- **Mined pairs**: {coverage['n_mined_pairs']:,} ({coverage['mined_pair_coverage']:.1%})",
-            f"- **Shared author-dev pairs**: {coverage['n_shared_author_dev_pairs']:,}",
-            f"- **Full author-dev pairs**: {coverage['n_full_author_dev_pairs']:,}",
-            f"- **Shared author-dev coverage**: {coverage['shared_author_dev_coverage']:.1%}",
-            "",
-        ])
+        lines.extend(
+            [
+                "## Coverage\n",
+                f"- **Total pairs**: {coverage['n_total_pairs']:,}",
+                f"- **Shared pairs**: {coverage['n_shared_pairs']:,} ({coverage['shared_pair_coverage']:.1%})",
+                f"- **Mined pairs**: {coverage['n_mined_pairs']:,} ({coverage['mined_pair_coverage']:.1%})",
+                f"- **Shared author-dev pairs**: {coverage['n_shared_author_dev_pairs']:,}",
+                f"- **Full author-dev pairs**: {coverage['n_full_author_dev_pairs']:,}",
+                f"- **Shared author-dev coverage**: {coverage['shared_author_dev_coverage']:.1%}",
+                "",
+            ]
+        )
 
-    # Logistic regression
-    perf_path = results_dir / "logreg-performance.json"
-    if perf_path.exists():
-        with open(perf_path) as f:
-            perf = json.load(f)
-        lines.extend([
-            "## Logistic Regression\n",
-            f"- **N**: {perf['n_total']:,} ({perf['n_shared']:,} shared, {perf['n_mined']:,} mined)",
-            f"- **AUC**: {perf['auc']:.3f}",
-            f"- **Pseudo R-squared**: {perf['pseudo_r_squared']:.4f}",
-            "",
-        ])
+    # Feature comparison (step-2)
+    numeric_path = base_dir / "step-2" / "numeric-feature-tests.csv"
+    if numeric_path.exists():
+        numeric_df = pl.read_csv(numeric_path)
+        sig_numeric = numeric_df.filter(pl.col("p_value_bonferroni") < 0.05)
+        lines.extend(
+            [
+                "## Feature Comparison\n",
+                f"- **Numeric features tested**: {numeric_df.height}",
+                f"- **Significant (Bonferroni p < 0.05)**: {sig_numeric.height}",
+                "",
+                "### Significant Numeric Features (by effect size)\n",
+            ]
+        )
+        for row in sig_numeric.sort("rank_biserial_r", descending=True).iter_rows(named=True):
+            lines.append(
+                f"- **{row['feature']}**: r={row['rank_biserial_r']:.3f} "
+                f"({row['effect_magnitude']}), {row['direction']}, "
+                f"median shared={row['median_shared']:.3f} vs "
+                f"mined={row['median_mined']:.3f}"
+            )
+        lines.append("")
 
-    # Network stats
+    cat_path = base_dir / "step-2" / "categorical-feature-tests.csv"
+    if cat_path.exists():
+        cat_df = pl.read_csv(cat_path)
+        sig_cat = cat_df.filter(pl.col("p_value_bonferroni") < 0.05)
+        lines.extend(
+            [
+                "### Significant Categorical Features\n",
+            ]
+        )
+        for row in sig_cat.sort("cramers_v", descending=True).iter_rows(named=True):
+            lines.append(
+                f"- **{row['feature']}**: Cramer's V={row['cramers_v']:.3f} "
+                f"({row['effect_magnitude']}), "
+                f"chi2={row['chi2']:.1f}"
+            )
+        lines.append("")
+
+    # Network stats (step-4)
     for label in ["shared", "full", "mined"]:
-        stats_path = results_dir / f"network-stats-{label}.json"
+        stats_path = base_dir / "step-4" / f"network-stats-{label}.json"
         if stats_path.exists():
             with open(stats_path) as f:
                 stats = json.load(f)
-            lines.extend([
-                f"## Network: {label.capitalize()}\n",
-                f"- **Nodes**: {stats['total_nodes']:,}",
-                f"- **Edges**: {stats['total_edges']:,}",
-                f"- **Components**: {stats['total_components']:,}",
-                f"- **Largest CC coverage**: {stats['coverage_pct']:.1f}%",
-                "",
-            ])
+            lines.extend(
+                [
+                    f"## Network: {label.capitalize()}\n",
+                    f"- **Nodes**: {stats['total_nodes']:,}",
+                    f"- **Edges**: {stats['total_edges']:,}",
+                    f"- **Components**: {stats['total_components']:,}",
+                    f"- **Largest CC coverage**: {stats['coverage_pct']:.1f}%",
+                    "",
+                ]
+            )
 
-    # Bridging
-    bridging_path = results_dir / "network-bridging-summary.json"
+    # Bridging (step-4)
+    bridging_path = base_dir / "step-4" / "network-bridging-summary.json"
     if bridging_path.exists():
         with open(bridging_path) as f:
             bridging = json.load(f)
-        lines.extend([
-            "## Bridging Analysis\n",
-            f"- **Delta components**: {bridging['delta_components']:,}",
-            f"- **Delta coverage**: {bridging['delta_coverage_pct']:.1f}%",
-            f"- **Merging full components**: {bridging['n_merging_full_components']:,}",
-            f"- **Shared components merged**: {bridging['n_shared_components_that_merged']:,}",
-            "",
-        ])
+        lines.extend(
+            [
+                "## Bridging Analysis\n",
+                f"- **Delta components**: {bridging['delta_components']:,}",
+                f"- **Delta coverage**: {bridging['delta_coverage_pct']:.1f}%",
+                f"- **Merging full components**: {bridging['n_merging_full_components']:,}",
+                f"- **Shared components merged**: {bridging['n_shared_components_that_merged']:,}",
+                "",
+            ]
+        )
 
-    # Shortest paths
+    # Shortest paths (step-5)
     for label in ["shared", "mined", "full"]:
-        sp_path = results_dir / f"shortest-path-{label}.json"
+        sp_path = base_dir / "step-5" / f"shortest-path-{label}.json"
         if sp_path.exists():
             with open(sp_path) as f:
                 sp = json.load(f)
-            lines.extend([
-                f"## Shortest Paths: {label.capitalize()}\n",
-                f"- **Mean**: {sp['mean']:.2f} (std: {sp['std']:.2f})",
-                f"- **Median**: {sp['median']:.2f}",
-                f"- **p10-p90**: {sp['p10']:.2f} - {sp['p90']:.2f}",
-                f"- **Sampled paths**: {sp['valid_paths']:,}",
-                "",
-            ])
+            lines.extend(
+                [
+                    f"## Shortest Paths: {label.capitalize()}\n",
+                    f"- **Mean**: {sp['mean']:.2f} (std: {sp['std']:.2f})",
+                    f"- **Median**: {sp['median']:.2f}",
+                    f"- **p10-p90**: {sp['p10']:.2f} - {sp['p90']:.2f}",
+                    f"- **Sampled paths**: {sp['valid_paths']:,}",
+                    "",
+                ]
+            )
 
     with open(results_dir / "rq2-summary.md", "w") as f:
         f.write("\n".join(lines) + "\n")
@@ -1308,31 +1569,36 @@ def analyze(
     sns.set_palette(PALETTE)
 
     total_steps = 6
+
+    # Create step subdirectories
+    for i in range(1, total_steps + 1):
+        (results_dir / f"step-{i}").mkdir(exist_ok=True)
+
     step = 0
 
     step += 1
     log.info("Step %d/%d: Loading RQ2 pairs...", step, total_steps)
-    pairs = load_rq2_pairs(results_dir, sample_size=sample_size)
+    pairs = load_rq2_pairs(results_dir / f"step-{step}", sample_size=sample_size)
 
     step += 1
-    log.info("Step %d/%d: Logistic regression...", step, total_steps)
-    run_logistic_regression(pairs, results_dir, top_n)
+    log.info("Step %d/%d: Univariate feature comparison...", step, total_steps)
+    run_feature_comparison(pairs, results_dir / f"step-{step}", top_n)
 
     step += 1
     log.info("Step %d/%d: Coverage analysis...", step, total_steps)
-    compute_coverage(pairs, results_dir)
+    compute_coverage(pairs, results_dir / f"step-{step}")
 
     step += 1
     log.info("Step %d/%d: Network component analysis...", step, total_steps)
-    analyze_network_components(pairs, results_dir)
+    analyze_network_components(pairs, results_dir / f"step-{step}")
 
     step += 1
     log.info("Step %d/%d: Shortest path analysis...", step, total_steps)
-    analyze_shortest_paths(pairs, results_dir, n_shortest_path_iterations)
+    analyze_shortest_paths(pairs, results_dir / f"step-{step}", n_shortest_path_iterations)
 
     step += 1
     log.info("Step %d/%d: Writing summary...", step, total_steps)
-    write_summary(results_dir)
+    write_summary(base_dir=results_dir, results_dir=results_dir / f"step-{step}")
 
     log.info("RQ2 analysis complete.")
 
