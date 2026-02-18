@@ -58,7 +58,7 @@ def _setup_gh_api(github_api_key: str | None = None) -> GhApi:
     max_time=16,
 )
 @cached(
-    cache=LRUCache(maxsize=2 * 16),  # Cache up to 32k results
+    cache=LRUCache(maxsize=2**17),
     key=lambda login, **kwargs: hashkey(login),  # Only cache by login
 )
 def _get_user_info_from_login(
@@ -502,6 +502,10 @@ def process_github_repo_task(
     return pair
 
 
+@cached(
+    cache=LRUCache(maxsize=2**17),
+    key=lambda username, github_api_key: hashkey(username),
+)
 def get_github_repos_for_developer(
     username: str,
     github_api_key: str | None = None,

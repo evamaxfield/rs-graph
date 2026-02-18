@@ -11,6 +11,8 @@ from typing import Any
 
 import pyalex
 import requests
+from cachetools import LRUCache, cached
+from cachetools.keys import hashkey
 
 from .. import types
 from ..db import models as db_models
@@ -142,6 +144,10 @@ def _increment_call_count_and_check() -> None:
 #######################################################################################
 
 
+@cached(
+    cache=LRUCache(maxsize=2**17),
+    key=lambda doi, semantic_scholar_api_key: hashkey(normalize_doi(doi)),
+)
 def get_updated_doi_from_semantic_scholar(
     doi: str,
     semantic_scholar_api_key: str,
@@ -187,6 +193,10 @@ def get_updated_doi_from_semantic_scholar(
         ) from e
 
 
+@cached(
+    cache=LRUCache(maxsize=2**17),
+    key=lambda open_alex_token, doi: hashkey(doi.lower()),
+)
 def get_open_alex_work_from_doi(
     open_alex_token: str,
     doi: str,
@@ -233,6 +243,10 @@ def convert_from_inverted_index_abstract(abstract: dict) -> str:
     return " ".join(abstract_as_list_of_str)
 
 
+@cached(
+    cache=LRUCache(maxsize=2**17),
+    key=lambda open_alex_token, author_id: hashkey(author_id),
+)
 def get_open_alex_author_from_id(
     open_alex_token: str,
     author_id: str,
@@ -645,6 +659,14 @@ class WorkAndOAResultModels:
     open_alex_results: types.OpenAlexResultModels
 
 
+@cached(
+    cache=LRUCache(maxsize=2**17),
+    key=(
+        lambda researcher_open_alex_id, open_alex_token, semantic_scholar_api_key: hashkey(
+            researcher_open_alex_id,
+        ),
+    ),
+)
 def get_articles_for_researcher(
     researcher_open_alex_id: str,
     open_alex_token: str,
