@@ -9,12 +9,11 @@ import colormaps as cmaps
 import connectorx  # noqa: F401
 import matplotlib.pyplot as plt
 import numpy as np
-import pingouin as pg
 import polars as pl
 import rustworkx as rx
 import seaborn as sns
 import typer
-from scipy.stats import chi2_contingency
+from scipy.stats import chi2_contingency, mannwhitneyu
 from scipy.stats.contingency import association
 from tqdm import tqdm
 
@@ -575,7 +574,10 @@ def run_feature_comparison(  # noqa: C901
     n_numeric_tests = len(numeric_cols)
     numeric_rows: list[dict[str, str | int | float]] = []
 
-    for col_name in numeric_cols:
+    for col_name in tqdm(
+        numeric_cols,
+        desc="Comparing numeric features",
+    ):
         shared_vals = shared[col_name].drop_nulls().drop_nans().to_numpy()
         mined_vals = mined[col_name].drop_nulls().drop_nans().to_numpy()
 
@@ -583,10 +585,9 @@ def run_feature_comparison(  # noqa: C901
             log.warning("Skipping %s: too few non-null values.", col_name)
             continue
 
-        mwu_result = pg.mwu(shared_vals, mined_vals, alternative="two-sided")
-        u_stat = float(mwu_result["U-val"].iloc[0])
-        p_val = float(mwu_result["p-val"].iloc[0])
-        r = float(mwu_result["RBC"].iloc[0])
+        u_stat, p_val = mannwhitneyu(shared_vals, mined_vals, alternative="two-sided")
+        n1, n2 = len(shared_vals), len(mined_vals)
+        r = 1 - (2 * u_stat) / (n1 * n2)
         p_bonf = min(p_val * n_numeric_tests, 1.0)
 
         numeric_rows.append(
