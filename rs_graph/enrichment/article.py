@@ -94,25 +94,46 @@ def _increment_call_count_and_check() -> None:
             # Response data looks like this:
             # {'api_key': '...',
             # 'is_grandfathered': False,
-            # 'rate_limit': {'credits_limit': 100000,
-            # 'credits_used': 0,
-            # 'credits_remaining': 100000,
-            # 'resets_at': '2026-02-16T00:00:00.000Z',
-            # 'resets_in_seconds': 59266,
-            # 'credit_costs': {'singleton': 0,
-            # 'list': 1,
-            # 'search': 10,
-            # 'content': 100,
-            # 'vector': 10,
-            # 'text': 100}}}
+            # 'rate_limit': {'credit_costs': {'content': 100,
+            #                                 'list': 1,
+            #                                 'search': 10,
+            #                                 'semantic': 100,
+            #                                 'singleton': 0,
+            #                                 'text': 100},
+            #                 'credits_limit': 10000,
+            #                 'credits_remaining': 363,
+            #                 'credits_used': 9637,
+            #                 'daily_budget_usd': 1,
+            #                 'daily_remaining_usd': 0.0363,
+            #                 'daily_used_usd': 0.9637,
+            #                 'endpoint_costs_usd': {'content': 0.01,
+            #                                     'list': 0.0001,
+            #                                     'search': 0.001,
+            #                                     'semantic': 0.01,
+            #                                     'singleton': 0,
+            #                                     'text': 0.01},
+            #                 'onetime_credits_balance': 1000000,
+            #                 'onetime_credits_expires_at': 'Wed May 20 2026 00:24:52 '
+            #                                             'GMT+0000 (Coordinated Universal '
+            #                                             'Time)',
+            #                 'onetime_credits_remaining': 1000000,
+            #                 'prepaid_balance_usd': 100,
+            #                 'prepaid_expires_at': 'Wed May 20 2026 00:24:52 GMT+0000 '
+            #                                     '(Coordinated Universal Time)',
+            #                 'prepaid_remaining_usd': 100,
+            #                 'resets_at': '2026-02-20T00:00:00.000Z',
+            #                 'resets_in_seconds': 75513}}
             if (
                 "rate_limit" in rate_limit_data
                 and "credits_remaining" in rate_limit_data["rate_limit"]
-            ):
-                credits_remaining = rate_limit_data["rate_limit"]["credits_remaining"]
-                print(f"OpenAlex API credits remaining: {credits_remaining}")
+            ) or "onetime_credits_remaining" in rate_limit_data["rate_limit"]:
+                total_credits_remaining = (
+                    rate_limit_data["rate_limit"]["credits_remaining"]
+                    + rate_limit_data["rate_limit"]["onetime_credits_remaining"]
+                )
+                print(f"OpenAlex API credits remaining: {total_credits_remaining}")
 
-                if credits_remaining <= 1000:
+                if total_credits_remaining <= 500:
                     reset_datetime = datetime.fromisoformat(
                         rate_limit_data["rate_limit"]["resets_at"]
                     )

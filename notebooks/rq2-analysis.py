@@ -46,6 +46,7 @@ NUMERIC_FEATURES = [
 ]
 
 CATEGORICAL_FEATURES = [
+    "document_is_open_access",
     "document_field_name",
     "document_type",
     "repository_primary_language",
@@ -65,6 +66,7 @@ FEATURE_DISPLAY_NAMES: dict[str, str] = {
     "document_publication_year": "Publication Year",
     "document_n_authors": "Number of Authors",
     "repository_commit_duration_days": "Repo Commit Duration (days)",
+    "document_is_open_access": "Open Access",
     "document_field_name": "Research Field",
     "document_type": "Document Type",
     "repository_primary_language": "Primary Language",
@@ -377,7 +379,7 @@ def load_rq2_pairs(
                 pl.col("doi").alias("document_doi"),
                 pl.col("cited_by_count").alias("document_cited_by_count"),
                 pl.col("fwci").alias("document_fwci"),
-                pl.col("is_open_access").alias("document_is_open_access"),
+                pl.col("is_open_access").cast(pl.Utf8).alias("document_is_open_access"),
                 pl.col("publication_date").alias("document_publication_date"),
                 pl.col("document_type").alias("document_type"),
             ),
