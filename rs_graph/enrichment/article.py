@@ -661,10 +661,8 @@ class WorkAndOAResultModels:
 
 @cached(
     cache=LRUCache(maxsize=2**17),
-    key=(
-        lambda researcher_open_alex_id, open_alex_token, semantic_scholar_api_key: hashkey(
-            researcher_open_alex_id,
-        ),
+    key=lambda researcher_open_alex_id, open_alex_token, semantic_scholar_api_key: hashkey(
+        researcher_open_alex_id,
     ),
 )
 def get_articles_for_researcher(
