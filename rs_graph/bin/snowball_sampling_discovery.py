@@ -2,6 +2,8 @@
 
 import itertools
 import os
+import signal
+import threading
 import time
 import traceback
 from collections import Counter
@@ -32,6 +34,25 @@ from rs_graph.utils.dt_and_td import parse_timedelta
 ###############################################################################
 
 app = typer.Typer()
+
+# Event used to signal a graceful shutdown on keyboard interrupt.
+# When set, the pipeline will finish any in-progress critical storage
+# and exit at the next safe point.
+_shutdown_requested = threading.Event()
+
+
+def _handle_sigint(signum: int, frame: object) -> None:
+    if _shutdown_requested.is_set():
+        # Second interrupt — restore default handler and re-raise to force quit
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        os.kill(os.getpid(), signal.SIGINT)
+    _shutdown_requested.set()
+    print(
+        "\nInterrupt received. Will exit at next safe point "
+        "(before article-repo storage or after author-developer storage). "
+        "Press Ctrl+C again to force quit."
+    )
+
 
 ###############################################################################
 
@@ -753,7 +774,7 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
     cycled_github_tokens: GitHubTokensCycler,
     open_alex_tokens: list[str],
     semantic_scholar_api_key: str | None,
-) -> dict[int, int]:
+) -> dict[int, int] | None:
     # Workers is the number of github tokens
     n_github_tokens = len(cycled_github_tokens)
 
@@ -861,6 +882,10 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
     )
 
     # Now collect results from both (they've been running in parallel)
+    if _shutdown_requested.is_set():
+        print("Shutdown requested — exiting before filtering.")
+        return None
+
     print("Filtering out articles already in the database...")
     flattened_author_articles = _flatten_and_check_articles_in_db(
         all_author_articles_and_errors=[aa.result() for aa in author_articles],
@@ -890,6 +915,10 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
         unchecked_possible_combinations=unchecked_possible_combinations,
     )
 
+    if _shutdown_requested.is_set():
+        print("Shutdown requested — exiting before enrichment.")
+        return None
+
     # Enrich unique repositories
     print("Enriching unique repositories...")
     enriched_repositories = wrapped_enrich_repository.map(
@@ -907,6 +936,10 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
             enriched_repositories=[er.result() for er in enriched_repositories],
         )
     )
+
+    if _shutdown_requested.is_set():
+        print("Shutdown requested — exiting before matching.")
+        return None
 
     # Prep for matching
     print("Preparing for article-repository matching...")
@@ -942,12 +975,9 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
         prediction_results=prediction_results,
     )
 
-    # Store / extend results
-    print("Storing prediction results...")
-    _store_prediction_results(
-        prediction_results=prediction_results,
-        iteration=iteration,
-    )
+    if _shutdown_requested.is_set():
+        print("Shutdown requested — exiting before extended processing.")
+        return None
 
     # Process all articles
     # Submit both article and repo processing in parallel
@@ -999,6 +1029,18 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
                 iteration=iteration,
             )
         )
+
+    # Check for graceful shutdown before entering the critical storage section
+    if _shutdown_requested.is_set():
+        print("Shutdown requested — skipping storage for this batch.")
+        return None
+    
+    # Store / extend results
+    print("Storing prediction results...")
+    _store_prediction_results(
+        prediction_results=prediction_results,
+        iteration=iteration,
+    )
 
     # Store everything
     print("Storing full details of article-repository pairs...")
@@ -1110,6 +1152,9 @@ def snowball_sampling_discovery(
     and their repositories, uses our article-repository matching model
     to predict new pairs, and then conducts standard processing.
     """
+    # Install graceful shutdown handler
+    signal.signal(signal.SIGINT, _handle_sigint)
+
     # Load environment variables
     load_dotenv()
 
@@ -1218,7 +1263,7 @@ def snowball_sampling_discovery(
         author_developer_link_batch = hydrated_author_developer_links[
             author_developer_index : author_developer_index + author_developer_links_batch_size
         ]
-        batch_link_counts: dict[int, int] = {
+        batch_link_counts: dict[int, int] | None = {
             link.author_developer_link_id: 0 for link in author_developer_link_batch
         }
 
@@ -1253,12 +1298,17 @@ def snowball_sampling_discovery(
             print(traceback.format_exc())
 
         finally:
-            _update_processed_links_cache(
-                iteration=iteration,
-                link_counts=batch_link_counts,
-            )
+            if batch_link_counts is not None:
+                _update_processed_links_cache(
+                    iteration=iteration,
+                    link_counts=batch_link_counts,
+                )
 
         time.sleep(1)
+
+        if _shutdown_requested.is_set():
+            print("Shutdown requested — exiting after completing current batch.")
+            break
 
 
 ###############################################################################
