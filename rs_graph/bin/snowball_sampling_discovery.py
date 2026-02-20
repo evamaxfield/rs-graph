@@ -1034,7 +1034,7 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
     if _shutdown_requested.is_set():
         print("Shutdown requested — skipping storage for this batch.")
         return None
-    
+
     # Store / extend results
     print("Storing prediction results...")
     _store_prediction_results(
