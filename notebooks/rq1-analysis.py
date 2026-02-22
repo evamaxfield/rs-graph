@@ -290,10 +290,20 @@ def _build_coauthorship_graph(
     return graph, node_to_idx, idx_to_node
 
 
-def _get_author_developer_pairs_connected_to_pairs(pair_links: pl.DataFrame) -> pl.DataFrame:
+def _get_author_developer_pairs_connected_to_pairs(
+    pair_links: pl.DataFrame,
+    confidence_threshold: float | None = None,
+) -> pl.DataFrame:
     """Return matched author-developer pairs connected to provided doc-repo pairs.
 
-    Expects `pair_links` to include `document_id`, `repository_id`, and optionally `iteration`.
+    Parameters
+    ----------
+    pair_links
+        Must include ``document_id``, ``repository_id``, and optionally ``iteration``.
+    confidence_threshold
+        When set, keep only researcher-developer links whose
+        ``predictive_model_confidence`` is null or >= this value.
+        When ``None`` (default), all links are returned.
     """
     required_cols = {"document_id", "repository_id"}
     if not required_cols.issubset(pair_links.columns):
@@ -313,19 +323,29 @@ def _get_author_developer_pairs_connected_to_pairs(pair_links: pl.DataFrame) -> 
         .select("repository_id", "developer_account_id")
         .unique()
     )
-    researcher_dev_links = (
-        _read_table("researcher_developer_account_link")
-        .filter(
-            pl.col("predictive_model_confidence").is_null()
-            | (pl.col("predictive_model_confidence") >= 0.97)
+    researcher_dev_links_raw = _read_table("researcher_developer_account_link")
+    if confidence_threshold is not None:
+        researcher_dev_links = (
+            researcher_dev_links_raw.filter(
+                pl.col("predictive_model_confidence").is_null()
+                | (pl.col("predictive_model_confidence") >= confidence_threshold)
+            )
+            .select("researcher_id", "developer_account_id")
+            .unique()
         )
-        .select("researcher_id", "developer_account_id")
-        .unique()
-    )
-    log.debug(
-        "Researcher-developer links after confidence filter (>= 0.97): %d",
-        researcher_dev_links.height,
-    )
+        log.debug(
+            "Researcher-developer links after confidence filter (>= %s): %d",
+            confidence_threshold,
+            researcher_dev_links.height,
+        )
+    else:
+        researcher_dev_links = researcher_dev_links_raw.select(
+            "researcher_id", "developer_account_id"
+        ).unique()
+        log.debug(
+            "Researcher-developer links (no confidence filter): %d",
+            researcher_dev_links.height,
+        )
 
     connected_pairs = (
         pair_links.join(doc_contribs, on="document_id", how="inner")
@@ -351,8 +371,21 @@ def _read_table(table: str) -> pl.DataFrame:
     )
 
 
-def load_pairs(sample_size: int | None = None) -> pl.DataFrame:
-    """Load document-repository pairs with all relevant metadata."""
+def load_pairs(
+    sample_size: int | None = None,
+    doc_repo_confidence_threshold: float | None = None,
+) -> pl.DataFrame:
+    """Load document-repository pairs with all relevant metadata.
+
+    Parameters
+    ----------
+    sample_size
+        Optional number of pairs to sample for faster analysis.
+    doc_repo_confidence_threshold
+        When set, keep only pairs whose ``predictive_model_confidence`` is
+        null (seed/shared) or >= this value.  When ``None`` (default), all
+        pairs are returned regardless of confidence.
+    """
     log.debug("Reading database tables...")
 
     dataset_sources = _read_table("dataset_source")
@@ -362,12 +395,19 @@ def load_pairs(sample_size: int | None = None) -> pl.DataFrame:
     doc_topics = _read_table("document_topic")
     topics = _read_table("topic")
 
-    # Drop predicted doc-repo pairs below confidence threshold
-    pairs = pairs.filter(
-        pl.col("predictive_model_confidence").is_null()
-        | (pl.col("predictive_model_confidence") >= 0.995)
-    )
-    log.info("Pairs after confidence filter (>= 0.995): %d", pairs.height)
+    # Optionally drop predicted doc-repo pairs below confidence threshold
+    if doc_repo_confidence_threshold is not None:
+        pairs = pairs.filter(
+            pl.col("predictive_model_confidence").is_null()
+            | (pl.col("predictive_model_confidence") >= doc_repo_confidence_threshold)
+        )
+        log.info(
+            "Pairs after confidence filter (>= %s): %d",
+            doc_repo_confidence_threshold,
+            pairs.height,
+        )
+    else:
+        log.info("Pairs (no confidence filter): %d", pairs.height)
 
     # Keep one canonical pair per document and repository for RQ1 analyses.
     pairs = pairs.unique(
@@ -824,7 +864,12 @@ def plot_pairs_over_time_by_field(
 
 
 def plot_iteration_expansion(results_dir: Path) -> None:
-    """Plot growth by mining iteration for pairs and author-developer pairs."""
+    """Plot growth by mining iteration for pairs and author-developer pairs.
+
+    Tracks both **all** pairs and **high-confidence** subsets:
+    - Article-repo high-conf: ``predictive_model_confidence`` is null or >= 0.995
+    - Author-developer high-conf: ``predictive_model_confidence`` is null or >= 0.97
+    """
     links = _read_table("document_repository_link")
     dataset_sources = _read_table("dataset_source")
 
@@ -837,13 +882,24 @@ def plot_iteration_expansion(results_dir: Path) -> None:
         how="left",
     )
 
+    _is_high_conf_doc_repo = pl.col("predictive_model_confidence").is_null() | (
+        pl.col("predictive_model_confidence") >= 0.995
+    )
+
     shared_links = links.filter(pl.col("dataset_source_name") != "snowball-sampling-discovery")
     mined_links = links.filter(
         pl.col("dataset_source_name") == "snowball-sampling-discovery",
         pl.col("iteration").is_not_null(),
     )
 
+    # --- Article-repository pair counts (all + high-conf) -------------------
     shared_pair_count = shared_links.select("document_id", "repository_id").unique().height
+    shared_pair_count_high_conf = (
+        shared_links.filter(_is_high_conf_doc_repo)
+        .select("document_id", "repository_id")
+        .unique()
+        .height
+    )
 
     mined_pairs_by_iteration = (
         mined_links.select("document_id", "repository_id", "iteration")
@@ -852,18 +908,40 @@ def plot_iteration_expansion(results_dir: Path) -> None:
         .agg(pl.len().alias("new_article_repository_pairs"))
         .sort("iteration")
     )
+    mined_pairs_high_conf_by_iteration = (
+        mined_links.filter(_is_high_conf_doc_repo)
+        .select("document_id", "repository_id", "iteration")
+        .unique()
+        .group_by("iteration")
+        .agg(pl.len().alias("new_article_repository_pairs_high_conf"))
+        .sort("iteration")
+    )
 
+    # --- Author-developer pair counts (all + high-conf) ---------------------
+    shared_unique_pairs = shared_links.select("document_id", "repository_id").unique()
     shared_author_dev_count = (
+        _get_author_developer_pairs_connected_to_pairs(shared_unique_pairs)
+        .select("researcher_id", "developer_account_id")
+        .unique()
+        .height
+    )
+    shared_author_dev_count_high_conf = (
         _get_author_developer_pairs_connected_to_pairs(
-            shared_links.select("document_id", "repository_id").unique()
+            shared_unique_pairs,
+            confidence_threshold=0.97,
         )
         .select("researcher_id", "developer_account_id")
         .unique()
         .height
     )
 
-    mined_author_dev_links = _get_author_developer_pairs_connected_to_pairs(
-        mined_links.select("document_id", "repository_id", "iteration").unique()
+    mined_unique_pairs = mined_links.select(
+        "document_id", "repository_id", "iteration"
+    ).unique()
+    mined_author_dev_links = _get_author_developer_pairs_connected_to_pairs(mined_unique_pairs)
+    mined_author_dev_links_high_conf = _get_author_developer_pairs_connected_to_pairs(
+        mined_unique_pairs,
+        confidence_threshold=0.97,
     )
 
     new_author_dev_by_iteration = (
@@ -873,23 +951,38 @@ def plot_iteration_expansion(results_dir: Path) -> None:
         .agg(pl.len().alias("new_author_developer_pairs"))
         .sort("iteration")
     )
+    new_author_dev_high_conf_by_iteration = (
+        mined_author_dev_links_high_conf.group_by("researcher_id", "developer_account_id")
+        .agg(pl.col("iteration").min().alias("iteration"))
+        .group_by("iteration")
+        .agg(pl.len().alias("new_author_developer_pairs_high_conf"))
+        .sort("iteration")
+    )
 
+    # --- Early return when no mined data ------------------------------------
     if mined_pairs_by_iteration.height == 0 and new_author_dev_by_iteration.height == 0:
         log.warning("No mined iterations found. Skipping iteration expansion plots.")
         summary = {
             "shared_seed_article_repository_pairs": int(shared_pair_count),
+            "shared_seed_article_repository_pairs_high_conf": int(shared_pair_count_high_conf),
             "shared_seed_author_developer_pairs": int(shared_author_dev_count),
+            "shared_seed_author_developer_pairs_high_conf": int(
+                shared_author_dev_count_high_conf
+            ),
             "iterations_found": 0,
         }
         with open(results_dir / "iteration_expansion_summary.json", "w") as f:
             json.dump(summary, f, indent=2)
         return
 
+    # --- Build growth DataFrame ---------------------------------------------
     iterations = (
         pl.concat(
             [
                 mined_pairs_by_iteration.select("iteration"),
+                mined_pairs_high_conf_by_iteration.select("iteration"),
                 new_author_dev_by_iteration.select("iteration"),
+                new_author_dev_high_conf_by_iteration.select("iteration"),
             ]
         )
         .unique()
@@ -898,18 +991,30 @@ def plot_iteration_expansion(results_dir: Path) -> None:
 
     growth_df = (
         iterations.join(mined_pairs_by_iteration, on="iteration", how="left")
+        .join(mined_pairs_high_conf_by_iteration, on="iteration", how="left")
         .join(new_author_dev_by_iteration, on="iteration", how="left")
+        .join(new_author_dev_high_conf_by_iteration, on="iteration", how="left")
         .with_columns(
             pl.col("new_article_repository_pairs").fill_null(0).cast(pl.Int64),
+            pl.col("new_article_repository_pairs_high_conf").fill_null(0).cast(pl.Int64),
             pl.col("new_author_developer_pairs").fill_null(0).cast(pl.Int64),
+            pl.col("new_author_developer_pairs_high_conf").fill_null(0).cast(pl.Int64),
         )
         .with_columns(
             (
                 pl.col("new_article_repository_pairs").cum_sum() + pl.lit(shared_pair_count)
             ).alias("cumulative_article_repository_pairs"),
             (
+                pl.col("new_article_repository_pairs_high_conf").cum_sum()
+                + pl.lit(shared_pair_count_high_conf)
+            ).alias("cumulative_article_repository_pairs_high_conf"),
+            (
                 pl.col("new_author_developer_pairs").cum_sum() + pl.lit(shared_author_dev_count)
             ).alias("cumulative_author_developer_pairs"),
+            (
+                pl.col("new_author_developer_pairs_high_conf").cum_sum()
+                + pl.lit(shared_author_dev_count_high_conf)
+            ).alias("cumulative_author_developer_pairs_high_conf"),
         )
         .sort("iteration")
     )
@@ -918,9 +1023,13 @@ def plot_iteration_expansion(results_dir: Path) -> None:
         {
             "iteration": [0],
             "new_article_repository_pairs": [0],
+            "new_article_repository_pairs_high_conf": [0],
             "new_author_developer_pairs": [0],
+            "new_author_developer_pairs_high_conf": [0],
             "cumulative_article_repository_pairs": [shared_pair_count],
+            "cumulative_article_repository_pairs_high_conf": [shared_pair_count_high_conf],
             "cumulative_author_developer_pairs": [shared_author_dev_count],
+            "cumulative_author_developer_pairs_high_conf": [shared_author_dev_count_high_conf],
         }
     )
     growth_with_seed_df = pl.concat([seed_row, growth_df], how="vertical").sort("iteration")
@@ -930,13 +1039,21 @@ def plot_iteration_expansion(results_dir: Path) -> None:
 
     summary = {
         "shared_seed_article_repository_pairs": int(shared_pair_count),
+        "shared_seed_article_repository_pairs_high_conf": int(shared_pair_count_high_conf),
         "shared_seed_author_developer_pairs": int(shared_author_dev_count),
+        "shared_seed_author_developer_pairs_high_conf": int(shared_author_dev_count_high_conf),
         "iterations_found": int(growth_df.height),
         "final_cumulative_article_repository_pairs": int(
             growth_with_seed_df["cumulative_article_repository_pairs"].max()
         ),
+        "final_cumulative_article_repository_pairs_high_conf": int(
+            growth_with_seed_df["cumulative_article_repository_pairs_high_conf"].max()
+        ),
         "final_cumulative_author_developer_pairs": int(
             growth_with_seed_df["cumulative_author_developer_pairs"].max()
+        ),
+        "final_cumulative_author_developer_pairs_high_conf": int(
+            growth_with_seed_df["cumulative_author_developer_pairs_high_conf"].max()
         ),
     }
     with open(results_dir / "iteration_expansion_summary.json", "w") as f:
@@ -946,14 +1063,27 @@ def plot_iteration_expansion(results_dir: Path) -> None:
     growth_df = growth_df.with_columns(pl.col("iteration").cast(pl.Int32))
     growth_with_seed_df = growth_with_seed_df.with_columns(pl.col("iteration").cast(pl.Int32))
 
+    # --- Plotting -----------------------------------------------------------
     fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(16, 6), constrained_layout=True)
 
+    # Left panel: article-repository pairs
     sns.barplot(
         data=growth_df,
         x="iteration",
         y="new_article_repository_pairs",
         ax=axes[0],
         color=PALETTE[0],
+        alpha=0.4,
+        label="All (new)",
+    )
+    sns.barplot(
+        data=growth_df,
+        x="iteration",
+        y="new_article_repository_pairs_high_conf",
+        ax=axes[0],
+        color=PALETTE[0],
+        alpha=1.0,
+        label="High-conf (new)",
     )
     ax0_twin = axes[0].twinx()
     sns.lineplot(
@@ -963,22 +1093,50 @@ def plot_iteration_expansion(results_dir: Path) -> None:
         marker="o",
         ax=ax0_twin,
         color=PALETTE[1],
+        linestyle="-",
+        label="All (cumulative)",
+    )
+    sns.lineplot(
+        data=growth_with_seed_df,
+        x="iteration",
+        y="cumulative_article_repository_pairs_high_conf",
+        marker="s",
+        ax=ax0_twin,
+        color=PALETTE[1],
+        linestyle="--",
+        label="High-conf (cumulative)",
     )
     axes[0].set_xlabel("Mining Iteration")
     axes[0].set_ylabel("New Article-Repository Pairs")
     ax0_twin.set_ylabel("Cumulative Article-Repository Pairs")
     axes[0].set_title(
         "Article-Repository Pair Expansion\n"
-        "(Bars = new pairs per iteration; line = cumulative total starting from seed pairs)",
+        "(Bars = new pairs; lines = cumulative; high-conf = null or >= 0.995)",
         fontsize=12,
     )
+    h0a, l0a = axes[0].get_legend_handles_labels()
+    h0b, l0b = ax0_twin.get_legend_handles_labels()
+    axes[0].legend(h0a + h0b, l0a + l0b, loc="upper left", fontsize=8)
+    ax0_twin.get_legend().remove()
 
+    # Right panel: author-developer pairs
     sns.barplot(
         data=growth_df,
         x="iteration",
         y="new_author_developer_pairs",
         ax=axes[1],
         color=PALETTE[2],
+        alpha=0.4,
+        label="All (new)",
+    )
+    sns.barplot(
+        data=growth_df,
+        x="iteration",
+        y="new_author_developer_pairs_high_conf",
+        ax=axes[1],
+        color=PALETTE[2],
+        alpha=1.0,
+        label="High-conf (new)",
     )
     ax1_twin = axes[1].twinx()
     sns.lineplot(
@@ -988,15 +1146,31 @@ def plot_iteration_expansion(results_dir: Path) -> None:
         marker="o",
         ax=ax1_twin,
         color=PALETTE[3],
+        linestyle="-",
+        label="All (cumulative)",
+    )
+    sns.lineplot(
+        data=growth_with_seed_df,
+        x="iteration",
+        y="cumulative_author_developer_pairs_high_conf",
+        marker="s",
+        ax=ax1_twin,
+        color=PALETTE[3],
+        linestyle="--",
+        label="High-conf (cumulative)",
     )
     axes[1].set_xlabel("Mining Iteration")
     axes[1].set_ylabel("New Author-Developer Pairs")
     ax1_twin.set_ylabel("Cumulative Author-Developer Pairs")
     axes[1].set_title(
         "Author-Developer Pair Expansion\n"
-        "(Bars = new matched pairs per iteration; line = cumulative total)",
+        "(Bars = new pairs; lines = cumulative; high-conf = null or >= 0.97)",
         fontsize=12,
     )
+    h1a, l1a = axes[1].get_legend_handles_labels()
+    h1b, l1b = ax1_twin.get_legend_handles_labels()
+    axes[1].legend(h1a + h1b, l1a + l1b, loc="upper left", fontsize=8)
+    ax1_twin.get_legend().remove()
 
     fig.savefig(results_dir / "iteration_expansion.png", bbox_inches="tight", dpi=300)
     plt.close(fig)
@@ -1854,7 +2028,8 @@ def analyze_network_role_by_code_contribution_status(  # noqa: C901
 
     code_contrib_researcher_ids = set(
         _get_author_developer_pairs_connected_to_pairs(
-            pairs.select("document_id", "repository_id").unique()
+            pairs.select("document_id", "repository_id").unique(),
+            confidence_threshold=0.97,
         )["researcher_id"]
         .unique()
         .to_list()
@@ -2129,6 +2304,96 @@ def analyze_network_role_by_code_contribution_status(  # noqa: C901
 ###############################################################################
 
 
+def _run_pair_analyses(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+    top_n: int,
+    n_shortest_path_iterations: int,
+    label: str,
+) -> None:
+    """Run all pair-based analyses, writing results into *results_dir*.
+
+    Parameters
+    ----------
+    pairs
+        Document-repository pair DataFrame (output of :func:`load_pairs`).
+    results_dir
+        Directory to write step subdirectories and result files into.
+    top_n
+        Number of top categories for field/language breakdowns.
+    n_shortest_path_iterations
+        Random shortest-path iterations for network analysis.
+    label
+        Human-readable label for log messages (e.g. ``"all"`` or ``"high-conf"``).
+    """
+    total_steps = 12
+    step = 0
+
+    def _step_dir(step_num: int) -> Path:
+        d = results_dir / f"step-{step_num}"
+        d.mkdir(exist_ok=True)
+        return d
+
+    step += 1
+    log.info("[%s] Step %d/%d: Descriptive statistics...", label, step, total_steps)
+    print_descriptive_stats(pairs, _step_dir(step))
+
+    step += 1
+    log.info("[%s] Step %d/%d: Field countplot...", label, step, total_steps)
+    plot_field_countplot(pairs, _step_dir(step), top_n)
+
+    step += 1
+    log.info("[%s] Step %d/%d: Features by field boxplots...", label, step, total_steps)
+    plot_features_by_field(pairs, _step_dir(step), top_n)
+
+    step += 1
+    log.info("[%s] Step %d/%d: Pairs over time...", label, step, total_steps)
+    sd = _step_dir(step)
+    plot_pairs_over_time(pairs, sd)
+    plot_pairs_over_time_by_field(pairs, sd, top_n)
+
+    step += 1
+    log.info("[%s] Step %d/%d: Field and language counts...", label, step, total_steps)
+    plot_field_and_language_counts(pairs, _step_dir(step), top_n)
+
+    step += 1
+    log.info("[%s] Step %d/%d: Repository metrics over time...", label, step, total_steps)
+    plot_repo_metrics_over_time(pairs, _step_dir(step))
+
+    step += 1
+    log.info("[%s] Step %d/%d: Geographic diversity depth...", label, step, total_steps)
+    plot_geographic_diversity_depth(pairs, _step_dir(step), top_n)
+
+    step += 1
+    log.info("[%s] Step %d/%d: FWCI vs FWSI analysis...", label, step, total_steps)
+    plot_fwci_vs_fwsi(pairs, _step_dir(step), top_n)
+
+    step += 1
+    log.info("[%s] Step %d/%d: Date relationships...", label, step, total_steps)
+    plot_date_relationships(pairs, _step_dir(step))
+
+    step += 1
+    log.info("[%s] Step %d/%d: Lifecycle and survival analyses...", label, step, total_steps)
+    plot_lifecycle_and_survival(pairs, _step_dir(step))
+
+    step += 1
+    log.info("[%s] Step %d/%d: Network coverage...", label, step, total_steps)
+    analyze_network_coverage(pairs, _step_dir(step), n_shortest_path_iterations)
+
+    step += 1
+    log.info(
+        "[%s] Step %d/%d: Network role by code-contribution status...",
+        label,
+        step,
+        total_steps,
+    )
+    analyze_network_role_by_code_contribution_status(
+        pairs,
+        _step_dir(step),
+        n_shortest_path_iterations,
+    )
+
+
 @app.command()
 def analyze(
     top_n: int = typer.Option(9, help="Number of top categories (rest grouped as 'Other')."),
@@ -2140,7 +2405,14 @@ def analyze(
     ),
     debug: bool = typer.Option(False, help="Enable debug logging."),
 ) -> None:
-    """Run the full RQ1 analysis pipeline."""
+    """Run the full RQ1 analysis pipeline.
+
+    Each pair-based analysis is run twice — once on **all** pairs and once on
+    a **high-confidence** subset (doc-repo confidence null or >= 0.995).
+    Results are written to ``all/`` and ``high-conf/`` subdirectories.
+    The iteration-expansion analysis (which reads directly from the DB)
+    tracks both subsets in a single output.
+    """
     setup_logger(debug=debug)
 
     results_dir = Path(__file__).parent / "rq1-results"
@@ -2148,75 +2420,33 @@ def analyze(
 
     sns.set_palette(PALETTE)
 
-    total_steps = 14
-    step = 0
-
-    def _step_dir(step_num: int) -> Path:
-        d = results_dir / f"step-{step_num}"
-        d.mkdir(exist_ok=True)
-        return d
-
-    step += 1
-    log.info("Step %d/%d: Loading pairs...", step, total_steps)
-    pairs = load_pairs(sample_size=sample_size)
-
-    step += 1
-    log.info("Step %d/%d: Descriptive statistics...", step, total_steps)
-    print_descriptive_stats(pairs, _step_dir(step))
-
-    step += 1
-    log.info("Step %d/%d: Field countplot...", step, total_steps)
-    plot_field_countplot(pairs, _step_dir(step), top_n)
-
-    step += 1
-    log.info("Step %d/%d: Features by field boxplots...", step, total_steps)
-    plot_features_by_field(pairs, _step_dir(step), top_n)
-
-    step += 1
-    log.info("Step %d/%d: Pairs over time...", step, total_steps)
-    sd = _step_dir(step)
-    plot_pairs_over_time(pairs, sd)
-    plot_pairs_over_time_by_field(pairs, sd, top_n)
-
-    step += 1
-    log.info("Step %d/%d: Iteration expansion...", step, total_steps)
-    plot_iteration_expansion(_step_dir(step))
-
-    step += 1
-    log.info("Step %d/%d: Field and language counts...", step, total_steps)
-    plot_field_and_language_counts(pairs, _step_dir(step), top_n)
-
-    step += 1
-    log.info("Step %d/%d: Repository metrics over time...", step, total_steps)
-    plot_repo_metrics_over_time(pairs, _step_dir(step))
-
-    step += 1
-    log.info("Step %d/%d: Geographic diversity depth...", step, total_steps)
-    plot_geographic_diversity_depth(pairs, _step_dir(step), top_n)
-
-    step += 1
-    log.info("Step %d/%d: FWCI vs FWSI analysis...", step, total_steps)
-    plot_fwci_vs_fwsi(pairs, _step_dir(step), top_n)
-
-    step += 1
-    log.info("Step %d/%d: Date relationships...", step, total_steps)
-    plot_date_relationships(pairs, _step_dir(step))
-
-    step += 1
-    log.info("Step %d/%d: Lifecycle and survival analyses...", step, total_steps)
-    plot_lifecycle_and_survival(pairs, _step_dir(step))
-
-    step += 1
-    log.info("Step %d/%d: Network coverage...", step, total_steps)
-    analyze_network_coverage(pairs, _step_dir(step), n_shortest_path_iterations)
-
-    step += 1
-    log.info("Step %d/%d: Network role by code-contribution status...", step, total_steps)
-    analyze_network_role_by_code_contribution_status(
-        pairs,
-        _step_dir(step),
-        n_shortest_path_iterations,
+    # -- Step 1: Load pairs (all + high-conf) --------------------------------
+    log.info("Loading pairs (all)...")
+    pairs_all = load_pairs(sample_size=sample_size)
+    log.info("Loading pairs (high-conf, >= 0.995)...")
+    pairs_high_conf = load_pairs(
+        sample_size=sample_size,
+        doc_repo_confidence_threshold=0.995,
     )
+
+    # -- Step 2: Iteration expansion (combined output) -----------------------
+    log.info("Iteration expansion (tracks all + high-conf internally)...")
+    iter_dir = results_dir / "iteration-expansion"
+    iter_dir.mkdir(exist_ok=True)
+    plot_iteration_expansion(iter_dir)
+
+    # -- Steps 3+: Run all pair-based analyses for each subset ---------------
+    for label, pairs in [("all", pairs_all), ("high-conf", pairs_high_conf)]:
+        subset_dir = results_dir / label
+        subset_dir.mkdir(exist_ok=True)
+        log.info("Running pair-based analyses for subset: %s", label)
+        _run_pair_analyses(
+            pairs,
+            subset_dir,
+            top_n,
+            n_shortest_path_iterations,
+            label,
+        )
 
     log.info("Analysis complete.")
 
