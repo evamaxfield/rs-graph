@@ -816,3 +816,93 @@ class ResearcherDeveloperAccountLink(StrippedSQLModel, table=True):
     updated_datetime: datetime | None = Field(
         default=None, sa_column=Column(DateTime(), onupdate=func.now())
     )
+
+
+class RepositoryImport(StrippedSQLModel, table=True):
+    """Stores software libraries imported in repository source code (extracted via eil)."""
+
+    __tablename__ = "repository_import"
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+    repository_id: int | None = Field(
+        foreign_key="repository.id",
+        index=True,
+        nullable=False,
+        ondelete="CASCADE",
+    )
+    software_name: str = Field(index=True)
+
+    __table_args__ = (UniqueConstraint("repository_id", "software_name"),)
+
+    # Data
+    software_name_normalized: str = Field(index=True)
+    file_path: str | None = Field(default=None, nullable=True)
+
+    # Updates
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
+
+
+class RepositoryDependency(StrippedSQLModel, table=True):
+    """Stores dependencies declared in repository manifests (extracted via git-pkgs)."""
+
+    __tablename__ = "repository_dependency"
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+    repository_id: int | None = Field(
+        foreign_key="repository.id",
+        index=True,
+        nullable=False,
+        ondelete="CASCADE",
+    )
+    software_name: str = Field(index=True)
+
+    __table_args__ = (UniqueConstraint("repository_id", "software_name"),)
+
+    # Data
+    software_name_normalized: str = Field(index=True)
+    version_spec: str | None = Field(default=None, nullable=True)
+
+    # Updates
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
+
+
+class DocumentSoftwareMention(StrippedSQLModel, table=True):
+    """Stores software mentions found in an academic paper (from SoftCite dataset)."""
+
+    __tablename__ = "document_software_mention"
+
+    # Primary Keys / Uniqueness
+    id: int | None = Field(default=None, primary_key=True)
+    document_id: int | None = Field(
+        foreign_key="document.id",
+        index=True,
+        nullable=False,
+        ondelete="CASCADE",
+    )
+    software_name: str = Field(index=True)
+    mention_context: str | None = Field(default=None, index=True, nullable=True)
+
+    __table_args__ = (UniqueConstraint("document_id", "software_name", "mention_context"),)
+
+    # Data
+    software_name_normalized: str = Field(index=True)
+
+    # Updates
+    created_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), server_default=func.now())
+    )
+    updated_datetime: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(), onupdate=func.now())
+    )
