@@ -548,7 +548,7 @@ def check_pair_exists(
 
     # Check we have already processed to repo parts
     assert pair.repo_parts is not None
-    normalized_doi = normalize_doi(pair.paper_doi).lower().strip()
+    normalized_doi = normalize_doi(pair.paper_doi)
 
     # Create a session
     with Session(engine) as session:
@@ -807,7 +807,7 @@ def check_article_in_db(
     engine = get_engine(use_prod=use_prod)
 
     # Normalize DOI variants (e.g., https://doi.org/...) and lowercase
-    article_doi = normalize_doi(article_doi).lower().strip()
+    article_doi = normalize_doi(article_doi)
 
     # Create a session
     document_found = False

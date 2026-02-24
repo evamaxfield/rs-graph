@@ -20,6 +20,11 @@ from scipy.optimize import linear_sum_assignment
 from tqdm import tqdm
 
 from rs_graph.db import constants as db_constants
+from rs_graph.utils.identifier_normalization import (
+    normalize_doi_col,
+    normalize_name,
+    prep_name_for_printing,
+)
 
 THIS_DIR = Path(__file__).parent.resolve()
 TEMP_REPO_PATH = THIS_DIR / "temp-repo"
@@ -49,26 +54,6 @@ def _read_table(table: str) -> pl.DataFrame:
     return pl.read_database_uri(
         f"SELECT * FROM {table}",
         f"sqlite:///{db_constants.V2_DATABASE_PATHS.dev}",
-    )
-
-
-def _normalize_doi_expr(col_name: str) -> pl.Expr:
-    """
-    Create a Polars expression to normalize DOIs.
-
-    Normalization:
-    - Strip whitespace
-    - Lowercase
-    - Remove URL prefixes (https://doi.org/, http://dx.doi.org/, etc.)
-    - Remove 'doi:' prefix
-    """
-    return (
-        pl.col(col_name)
-        .str.strip_chars()
-        .str.to_lowercase()
-        .str.replace(r"^https?://(dx\.)?doi\.org/", "")
-        .str.replace(r"^doi:", "")
-        .str.strip_chars()
     )
 
 
@@ -158,7 +143,7 @@ def load_pairs() -> pl.DataFrame:
                 pl.col("fwci").alias("document_fwci"),
                 pl.col("is_open_access").alias("document_is_open_access"),
                 pl.col("publication_date").alias("document_publication_date"),
-            ).with_columns(_normalize_doi_expr("document_doi").alias("document_doi")),
+            ).with_columns(normalize_doi_col("document_doi").alias("document_doi")),
             on="document_id",
             how="left",
         )
@@ -223,35 +208,6 @@ def load_pairs() -> pl.DataFrame:
         (pl.col("document_repository_link_confidence") >= 0.995)
         | (pl.col("document_repository_link_confidence").is_null())
     )
-
-
-def normalize_name(name: str) -> str:
-    """
-    Normalize a software name for comparison.
-
-    - Converts to lowercase
-    - Removes hyphens, underscores, and spaces
-    - Preserves alphanumeric characters and dots
-    - Removes newlines and other whitespace
-    """
-    return (
-        name.lower()
-        .replace("-", "")
-        .replace("_", "")
-        .replace(" ", "")
-        .replace("\n", "")
-        .replace("\r", "")
-        .strip()
-    )
-
-
-def prep_name_for_printing(name: str) -> str:
-    """
-    Normalize a name for printing.
-
-    - Removes newlines, carriage returns, and extra spaces
-    """
-    return name.replace("\n", "").replace("\r", "").strip()
 
 
 @dataclass
@@ -670,9 +626,7 @@ def get_imported_libraries(
     softcite_papers_df = pl.read_parquet(softcite_papers_path)
 
     # Normalize softcite DOIs
-    softcite_papers_df = softcite_papers_df.with_columns(
-        _normalize_doi_expr("doi").alias("doi")
-    )
+    softcite_papers_df = softcite_papers_df.with_columns(normalize_doi_col("doi").alias("doi"))
     softcite_dois = softcite_papers_df.select("doi").drop_nulls().unique()["doi"].to_list()
     print(f"Found {len(softcite_dois)} unique DOIs in softcite dataset")
 
@@ -817,9 +771,7 @@ def compare_imported_vs_mentioned(
     softcite_papers_path = softcite_dir / "papers.parquet"
     softcite_mentions_path = softcite_dir / "mentions.pdf.parquet"
     softcite_papers_df = pl.read_parquet(softcite_papers_path)
-    softcite_papers_df = softcite_papers_df.with_columns(
-        _normalize_doi_expr("doi").alias("doi")
-    )
+    softcite_papers_df = softcite_papers_df.with_columns(normalize_doi_col("doi").alias("doi"))
     softcite_mentions_df = pl.scan_parquet(softcite_mentions_path)
     softcite_mentions_df = (
         softcite_mentions_df.select(
