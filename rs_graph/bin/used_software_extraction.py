@@ -7,6 +7,7 @@ import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import polars as pl
 import typer
 from eil import Extractor
 from git import GitCommandError, Repo
@@ -16,6 +17,7 @@ from prefect import flow
 from sqlmodel import Session, col, select
 from tqdm import tqdm
 
+from rs_graph import types
 from rs_graph.bin.pipeline_utils import (
     _get_small_cpu_api_cluster,
     _wrap_func_with_coiled_prefect_task,
@@ -29,6 +31,13 @@ from rs_graph.utils.identifier_normalization import normalize_name
 app = typer.Typer(rich_markup_mode=None, pretty_exceptions_enable=False)
 
 DEFAULT_LANGUAGE_FILTER = ["Python", "Jupyter Notebook", "R"]
+# TODO: git-pkgs not being found. We might want to add more logging to this
+# and also alias the full path rather than relative path
+GIT_PKGS_INSTALL_COMMAND = """
+    curl -L https://github.com/git-pkgs/git-pkgs/releases/latest/download/git-pkgs-linux-amd64 -o git-pkgs
+    chmod +x git-pkgs
+    alias git-pkgs="./git-pkgs"
+"""  # noqa: E501
 
 ###############################################################################
 
@@ -52,7 +61,6 @@ class RepoExtractionResult:
     name: str
     imports: list[ImportRecord] = field(default_factory=list)
     dependencies: list[DependencyRecord] = field(default_factory=list)
-    error: str | None = None
 
 
 ###############################################################################
@@ -103,10 +111,17 @@ class _TqdmProgress(RemoteProgress):
 ###############################################################################
 
 
+@dataclass
+class UnprocessedRepository:
+    repo_id: int
+    owner: str
+    name: str
+
+
 def _query_unprocessed_repositories(
     use_prod: bool,
     language_filter: list[str],
-) -> list[tuple[int, str, str]]:
+) -> list[UnprocessedRepository]:
     """Return (repo_id, owner, name) for repos not yet extracted, filtered by language."""
     engine = db_utils.get_engine(use_prod=use_prod)
     with Session(engine) as session:
@@ -133,7 +148,7 @@ def _query_unprocessed_repositories(
         all_repos = session.exec(stmt).all()
 
     return [
-        (r.id, r.owner, r.name)
+        UnprocessedRepository(repo_id=r.id, owner=r.owner, name=r.name)
         for r in all_repos
         if r.id is not None and r.id not in processed_ids
     ]
@@ -142,7 +157,7 @@ def _query_unprocessed_repositories(
 ###############################################################################
 
 
-def _clone_repo(repo_path: Path, repo_full_name: str) -> str | None:
+def _clone_repo(repo_path: Path, repo_full_name: str) -> None | types.ErrorResult:
     """Clone a GitHub repo to repo_path. Returns an error string on failure, None on success."""
     try:
         with _TqdmProgress(desc=f"Cloning {repo_full_name}") as progress:
@@ -153,18 +168,32 @@ def _clone_repo(repo_path: Path, repo_full_name: str) -> str | None:
             )
         return None
     except GitCommandError as e:
-        return f"Clone failed: {e}"
+        return types.ErrorResult(
+            source="used-software-extraction",
+            step="clone_repo",
+            identifier=repo_full_name,
+            error=str(e),
+            traceback=traceback.format_exc(),
+        )
 
 
-def _convert_notebooks(repo_path: Path, repo_full_name: str) -> None:
+def _convert_notebooks(repo_path: Path, repo_full_name: str) -> types.ErrorResult | None:
     """Convert Jupyter notebooks to Python scripts in place."""
     try:
         convert_nb_to_src_in_dir(repo_path, recursive=True, progress_leave=False)
     except Exception as e:
-        print(f"Notebook conversion warning for {repo_full_name}: {e}")
+        return types.ErrorResult(
+            source="used-software-extraction",
+            step="convert_notebooks",
+            identifier=repo_full_name,
+            error=str(e),
+            traceback=traceback.format_exc(),
+        )
 
 
-def _get_imports(repo_path: Path, repo_full_name: str) -> list[ImportRecord]:
+def _get_imports(
+    repo_path: Path, repo_full_name: str
+) -> list[ImportRecord] | types.ErrorResult:
     """Extract third-party imports via eil."""
     try:
         extractor = Extractor()
@@ -191,19 +220,22 @@ def _get_imports(repo_path: Path, repo_full_name: str) -> list[ImportRecord]:
             for lib, paths in lib_to_files.items()
         ]
     except Exception as e:
-        print(f"Import extraction warning for {repo_full_name}: {e}")
-        return []
+        return types.ErrorResult(
+            source="used-software-extraction",
+            step="get_imports",
+            identifier=repo_full_name,
+            error=str(e),
+            traceback=traceback.format_exc(),
+        )
 
 
-def _get_dependencies(repo_path: Path, repo_full_name: str) -> list[DependencyRecord]:
+def _get_dependencies(
+    repo_path: Path, repo_full_name: str
+) -> list[DependencyRecord] | types.ErrorResult:
     """Extract declared dependencies via git-pkgs CLI."""
     try:
-        subprocess.run(
-            ["git-pkgs", "init", "-q"],
-            cwd=str(repo_path),
-            capture_output=True,
-            check=False,
-        )
+        # TODO: we want to also store the ecosystem (e.g., PyPI, CRAN, conda)
+        # the dep type, and manifest path
         dep_proc = subprocess.run(
             ["git-pkgs", "list", "--format", "json", "-q"],
             cwd=str(repo_path),
@@ -227,33 +259,45 @@ def _get_dependencies(repo_path: Path, repo_full_name: str) -> list[DependencyRe
                     )
                 )
             return dependencies
+        else:
+            raise RuntimeError(
+                f"git-pkgs failed with code {dep_proc.returncode}: {dep_proc.stderr}"
+            )
     except Exception as e:
-        print(f"Dependency extraction warning for {repo_full_name}: {e}")
-    return []
+        return types.ErrorResult(
+            source="used-software-extraction",
+            step="get_dependencies",
+            identifier=repo_full_name,
+            error=str(e),
+            traceback=traceback.format_exc(),
+        )
 
 
 def _extract_repo_imports_and_deps(
     repository_id: int,
     owner: str,
     name: str,
-) -> RepoExtractionResult:
+) -> RepoExtractionResult | types.ErrorResult:
     """Clone a repo and extract software imports (eil) and dependencies (git-pkgs)."""
     repo_full_name = f"{owner}/{name}"
     with tempfile.TemporaryDirectory() as tmp_dir:
         repo_path = Path(tmp_dir) / "repo"
         clone_error = _clone_repo(repo_path, repo_full_name)
         if clone_error:
-            return RepoExtractionResult(
-                repository_id=repository_id,
-                owner=owner,
-                name=name,
-                error=clone_error,
-            )
+            return clone_error
 
         # Convert, extract imports, and extract deps
-        _convert_notebooks(repo_path, repo_full_name)
+        convert_result = _convert_notebooks(repo_path, repo_full_name)
+        if isinstance(convert_result, types.ErrorResult):
+            return convert_result
         imports = _get_imports(repo_path, repo_full_name)
+        if isinstance(imports, types.ErrorResult):
+            return imports
         dependencies = _get_dependencies(repo_path, repo_full_name)
+        if isinstance(dependencies, types.ErrorResult):
+            return dependencies
+
+    # Made it through, we have results
     return RepoExtractionResult(
         repository_id=repository_id,
         owner=owner,
@@ -299,51 +343,101 @@ def _used_software_extraction_flow(
     language_filter: list[str],
     use_coiled: bool,
     coiled_region: str,
+    coiled_workers: int,
+    batch_size: int,
     limit: int | None,
+    errors_cache_file: str,
 ) -> None:
+    # Construct the actual full path of the errors cache file
+    errors_cache_path = Path(errors_cache_file).resolve()
+
+    # Print dataset and coiled status
+    print("-" * 80)
+    print("Pipeline Options:")
+    print(f"Use Prod Database: {use_prod}")
+    print(f"Language Filter: {language_filter}")
+    print(f"Use Coiled: {use_coiled}")
+    print(f"Coiled Region: {coiled_region}")
+    print(f"Coiled Workers: {coiled_workers}")
+    # print(f"Batch Size: {batch_size}")
+    print(f"Total Processing Limit: {limit}")
+    print(f"Errors Cache File: {errors_cache_path}")
+    print("-" * 80)
+
+    # Get list of repos to process
+    print("Retrieving list of repositories to process...")
     repos = _query_unprocessed_repositories(
         use_prod=use_prod,
         language_filter=language_filter,
     )
-    print(f"Found {len(repos)} repositories to process")
+    repos = repos[:limit] if limit is not None else repos
+    print(f"Retrieved {len(repos)} repositories to process")
 
+    # Handle no repos to process
     if not repos:
+        print("No repositories to process. Exiting.")
         return
 
-    if limit is not None:
-        repos = repos[:limit]
-        print(f"Limited to {limit} repositories")
-
+    # Construct the extract task mappable function
     extract_task = _wrap_func_with_coiled_prefect_task(
         _extract_repo_imports_and_deps,
+        coiled_func_name="extract_repo_imports_and_deps",
         coiled_kwargs=_get_small_cpu_api_cluster(
-            n_workers=10,
+            n_workers=coiled_workers,
             use_coiled=use_coiled,
             coiled_region=coiled_region,
+            host_setup_script=GIT_PKGS_INSTALL_COMMAND,
         ),
         timeout_seconds=600,
     )
 
-    errors = 0
-    for repo_id, owner, name in tqdm(repos, desc="Processing repositories"):
-        try:
-            future = extract_task.submit(
-                repository_id=repo_id,
-                owner=owner,
-                name=name,
-            )
-            result: RepoExtractionResult = future.result()
-            if result.error:
-                print(f"Extraction error for {owner}/{name}: {result.error}")
-                errors += 1
-                continue
-            _store_repo_result(result=result, use_prod=use_prod)
-        except Exception as e:
-            print(f"Unexpected error processing {owner}/{name}: {e}")
-            print(traceback.format_exc())
-            errors += 1
+    # Process in batches
+    batches = [repos[i : i + batch_size] for i in range(0, len(repos), batch_size)]
+    for batch in tqdm(batches, desc="Processing batches", total=len(batches)):
+        batch_futures = extract_task.map(
+            repository_id=[r.repo_id for r in batch],
+            owner=[r.owner for r in batch],
+            name=[r.name for r in batch],
+        )
+        batch_results = [future.result() for future in batch_futures]
 
-    print(f"Done. {len(repos) - errors} succeeded, {errors} failed.")
+        # Split out successful results vs errors
+        batch_success_results: list[RepoExtractionResult] = []
+        batch_errors: list[types.ErrorResult] = []
+        for result in batch_results:
+            if isinstance(result, types.ErrorResult):
+                batch_errors.append(result)
+            else:
+                batch_success_results.append(result)
+                print(result)
+
+        # Log counts for this batch
+        print(
+            f"Batch completed with {len(batch_success_results)} successes "
+            f"and {len(batch_errors)} errors"
+        )
+
+        # Store successful results after each batch to avoid
+        # losing everything if something goes wrong at the end
+        print("Storing results for batch")
+        # for result in batch_success_results:
+        #     _store_repo_result(result=result, use_prod=use_prod)
+
+        # Store errors to parquet file
+        if batch_errors:
+            # Read in existing errors if the file already exists,
+            # otherwise start with an empty list
+            if errors_cache_path.exists():
+                existing_errors = pl.read_parquet(errors_cache_path)
+            else:
+                existing_errors = pl.DataFrame()
+
+            # Convert new errors to a DataFrame and concatenate with existing errors
+            new_errors_df = pl.DataFrame([e.to_dict() for e in batch_errors])
+            combined_errors = pl.concat([existing_errors, new_errors_df])
+
+            # Write combined errors back to the parquet file
+            combined_errors.write_parquet(errors_cache_path)
 
 
 @app.command()
@@ -351,10 +445,17 @@ def used_software_extraction(
     use_prod: bool = False,
     use_coiled: bool = False,
     coiled_region: str = "us-west-2",
+    coiled_workers: int = 10,
     language_filter: list[str] | None = None,
+    batch_size: int = 24,
     limit: int | None = None,
+    errors_cache_file: str = "used-software-extraction-errors.parquet",
 ) -> None:
-    """Extract software imports and dependencies from document-linked repositories."""
+    """
+    Extract software imports and dependencies from document-linked repositories.
+
+    Default language filter is Python, Jupyter Notebook, and R.
+    """
     _used_software_extraction_flow(
         use_prod=use_prod,
         language_filter=language_filter
@@ -362,7 +463,10 @@ def used_software_extraction(
         else DEFAULT_LANGUAGE_FILTER,
         use_coiled=use_coiled,
         coiled_region=coiled_region,
+        coiled_workers=coiled_workers,
+        batch_size=batch_size,
         limit=limit,
+        errors_cache_file=errors_cache_file,
     )
 
 

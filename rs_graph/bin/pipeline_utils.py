@@ -24,6 +24,7 @@ def _get_small_cpu_api_cluster(
     use_coiled: bool,
     coiled_region: str,
     keepalive: str = "15m",
+    host_setup_script: str | None = None,
 ) -> dict:
     return {
         "keepalive": keepalive,
@@ -38,6 +39,9 @@ def _get_small_cpu_api_cluster(
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
         "region": coiled_region,
+        "extra_kwargs": {
+            "host_setup_script": host_setup_script,
+        },
     }
 
 
