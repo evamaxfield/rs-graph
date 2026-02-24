@@ -71,6 +71,9 @@ pipeline = [
   "allofplos>=1,<2",
   "backoff>=2,<3",
   "bokeh>=3,<4",
+  "pyeil>=0.4",
+  "gitpython>=3,<4",
+  "py-nb-to-src>=0.3",
   "cachetools>=5,<7",
   "coiled>=1,<2",
   "dataclasses-json>=0.6,<0.7",
@@ -109,6 +112,7 @@ rs-graph-prelinked-dataset-ingestion = "rs_graph.bin.prelinked_dataset_ingestion
 rs-graph-snowball-sampling-discovery = "rs_graph.bin.snowball_sampling_discovery:main"
 rs-graph-alternate-doi-discovery = "rs_graph.bin.alternate_doi_discovery:main"
 rs-graph-generate-snowball-sampling-input = "rs_graph.bin.generate_snowball_sampling_input:main"
+rs-graph-used-software-extraction = "rs_graph.bin.used_software_extraction:main"
 
 # build settings
 # https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html
