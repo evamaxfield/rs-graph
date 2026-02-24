@@ -156,6 +156,7 @@ notebooks/rq2-results/*
 
 # Ignored data files
 rs_graph/data/files/*.db
+rs_graph/data/files/*.db.zip
 rs_graph/data/files/.metadata.json
 author-dev-em-annotation-dataset.csv
 author-dev-em-annotation-dataset-irr.csv
