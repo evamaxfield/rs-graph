@@ -83,7 +83,7 @@ class _TqdmProgress(RemoteProgress):
                 self._tqdm.update(cur - self._tqdm.n)
             if message:
                 self._tqdm.set_postfix_str(str(message))
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
     def __enter__(self) -> "_TqdmProgress":
@@ -112,14 +112,10 @@ def _query_unprocessed_repositories(
     with Session(engine) as session:
         # Collect repo IDs that already have imports or dependencies
         imported_ids = set(
-            session.exec(
-                select(db_models.RepositoryImport.repository_id).distinct()
-            ).all()
+            session.exec(select(db_models.RepositoryImport.repository_id).distinct()).all()
         )
         dep_ids = set(
-            session.exec(
-                select(db_models.RepositoryDependency.repository_id).distinct()
-            ).all()
+            session.exec(select(db_models.RepositoryDependency.repository_id).distinct()).all()
         )
         processed_ids = imported_ids | dep_ids
 
@@ -128,7 +124,8 @@ def _query_unprocessed_repositories(
             select(db_models.Repository)
             .join(
                 db_models.DocumentRepositoryLink,
-                db_models.DocumentRepositoryLink.repository_id == db_models.Repository.id,
+                col(db_models.DocumentRepositoryLink.repository_id)
+                == col(db_models.Repository.id),
             )
             .where(col(db_models.Repository.primary_language).in_(language_filter))
             .distinct()
@@ -152,7 +149,7 @@ def _clone_repo(repo_path: Path, repo_full_name: str) -> str | None:
             Repo.clone_from(
                 f"https://github.com/{repo_full_name}.git",
                 str(repo_path),
-                progress=progress,
+                progress=progress,  # type: ignore[arg-type]
             )
         return None
     except GitCommandError as e:
@@ -163,7 +160,7 @@ def _convert_notebooks(repo_path: Path, repo_full_name: str) -> None:
     """Convert Jupyter notebooks to Python scripts in place."""
     try:
         convert_nb_to_src_in_dir(repo_path, recursive=True, progress_leave=False)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"Notebook conversion warning for {repo_full_name}: {e}")
 
 
@@ -193,7 +190,7 @@ def _get_imports(repo_path: Path, repo_full_name: str) -> list[ImportRecord]:
             )
             for lib, paths in lib_to_files.items()
         ]
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"Import extraction warning for {repo_full_name}: {e}")
         return []
 
@@ -230,7 +227,7 @@ def _get_dependencies(repo_path: Path, repo_full_name: str) -> list[DependencyRe
                     )
                 )
             return dependencies
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         print(f"Dependency extraction warning for {repo_full_name}: {e}")
     return []
 
@@ -252,7 +249,7 @@ def _extract_repo_imports_and_deps(
                 name=name,
                 error=clone_error,
             )
-        
+
         # Convert, extract imports, and extract deps
         _convert_notebooks(repo_path, repo_full_name)
         imports = _get_imports(repo_path, repo_full_name)
@@ -341,7 +338,7 @@ def _used_software_extraction_flow(
                 errors += 1
                 continue
             _store_repo_result(result=result, use_prod=use_prod)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             print(f"Unexpected error processing {owner}/{name}: {e}")
             print(traceback.format_exc())
             errors += 1
@@ -360,7 +357,9 @@ def used_software_extraction(
     """Extract software imports and dependencies from document-linked repositories."""
     _used_software_extraction_flow(
         use_prod=use_prod,
-        language_filter=language_filter if language_filter is not None else DEFAULT_LANGUAGE_FILTER,
+        language_filter=language_filter
+        if language_filter is not None
+        else DEFAULT_LANGUAGE_FILTER,
         use_coiled=use_coiled,
         coiled_region=coiled_region,
         limit=limit,
