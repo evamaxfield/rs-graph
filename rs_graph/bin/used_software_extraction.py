@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 
 import json
+import platform
+import shutil
 import subprocess
+import tarfile
 import tempfile
 import traceback
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -31,15 +35,55 @@ from rs_graph.utils.identifier_normalization import normalize_name
 app = typer.Typer(rich_markup_mode=None, pretty_exceptions_enable=False)
 
 DEFAULT_LANGUAGE_FILTER = ["Python", "Jupyter Notebook", "R"]
-# TODO: git-pkgs not being found. We might want to add more logging to this
-# and also alias the full path rather than relative path
-GIT_PKGS_INSTALL_COMMAND = """
-    curl -L https://github.com/git-pkgs/git-pkgs/releases/latest/download/git-pkgs-linux-amd64 -o git-pkgs
-    chmod +x git-pkgs
-    alias git-pkgs="./git-pkgs"
-"""  # noqa: E501
+_GIT_PKGS_VERSION = "0.14.0"
+_GIT_PKGS_CACHE = Path("/tmp/git-pkgs-bin/git-pkgs")
+
+
+def _ensure_git_pkgs() -> str:
+    """Return path to git-pkgs binary, downloading and caching if not on PATH."""
+    # Check for git-pkgs on PATH first
+    print("Checking for git-pkgs binary...")
+    git_pkgs_path = shutil.which("git-pkgs")
+    if git_pkgs_path:
+        print("Found git-pkgs on PATH")
+        return git_pkgs_path
+    if _GIT_PKGS_CACHE.exists():
+        print(f"Found cached git-pkgs binary at {_GIT_PKGS_CACHE}")
+        return str(_GIT_PKGS_CACHE)
+
+    # No git-pkgs, get machine details
+    print("git-pkgs not found on PATH or cache, downloading...")
+    machine = platform.machine().lower()
+    arch = "arm64" if machine in ("aarch64", "arm64") else "amd64"
+    url = (
+        f"https://github.com/git-pkgs/git-pkgs/releases/download/"
+        f"v{_GIT_PKGS_VERSION}/git-pkgs_{_GIT_PKGS_VERSION}_linux_{arch}.tar.gz"
+    )
+
+    # Make cache dir and download
+    _GIT_PKGS_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    tarball = _GIT_PKGS_CACHE.parent / "git-pkgs.tar.gz"
+    urllib.request.urlretrieve(url, tarball)
+
+    # Decompress and set permissions
+    with tarfile.open(tarball) as tf:
+        tf.extract("git-pkgs", path=_GIT_PKGS_CACHE.parent, filter="data")
+    tarball.unlink()
+    _GIT_PKGS_CACHE.chmod(0o755)
+
+    # Return the path
+    print(f"git-pkgs stored to {_GIT_PKGS_CACHE}")
+    return str(_GIT_PKGS_CACHE)
+
 
 ###############################################################################
+
+# TODO: we want to change import records to record file_paths instead of file_path
+# this should still be a string
+# but it can contain multiple paths separated by semicolons.
+# TODO: we want to add fields for ecosystem (e.g., PyPI, CRAN, conda),
+# dependency type (e.g., runtime vs dev),
+# and manifest paths to the DependencyRecord as well.
 
 
 @dataclass
@@ -235,16 +279,17 @@ def _get_dependencies(
     """Extract declared dependencies via git-pkgs CLI."""
     try:
         # TODO: we want to also store the ecosystem (e.g., PyPI, CRAN, conda)
-        # the dep type, and manifest path
+        # the dep type, and manifest paths
+        git_pkgs_bin = _ensure_git_pkgs()
         dep_proc = subprocess.run(
-            ["git-pkgs", "list", "--format", "json", "-q"],
+            [git_pkgs_bin, "list", "--format", "json", "-q"],
             cwd=str(repo_path),
             capture_output=True,
             text=True,
             check=False,
         )
         if dep_proc.returncode == 0 and dep_proc.stdout.strip():
-            raw_deps: list[dict] = json.loads(dep_proc.stdout)
+            raw_deps: list[dict] = json.loads(dep_proc.stdout) or []
             seen_names: set[str] = set()
             dependencies = []
             for dep in raw_deps:
@@ -260,6 +305,10 @@ def _get_dependencies(
                 )
             return dependencies
         else:
+            print(
+                f"git-pkgs failed for {repo_full_name} "
+                f"(returncode={dep_proc.returncode}): {dep_proc.stderr.strip()}"
+            )
             raise RuntimeError(
                 f"git-pkgs failed with code {dep_proc.returncode}: {dep_proc.stderr}"
             )
@@ -386,7 +435,6 @@ def _used_software_extraction_flow(
             n_workers=coiled_workers,
             use_coiled=use_coiled,
             coiled_region=coiled_region,
-            host_setup_script=GIT_PKGS_INSTALL_COMMAND,
         ),
         timeout_seconds=600,
     )
@@ -409,7 +457,6 @@ def _used_software_extraction_flow(
                 batch_errors.append(result)
             else:
                 batch_success_results.append(result)
-                print(result)
 
         # Log counts for this batch
         print(
@@ -420,8 +467,8 @@ def _used_software_extraction_flow(
         # Store successful results after each batch to avoid
         # losing everything if something goes wrong at the end
         print("Storing results for batch")
-        # for result in batch_success_results:
-        #     _store_repo_result(result=result, use_prod=use_prod)
+        for result in batch_success_results:
+            _store_repo_result(result=result, use_prod=use_prod)
 
         # Store errors to parquet file
         if batch_errors:
