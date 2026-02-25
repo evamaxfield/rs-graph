@@ -436,7 +436,7 @@ def _used_software_extraction_flow(
             use_coiled=use_coiled,
             coiled_region=coiled_region,
         ),
-        timeout_seconds=600,
+        timeout_seconds=120,
     )
 
     # Process in batches
@@ -447,7 +447,22 @@ def _used_software_extraction_flow(
             owner=[r.owner for r in batch],
             name=[r.name for r in batch],
         )
-        batch_results = [future.result() for future in batch_futures]
+        batch_results = []
+        for future, repo in zip(batch_futures, batch, strict=False):
+            try:
+                batch_results.append(future.result())
+            except TimeoutError:
+                repo_full_name = f"{repo.owner}/{repo.name}"
+                print(f"Timeout reached for {repo_full_name}, skipping.")
+                batch_results.append(
+                    types.ErrorResult(
+                        source="used-software-extraction",
+                        step="task_timeout",
+                        identifier=repo_full_name,
+                        error="Task timed out",
+                        traceback="",
+                    )
+                )
 
         # Split out successful results vs errors
         batch_success_results: list[RepoExtractionResult] = []
@@ -492,9 +507,9 @@ def used_software_extraction(
     use_prod: bool = False,
     use_coiled: bool = False,
     coiled_region: str = "us-west-2",
-    coiled_workers: int = 10,
+    coiled_workers: int = 24,
     language_filter: list[str] | None = None,
-    batch_size: int = 24,
+    batch_size: int = 48,
     limit: int | None = None,
     errors_cache_file: str = "used-software-extraction-errors.parquet",
 ) -> None:
