@@ -78,13 +78,6 @@ def _ensure_git_pkgs() -> str:
 
 ###############################################################################
 
-# TODO: we want to change import records to record file_paths instead of file_path
-# this should still be a string
-# but it can contain multiple paths separated by semicolons.
-# TODO: we want to add fields for ecosystem (e.g., PyPI, CRAN, conda),
-# dependency type (e.g., runtime vs dev),
-# and manifest paths to the DependencyRecord as well.
-
 
 @dataclass
 class ImportRecord:
