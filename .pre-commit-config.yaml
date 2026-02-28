@@ -4,10 +4,10 @@ repos:
   - repo: https://github.com/charliermarsh/ruff-pre-commit
     rev: v0.12.12
     hooks:
-      - id: ruff-check
-        args: ["--fix"]
       - id: ruff-format
         types_or: [ python, pyi ]
+      - id: ruff-check
+        args: ["--fix"]
 
   # Revert to mypy if desired
   # - repo: https://github.com/pre-commit/mirrors-mypy
