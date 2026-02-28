@@ -1,6 +1,7 @@
 import json
 import logging
 import random
+import shutil
 from collections import defaultdict
 from itertools import combinations
 from pathlib import Path
@@ -365,8 +366,18 @@ def _get_author_developer_pairs_connected_to_pairs(
 
 def _read_table(table: str) -> pl.DataFrame:
     """Read a table from the v2 database."""
+    log.info(f"Reading table: {table}")
     return pl.read_database_uri(
         f"SELECT * FROM {table}",
+        f"sqlite:///{db_constants.V2_DATABASE_PATHS.dev}",
+    )
+
+
+def _read_sql(query: str) -> pl.DataFrame:
+    """Execute a raw SQL query against the v2 database."""
+    log.info(f"Running query: {query[:80].strip()}...")
+    return pl.read_database_uri(
+        query,
         f"sqlite:///{db_constants.V2_DATABASE_PATHS.dev}",
     )
 
@@ -392,7 +403,15 @@ def load_pairs(
     docs = _read_table("document")
     repos = _read_table("repository")
     pairs = _read_table("document_repository_link")
-    doc_topics = _read_table("document_topic")
+    doc_topics = _read_sql("""
+        SELECT document_id, topic_id
+        FROM document_topic
+        WHERE (document_id, score) IN (
+            SELECT document_id, MAX(score)
+            FROM document_topic
+            GROUP BY document_id
+        )
+    """)
     topics = _read_table("topic")
 
     # Optionally drop predicted doc-repo pairs below confidence threshold
@@ -410,6 +429,7 @@ def load_pairs(
         log.info("Pairs (no confidence filter): %d", pairs.height)
 
     # Keep one canonical pair per document and repository for RQ1 analyses.
+    log.debug("Deduplicating pairs to get one canonical pair per document and repository...")
     pairs = pairs.unique(
         subset="document_id",
         keep="none",
@@ -428,33 +448,17 @@ def load_pairs(
         )
         pairs = pairs.filter(pl.col("document_id").is_in(sampled_doc_ids["document_id"]))
 
-    doc_contribs = _read_table("document_contributor")
-    doc_contrib_institutions = _read_table("document_contributor_institution")
-    institutions = _read_table("institution")
-
-    doc_author_country_rows = (
-        doc_contribs.select(
-            pl.col("id").alias("document_contributor_id"),
-            pl.col("researcher_id"),
-            pl.col("document_id"),
-        )
-        .join(
-            doc_contrib_institutions.select("document_contributor_id", "institution_id"),
-            on="document_contributor_id",
-            how="left",
-        )
-        .join(
-            institutions.select(pl.col("id").alias("institution_id"), "country_code"),
-            on="institution_id",
-            how="left",
-        )
-        .with_columns(
-            pl.when(pl.col("country_code").is_null())
-            .then(pl.lit("Unknown"))
-            .otherwise(pl.col("country_code"))
-            .alias("country_code")
-        )
-    )
+    doc_author_country_rows = _read_sql("""
+        SELECT
+            dc.document_id,
+            dc.researcher_id,
+            COALESCE(i.country_code, 'Unknown') AS country_code
+        FROM document_contributor dc
+        LEFT JOIN document_contributor_institution dci
+            ON dc.id = dci.document_contributor_id
+        LEFT JOIN institution i
+            ON dci.institution_id = i.id
+    """)
 
     doc_author_country_entropy = (
         doc_author_country_rows.group_by(["document_id", "country_code"])
@@ -494,24 +498,32 @@ def load_pairs(
         )
     )
 
-    repo_contribs = _read_table("repository_contributor")
-    repo_contribs = repo_contribs.group_by("repository_id").len("repository_n_contributors")
+    repo_contribs = _read_sql("""
+        SELECT
+            repository_id,
+            COUNT(*) AS repository_n_contributors
+        FROM repository_contributor
+        GROUP BY repository_id
+    """)
 
-    repo_files = _read_table("repository_file")
-    repo_file_counts = (
-        repo_files.filter(pl.col("tree_type") == "blob")
-        .group_by("repository_id")
-        .agg(
-            pl.len().alias("repository_n_files"),
-            pl.col("bytes_of_code").sum().alias("repository_total_file_bytes"),
-        )
-    )
+    repo_file_counts = _read_sql("""
+        SELECT
+            repository_id,
+            COUNT(*) AS repository_n_files,
+            SUM(bytes_of_code) AS repository_total_file_bytes
+        FROM repository_file
+        WHERE tree_type = 'blob'
+        GROUP BY repository_id
+    """)
 
-    repo_languages = _read_table("repository_language")
-    repo_language_counts = repo_languages.group_by("repository_id").agg(
-        pl.len().alias("repository_n_languages"),
-        pl.col("bytes_of_code").sum().alias("repository_total_language_bytes"),
-    )
+    repo_language_counts = _read_sql("""
+        SELECT
+            repository_id,
+            COUNT(*) AS repository_n_languages,
+            SUM(bytes_of_code) AS repository_total_language_bytes
+        FROM repository_language
+        GROUP BY repository_id
+    """)
 
     result = (
         pairs.select(
@@ -564,9 +576,7 @@ def load_pairs(
             how="left",
         )
         .join(
-            doc_topics.sort("score", descending=True)
-            .unique("document_id", maintain_order=True)
-            .select("document_id", pl.col("topic_id")),
+            doc_topics,
             on="document_id",
             how="left",
         )
@@ -2310,6 +2320,7 @@ def _run_pair_analyses(
     top_n: int,
     n_shortest_path_iterations: int,
     label: str,
+    run_network_analyses: bool = True,
 ) -> None:
     """Run all pair-based analyses, writing results into *results_dir*.
 
@@ -2325,8 +2336,11 @@ def _run_pair_analyses(
         Random shortest-path iterations for network analysis.
     label
         Human-readable label for log messages (e.g. ``"all"`` or ``"high-conf"``).
+    run_network_analyses
+        Whether to run the (potentially time-consuming) network analyses. Set to
+        False to skip those steps and produce results for the other analyses only.
     """
-    total_steps = 12
+    total_steps = 12 if run_network_analyses else 10
     step = 0
 
     def _step_dir(step_num: int) -> Path:
@@ -2376,22 +2390,23 @@ def _run_pair_analyses(
     log.info("[%s] Step %d/%d: Lifecycle and survival analyses...", label, step, total_steps)
     plot_lifecycle_and_survival(pairs, _step_dir(step))
 
-    step += 1
-    log.info("[%s] Step %d/%d: Network coverage...", label, step, total_steps)
-    analyze_network_coverage(pairs, _step_dir(step), n_shortest_path_iterations)
+    if run_network_analyses:
+        step += 1
+        log.info("[%s] Step %d/%d: Network coverage...", label, step, total_steps)
+        analyze_network_coverage(pairs, _step_dir(step), n_shortest_path_iterations)
 
-    step += 1
-    log.info(
-        "[%s] Step %d/%d: Network role by code-contribution status...",
-        label,
-        step,
-        total_steps,
-    )
-    analyze_network_role_by_code_contribution_status(
-        pairs,
-        _step_dir(step),
-        n_shortest_path_iterations,
-    )
+        step += 1
+        log.info(
+            "[%s] Step %d/%d: Network role by code-contribution status...",
+            label,
+            step,
+            total_steps,
+        )
+        analyze_network_role_by_code_contribution_status(
+            pairs,
+            _step_dir(step),
+            n_shortest_path_iterations,
+        )
 
 
 @app.command()
@@ -2402,6 +2417,9 @@ def analyze(
     ),
     sample_size: int | None = typer.Option(
         None, help="Sample this many pairs for faster analysis."
+    ),
+    run_network_analyses: bool = typer.Option(
+        True, help="Whether to run the (potentially time-consuming) network analyses."
     ),
     debug: bool = typer.Option(False, help="Enable debug logging."),
 ) -> None:
@@ -2416,6 +2434,13 @@ def analyze(
     setup_logger(debug=debug)
 
     results_dir = Path(__file__).parent / "rq1-results"
+
+    # Delete existing results if present, to ensure clean slate for each run
+    if results_dir.exists():
+        log.info("Deleting existing results directory: %s", results_dir)
+        shutil.rmtree(results_dir)
+
+    # Remake the dir
     results_dir.mkdir(exist_ok=True)
 
     sns.set_palette(PALETTE)
@@ -2446,6 +2471,7 @@ def analyze(
             top_n,
             n_shortest_path_iterations,
             label,
+            run_network_analyses=run_network_analyses,
         )
 
     log.info("Analysis complete.")

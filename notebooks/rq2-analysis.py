@@ -1,6 +1,7 @@
 import json
 import logging
 import random
+import shutil
 from collections import defaultdict
 from itertools import combinations
 from pathlib import Path
@@ -86,8 +87,18 @@ app = typer.Typer()
 
 def _read_table(table: str) -> pl.DataFrame:
     """Read a table from the v2 database."""
+    log.info(f"Reading table: {table}")
     return pl.read_database_uri(
         f"SELECT * FROM {table}",
+        f"sqlite:///{db_constants.V2_DATABASE_PATHS.dev}",
+    )
+
+
+def _read_sql(query: str) -> pl.DataFrame:
+    """Execute a raw SQL query against the v2 database."""
+    log.info(f"Running query: {query[:80].strip()}...")
+    return pl.read_database_uri(
+        query,
         f"sqlite:///{db_constants.V2_DATABASE_PATHS.dev}",
     )
 
@@ -218,8 +229,8 @@ def _get_author_developer_pairs_connected_to_pairs(
 
 
 def load_rq2_pairs(
-    results_dir: Path,
     sample_size: int | None = None,
+    doc_repo_confidence_threshold: float | None = None,
 ) -> pl.DataFrame:
     """Load document-repository pairs with provenance labels for RQ2."""
     log.debug("Reading database tables...")
@@ -228,17 +239,32 @@ def load_rq2_pairs(
     docs = _read_table("document")
     repos = _read_table("repository")
     pairs = _read_table("document_repository_link")
-    doc_topics = _read_table("document_topic")
+    doc_topics = _read_sql("""
+        SELECT document_id, topic_id
+        FROM document_topic
+        WHERE (document_id, score) IN (
+            SELECT document_id, MAX(score)
+            FROM document_topic
+            GROUP BY document_id
+        )
+    """)
     topics = _read_table("topic")
 
     log.info("Raw document_repository_link rows: %d", pairs.height)
 
     # Drop predicted doc-repo pairs below confidence threshold
-    pairs = pairs.filter(
-        pl.col("predictive_model_confidence").is_null()
-        | (pl.col("predictive_model_confidence") >= 0.995)
-    )
-    log.info("Pairs after confidence filter (>= 0.995): %d", pairs.height)
+    if doc_repo_confidence_threshold is not None:
+        pairs = pairs.filter(
+            pl.col("predictive_model_confidence").is_null()
+            | (pl.col("predictive_model_confidence") >= doc_repo_confidence_threshold)
+        )
+        log.info(
+            "Pairs after confidence filter (>= %s): %d",
+            doc_repo_confidence_threshold,
+            pairs.height,
+        )
+    else:
+        log.info("Pairs (no confidence filter): %d", pairs.height)
 
     # Join dataset source name for provenance labeling
     pairs = pairs.join(
@@ -329,47 +355,38 @@ def load_rq2_pairs(
 
     # --- Join article and repository features (same as RQ1) ---
 
-    doc_contribs = _read_table("document_contributor")
-    doc_contrib_institutions = _read_table("document_contributor_institution")
-    institutions = _read_table("institution")
-
-    doc_author_country_rows = (
-        doc_contribs.select(
-            pl.col("id").alias("document_contributor_id"),
-            pl.col("researcher_id"),
-            pl.col("document_id"),
-        )
-        .join(
-            doc_contrib_institutions.select("document_contributor_id", "institution_id"),
-            on="document_contributor_id",
-            how="left",
-        )
-        .join(
-            institutions.select(pl.col("id").alias("institution_id"), "country_code"),
-            on="institution_id",
-            how="left",
-        )
-        .with_columns(
-            pl.when(pl.col("country_code").is_null())
-            .then(pl.lit("Unknown"))
-            .otherwise(pl.col("country_code"))
-            .alias("country_code")
-        )
-    )
+    doc_author_country_rows = _read_sql("""
+        SELECT
+            dc.document_id,
+            dc.researcher_id,
+            COALESCE(i.country_code, 'Unknown') AS country_code
+        FROM document_contributor dc
+        LEFT JOIN document_contributor_institution dci
+            ON dc.id = dci.document_contributor_id
+        LEFT JOIN institution i
+            ON dci.institution_id = i.id
+    """)
 
     doc_author_countries = doc_author_country_rows.group_by("document_id").agg(
         pl.len().alias("document_n_authors")
     )
 
-    repo_contribs = _read_table("repository_contributor")
-    repo_contribs = repo_contribs.group_by("repository_id").len("repository_n_contributors")
+    repo_contribs = _read_sql("""
+        SELECT
+            repository_id,
+            COUNT(*) AS repository_n_contributors
+        FROM repository_contributor
+        GROUP BY repository_id
+    """)
 
-    repo_files = _read_table("repository_file")
-    repo_file_counts = (
-        repo_files.filter(pl.col("tree_type") == "blob")
-        .group_by("repository_id")
-        .agg(pl.len().alias("repository_n_files"))
-    )
+    repo_file_counts = _read_sql("""
+        SELECT
+            repository_id,
+            COUNT(*) AS repository_n_files
+        FROM repository_file
+        WHERE tree_type = 'blob'
+        GROUP BY repository_id
+    """)
 
     result = (
         pairs_deduped.join(
@@ -403,9 +420,7 @@ def load_rq2_pairs(
             how="left",
         )
         .join(
-            doc_topics.sort("score", descending=True)
-            .unique("document_id", maintain_order=True)
-            .select("document_id", pl.col("topic_id")),
+            doc_topics,
             on="document_id",
             how="left",
         )
@@ -482,60 +497,6 @@ def load_rq2_pairs(
         )
 
     log.info("Final RQ2 pairs: %d", result.height)
-
-    # Save outputs
-    result.write_parquet(results_dir / "rq2-pairs.parquet")
-    log.info("Saved rq2-pairs.parquet")
-
-    # Missingness summary
-    missingness_rows: list[dict[str, str | int | float]] = []
-    for col_name in result.columns:
-        n_total = result.height
-        n_null = result[col_name].null_count()
-        missingness_rows.append(
-            {
-                "column": col_name,
-                "n_total": n_total,
-                "n_null": n_null,
-                "pct_null": round(100 * n_null / n_total, 2) if n_total > 0 else 0,
-            }
-        )
-    pl.DataFrame(missingness_rows).write_csv(results_dir / "rq2-missingness.csv")
-
-    # Schema
-    schema_dict = {col: str(dtype) for col, dtype in result.schema.items()}
-    with open(results_dir / "rq2-pairs-schema.json", "w") as f:
-        json.dump(schema_dict, f, indent=2)
-
-    # README explaining the dataset
-    readme_lines = [
-        "# rq2-pairs.parquet",
-        "",
-        "## What is this file?",
-        "",
-        "This is the assembled analysis dataset for RQ2. It joins",
-        "`document_repository_link` with document metadata (from `document`),",
-        "repository metadata (from `repository`), topic/field classifications,",
-        "author counts, contributor counts, file counts, provenance labels",
-        "(`pair_source_label`: shared vs mined), and derived features",
-        "(log transforms, FWSI, temporal durations).",
-        "",
-        "## Why persist it?",
-        "",
-        "1. **Downstream steps** (feature comparison, coverage, network analysis)",
-        "   read from this DataFrame rather than re-querying the database.",
-        "2. **Reproducibility**: The exact dataset used for analysis is preserved.",
-        "3. **Auditability**: The schema JSON and missingness CSV document the",
-        "   data shape and completeness at analysis time.",
-        "",
-        "## Schema",
-        "",
-        "See `rq2-pairs-schema.json` for the Polars dtype of each column.",
-        "See `rq2-missingness.csv` for null/NaN counts per column.",
-        "",
-    ]
-    with open(results_dir / "README.md", "w") as f:
-        f.write("\n".join(readme_lines))
 
     return result
 
@@ -1574,6 +1535,105 @@ def write_summary(base_dir: Path, results_dir: Path) -> None:  # noqa: C901
 ###############################################################################
 
 
+def _run_rq2_analyses(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+    top_n: int,
+    n_shortest_path_iterations: int,
+    label: str,
+    run_network_analyses: bool = True,
+) -> None:
+    """Run all RQ2 per-subset analyses and save results under results_dir."""
+    total_steps = 6 if run_network_analyses else 4
+
+    def _step_dir(n: int) -> Path:
+        d = results_dir / f"step-{n}"
+        d.mkdir(exist_ok=True)
+        return d
+
+    step = 0
+
+    # Step 1: Save pairs dataset
+    step += 1
+    log.info("[%s] Step %d/%d: Saving pairs dataset...", label, step, total_steps)
+    step_dir = _step_dir(step)
+    pairs.write_parquet(step_dir / "rq2-pairs.parquet")
+    log.info("[%s] Saved rq2-pairs.parquet", label)
+
+    missingness_rows: list[dict[str, str | int | float]] = []
+    for col_name in pairs.columns:
+        n_total = pairs.height
+        n_null = pairs[col_name].null_count()
+        missingness_rows.append(
+            {
+                "column": col_name,
+                "n_total": n_total,
+                "n_null": n_null,
+                "pct_null": round(100 * n_null / n_total, 2) if n_total > 0 else 0,
+            }
+        )
+    pl.DataFrame(missingness_rows).write_csv(step_dir / "rq2-missingness.csv")
+
+    schema_dict = {col: str(dtype) for col, dtype in pairs.schema.items()}
+    with open(step_dir / "rq2-pairs-schema.json", "w") as f:
+        json.dump(schema_dict, f, indent=2)
+
+    readme_lines = [
+        "# rq2-pairs.parquet",
+        "",
+        "## What is this file?",
+        "",
+        "This is the assembled analysis dataset for RQ2. It joins",
+        "`document_repository_link` with document metadata (from `document`),",
+        "repository metadata (from `repository`), topic/field classifications,",
+        "author counts, contributor counts, file counts, provenance labels",
+        "(`pair_source_label`: shared vs mined), and derived features",
+        "(log transforms, FWSI, temporal durations).",
+        "",
+        "## Why persist it?",
+        "",
+        "1. **Downstream steps** (feature comparison, coverage, network analysis)",
+        "   read from this DataFrame rather than re-querying the database.",
+        "2. **Reproducibility**: The exact dataset used for analysis is preserved.",
+        "3. **Auditability**: The schema JSON and missingness CSV document the",
+        "   data shape and completeness at analysis time.",
+        "",
+        "## Schema",
+        "",
+        "See `rq2-pairs-schema.json` for the Polars dtype of each column.",
+        "See `rq2-missingness.csv` for null/NaN counts per column.",
+        "",
+    ]
+    with open(step_dir / "README.md", "w") as f:
+        f.write("\n".join(readme_lines))
+
+    # Step 2: Feature comparison
+    step += 1
+    log.info("[%s] Step %d/%d: Univariate feature comparison...", label, step, total_steps)
+    run_feature_comparison(pairs, _step_dir(step), top_n)
+
+    # Step 3: Coverage
+    step += 1
+    log.info("[%s] Step %d/%d: Coverage analysis...", label, step, total_steps)
+    compute_coverage(pairs, _step_dir(step))
+
+    if run_network_analyses:
+        # Step 4: Network components
+        step += 1
+        log.info("[%s] Step %d/%d: Network component analysis...", label, step, total_steps)
+        analyze_network_components(pairs, _step_dir(step))
+
+        # Step 5: Shortest paths
+        step += 1
+        log.info("[%s] Step %d/%d: Shortest path analysis...", label, step, total_steps)
+        analyze_shortest_paths(pairs, _step_dir(step), n_shortest_path_iterations)
+
+    # Final step: Summary
+    step += 1
+    log.info("[%s] Step %d/%d: Writing summary...", label, step, total_steps)
+    write_summary(base_dir=results_dir, results_dir=_step_dir(step))
+
+
 @app.command()
 def analyze(
     top_n: int = typer.Option(9, help="Number of top categories (rest grouped as 'Other')."),
@@ -1583,47 +1643,50 @@ def analyze(
     sample_size: int | None = typer.Option(
         None, help="Sample this many pairs for faster analysis."
     ),
+    run_network_analyses: bool = typer.Option(
+        True, help="Whether to run the (potentially time-consuming) network analyses."
+    ),
     debug: bool = typer.Option(False, help="Enable debug logging."),
 ) -> None:
-    """Run the full RQ2 analysis pipeline."""
+    """Run the full RQ2 analysis pipeline.
+
+    Each pair-based analysis is run twice — once on **all** pairs and once on
+    a **high-confidence** subset (doc-repo confidence null or >= 0.995).
+    Results are written to ``all/`` and ``high-conf/`` subdirectories.
+    """
     setup_logger(debug=debug)
 
     results_dir = Path(__file__).parent / "rq2-results"
+
+    # Delete existing results if present, to ensure clean slate for each run
+    if results_dir.exists():
+        log.info("Deleting existing results directory: %s", results_dir)
+        shutil.rmtree(results_dir)
+
     results_dir.mkdir(exist_ok=True)
 
     sns.set_palette(PALETTE)
 
-    total_steps = 6
+    log.info("Loading pairs (all)...")
+    pairs_all = load_rq2_pairs(sample_size=sample_size)
+    log.info("Loading pairs (high-conf, >= 0.995)...")
+    pairs_high_conf = load_rq2_pairs(
+        sample_size=sample_size,
+        doc_repo_confidence_threshold=0.995,
+    )
 
-    # Create step subdirectories
-    for i in range(1, total_steps + 1):
-        (results_dir / f"step-{i}").mkdir(exist_ok=True)
-
-    step = 0
-
-    step += 1
-    log.info("Step %d/%d: Loading RQ2 pairs...", step, total_steps)
-    pairs = load_rq2_pairs(results_dir / f"step-{step}", sample_size=sample_size)
-
-    step += 1
-    log.info("Step %d/%d: Univariate feature comparison...", step, total_steps)
-    run_feature_comparison(pairs, results_dir / f"step-{step}", top_n)
-
-    step += 1
-    log.info("Step %d/%d: Coverage analysis...", step, total_steps)
-    compute_coverage(pairs, results_dir / f"step-{step}")
-
-    step += 1
-    log.info("Step %d/%d: Network component analysis...", step, total_steps)
-    analyze_network_components(pairs, results_dir / f"step-{step}")
-
-    step += 1
-    log.info("Step %d/%d: Shortest path analysis...", step, total_steps)
-    analyze_shortest_paths(pairs, results_dir / f"step-{step}", n_shortest_path_iterations)
-
-    step += 1
-    log.info("Step %d/%d: Writing summary...", step, total_steps)
-    write_summary(base_dir=results_dir, results_dir=results_dir / f"step-{step}")
+    for label, pairs in [("all", pairs_all), ("high-conf", pairs_high_conf)]:
+        subset_dir = results_dir / label
+        subset_dir.mkdir(exist_ok=True)
+        log.info("Running RQ2 analyses for subset: %s", label)
+        _run_rq2_analyses(
+            pairs,
+            subset_dir,
+            top_n,
+            n_shortest_path_iterations,
+            label,
+            run_network_analyses=run_network_analyses,
+        )
 
     log.info("RQ2 analysis complete.")
 
