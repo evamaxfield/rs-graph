@@ -35,7 +35,7 @@ from rs_graph.utils.identifier_normalization import normalize_name
 app = typer.Typer(rich_markup_mode=None, pretty_exceptions_enable=False)
 
 DEFAULT_LANGUAGE_FILTER = ["Python", "Jupyter Notebook", "R"]
-_GIT_PKGS_VERSION = "0.14.0"
+_GIT_PKGS_VERSION = "0.15.0"
 _GIT_PKGS_CACHE = Path("/tmp/git-pkgs-bin/git-pkgs")
 
 
@@ -89,13 +89,16 @@ def _ensure_git_pkgs() -> str:
 @dataclass
 class ImportRecord:
     software_name: str
-    file_path: str | None
+    file_paths: str | None
 
 
 @dataclass
 class DependencyRecord:
     software_name: str
     version_spec: str | None
+    ecosystem: str | None = None
+    dependency_type: str | None = None
+    manifest_paths: str | None = None
 
 
 @dataclass
@@ -259,7 +262,7 @@ def _get_imports(
         return [
             ImportRecord(
                 software_name=lib,
-                file_path=";".join(paths) if paths else None,
+                file_paths=";".join(paths) if paths else None,
             )
             for lib, paths in lib_to_files.items()
         ]
@@ -291,19 +294,35 @@ def _get_dependencies(
         if dep_proc.returncode == 0 and dep_proc.stdout.strip():
             raw_deps: list[dict] = json.loads(dep_proc.stdout) or []
             seen_names: set[str] = set()
-            dependencies = []
+            dependencies = {}
             for dep in raw_deps:
                 dep_name = dep.get("name", "")
                 if not dep_name or dep_name in seen_names:
                     continue
                 seen_names.add(dep_name)
-                dependencies.append(
-                    DependencyRecord(
+                if "purl" not in dep:
+                    continue
+                dep_purl = dep["purl"]
+                if dep_purl not in dependencies:
+                    dependencies[dep_purl] = DependencyRecord(
                         software_name=dep_name,
                         version_spec=dep.get("requirement"),
+                        ecosystem=dep.get("ecosystem"),
+                        dependency_type=dep.get("dependency_type"),
+                        manifest_paths=dep.get("manifest_path"),
                     )
-                )
-            return dependencies
+                else:
+                    # If we see the same dep again with a different manifest path,
+                    # we want to combine them
+                    existing = dependencies[dep_purl]
+                    new_manifest_paths = set(
+                        existing.manifest_paths.split(";") if existing.manifest_paths else []
+                    )
+                    new_manifest_paths.add(dep.get("manifest_path", ""))
+                    existing.manifest_paths = ";".join(sorted(new_manifest_paths))
+
+            # Return the list of unique dependencies
+            return list(dependencies.values())
         else:
             print(
                 f"git-pkgs failed for {repo_full_name} "
@@ -366,7 +385,7 @@ def _store_repo_result(result: RepoExtractionResult, use_prod: bool) -> None:
                     repository_id=result.repository_id,
                     software_name=record.software_name,
                     software_name_normalized=normalize_name(record.software_name),
-                    file_path=record.file_path,
+                    file_paths=record.file_paths,
                 ),
                 session,
             )
@@ -377,6 +396,9 @@ def _store_repo_result(result: RepoExtractionResult, use_prod: bool) -> None:
                     software_name=record.software_name,
                     software_name_normalized=normalize_name(record.software_name),
                     version_spec=record.version_spec,
+                    ecosystem=record.ecosystem,
+                    dependency_type=record.dependency_type,
+                    manifest_paths=record.manifest_paths,
                 ),
                 session,
             )

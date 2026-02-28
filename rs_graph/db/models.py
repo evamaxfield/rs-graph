@@ -837,7 +837,7 @@ class RepositoryImport(StrippedSQLModel, table=True):
 
     # Data
     software_name_normalized: str = Field(index=True)
-    file_path: str | None = Field(default=None, nullable=True)
+    file_paths: str | None = Field(default=None, nullable=True)
 
     # Updates
     created_datetime: datetime | None = Field(
@@ -868,6 +868,13 @@ class RepositoryDependency(StrippedSQLModel, table=True):
     # Data
     software_name_normalized: str = Field(index=True)
     version_spec: str | None = Field(default=None, nullable=True)
+    # Dependency ecosystem, e.g. "PyPI", "CRAN", "npm"
+    ecosystem: str | None = Field(default=None, index=True, nullable=True)
+    # Semicolon separated paths to which manifest files
+    # declaring the dependency were found (e.g. "requirements.txt;pyproject.toml")
+    manifest_paths: str | None = Field(default=None, nullable=True)
+    # Type of dependency, e.g. "runtime", "development", "peer", "optional"
+    dependency_type: str | None = Field(default=None, index=True, nullable=True)
 
     # Updates
     created_datetime: datetime | None = Field(
