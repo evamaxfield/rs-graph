@@ -532,7 +532,6 @@ def ingest_softcite_mentions(
                     )
 
             session.commit()
-            break
 
     print(f"Done. Matched: {matched_count} | Skipped (no DB match): {skipped_count}")
 
