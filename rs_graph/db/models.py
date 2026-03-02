@@ -902,7 +902,7 @@ class DocumentSoftwareMention(StrippedSQLModel, table=True):
     software_name: str = Field(index=True)
     mention_context: str | None = Field(default=None, nullable=True)
 
-    __table_args__ = (UniqueConstraint("document_id", "software_name", "mention_context"),)
+    __table_args__ = (UniqueConstraint("document_id", "software_name", "softcite_mention_id"),)
 
     # Data
     software_name_normalized: str = Field(index=True)
