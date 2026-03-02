@@ -18,11 +18,11 @@ SoftCite software mentions are stored in the `DocumentSoftwareMention` table, li
    - `papers.parquet` — contains `paper_id` and `doi`
    - `mentions.pdf.parquet` — contains `software_mention_id`, `paper_id`, `software_normalized`
 2. Join mentions to papers to get DOIs
-3. Normalize DOIs using the shared `_normalize_doi_expr()` function
+3. Normalize DOIs using the shared `normalize_doi_col()` function
 4. Match DOIs to existing `document` records in the rs-graph database
 5. Look up the corresponding `document` records (also check the `DocumentAlternateDOI` table)
 6. For each mention:
-   - `software_name` = the `software_normalized` value from SoftCite
+   - `software_name` = the `software` value from SoftCite
    - `software_name_normalized` = result of `normalize_name(software_name)`
    - `mention_context` = the `software_mention_id` from SoftCite (for traceability back to the original annotation)
 7. Store in `DocumentSoftwareMention` table
@@ -51,7 +51,7 @@ SoftCite software mentions are stored in the `DocumentSoftwareMention` table, li
 
 ## Files to Create or Edit
 
-- Add as a Typer command in `rs_graph/bin/used_software_extraction.py` (created in Task 2), OR create a separate script if Task 2 is not yet complete
+- `rs_graph/bin/used_software_extraction.py` — add a new `ingest-softcite-mentions` Typer command to the existing `app`
 
 ## Commands to Run
 

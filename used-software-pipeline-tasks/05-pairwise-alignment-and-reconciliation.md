@@ -54,7 +54,15 @@ For a given document-repository pair with imports `I`, dependencies `D`, and men
   - `_create_software_records()` (lines 276-333) — creating structured records from match results
   - `SoftwareRecord` dataclass (lines 257-273) — current record structure (will be extended)
   - `normalize_name()` (lines 228-245) — used during alignment
-- `rs_graph/utils/normalization.py` — shared normalization functions (from Task 2)
+- `rs_graph/utils/identifier_normalization.py` — shared normalization functions (from Task 2); use `normalize_name()` from here
+
+### Actual DB field names (from Task 1 implementation)
+
+When querying the three tables, use these exact field names:
+
+- `RepositoryImport`: `repository_id`, `software_name`, `software_name_normalized`, `file_paths` (semicolon-separated, nullable)
+- `RepositoryDependency`: `repository_id`, `software_name`, `software_name_normalized`, `version_spec`, `ecosystem` (e.g. "PyPI", "CRAN"), `manifest_paths` (semicolon-separated), `dependency_type` (e.g. "runtime", "development")
+- `DocumentSoftwareMention`: `document_id`, `software_name`, `software_name_normalized`, `mention_context`
 
 ## Files to Create
 

@@ -54,6 +54,16 @@ The prototype's `compare_imported_vs_mentioned` command (lines 786-1032) has sig
 
 The key difference: extend from two-way (import vs mention) to three-way comparison.
 
+## Actual DB field names (from Task 1 implementation)
+
+Use these exact field names when querying the three software tables:
+
+- `RepositoryImport`: `repository_id`, `software_name`, `software_name_normalized`, `file_paths` (semicolon-separated, nullable)
+- `RepositoryDependency`: `repository_id`, `software_name`, `software_name_normalized`, `version_spec`, `ecosystem` (e.g. "PyPI", "CRAN", "npm"), `manifest_paths` (semicolon-separated), `dependency_type` (e.g. "runtime", "development")
+- `DocumentSoftwareMention`: `document_id`, `software_name`, `software_name_normalized`, `mention_context` (stores `software_mention_id` for traceability)
+
+The `RepositoryDependency.ecosystem` and `dependency_type` fields enable additional breakdown analyses beyond the original spec — e.g., do PyPI vs CRAN repos differ in mention coverage? Are development-only dependencies systematically absent from mentions?
+
 ## Files to Read
 
 - `notebooks/example-used-software-comparison.py` — prototype analysis logic to adapt
@@ -62,7 +72,7 @@ The key difference: extend from two-way (import vs mention) to three-way compari
 - `rs_graph/db/models.py` — the three software tables (from Task 1) plus metadata tables
 - `rs_graph/db/constants.py` — database path constants
 - `rs_graph/utils/software_alignment.py` — three-way alignment utilities (from Task 5)
-- `rs_graph/utils/normalization.py` — shared normalization functions (from Task 2)
+- `rs_graph/utils/identifier_normalization.py` — shared normalization functions (from Task 2); use `normalize_name()` and `prep_name_for_printing()` from here
 - `notebooks/proposal-draft.md` — RQ3 description and expected analyses
 
 ## Files to Create
