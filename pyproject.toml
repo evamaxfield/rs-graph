@@ -36,6 +36,7 @@ dependencies = [
 lint = [
   "prek>=0.2.29",
   "ty>=0.0.12",
+  "pyarrow-stubs>=20",
 ]
 dev = [
   "ipython",

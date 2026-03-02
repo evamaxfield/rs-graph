@@ -28,7 +28,11 @@ from rs_graph.bin.pipeline_utils import (
 )
 from rs_graph.db import models as db_models
 from rs_graph.db import utils as db_utils
-from rs_graph.utils.identifier_normalization import normalize_name
+from rs_graph.sources.softcite_2025 import SOFTCITE_MENTIONS_NAME, SOFTCITE_PAPERS_NAME
+from rs_graph.utils.identifier_normalization import (
+    normalize_doi_col,
+    normalize_name,
+)
 
 ###############################################################################
 
@@ -396,6 +400,129 @@ def _store_repo_result(result: RepoExtractionResult, use_prod: bool) -> None:
                 session,
             )
         session.commit()
+
+
+###############################################################################
+
+
+def _lookup_document_id_by_doi(doi: str, session: Session) -> int | None:
+    """Look up a document ID by normalized DOI, checking Document and DocumentAlternateDOI."""
+    doc = session.exec(select(db_models.Document).where(db_models.Document.doi == doi)).first()
+    if doc is not None:
+        return doc.id
+
+    alt = session.exec(
+        select(db_models.DocumentAlternateDOI).where(db_models.DocumentAlternateDOI.doi == doi)
+    ).first()
+    if alt is not None:
+        return alt.document_id
+
+    return None
+
+
+@app.command()
+def ingest_softcite_mentions(
+    data_dir: str,
+    use_prod: bool = False,
+    batch_size: int = 500,
+    reprocess_all: bool = False,
+) -> None:
+    """
+    Ingest SoftCite software mentions into the DocumentSoftwareMention table.
+
+    DATA_DIR should be the path to the raw SoftCite 2025 data directory
+    (containing papers.parquet and mentions.pdf.parquet).
+
+    By default, DOIs that already have mentions in the database are skipped so
+    new document records can be picked up incrementally on subsequent runs.
+    Pass --reprocess-all to re-ingest every DOI regardless.
+    """
+    data_dir_path = Path(data_dir).resolve()
+
+    # Load and join SoftCite parquet files
+    print("Loading SoftCite parquet files...")
+    mentions = pl.scan_parquet(data_dir_path / SOFTCITE_MENTIONS_NAME).select(
+        "software_mention_id", "paper_id", "software_raw"
+    )
+    papers = pl.scan_parquet(data_dir_path / SOFTCITE_PAPERS_NAME).select("paper_id", "doi")
+    # This type ignore is caused by the .collect() statement at
+    # the end. Polars recently added InProcess execution which
+    # causes the type checker to not know which DataFrame type to
+    # expect until after execution.
+    df: pl.DataFrame = (  # type: ignore
+        mentions.join(
+            papers,
+            on="paper_id",
+            how="inner",
+        )
+        .with_columns(normalize_doi_col("doi").alias("doi_normalized"))
+        .collect()
+    )
+    print(f"Total SoftCite mention rows: {len(df)}")
+
+    # Optionally skip DOIs that already have mentions in the DB
+    if not reprocess_all:
+        engine = db_utils.get_engine(use_prod=use_prod)
+        with Session(engine) as session:
+            processed_doc_ids = set(
+                session.exec(
+                    select(db_models.DocumentSoftwareMention.document_id).distinct()
+                ).all()
+            )
+            if processed_doc_ids:
+                processed_dois = set(
+                    session.exec(
+                        select(db_models.Document.doi).where(
+                            col(db_models.Document.id).in_(processed_doc_ids)
+                        )
+                    ).all()
+                )
+                before = len(df)
+                df = df.filter(~pl.col("doi_normalized").is_in(processed_dois))
+                print(
+                    f"Skipping {before - len(df)} rows for {len(processed_dois)} "
+                    f"already-processed DOIs; {len(df)} rows remaining"
+                )
+
+    if len(df) == 0:
+        print("No new rows to process. Exiting.")
+        return
+
+    # Process in batches
+    engine = db_utils.get_engine(use_prod=use_prod)
+    matched_count = 0
+    skipped_count = 0
+    batches = [df[i : i + batch_size] for i in range(0, len(df), batch_size)]
+    for batch_df in tqdm(batches, desc="Ingesting batches", total=len(batches)):
+        with Session(engine) as session:
+            for row in batch_df.iter_rows(named=True):
+                doi_normalized = row["doi_normalized"]
+                software_raw: str = row["software_raw"] or ""
+                mention_id: str = row["software_mention_id"]
+
+                if not software_raw:
+                    skipped_count += 1
+                    continue
+
+                document_id = _lookup_document_id_by_doi(doi_normalized, session)
+                if document_id is None:
+                    skipped_count += 1
+                    continue
+
+                db_utils._get_or_add_and_flush(
+                    db_models.DocumentSoftwareMention(
+                        document_id=document_id,
+                        software_name=software_raw,
+                        software_name_normalized=normalize_name(software_raw),
+                        mention_context=mention_id,
+                    ),
+                    session,
+                )
+                matched_count += 1
+
+            session.commit()
+
+    print(f"Done. Matched and stored: {matched_count} | Skipped (no DB match): {skipped_count}")
 
 
 ###############################################################################
