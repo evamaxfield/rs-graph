@@ -898,8 +898,9 @@ class DocumentSoftwareMention(StrippedSQLModel, table=True):
         nullable=False,
         ondelete="CASCADE",
     )
+    softcite_mention_id: str = Field(index=True)
     software_name: str = Field(index=True)
-    mention_context: str | None = Field(default=None, index=True, nullable=True)
+    mention_context: str | None = Field(default=None, nullable=True)
 
     __table_args__ = (UniqueConstraint("document_id", "software_name", "mention_context"),)
 

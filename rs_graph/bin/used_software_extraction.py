@@ -424,7 +424,7 @@ def _lookup_document_id_by_doi(doi: str, session: Session) -> int | None:
 def ingest_softcite_mentions(
     data_dir: str,
     use_prod: bool = False,
-    batch_size: int = 500,
+    batch_size: int = 200,
     reprocess_all: bool = False,
 ) -> None:
     """
@@ -442,7 +442,7 @@ def ingest_softcite_mentions(
     # Load and join SoftCite parquet files
     print("Loading SoftCite parquet files...")
     mentions = pl.scan_parquet(data_dir_path / SOFTCITE_MENTIONS_NAME).select(
-        "software_mention_id", "paper_id", "software_raw"
+        "software_mention_id", "paper_id", "software_raw", "context_full_text"
     )
     papers = pl.scan_parquet(data_dir_path / SOFTCITE_PAPERS_NAME).select("paper_id", "doi")
     # This type ignore is caused by the .collect() statement at
@@ -455,10 +455,15 @@ def ingest_softcite_mentions(
             on="paper_id",
             how="inner",
         )
-        .with_columns(normalize_doi_col("doi").alias("doi_normalized"))
+        .with_columns(
+            normalize_doi_col("doi").alias("doi_normalized"),
+            pl.col("software_mention_id").str.strip_chars().alias("software_mention_id"),
+            pl.col("context_full_text").str.strip_chars().alias("context_full_text"),
+        )
         .collect()
     )
     print(f"Total SoftCite mention rows: {len(df)}")
+    print(f"Total unique DOIs in SoftCite mentions: {len(df['doi_normalized'].unique())}")
 
     # Optionally skip DOIs that already have mentions in the DB
     if not reprocess_all:
@@ -484,45 +489,52 @@ def ingest_softcite_mentions(
                     f"already-processed DOIs; {len(df)} rows remaining"
                 )
 
-    if len(df) == 0:
+    unique_dois: list[str] = df["doi_normalized"].unique().to_list()
+    if len(unique_dois) == 0:
         print("No new rows to process. Exiting.")
         return
 
-    # Process in batches
+    # Process in batches of unique DOIs — document_id is looked up once per DOI
     engine = db_utils.get_engine(use_prod=use_prod)
     matched_count = 0
     skipped_count = 0
-    batches = [df[i : i + batch_size] for i in range(0, len(df), batch_size)]
-    for batch_df in tqdm(batches, desc="Ingesting batches", total=len(batches)):
+    doi_batches = [
+        unique_dois[i : i + batch_size] for i in range(0, len(unique_dois), batch_size)
+    ]
+    for doi_batch in tqdm(doi_batches, desc="Ingesting batches", total=len(doi_batches)):
         with Session(engine) as session:
-            for row in batch_df.iter_rows(named=True):
-                doi_normalized = row["doi_normalized"]
-                software_raw: str = row["software_raw"] or ""
-                mention_id: str = row["software_mention_id"]
+            for doi in doi_batch:
+                # Try DOI lookup
+                document_id = _lookup_document_id_by_doi(doi, session)
 
-                if not software_raw:
+                # Handle fast exit
+                if document_id is not None:
+                    matched_count += 1
+                else:
                     skipped_count += 1
                     continue
 
-                document_id = _lookup_document_id_by_doi(doi_normalized, session)
-                if document_id is None:
-                    skipped_count += 1
-                    continue
+                # Process all mentions
+                for row in df.filter(pl.col("doi_normalized") == doi).iter_rows(named=True):
+                    software_raw: str = row["software_raw"]
+                    mention_id: str = row["software_mention_id"]
+                    mention_context: str = row["context_full_text"]
 
-                db_utils._get_or_add_and_flush(
-                    db_models.DocumentSoftwareMention(
-                        document_id=document_id,
-                        software_name=software_raw,
-                        software_name_normalized=normalize_name(software_raw),
-                        mention_context=mention_id,
-                    ),
-                    session,
-                )
-                matched_count += 1
+                    db_utils._get_or_add_and_flush(
+                        db_models.DocumentSoftwareMention(
+                            document_id=document_id,
+                            software_name=software_raw,
+                            software_name_normalized=normalize_name(software_raw),
+                            softcite_mention_id=mention_id,
+                            mention_context=mention_context,
+                        ),
+                        session,
+                    )
 
             session.commit()
+            break
 
-    print(f"Done. Matched and stored: {matched_count} | Skipped (no DB match): {skipped_count}")
+    print(f"Done. Matched: {matched_count} | Skipped (no DB match): {skipped_count}")
 
 
 ###############################################################################
