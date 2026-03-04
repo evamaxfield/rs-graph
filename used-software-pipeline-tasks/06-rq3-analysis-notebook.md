@@ -10,7 +10,7 @@ After Tasks 1-5 have populated the database with imports, dependencies, and ment
 
 A complete analysis notebook that:
 1. Queries all three software tables from the database
-2. Runs three-way pairwise alignment and reconciliation per document-repository pair
+2. Applies `align_software_names()` pairwise (imports↔deps, imports↔mentions, deps↔mentions) per document-repository pair
 3. Produces summary statistics, visualizations, and breakdowns answering RQ3
 4. Follows the conventions of existing analysis notebooks (`rq1-analysis.py`, `rq2-analysis.py`)
 
@@ -71,7 +71,7 @@ The `RepositoryDependency.ecosystem` and `dependency_type` fields enable additio
 - `notebooks/rq2-analysis.py` — another reference for notebook structure and style
 - `rs_graph/db/models.py` — the three software tables (from Task 1) plus metadata tables
 - `rs_graph/db/constants.py` — database path constants
-- `rs_graph/utils/software_alignment.py` — three-way alignment utilities (from Task 5)
+- `rs_graph/utils/software_alignment.py` — `align_software_names()` and `PairwiseAlignmentResult` (from Task 5); apply pairwise for each source pair rather than using a three-way wrapper (see Task 7 for future reconciliation)
 - `rs_graph/utils/identifier_normalization.py` — shared normalization functions (from Task 2); use `normalize_name()` and `prep_name_for_printing()` from here
 - `notebooks/proposal-draft.md` — RQ3 description and expected analyses
 
