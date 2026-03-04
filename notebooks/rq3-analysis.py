@@ -400,12 +400,11 @@ def _print_descriptive_stats(
     df: pl.DataFrame,
     col: str,
     label: str,
-) -> None:
-    """Print full descriptive statistics for a numeric column."""
+) -> str:
+    """Return full descriptive statistics for a numeric column as a string."""
     vals = df[col].drop_nulls()
     if vals.len() == 0:
-        print(f"  {label}: no data")
-        return
+        return f"  {label}: no data"
 
     mean = vals.mean()
     std = vals.std()
@@ -417,7 +416,7 @@ def _print_descriptive_stats(
     min_val = vals.min()
     max_val = vals.max()
 
-    print(
+    return (
         f"  {label}: mean={mean:.3f}, std={std:.3f}, "
         f"min={min_val:.3f}, p10={p10:.3f}, p25={p25:.3f}, "
         f"median={median:.3f}, p75={p75:.3f}, p90={p90:.3f}, max={max_val:.3f}"
@@ -443,8 +442,8 @@ def _print_group_row_top_n(
     a_label: str,
     b_label: str,
     top_n: int,
-) -> None:
-    """Print top-N software items for a single group row."""
+) -> str:
+    """Return top-N software items for a single group row as a string."""
     gv = row[group_col]
     if gv is None:
         group_df = results_df.filter(pl.col(group_col).is_null())
@@ -454,33 +453,36 @@ def _print_group_row_top_n(
     for did in set(group_df["document_id"].to_list()):
         group_recs.extend(doc_id_to_records.get(did, []))
 
+    lines: list[str] = []
     top_matched = _get_top_items_by_status(group_recs, "matched", "source_a_name", top_n)
     if top_matched:
-        print(f"      Top {top_n} matched: {', '.join(top_matched)}")
+        lines.append(f"      Top {top_n} matched: {', '.join(top_matched)}")
 
     top_a = _get_top_items_by_status(
         group_recs, ["matched", "source_a_only"], "source_a_name", top_n
     )
     if top_a:
-        print(f"      Top {top_n} {a_label}: {', '.join(top_a)}")
+        lines.append(f"      Top {top_n} {a_label}: {', '.join(top_a)}")
 
     top_b = _get_top_items_by_status(
         group_recs, ["matched", "source_b_only"], "source_b_name", top_n
     )
     if top_b:
-        print(f"      Top {top_n} {b_label}: {', '.join(top_b)}")
+        lines.append(f"      Top {top_n} {b_label}: {', '.join(top_b)}")
 
     top_a_unmatched = _get_top_items_by_status(
         group_recs, "source_a_only", "source_a_name", top_n
     )
     if top_a_unmatched:
-        print(f"      Top {top_n} unmatched-{a_label}: {', '.join(top_a_unmatched)}")
+        lines.append(f"      Top {top_n} unmatched-{a_label}: {', '.join(top_a_unmatched)}")
 
     top_b_unmatched = _get_top_items_by_status(
         group_recs, "source_b_only", "source_b_name", top_n
     )
     if top_b_unmatched:
-        print(f"      Top {top_n} unmatched-{b_label}: {', '.join(top_b_unmatched)}")
+        lines.append(f"      Top {top_n} unmatched-{b_label}: {', '.join(top_b_unmatched)}")
+
+    return "\n".join(lines)
 
 
 def _print_group_breakdown(
@@ -494,14 +496,14 @@ def _print_group_breakdown(
     a_label: str | None = None,
     b_label: str | None = None,
     top_n: int = 10,
-) -> None:
-    """Print per-group descriptive stats for jaccard and n_matched."""
-    print()
+) -> str:
+    """Return per-group descriptive stats for jaccard and n_matched as a string."""
+    lines: list[str] = [""]
     if top_n_filter is not None:
-        print(f"  Breakdown by {group_label} (top {top_n_filter} most populous):")
+        lines.append(f"  Breakdown by {group_label} (top {top_n_filter} most populous):")
     else:
-        print(f"  Breakdown by {group_label}:")
-    print(f"  {'-' * 60}")
+        lines.append(f"  Breakdown by {group_label}:")
+    lines.append(f"  {'-' * 60}")
 
     grouped = (
         results_df.group_by(group_col)
@@ -526,7 +528,7 @@ def _print_group_breakdown(
 
     for row in grouped.iter_rows(named=True):
         group_val = row[group_col] if row[group_col] is not None else "Unknown"
-        print(
+        lines.append(
             f"    [{group_val}]: n={row['n_pairs']}, "
             f"jaccard mean={row['mean_jaccard'] or 0:.3f}, "
             f"std={row['std_jaccard'] or 0:.3f}, "
@@ -537,7 +539,7 @@ def _print_group_breakdown(
         )
 
         if show_top_n:
-            _print_group_row_top_n(
+            top_n_text = _print_group_row_top_n(
                 row,
                 group_col,
                 results_df,
@@ -546,6 +548,10 @@ def _print_group_breakdown(
                 b_label,  # type: ignore[arg-type]
                 top_n,
             )
+            if top_n_text:
+                lines.append(top_n_text)
+
+    return "\n".join(lines)
 
 
 def _compute_gini(counts: list[int]) -> float:
@@ -570,8 +576,11 @@ def _print_summary_stats(
     all_id_records: list[dict],
     all_dm_records: list[dict],
     top_n: int,
-) -> None:
-    """Print full descriptive statistics for all three pairwise comparisons."""
+) -> dict[str, str]:
+    """Return full descriptive statistics for all three pairwise comparisons.
+
+    Returns a dict mapping comparison label to its stats text.
+    """
     # top_n_filter=None means show all groups; integer means show only top-N most populous
     grouping_cols: list[tuple[str, str, int | None]] = [
         ("document_domain_name", "Domain", None),
@@ -600,59 +609,72 @@ def _print_summary_stats(
         "dm": (pl.col("dm_n_deps") > 0) & (pl.col("dm_n_mentions") > 0),
     }
 
+    results: dict[str, str] = {}
     for label, prefix, all_records, a_label, b_label in comparisons:
         comparison_df = results_df.filter(filter_exprs[prefix])
-        print()
-        print("=" * 70)
-        print(f"  {label}  (N pairs with data for both sources: {comparison_df.height})")
-        print("=" * 70)
+        lines: list[str] = [
+            "",
+            "=" * 70,
+            f"  {label}  (N pairs with data for both sources: {comparison_df.height})",
+            "=" * 70,
+        ]
 
-        _print_descriptive_stats(comparison_df, f"{prefix}_jaccard", "Jaccard")
-        _print_descriptive_stats(comparison_df, f"{prefix}_n_matched", "N Matched")
+        lines.append(_print_descriptive_stats(comparison_df, f"{prefix}_jaccard", "Jaccard"))
+        lines.append(
+            _print_descriptive_stats(comparison_df, f"{prefix}_n_matched", "N Matched")
+        )
         non_zero_score = comparison_df.filter(pl.col(f"{prefix}_avg_score") > 0)
-        _print_descriptive_stats(non_zero_score, f"{prefix}_avg_score", "Avg Match Score")
+        lines.append(
+            _print_descriptive_stats(non_zero_score, f"{prefix}_avg_score", "Avg Match Score")
+        )
 
         top_matched = _get_top_items_by_status(all_records, "matched", "source_a_name", top_n)
         if top_matched:
-            print(f"  Top {top_n} matched: {', '.join(top_matched)}")
+            lines.append(f"  Top {top_n} matched: {', '.join(top_matched)}")
 
         top_a = _get_top_items_by_status(
             all_records, ["matched", "source_a_only"], "source_a_name", top_n
         )
         if top_a:
-            print(f"  Top {top_n} {a_label}: {', '.join(top_a)}")
+            lines.append(f"  Top {top_n} {a_label}: {', '.join(top_a)}")
 
         top_b = _get_top_items_by_status(
             all_records, ["matched", "source_b_only"], "source_b_name", top_n
         )
         if top_b:
-            print(f"  Top {top_n} {b_label}: {', '.join(top_b)}")
+            lines.append(f"  Top {top_n} {b_label}: {', '.join(top_b)}")
 
         top_a_unmatched = _get_top_items_by_status(
             all_records, "source_a_only", "source_a_name", top_n
         )
         if top_a_unmatched:
-            print(f"  Top {top_n} unmatched-{a_label}: {', '.join(top_a_unmatched)}")
+            lines.append(f"  Top {top_n} unmatched-{a_label}: {', '.join(top_a_unmatched)}")
 
         top_b_unmatched = _get_top_items_by_status(
             all_records, "source_b_only", "source_b_name", top_n
         )
         if top_b_unmatched:
-            print(f"  Top {top_n} unmatched-{b_label}: {', '.join(top_b_unmatched)}")
+            lines.append(f"  Top {top_n} unmatched-{b_label}: {', '.join(top_b_unmatched)}")
 
         for col, col_label, tnf in grouping_cols:
-            _print_group_breakdown(
-                comparison_df,
-                col,
-                col_label,
-                f"{prefix}_jaccard",
-                f"{prefix}_n_matched",
-                top_n_filter=tnf,
-                all_records=all_records,
-                a_label=a_label,
-                b_label=b_label,
-                top_n=top_n,
+            lines.append(
+                _print_group_breakdown(
+                    comparison_df,
+                    col,
+                    col_label,
+                    f"{prefix}_jaccard",
+                    f"{prefix}_n_matched",
+                    top_n_filter=tnf,
+                    all_records=all_records,
+                    a_label=a_label,
+                    b_label=b_label,
+                    top_n=top_n,
+                )
             )
+
+        results[label] = "\n".join(lines)
+
+    return results
 
 
 ###############################################################################
@@ -890,6 +912,15 @@ def analyze(
     log.info("Loading software tables from database...")
     imports_df = _read_table("repository_import")
     deps_df = _read_table("repository_dependency")
+    # Ecosystem filtering: the `ecosystem` column contains values like "PyPI", "NPM",
+    # "CRAN", "github-actions", "docker", etc. By default all ecosystems are included in
+    # the analysis. To exclude specific ecosystems that are not research software
+    # (e.g. github-actions, docker), uncomment and modify the filter below:
+    # DEPS_EXCLUDE_ECOSYSTEMS: set[str] = {"github-actions", "docker"}
+    # deps_df = deps_df.filter(
+    #     pl.col("ecosystem").is_null()
+    #     | ~pl.col("ecosystem").is_in(list(DEPS_EXCLUDE_ECOSYSTEMS))
+    # )
     raw_mentions_df = _read_table("document_software_mention")
     mentions_df = raw_mentions_df.filter(
         ~pl.col("software_name_normalized").is_in(list(MENTION_EXCLUDE_NORMALIZED))
@@ -1062,13 +1093,24 @@ def analyze(
 
     # Summary statistics
     log.info("Printing summary stats...")
-    _print_summary_stats(
+    stats_by_comparison = _print_summary_stats(
         results_df,
         all_im_records,
         all_id_records,
         all_dm_records,
         top_n,
     )
+    filename_map = {
+        "Imports vs Mentions": "rq3-summary-stats-imports-vs-mentions.txt",
+        "Imports vs Dependencies": "rq3-summary-stats-imports-vs-dependencies.txt",
+        "Dependencies vs Mentions": "rq3-summary-stats-dependencies-vs-mentions.txt",
+    }
+    for comparison_label, stats_text in stats_by_comparison.items():
+        print(stats_text)
+        fname = filename_map[comparison_label]
+        with open(output_path / fname, "w") as f:
+            f.write(stats_text)
+        log.info(f"Saved {fname}")
     log.info("Summary stats complete.")
 
     # Gini coefficients + frequency distribution plot
