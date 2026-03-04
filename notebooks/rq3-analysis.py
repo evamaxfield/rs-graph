@@ -248,14 +248,12 @@ class PairwiseSoftwareRecord:
 ###############################################################################
 
 
-def _dedup_by_normalized(
-    names: list[str], norms: list[str]
-) -> tuple[list[str], list[str]]:
+def _dedup_by_normalized(names: list[str], norms: list[str]) -> tuple[list[str], list[str]]:
     """Deduplicate (name, normalized) pairs by normalized value, keeping first."""
     seen: set[str] = set()
     out_names: list[str] = []
     out_norms: list[str] = []
-    for n, nm in zip(names, norms):
+    for n, nm in zip(names, norms, strict=False):
         if nm not in seen:
             seen.add(nm)
             out_names.append(n)
@@ -282,8 +280,8 @@ def run_pairwise_analysis(
         records: List of PairwiseSoftwareRecord objects
         stats: Dict of summary statistics for this comparison
     """
-    norm_a_to_orig = dict(zip(source_a_normalized, source_a_names))
-    norm_b_to_orig = dict(zip(source_b_normalized, source_b_names))
+    norm_a_to_orig = dict(zip(source_a_normalized, source_a_names, strict=False))
+    norm_b_to_orig = dict(zip(source_b_normalized, source_b_names, strict=False))
 
     # align_software_names normalizes inputs internally (idempotent on pre-normalized names)
     matches = align_software_names(
@@ -311,7 +309,7 @@ def run_pairwise_analysis(
             )
         )
 
-    for orig, norm in zip(source_a_names, source_a_normalized):
+    for orig, norm in zip(source_a_names, source_a_normalized, strict=False):
         if norm not in matched_a_norms:
             records.append(
                 PairwiseSoftwareRecord(
@@ -323,7 +321,7 @@ def run_pairwise_analysis(
                 )
             )
 
-    for orig, norm in zip(source_b_names, source_b_normalized):
+    for orig, norm in zip(source_b_names, source_b_normalized, strict=False):
         if norm not in matched_b_norms:
             records.append(
                 PairwiseSoftwareRecord(
@@ -376,9 +374,7 @@ def _get_top_items_by_status(
         status_filter = [status_filter]
 
     filtered = [
-        r
-        for r in all_records
-        if r["status"] in status_filter and r[name_column] is not None
+        r for r in all_records if r["status"] in status_filter and r[name_column] is not None
     ]
 
     if not filtered:
@@ -392,10 +388,7 @@ def _get_top_items_by_status(
         norm_to_display[norm] = r[name_column]
 
     top = norm_counts.most_common(top_n)
-    return [
-        f"{prep_name_for_printing(norm_to_display[norm])} ({count})"
-        for norm, count in top
-    ]
+    return [f"{prep_name_for_printing(norm_to_display[norm])} ({count})" for norm, count in top]
 
 
 ###############################################################################
@@ -437,10 +430,18 @@ def _print_group_breakdown(
     group_label: str,
     jaccard_col: str,
     n_matched_col: str,
+    top_n_filter: int | None = None,
+    all_records: list[dict] | None = None,
+    a_label: str | None = None,
+    b_label: str | None = None,
+    top_n: int = 10,
 ) -> None:
     """Print per-group descriptive stats for jaccard and n_matched."""
     print()
-    print(f"  Breakdown by {group_label}:")
+    if top_n_filter is not None:
+        print(f"  Breakdown by {group_label} (top {top_n_filter} most populous):")
+    else:
+        print(f"  Breakdown by {group_label}:")
     print(f"  {'-' * 60}")
 
     grouped = (
@@ -455,8 +456,22 @@ def _print_group_breakdown(
             pl.col(n_matched_col).mean().alias("mean_n_matched"),
             pl.col(n_matched_col).median().alias("median_n_matched"),
         )
-        .sort(group_col)
+        .sort("n_pairs", descending=True)
     )
+
+    if top_n_filter is not None:
+        grouped = grouped.head(top_n_filter)
+
+    show_top_n = all_records is not None and a_label is not None and b_label is not None
+
+    # Pre-build doc_id → records lookup for efficient per-group filtering
+    doc_id_to_records: dict[int, list[dict]] = {}
+    if show_top_n:
+        for rec in all_records:  # type: ignore[union-attr]
+            did = rec["document_id"]
+            if did not in doc_id_to_records:
+                doc_id_to_records[did] = []
+            doc_id_to_records[did].append(rec)
 
     for row in grouped.iter_rows(named=True):
         group_val = row[group_col] if row[group_col] is not None else "Unknown"
@@ -469,6 +484,45 @@ def _print_group_breakdown(
             f"p75={row['p75_jaccard'] or 0:.3f}, "
             f"mean_n_matched={row['mean_n_matched'] or 0:.1f}"
         )
+
+        if show_top_n:
+            gv = row[group_col]
+            if gv is None:
+                group_df = results_df.filter(pl.col(group_col).is_null())
+            else:
+                group_df = results_df.filter(pl.col(group_col) == gv)
+            group_doc_ids = set(group_df["document_id"].to_list())
+            group_recs: list[dict] = []
+            for did in group_doc_ids:
+                group_recs.extend(doc_id_to_records.get(did, []))
+
+            top_matched = _get_top_items_by_status(group_recs, "matched", "source_a_name", top_n)
+            if top_matched:
+                print(f"      Top {top_n} matched: {', '.join(top_matched)}")
+
+            top_a = _get_top_items_by_status(
+                group_recs, ["matched", "source_a_only"], "source_a_name", top_n
+            )
+            if top_a:
+                print(f"      Top {top_n} {a_label}: {', '.join(top_a)}")
+
+            top_b = _get_top_items_by_status(
+                group_recs, ["matched", "source_b_only"], "source_b_name", top_n
+            )
+            if top_b:
+                print(f"      Top {top_n} {b_label}: {', '.join(top_b)}")
+
+            top_a_unmatched = _get_top_items_by_status(
+                group_recs, "source_a_only", "source_a_name", top_n
+            )
+            if top_a_unmatched:
+                print(f"      Top {top_n} unmatched-{a_label}: {', '.join(top_a_unmatched)}")
+
+            top_b_unmatched = _get_top_items_by_status(
+                group_recs, "source_b_only", "source_b_name", top_n
+            )
+            if top_b_unmatched:
+                print(f"      Top {top_n} unmatched-{b_label}: {', '.join(top_b_unmatched)}")
 
 
 def _compute_gini(counts: list[int]) -> float:
@@ -495,59 +549,86 @@ def _print_summary_stats(
     top_n: int,
 ) -> None:
     """Print full descriptive statistics for all three pairwise comparisons."""
-    grouping_cols = [
-        ("document_domain_name", "Domain"),
-        ("document_field_name", "Field"),
-        ("repository_primary_language", "Language"),
-        ("dataset_source_name", "Dataset Source"),
-        ("document_publication_year", "Publication Year"),
-        ("country_code", "Country"),
-        ("document_is_open_access", "Open Access"),
+    # top_n_filter=None means show all groups; integer means show only top-N most populous
+    grouping_cols: list[tuple[str, str, int | None]] = [
+        ("document_domain_name", "Domain", None),
+        ("document_field_name", "Field", top_n),
+        ("repository_primary_language", "Language", top_n),
+        ("dataset_source_name", "Dataset Source", None),
+        ("document_publication_year", "Publication Year", None),
+        ("country_code", "Country", top_n),
+        ("document_is_open_access", "Open Access", None),
     ]
 
-    comparisons: list[tuple[str, str, list[dict]]] = [
-        ("Imports vs Mentions", "im", all_im_records),
-        ("Imports vs Dependencies", "id", all_id_records),
-        ("Dependencies vs Mentions", "dm", all_dm_records),
+    comparisons: list[tuple[str, str, list[dict], str, str]] = [
+        ("Imports vs Mentions", "im", all_im_records, "Imports", "Mentions"),
+        ("Imports vs Dependencies", "id", all_id_records, "Imports", "Dependencies"),
+        ("Dependencies vs Mentions", "dm", all_dm_records, "Dependencies", "Mentions"),
     ]
 
-    source_a_col_name = {
-        "im": ("source_a_name", "source_b_name"),
-        "id": ("source_a_name", "source_b_name"),
-        "dm": ("source_a_name", "source_b_name"),
+    # TODO: Currently using AND logic (both sources must have data) for testing purposes
+    # while imports/dependencies processing is still incomplete. Once the full dataset
+    # has been processed for all source types, switch to OR logic so that one-sided pairs
+    # (e.g. a repo with imports but a paper with no mentions) are included for a complete
+    # picture. To switch: change each & to | in the filter expressions below.
+    filter_exprs = {
+        "im": (pl.col("im_n_imports") > 0) & (pl.col("im_n_mentions") > 0),
+        "id": (pl.col("id_n_imports") > 0) & (pl.col("id_n_deps") > 0),
+        "dm": (pl.col("dm_n_deps") > 0) & (pl.col("dm_n_mentions") > 0),
     }
 
-    for label, prefix, all_records in comparisons:
-        a_col, b_col = source_a_col_name[prefix]
+    for label, prefix, all_records, a_label, b_label in comparisons:
+        comparison_df = results_df.filter(filter_exprs[prefix])
         print()
         print("=" * 70)
-        print(f"  {label}")
+        print(f"  {label}  (N pairs with data for both sources: {comparison_df.height})")
         print("=" * 70)
 
-        _print_descriptive_stats(results_df, f"{prefix}_jaccard", "Jaccard")
-        _print_descriptive_stats(results_df, f"{prefix}_n_matched", "N Matched")
-        non_zero_score = results_df.filter(pl.col(f"{prefix}_avg_score") > 0)
+        _print_descriptive_stats(comparison_df, f"{prefix}_jaccard", "Jaccard")
+        _print_descriptive_stats(comparison_df, f"{prefix}_n_matched", "N Matched")
+        non_zero_score = comparison_df.filter(pl.col(f"{prefix}_avg_score") > 0)
         _print_descriptive_stats(non_zero_score, f"{prefix}_avg_score", "Avg Match Score")
 
-        top_matched = _get_top_items_by_status(all_records, "matched", a_col, top_n)
+        top_matched = _get_top_items_by_status(all_records, "matched", "source_a_name", top_n)
         if top_matched:
-            print(f"  Top {top_n} matched (source A): {', '.join(top_matched)}")
+            print(f"  Top {top_n} matched: {', '.join(top_matched)}")
 
-        top_a_only = _get_top_items_by_status(all_records, "source_a_only", a_col, top_n)
-        if top_a_only:
-            print(f"  Top {top_n} source-A-only: {', '.join(top_a_only)}")
+        top_a = _get_top_items_by_status(
+            all_records, ["matched", "source_a_only"], "source_a_name", top_n
+        )
+        if top_a:
+            print(f"  Top {top_n} {a_label}: {', '.join(top_a)}")
 
-        top_b_only = _get_top_items_by_status(all_records, "source_b_only", b_col, top_n)
-        if top_b_only:
-            print(f"  Top {top_n} source-B-only: {', '.join(top_b_only)}")
+        top_b = _get_top_items_by_status(
+            all_records, ["matched", "source_b_only"], "source_b_name", top_n
+        )
+        if top_b:
+            print(f"  Top {top_n} {b_label}: {', '.join(top_b)}")
 
-        for col, col_label in grouping_cols:
+        top_a_unmatched = _get_top_items_by_status(
+            all_records, "source_a_only", "source_a_name", top_n
+        )
+        if top_a_unmatched:
+            print(f"  Top {top_n} unmatched-{a_label}: {', '.join(top_a_unmatched)}")
+
+        top_b_unmatched = _get_top_items_by_status(
+            all_records, "source_b_only", "source_b_name", top_n
+        )
+        if top_b_unmatched:
+            print(f"  Top {top_n} unmatched-{b_label}: {', '.join(top_b_unmatched)}")
+
+        for col, col_label, tnf in grouping_cols:
             _print_group_breakdown(
-                results_df,
+                comparison_df,
                 col,
                 col_label,
                 f"{prefix}_jaccard",
                 f"{prefix}_n_matched",
+                top_n_filter=tnf,
+                all_records=all_records,
+                a_label=a_label,
+                b_label=b_label,
+                top_n=top_n,
             )
 
 
@@ -577,13 +658,13 @@ def _plot_jaccard_boxplot(
 
     plot_df = pl.DataFrame(data).to_pandas()
     fig, ax = plt.subplots(figsize=(8, 5))
-    sns.boxplot(data=plot_df, x="Comparison", y="Jaccard Similarity", ax=ax)
+    sns.boxplot(data=plot_df, x="Comparison", y="Jaccard Similarity", ax=ax, showfliers=False)
     ax.set_title("Distribution of Pairwise Jaccard Similarity Scores")
     ax.set_xlabel("")
     plt.tight_layout()
-    fig.savefig(output_dir / "jaccard_boxplot.pdf", bbox_inches="tight")
+    fig.savefig(output_dir / "jaccard_boxplot.png", bbox_inches="tight")
     plt.close(fig)
-    log.info("Saved jaccard_boxplot.pdf")
+    log.info("Saved jaccard_boxplot.png")
 
 
 def _plot_jaccard_by_group(
@@ -593,7 +674,6 @@ def _plot_jaccard_by_group(
     output_dir: Path,
     top_n_groups: int = 10,
 ) -> None:
-    """Grouped bar chart of mean Jaccard by a grouping variable."""
     top_groups = (
         results_df.group_by(group_col)
         .agg(pl.len().alias("count"))
@@ -642,9 +722,9 @@ def _plot_jaccard_by_group(
     ax.tick_params(axis="x", rotation=45)
     plt.tight_layout()
     safe_name = group_col.replace("/", "_").replace(" ", "_")
-    fig.savefig(output_dir / f"jaccard_by_{safe_name}.pdf", bbox_inches="tight")
+    fig.savefig(output_dir / f"jaccard_by_{safe_name}.png", bbox_inches="tight")
     plt.close(fig)
-    log.info(f"Saved jaccard_by_{safe_name}.pdf")
+    log.info(f"Saved jaccard_by_{safe_name}.png")
 
 
 def _plot_score_histograms(
@@ -659,7 +739,7 @@ def _plot_score_histograms(
     }
 
     fig, axes = plt.subplots(1, 3, figsize=(14, 4))
-    for ax, (col, label) in zip(axes, score_cols.items()):
+    for ax, (col, label) in zip(axes, score_cols.items(), strict=False):
         vals = results_df.filter(pl.col(col) > 0)[col].drop_nulls().to_list()
         if vals:
             ax.hist(vals, bins=30, edgecolor="white")
@@ -668,9 +748,9 @@ def _plot_score_histograms(
         ax.set_ylabel("Count")
     plt.suptitle("Distribution of Pairwise Match Scores")
     plt.tight_layout()
-    fig.savefig(output_dir / "match_score_histograms.pdf", bbox_inches="tight")
+    fig.savefig(output_dir / "match_score_histograms.png", bbox_inches="tight")
     plt.close(fig)
-    log.info("Saved match_score_histograms.pdf")
+    log.info("Saved match_score_histograms.png")
 
 
 def _plot_software_frequency_distributions(
@@ -728,9 +808,9 @@ def _plot_software_frequency_distributions(
     ax.set_title("Software Name Frequency Distributions by Source")
     ax.legend()
     plt.tight_layout()
-    fig.savefig(output_dir / "software_frequency_distributions.pdf", bbox_inches="tight")
+    fig.savefig(output_dir / "software_frequency_distributions.png", bbox_inches="tight")
     plt.close(fig)
-    log.info("Saved software_frequency_distributions.pdf")
+    log.info("Saved software_frequency_distributions.png")
 
     return gini_values
 
@@ -744,7 +824,7 @@ def _plot_software_frequency_distributions(
 def analyze(
     score_cutoff: float = SCORE_CUTOFF,
     top_n: int = 10,
-    output_dir: str = str(THIS_DIR / "rq3-output"),
+    output_dir: str = str(THIS_DIR / "rq3-results"),
     debug: bool = False,
 ) -> None:
     """
@@ -795,6 +875,11 @@ def analyze(
     imports_by_repo = _build_lookup(imports_df, "repository_id")
     deps_by_repo = _build_lookup(deps_df, "repository_id")
     mentions_by_doc = _build_lookup(mentions_df, "document_id")
+    log.info(
+        f"Lookup dicts built: {len(imports_by_repo)} repos with imports, "
+        f"{len(deps_by_repo)} repos with deps, "
+        f"{len(mentions_by_doc)} docs with mentions"
+    )
 
     # Run pairwise analysis per pair
     results: list[dict] = []
@@ -802,20 +887,27 @@ def analyze(
     all_id_records: list[dict] = []
     all_dm_records: list[dict] = []
 
-    for row in tqdm(
-        pairs.iter_rows(named=True),
-        total=pairs.height,
-        desc="Running pairwise analysis",
+    for i, row in enumerate(
+        tqdm(
+            pairs.iter_rows(named=True),
+            total=pairs.height,
+            desc="Running pairwise analysis",
+        )
     ):
         doc_id: int = row["document_id"]
         repo_id: int = row["repository_id"]
+        if i % 10_000 == 0:
+            log.debug(
+                f"[{i}/{pairs.height}] doc_id={doc_id} repo_id={repo_id} | "
+                f"imports={len(imports_by_repo.get(repo_id, ([], []))[0])} "
+                f"deps={len(deps_by_repo.get(repo_id, ([], []))[0])} "
+                f"mentions={len(mentions_by_doc.get(doc_id, ([], []))[0])}"
+            )
 
         import_names, import_norms = _dedup_by_normalized(
             *imports_by_repo.get(repo_id, ([], []))
         )
-        dep_names, dep_norms = _dedup_by_normalized(
-            *deps_by_repo.get(repo_id, ([], []))
-        )
+        dep_names, dep_norms = _dedup_by_normalized(*deps_by_repo.get(repo_id, ([], [])))
         mention_names, mention_norms = _dedup_by_normalized(
             *mentions_by_doc.get(doc_id, ([], []))
         )
@@ -853,9 +945,10 @@ def analyze(
             score_cutoff,
         )
 
-        def _to_dicts(records: list[PairwiseSoftwareRecord]) -> list[dict]:
+        def _to_dicts(records: list[PairwiseSoftwareRecord], d_id: int) -> list[dict]:
             return [
                 {
+                    "document_id": d_id,
                     "source_a_name": r.source_a_name,
                     "source_b_name": r.source_b_name,
                     "normalized_name": r.normalized_name,
@@ -865,9 +958,9 @@ def analyze(
                 for r in records
             ]
 
-        im_dicts = _to_dicts(im_records)
-        id_dicts = _to_dicts(id_records)
-        dm_dicts = _to_dicts(dm_records)
+        im_dicts = _to_dicts(im_records, doc_id)
+        id_dicts = _to_dicts(id_records, doc_id)
+        dm_dicts = _to_dicts(dm_records, doc_id)
 
         all_im_records.extend(im_dicts)
         all_id_records.extend(id_dicts)
@@ -911,10 +1004,23 @@ def analyze(
         )
 
     # Build results DataFrame and add publication year
-    results_df = pl.DataFrame(results).with_columns(
-        pl.col("document_publication_date").dt.year().alias("document_publication_year")
-    )
+    # infer_schema_length=None: scan all rows so nested match_score (None vs f64) is
+    # correctly typed as Float64 rather than Null
+    log.info("Building results DataFrame (infer_schema_length=None)...")
+    try:
+        results_df = pl.DataFrame(results, infer_schema_length=None).with_columns(
+            pl.col("document_publication_date").dt.year().alias("document_publication_year")
+        )
+    except Exception as e:
+        log.error(f"Failed to build results DataFrame: {e}")
+        log.debug(f"First result dict keys: {list(results[0].keys()) if results else 'empty'}")
+        if results:
+            log.debug(
+                f"First result dict sample: { {k: type(v).__name__ for k, v in results[0].items()} }"
+            )
+        raise
     log.info(f"Built results DataFrame with {results_df.height} rows")
+    log.debug(f"Results DataFrame schema:\n{results_df.schema}")
 
     # Save to parquet (drop nested record cols which are for in-memory use only)
     parquet_df = results_df.drop(
@@ -925,6 +1031,7 @@ def analyze(
     log.info(f"Saved results to {parquet_path}")
 
     # Summary statistics
+    log.info("Printing summary stats...")
     _print_summary_stats(
         results_df,
         all_im_records,
@@ -932,6 +1039,7 @@ def analyze(
         all_dm_records,
         top_n,
     )
+    log.info("Summary stats complete.")
 
     # Gini coefficients + frequency distribution plot
     pair_repo_ids = set(pairs["repository_id"].to_list())

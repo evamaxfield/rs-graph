@@ -153,6 +153,7 @@ stored-queries.sql
 .open-alex-tokens.yml
 notebooks/rq1-results/*
 notebooks/rq2-results/*
+notebooks/rq3-results/*
 
 # Ignored data files
 rs_graph/data/files/*.db
