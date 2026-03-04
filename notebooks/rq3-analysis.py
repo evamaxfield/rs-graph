@@ -424,6 +424,65 @@ def _print_descriptive_stats(
     )
 
 
+def _build_doc_id_lookup(all_records: list[dict]) -> dict[int, list[dict]]:
+    """Build a document_id → records lookup for efficient per-group filtering."""
+    lookup: dict[int, list[dict]] = {}
+    for rec in all_records:
+        did = rec["document_id"]
+        if did not in lookup:
+            lookup[did] = []
+        lookup[did].append(rec)
+    return lookup
+
+
+def _print_group_row_top_n(
+    row: dict,
+    group_col: str,
+    results_df: pl.DataFrame,
+    doc_id_to_records: dict[int, list[dict]],
+    a_label: str,
+    b_label: str,
+    top_n: int,
+) -> None:
+    """Print top-N software items for a single group row."""
+    gv = row[group_col]
+    if gv is None:
+        group_df = results_df.filter(pl.col(group_col).is_null())
+    else:
+        group_df = results_df.filter(pl.col(group_col) == gv)
+    group_recs: list[dict] = []
+    for did in set(group_df["document_id"].to_list()):
+        group_recs.extend(doc_id_to_records.get(did, []))
+
+    top_matched = _get_top_items_by_status(group_recs, "matched", "source_a_name", top_n)
+    if top_matched:
+        print(f"      Top {top_n} matched: {', '.join(top_matched)}")
+
+    top_a = _get_top_items_by_status(
+        group_recs, ["matched", "source_a_only"], "source_a_name", top_n
+    )
+    if top_a:
+        print(f"      Top {top_n} {a_label}: {', '.join(top_a)}")
+
+    top_b = _get_top_items_by_status(
+        group_recs, ["matched", "source_b_only"], "source_b_name", top_n
+    )
+    if top_b:
+        print(f"      Top {top_n} {b_label}: {', '.join(top_b)}")
+
+    top_a_unmatched = _get_top_items_by_status(
+        group_recs, "source_a_only", "source_a_name", top_n
+    )
+    if top_a_unmatched:
+        print(f"      Top {top_n} unmatched-{a_label}: {', '.join(top_a_unmatched)}")
+
+    top_b_unmatched = _get_top_items_by_status(
+        group_recs, "source_b_only", "source_b_name", top_n
+    )
+    if top_b_unmatched:
+        print(f"      Top {top_n} unmatched-{b_label}: {', '.join(top_b_unmatched)}")
+
+
 def _print_group_breakdown(
     results_df: pl.DataFrame,
     group_col: str,
@@ -463,15 +522,7 @@ def _print_group_breakdown(
         grouped = grouped.head(top_n_filter)
 
     show_top_n = all_records is not None and a_label is not None and b_label is not None
-
-    # Pre-build doc_id → records lookup for efficient per-group filtering
-    doc_id_to_records: dict[int, list[dict]] = {}
-    if show_top_n:
-        for rec in all_records:  # type: ignore[union-attr]
-            did = rec["document_id"]
-            if did not in doc_id_to_records:
-                doc_id_to_records[did] = []
-            doc_id_to_records[did].append(rec)
+    doc_id_to_records = _build_doc_id_lookup(all_records) if show_top_n else {}
 
     for row in grouped.iter_rows(named=True):
         group_val = row[group_col] if row[group_col] is not None else "Unknown"
@@ -486,43 +537,15 @@ def _print_group_breakdown(
         )
 
         if show_top_n:
-            gv = row[group_col]
-            if gv is None:
-                group_df = results_df.filter(pl.col(group_col).is_null())
-            else:
-                group_df = results_df.filter(pl.col(group_col) == gv)
-            group_doc_ids = set(group_df["document_id"].to_list())
-            group_recs: list[dict] = []
-            for did in group_doc_ids:
-                group_recs.extend(doc_id_to_records.get(did, []))
-
-            top_matched = _get_top_items_by_status(group_recs, "matched", "source_a_name", top_n)
-            if top_matched:
-                print(f"      Top {top_n} matched: {', '.join(top_matched)}")
-
-            top_a = _get_top_items_by_status(
-                group_recs, ["matched", "source_a_only"], "source_a_name", top_n
+            _print_group_row_top_n(
+                row,
+                group_col,
+                results_df,
+                doc_id_to_records,
+                a_label,  # type: ignore[arg-type]
+                b_label,  # type: ignore[arg-type]
+                top_n,
             )
-            if top_a:
-                print(f"      Top {top_n} {a_label}: {', '.join(top_a)}")
-
-            top_b = _get_top_items_by_status(
-                group_recs, ["matched", "source_b_only"], "source_b_name", top_n
-            )
-            if top_b:
-                print(f"      Top {top_n} {b_label}: {', '.join(top_b)}")
-
-            top_a_unmatched = _get_top_items_by_status(
-                group_recs, "source_a_only", "source_a_name", top_n
-            )
-            if top_a_unmatched:
-                print(f"      Top {top_n} unmatched-{a_label}: {', '.join(top_a_unmatched)}")
-
-            top_b_unmatched = _get_top_items_by_status(
-                group_recs, "source_b_only", "source_b_name", top_n
-            )
-            if top_b_unmatched:
-                print(f"      Top {top_n} unmatched-{b_label}: {', '.join(top_b_unmatched)}")
 
 
 def _compute_gini(counts: list[int]) -> float:
@@ -816,6 +839,26 @@ def _plot_software_frequency_distributions(
 
 
 ###############################################################################
+# Pipeline Helpers
+###############################################################################
+
+
+def _build_lookup(
+    df: pl.DataFrame,
+    id_col: str,
+) -> dict[int, tuple[list[str], list[str]]]:
+    """Build a per-ID lookup of (names, normalized_names) for fast pair iteration."""
+    lut: dict[int, tuple[list[str], list[str]]] = {}
+    for row in df.iter_rows(named=True):
+        key = row[id_col]
+        if key not in lut:
+            lut[key] = ([], [])
+        lut[key][0].append(row["software_name"])
+        lut[key][1].append(row["software_name_normalized"])
+    return lut
+
+
+###############################################################################
 # Main Command
 ###############################################################################
 
@@ -859,19 +902,6 @@ def analyze(
     )
 
     # Build per-ID lookup dicts for fast access during pair iteration
-    def _build_lookup(
-        df: pl.DataFrame,
-        id_col: str,
-    ) -> dict[int, tuple[list[str], list[str]]]:
-        lut: dict[int, tuple[list[str], list[str]]] = {}
-        for row in df.iter_rows(named=True):
-            key = row[id_col]
-            if key not in lut:
-                lut[key] = ([], [])
-            lut[key][0].append(row["software_name"])
-            lut[key][1].append(row["software_name_normalized"])
-        return lut
-
     imports_by_repo = _build_lookup(imports_df, "repository_id")
     deps_by_repo = _build_lookup(deps_df, "repository_id")
     mentions_by_doc = _build_lookup(mentions_df, "document_id")
