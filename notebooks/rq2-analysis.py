@@ -854,6 +854,79 @@ def run_feature_comparison(  # noqa: C901
         )
         plt.close(fig)
 
+    # ── Combined 2 by 2 categorical overview figure ──
+    fig, axes = plt.subplots(2, 2, figsize=(18, 14), constrained_layout=True)
+    axes_flat = axes.flatten()
+
+    _cat_plot_order = [
+        "document_field_name",
+        "document_is_open_access",
+        "document_type",
+        "repository_primary_language",
+    ]
+
+    for i, cat_col in enumerate(_cat_plot_order):
+        ax = axes_flat[i]
+        if cat_col not in pairs.columns:
+            ax.set_visible(False)
+            continue
+
+        work_df = pairs.with_columns(pl.col(cat_col).fill_null("Unknown"))
+        work_df, _, top_col = _add_top_n_other_column(work_df, cat_col, top_n)
+
+        props = (
+            work_df.group_by(["pair_source_label", top_col])
+            .len()
+            .with_columns(
+                (pl.col("len") / pl.col("len").sum().over("pair_source_label")).alias(
+                    "proportion"
+                )
+            )
+            .sort(top_col)
+        )
+
+        props_pd = props.to_pandas()
+        categories = sorted(props_pd[top_col].unique())
+        x = np.arange(len(categories))
+        width = 0.35
+
+        shared_props = []
+        mined_props = []
+        for cat in categories:
+            s = props_pd[
+                (props_pd["pair_source_label"] == "shared") & (props_pd[top_col] == cat)
+            ]["proportion"]
+            shared_props.append(float(s.iloc[0]) if len(s) > 0 else 0)
+            m = props_pd[
+                (props_pd["pair_source_label"] == "mined") & (props_pd[top_col] == cat)
+            ]["proportion"]
+            mined_props.append(float(m.iloc[0]) if len(m) > 0 else 0)
+
+        ax.bar(x - width / 2, shared_props, width, label="Shared", color=PALETTE[0])
+        ax.bar(x + width / 2, mined_props, width, label="Mined", color=PALETTE[1])
+        ax.set_xticks(x)
+        ax.set_xticklabels(categories, rotation=45, ha="right", fontsize=9)
+        ax.set_ylabel("Proportion within group")
+        ax.legend()
+
+        cat_display = FEATURE_DISPLAY_NAMES.get(cat_col, cat_col)
+        stat_row = cat_df.filter(pl.col("feature") == cat_col)
+        if stat_row.height > 0:
+            r = stat_row.row(0, named=True)
+            ax.set_title(
+                f"{cat_display}\n"
+                f"Chi-square p={r['p_value']:.2e}, "
+                f"Cramer's V={r['cramers_v']:.3f} ({r['effect_magnitude']})",
+                fontsize=11,
+            )
+        else:
+            ax.set_title(cat_display, fontsize=11)
+
+    fig.suptitle("Categorical Features: Shared vs Mined Pairs", fontsize=16)
+    fig.savefig(results_dir / "dist-categorical-overview.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+    log.info("Saved dist-categorical-overview.png")
+
     # ── E. Summary markdown ──
     lines = [
         "# Feature Comparison: Shared vs Mined Pairs\n",
@@ -1668,14 +1741,15 @@ def analyze(
     sns.set_palette(PALETTE)
 
     log.info("Loading pairs (all)...")
-    pairs_all = load_rq2_pairs(sample_size=sample_size)
+    # pairs_all = load_rq2_pairs(sample_size=sample_size)
     log.info("Loading pairs (high-conf, >= 0.995)...")
     pairs_high_conf = load_rq2_pairs(
         sample_size=sample_size,
         doc_repo_confidence_threshold=0.995,
     )
 
-    for label, pairs in [("all", pairs_all), ("high-conf", pairs_high_conf)]:
+    # for label, pairs in [("all", pairs_all), ("high-conf", pairs_high_conf)]:
+    for label, pairs in [("high-conf", pairs_high_conf)]:
         subset_dir = results_dir / label
         subset_dir.mkdir(exist_ok=True)
         log.info("Running RQ2 analyses for subset: %s", label)

@@ -509,8 +509,7 @@ def load_pairs(
     repo_file_counts = _read_sql("""
         SELECT
             repository_id,
-            COUNT(*) AS repository_n_files,
-            SUM(bytes_of_code) AS repository_total_file_bytes
+            COUNT(*) AS repository_n_files
         FROM repository_file
         WHERE tree_type = 'blob'
         GROUP BY repository_id
@@ -519,8 +518,7 @@ def load_pairs(
     repo_language_counts = _read_sql("""
         SELECT
             repository_id,
-            COUNT(*) AS repository_n_languages,
-            SUM(bytes_of_code) AS repository_total_language_bytes
+            COUNT(*) AS repository_n_languages
         FROM repository_language
         GROUP BY repository_id
     """)
@@ -702,6 +700,13 @@ def plot_field_countplot(
         field_data, "document_field_name", top_n
     )
     field_order = [*top_fields, "Other"]
+
+    (
+        field_data[field_col]
+        .value_counts(sort=True)
+        .rename({field_col: "field", "count": "pair_count"})
+        .write_csv(results_dir / "field_countplot_data.csv")
+    )
 
     fig, ax = plt.subplots(figsize=(9, 7))
     sns.countplot(
@@ -1273,6 +1278,21 @@ def plot_field_and_language_counts(
         ax.set_ylabel("")
         ax.set_title(FIELD_LANGUAGE_TITLE_LUT.get(feature_name, feature_name), fontsize=16)
 
+    (
+        pairs[lang_col]
+        .value_counts(sort=True)
+        .rename({lang_col: "language", "count": "pair_count"})
+        .write_csv(results_dir / "language_counts.csv")
+    )
+
+    (
+        pairs.group_by([field_col, lang_col])
+        .agg(pl.len().alias("pair_count"))
+        .sort([field_col, "pair_count"], descending=[False, True])
+        .rename({field_col: "field", lang_col: "language"})
+        .write_csv(results_dir / "language_counts_by_field.csv")
+    )
+
     fig.savefig(results_dir / "field_and_language_counts.png", bbox_inches="tight", dpi=300)
     plt.close(fig)
 
@@ -1547,32 +1567,44 @@ def plot_fwci_vs_fwsi(
         y_line = regression["intercept"] + regression["slope"] * x_line
         ax.plot(x_line, y_line, color="black", linestyle="--", linewidth=2)
 
-    labeled_frames: list[pl.DataFrame] = []
-
-    top_fwci_points = fwci_fwsi_plot_data.sort("document_fwci_log10", descending=True).head(2)
-    colors = ["red", "blue"]
-    for row, color in zip(top_fwci_points.iter_rows(named=True), colors, strict=False):
-        _plot_fwci_fwsi_point_data(row, color, ax)
-    labeled_frames.append(top_fwci_points)
-
-    top_fwsi_points = fwci_fwsi_plot_data.sort("repository_fwsi_log10", descending=True).head(2)
-    colors = ["green", "orange"]
-    for row, color in zip(top_fwsi_points.iter_rows(named=True), colors, strict=False):
-        _plot_fwci_fwsi_point_data(row, color, ax)
-    labeled_frames.append(top_fwsi_points)
-
     fwci_fwsi_plot_data = fwci_fwsi_plot_data.with_columns(
         (pl.col("document_fwci_log10") * pl.col("repository_fwsi_log10")).alias(
             "fwci_fwsi_product_log10"
         )
     )
-    selected_product_points = fwci_fwsi_plot_data.sort(
-        "fwci_fwsi_product_log10", descending=True
-    ).head(2)
-    colors = ["brown", "purple"]
-    for row, color in zip(selected_product_points.iter_rows(named=True), colors, strict=False):
-        _plot_fwci_fwsi_point_data(row, color, ax)
-    labeled_frames.append(selected_product_points)
+
+    labeled_frames: list[pl.DataFrame] = [
+        fwci_fwsi_plot_data.sort("document_fwci_log10", descending=True)[0:4:2],
+        fwci_fwsi_plot_data.sort("repository_fwsi_log10", descending=True)[9],
+        fwci_fwsi_plot_data.sort("fwci_fwsi_product_log10", descending=True)[6],
+        fwci_fwsi_plot_data.with_columns(
+            (
+                (pl.col("document_fwci_log10") - 1.5).abs()
+                + (pl.col("repository_fwsi_log10") - 1.5).abs()
+            ).alias("distance_to_1_5_1_5")
+        )
+        .sort("distance_to_1_5_1_5")
+        .head(1),
+        fwci_fwsi_plot_data.with_columns(
+            (
+                (pl.col("document_fwci_log10") - 2.0).abs()
+                + (pl.col("repository_fwsi_log10") - 1.0).abs()
+            ).alias("distance_to_2_0_1_0")
+        )
+        .sort("distance_to_2_0_1_0")
+        .head(1),
+        fwci_fwsi_plot_data.with_columns(
+            (
+                (pl.col("document_fwci_log10") - 0.95).abs()
+                + (pl.col("repository_fwsi_log10") - 2.0).abs()
+            ).alias("distance_to_1_0_2_0")
+        )
+        .sort("distance_to_1_0_2_0")
+        .head(1),
+    ]
+    for rows_df in labeled_frames:
+        for row in rows_df.iter_rows(named=True):
+            _plot_fwci_fwsi_point_data(row, "black", ax)
 
     ax.set_title(
         "Field-Weighted Citation Impact (FWCI) vs Field-Weighted Star Impact (FWSI)\n"
@@ -1581,9 +1613,13 @@ def plot_fwci_vs_fwsi(
     )
     ax.set_xlabel("Document FWCI (log10)")
     ax.set_ylabel("Repository FWSI (log10)")
+    ax.set_xlim(right=ax.get_xlim()[1] + 1.5)
+    sns.despine(ax=ax)
 
     fig.savefig(results_dir / "fwci_vs_fwsi_scatter.png", bbox_inches="tight", dpi=300)
     plt.close(fig)
+
+    fwci_fwsi_plot_data.write_parquet(results_dir / "fwci_fwsi_plot_data.parquet")
 
     labeled_cols = [
         "document_title",
@@ -2447,7 +2483,7 @@ def analyze(
 
     # -- Step 1: Load pairs (all + high-conf) --------------------------------
     log.info("Loading pairs (all)...")
-    pairs_all = load_pairs(sample_size=sample_size)
+    # pairs_all = load_pairs(sample_size=sample_size)
     log.info("Loading pairs (high-conf, >= 0.995)...")
     pairs_high_conf = load_pairs(
         sample_size=sample_size,
@@ -2461,7 +2497,8 @@ def analyze(
     plot_iteration_expansion(iter_dir)
 
     # -- Steps 3+: Run all pair-based analyses for each subset ---------------
-    for label, pairs in [("all", pairs_all), ("high-conf", pairs_high_conf)]:
+    # for label, pairs in [("all", pairs_all), ("high-conf", pairs_high_conf)]:
+    for label, pairs in [("high-conf", pairs_high_conf)]:
         subset_dir = results_dir / label
         subset_dir.mkdir(exist_ok=True)
         log.info("Running pair-based analyses for subset: %s", label)
