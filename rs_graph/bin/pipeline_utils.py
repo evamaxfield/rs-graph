@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, overload
 
 import coiled
 import yaml
@@ -60,6 +60,32 @@ def _get_basic_gpu_cluster_config(
     }
 
 
+@overload
+def _wrap_func_with_coiled_prefect_task(
+    func: Callable,
+    prefect_kwargs: dict[str, Any] | None = ...,
+    coiled_func_name: str | None = ...,
+    coiled_kwargs: dict[str, Any] | None = ...,
+    environ: dict[str, str] | None = ...,
+    timeout_seconds: int = ...,
+    *,
+    warmup_timeout_seconds: None = ...,
+) -> Task: ...
+
+
+@overload
+def _wrap_func_with_coiled_prefect_task(
+    func: Callable,
+    prefect_kwargs: dict[str, Any] | None = ...,
+    coiled_func_name: str | None = ...,
+    coiled_kwargs: dict[str, Any] | None = ...,
+    environ: dict[str, str] | None = ...,
+    timeout_seconds: int = ...,
+    *,
+    warmup_timeout_seconds: int,
+) -> tuple[Task, Task]: ...
+
+
 def _wrap_func_with_coiled_prefect_task(
     func: Callable,
     prefect_kwargs: dict[str, Any] | None = None,
@@ -67,11 +93,23 @@ def _wrap_func_with_coiled_prefect_task(
     coiled_kwargs: dict[str, Any] | None = None,
     environ: dict[str, str] | None = None,
     timeout_seconds: int = 1200,  # 20 minutes
-) -> Task:
+    *,
+    warmup_timeout_seconds: int | None = None,
+) -> Task | tuple[Task, Task]:
     if coiled_kwargs is None:
         coiled_kwargs = {}
     if prefect_kwargs is None:
         prefect_kwargs = {}
+
+    # Create the coiled function once — all Prefect task wrappers call this
+    # same object so they share the same cluster.
+    @coiled.function(
+        **coiled_kwargs,
+        name=coiled_func_name if coiled_func_name is not None else func.__name__,  # type: ignore[attr-defined]
+        environ=environ,
+    )
+    def coiled_func(*args, **kwargs):
+        return func(*args, **kwargs)
 
     @task(
         **prefect_kwargs,
@@ -79,15 +117,23 @@ def _wrap_func_with_coiled_prefect_task(
         log_prints=True,
         timeout_seconds=timeout_seconds,
     )
-    @coiled.function(
-        **coiled_kwargs,
-        name=coiled_func_name if coiled_func_name is not None else func.__name__,  # type: ignore[attr-defined]
-        environ=environ,
-    )
-    def wrapped_func(*args, **kwargs):
-        return func(*args, **kwargs)
+    def normal_task(*args, **kwargs):
+        return coiled_func(*args, **kwargs)
 
-    return wrapped_func
+    if warmup_timeout_seconds is not None:
+
+        @task(
+            **prefect_kwargs,
+            name=func.__name__,  # type: ignore[attr-defined]
+            log_prints=True,
+            timeout_seconds=warmup_timeout_seconds,
+        )
+        def warmup_task(*args, **kwargs):
+            return coiled_func(*args, **kwargs)
+
+        return warmup_task, normal_task
+
+    return normal_task
 
 
 def _load_open_alex_tokens(

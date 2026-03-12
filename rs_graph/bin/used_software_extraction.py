@@ -580,8 +580,9 @@ def _used_software_extraction_flow(
         print("No repositories to process. Exiting.")
         return
 
-    # Construct the extract task mappable function
-    extract_task = _wrap_func_with_coiled_prefect_task(
+    # Construct extract tasks — warmup task uses a longer timeout to absorb
+    # cold-start cluster provisioning (~5-8 min for t4g.large spot instances).
+    extract_warmup_task, extract_task = _wrap_func_with_coiled_prefect_task(
         _extract_repo_imports_and_deps,
         coiled_func_name="extract_repo_imports_and_deps",
         coiled_kwargs=_get_small_cpu_api_cluster(
@@ -590,12 +591,16 @@ def _used_software_extraction_flow(
             coiled_region=coiled_region,
         ),
         timeout_seconds=120,
+        warmup_timeout_seconds=600,
     )
 
     # Process in batches
     batches = [repos[i : i + batch_size] for i in range(0, len(repos), batch_size)]
-    for batch in tqdm(batches, desc="Processing batches", total=len(batches)):
-        batch_futures = extract_task.map(
+    for batch_idx, batch in enumerate(
+        tqdm(batches, desc="Processing batches", total=len(batches))
+    ):
+        task_fn = extract_warmup_task if batch_idx == 0 else extract_task
+        batch_futures = task_fn.map(
             repository_id=[r.repo_id for r in batch],
             owner=[r.owner for r in batch],
             name=[r.name for r in batch],
