@@ -53,7 +53,7 @@ def _get_basic_gpu_cluster_config(
     return {
         "keepalive": keepalive,
         "vm_type": "g4dn.xlarge",
-        "n_workers": [4, 12],
+        "n_workers": [2, 12],
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
         "region": coiled_region,
