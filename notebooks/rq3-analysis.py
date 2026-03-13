@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
 import seaborn as sns
+import statsmodels.formula.api as smf
 import typer
 from tqdm import tqdm
 
@@ -566,6 +567,165 @@ def _compute_gini(counts: list[int]) -> float:
 
 
 ###############################################################################
+# Coverage Summary
+###############################################################################
+
+
+def _print_coverage_summary(
+    pairs: pl.DataFrame,
+    imports_by_repo: dict[int, tuple[list[str], list[str]]],
+    deps_by_repo: dict[int, tuple[list[str], list[str]]],
+    mentions_by_doc: dict[int, tuple[list[str], list[str]]],
+) -> str:
+    """Return a diagnostic table showing how much of the dataset has each source populated."""
+    n_total = pairs.height
+    import_keys = set(imports_by_repo.keys())
+    dep_keys = set(deps_by_repo.keys())
+    mention_keys = set(mentions_by_doc.keys())
+
+    # Per-pair coverage flags (vectorized via polars)
+    repo_ids = pairs["repository_id"].to_list()
+    doc_ids = pairs["document_id"].to_list()
+
+    has_i = [rid in import_keys for rid in repo_ids]
+    has_d = [rid in dep_keys for rid in repo_ids]
+    has_m = [did in mention_keys for did in doc_ids]
+
+    n_has_i = sum(has_i)
+    n_has_d = sum(has_d)
+    n_has_m = sum(has_m)
+
+    n_im_and = sum(i and m for i, m in zip(has_i, has_m, strict=False))
+    n_id_and = sum(i and d for i, d in zip(has_i, has_d, strict=False))
+    n_dm_and = sum(d and m for d, m in zip(has_d, has_m, strict=False))
+
+    n_im_or = sum(i or m for i, m in zip(has_i, has_m, strict=False))
+    n_id_or = sum(i or d for i, d in zip(has_i, has_d, strict=False))
+    n_dm_or = sum(d or m for d, m in zip(has_d, has_m, strict=False))
+
+    n_all_three = sum(i and d and m for i, d, m in zip(has_i, has_d, has_m, strict=False))
+    n_none = sum(
+        not i and not d and not m for i, d, m in zip(has_i, has_d, has_m, strict=False)
+    )
+
+    def pct(n: int) -> str:
+        return f"{n / n_total * 100:.1f}%" if n_total > 0 else "N/A"
+
+    sep = "━" * 52
+    lines = [
+        "",
+        sep,
+        f"  Coverage Summary  (total pairs loaded: {n_total:,})",
+        sep,
+        "  Source coverage (pairs with any data for source):",
+        f"    Imports:      {n_has_i:>7,}  ({pct(n_has_i)})",
+        f"    Dependencies: {n_has_d:>7,}  ({pct(n_has_d)})",
+        f"    Mentions:     {n_has_m:>7,}  ({pct(n_has_m)})",
+        "",
+        "  Pairwise AND (both sources non-empty → complete-cases filter):",
+        f"    Imports ∧ Mentions:     {n_im_and:>7,}  ({pct(n_im_and)})",
+        f"    Imports ∧ Dependencies: {n_id_and:>7,}  ({pct(n_id_and)})",
+        f"    Deps ∧ Mentions:        {n_dm_and:>7,}  ({pct(n_dm_and)})",
+        "",
+        "  Pairwise OR (at least one source non-empty → full-population filter):",
+        f"    Imports v Mentions:     {n_im_or:>7,}  ({pct(n_im_or)})",
+        f"    Imports v Dependencies: {n_id_or:>7,}  ({pct(n_id_or)})",
+        f"    Deps v Mentions:        {n_dm_or:>7,}  ({pct(n_dm_or)})",
+        "",
+        f"  All three sources non-empty: {n_all_three:>7,}  ({pct(n_all_three)})",
+        f"  No sources with data:        {n_none:>7,}  ({pct(n_none)})",
+        sep,
+    ]
+    return "\n".join(lines)
+
+
+###############################################################################
+# Hidden Infrastructure
+###############################################################################
+
+
+def _print_hidden_infrastructure(
+    imports_df: pl.DataFrame,
+    deps_df: pl.DataFrame,
+    mentions_df: pl.DataFrame,
+    pair_repo_ids: set[int],
+    pair_doc_ids: set[int],
+    top_n: int = 50,
+) -> str:
+    """Ranked table of most-imported libraries with import:mention and import:dep ratios."""
+    import_counts = (
+        imports_df.filter(pl.col("repository_id").is_in(list(pair_repo_ids)))
+        .group_by("software_name_normalized")
+        .agg(pl.len().alias("import_count"))
+        .sort("import_count", descending=True)
+        .head(top_n)
+    )
+    dep_counts = (
+        deps_df.filter(pl.col("repository_id").is_in(list(pair_repo_ids)))
+        .group_by("software_name_normalized")
+        .agg(pl.len().alias("dep_count"))
+    )
+    mention_counts = (
+        mentions_df.filter(pl.col("document_id").is_in(list(pair_doc_ids)))
+        .group_by("software_name_normalized")
+        .agg(pl.len().alias("mention_count"))
+    )
+
+    n_repos = len(pair_repo_ids)
+    n_docs = len(pair_doc_ids)
+
+    table = (
+        import_counts.join(dep_counts, on="software_name_normalized", how="left")
+        .join(mention_counts, on="software_name_normalized", how="left")
+        .with_columns(
+            pl.col("dep_count").fill_null(0),
+            pl.col("mention_count").fill_null(0),
+        )
+        .with_columns(
+            (pl.col("import_count") / n_repos * 100).round(2).alias("import_pct"),
+            (pl.col("dep_count") / n_repos * 100).round(2).alias("dep_pct"),
+            (pl.col("mention_count") / n_docs * 100).round(2).alias("mention_pct"),
+            (pl.col("import_count") / (pl.col("mention_count") + 1))
+            .round(1)
+            .alias("import_mention_ratio"),
+            (pl.col("import_count") / (pl.col("dep_count") + 1))
+            .round(1)
+            .alias("import_dep_ratio"),
+        )
+    )
+
+    col_w = 32
+    header = (
+        f"  {'Library':<{col_w}} {'Imports':>8} {'Imp%':>6} "
+        f"{'Mentions':>9} {'Men%':>6} {'I:M Ratio':>10} "
+        f"{'Deps':>7} {'Dep%':>6} {'I:D Ratio':>10}"
+    )
+    sep = "  " + "-" * (len(header) - 2)
+    lines = [
+        "",
+        "=" * 70,
+        f"  Hidden Infrastructure: top {top_n} most-imported libraries",
+        "  I:M Ratio = import_count / (mention_count + 1)  — high = rarely mentioned",
+        "  I:D Ratio = import_count / (dep_count + 1)      — high = rarely declared as dep",
+        "=" * 70,
+        header,
+        sep,
+    ]
+
+    for row in table.iter_rows(named=True):
+        name = prep_name_for_printing(row["software_name_normalized"])[:col_w]
+        lines.append(
+            f"  {name:<{col_w}} {row['import_count']:>8,} {row['import_pct']:>5.1f}% "
+            f"{row['mention_count']:>9,} {row['mention_pct']:>5.1f}% "
+            f"{row['import_mention_ratio']:>10.1f} "
+            f"{row['dep_count']:>7,} {row['dep_pct']:>5.1f}% "
+            f"{row['import_dep_ratio']:>10.1f}"
+        )
+
+    return "\n".join(lines)
+
+
+###############################################################################
 # Summary Statistics
 ###############################################################################
 
@@ -576,11 +736,8 @@ def _print_summary_stats(
     all_id_records: list[dict],
     all_dm_records: list[dict],
     top_n: int,
+    filter_mode: str,
 ) -> dict[str, str]:
-    """Return full descriptive statistics for all three pairwise comparisons.
-
-    Returns a dict mapping comparison label to its stats text.
-    """
     # top_n_filter=None means show all groups; integer means show only top-N most populous
     grouping_cols: list[tuple[str, str, int | None]] = [
         ("document_domain_name", "Domain", None),
@@ -598,26 +755,37 @@ def _print_summary_stats(
         ("Dependencies vs Mentions", "dm", all_dm_records, "Dependencies", "Mentions"),
     ]
 
-    # TODO: Currently using AND logic (both sources must have data) for testing purposes
-    # while imports/dependencies processing is still incomplete. Once the full dataset
-    # has been processed for all source types, switch to OR logic so that one-sided pairs
-    # (e.g. a repo with imports but a paper with no mentions) are included for a complete
-    # picture. To switch: change each & to | in the filter expressions below.
-    filter_exprs = {
-        "im": (pl.col("im_n_imports") > 0) & (pl.col("im_n_mentions") > 0),
-        "id": (pl.col("id_n_imports") > 0) & (pl.col("id_n_deps") > 0),
-        "dm": (pl.col("dm_n_deps") > 0) & (pl.col("dm_n_mentions") > 0),
-    }
+    if filter_mode == "complete-cases":
+        filter_exprs = {
+            "im": (pl.col("im_n_imports") > 0) & (pl.col("im_n_mentions") > 0),
+            "id": (pl.col("id_n_imports") > 0) & (pl.col("id_n_deps") > 0),
+            "dm": (pl.col("dm_n_deps") > 0) & (pl.col("dm_n_mentions") > 0),
+        }
+    else:  # full-population
+        filter_exprs = {
+            "im": (pl.col("im_n_imports") > 0) | (pl.col("im_n_mentions") > 0),
+            "id": (pl.col("id_n_imports") > 0) | (pl.col("id_n_deps") > 0),
+            "dm": (pl.col("dm_n_deps") > 0) | (pl.col("dm_n_mentions") > 0),
+        }
 
     results: dict[str, str] = {}
     for label, prefix, all_records, a_label, b_label in comparisons:
         comparison_df = results_df.filter(filter_exprs[prefix])
+        mode_note = (
+            "NOTE: full-population results include structural zeros where one source has "
+            "no data. These are only meaningful once dataset processing is complete."
+            if filter_mode == "full-population"
+            else ""
+        )
         lines: list[str] = [
             "",
             "=" * 70,
-            f"  {label}  (N pairs with data for both sources: {comparison_df.height})",
+            f"  Filter mode: {filter_mode}  (N = {comparison_df.height})",
+            f"  {label}",
             "=" * 70,
         ]
+        if mode_note:
+            lines.append(f"  *** {mode_note} ***")
 
         lines.append(_print_descriptive_stats(comparison_df, f"{prefix}_jaccard", "Jaccard"))
         lines.append(
@@ -682,19 +850,39 @@ def _print_summary_stats(
 ###############################################################################
 
 
+def _filter_for_mode(
+    results_df: pl.DataFrame,
+    prefix: str,
+    filter_mode: str,
+) -> pl.DataFrame:
+    """Filter results_df to pairs appropriate for the given comparison and filter mode."""
+    col_pairs = {
+        "im": ("im_n_imports", "im_n_mentions"),
+        "id": ("id_n_imports", "id_n_deps"),
+        "dm": ("dm_n_deps", "dm_n_mentions"),
+    }
+    a_col, b_col = col_pairs[prefix]
+    if filter_mode == "complete-cases":
+        return results_df.filter((pl.col(a_col) > 0) & (pl.col(b_col) > 0))
+    else:
+        return results_df.filter((pl.col(a_col) > 0) | (pl.col(b_col) > 0))
+
+
 def _plot_jaccard_boxplot(
     results_df: pl.DataFrame,
     output_dir: Path,
+    filter_mode: str,
 ) -> None:
     """Box plots of per-pair Jaccard scores for all three comparisons."""
     comparison_labels = {
-        "im_jaccard": "Imports vs Mentions",
-        "id_jaccard": "Imports vs Dependencies",
-        "dm_jaccard": "Deps vs Mentions",
+        "im_jaccard": ("Imports vs Mentions", "im"),
+        "id_jaccard": ("Imports vs Dependencies", "id"),
+        "dm_jaccard": ("Deps vs Mentions", "dm"),
     }
     data: list[dict] = []
-    for col, label in comparison_labels.items():
-        for v in results_df[col].drop_nulls().to_list():
+    for col, (label, prefix) in comparison_labels.items():
+        filtered = _filter_for_mode(results_df, prefix, filter_mode)
+        for v in filtered[col].drop_nulls().to_list():
             data.append({"Comparison": label, "Jaccard Similarity": float(v)})
 
     if not data:
@@ -717,6 +905,7 @@ def _plot_jaccard_by_group(
     group_col: str,
     group_label: str,
     output_dir: Path,
+    filter_mode: str,
     top_n_groups: int = 10,
 ) -> None:
     top_groups = (
@@ -726,16 +915,17 @@ def _plot_jaccard_by_group(
         .head(top_n_groups)[group_col]
         .to_list()
     )
-    filtered = results_df.filter(pl.col(group_col).is_in(top_groups))
 
     comparison_cols = {
-        "im_jaccard": "Imports vs Mentions",
-        "id_jaccard": "Imports vs Dependencies",
-        "dm_jaccard": "Deps vs Mentions",
+        "im_jaccard": ("Imports vs Mentions", "im"),
+        "id_jaccard": ("Imports vs Dependencies", "id"),
+        "dm_jaccard": ("Deps vs Mentions", "dm"),
     }
 
     data: list[dict] = []
-    for col, label in comparison_cols.items():
+    for col, (label, prefix) in comparison_cols.items():
+        mode_filtered = _filter_for_mode(results_df, prefix, filter_mode)
+        filtered = mode_filtered.filter(pl.col(group_col).is_in(top_groups))
         for row in (
             filtered.group_by(group_col)
             .agg(pl.col(col).mean().alias("mean_jaccard"))
@@ -775,17 +965,19 @@ def _plot_jaccard_by_group(
 def _plot_score_histograms(
     results_df: pl.DataFrame,
     output_dir: Path,
+    filter_mode: str,
 ) -> None:
     """Histograms of average pairwise match scores for each comparison."""
     score_cols = {
-        "im_avg_score": "Imports vs Mentions",
-        "id_avg_score": "Imports vs Dependencies",
-        "dm_avg_score": "Deps vs Mentions",
+        "im_avg_score": ("Imports vs Mentions", "im"),
+        "id_avg_score": ("Imports vs Dependencies", "id"),
+        "dm_avg_score": ("Deps vs Mentions", "dm"),
     }
 
     fig, axes = plt.subplots(1, 3, figsize=(14, 4))
-    for ax, (col, label) in zip(axes, score_cols.items(), strict=False):
-        vals = results_df.filter(pl.col(col) > 0)[col].drop_nulls().to_list()
+    for ax, (col, (label, prefix)) in zip(axes, score_cols.items(), strict=False):
+        filtered = _filter_for_mode(results_df, prefix, filter_mode)
+        vals = filtered.filter(pl.col(col) > 0)[col].drop_nulls().to_list()
         if vals:
             ax.hist(vals, bins=30, edgecolor="white")
         ax.set_title(label)
@@ -796,6 +988,58 @@ def _plot_score_histograms(
     fig.savefig(output_dir / "match_score_histograms.png", bbox_inches="tight")
     plt.close(fig)
     log.info("Saved match_score_histograms.png")
+
+
+def _plot_jaccard_trend_by_year(
+    results_df: pl.DataFrame,
+    output_dir: Path,
+    filter_mode: str,
+    min_pairs_per_year: int = 5,
+) -> None:
+    """Line plots of mean Jaccard ± 95% CI by publication year, one per comparison."""
+    comparisons = [
+        ("im_jaccard", "im", "Imports vs Mentions", "im"),
+        ("id_jaccard", "id", "Imports vs Dependencies", "id"),
+        ("dm_jaccard", "dm", "Dependencies vs Mentions", "dm"),
+    ]
+
+    for jac_col, prefix, label, tag in comparisons:
+        df = _filter_for_mode(results_df, prefix, filter_mode)
+        year_stats = (
+            df.group_by("document_publication_year")
+            .agg(
+                pl.col(jac_col).mean().alias("mean_jac"),
+                pl.col(jac_col).std().alias("std_jac"),
+                pl.len().alias("n"),
+            )
+            .filter(pl.col("n") >= min_pairs_per_year)
+            .sort("document_publication_year")
+        )
+
+        if year_stats.height < 2:
+            log.warning(f"Insufficient data for temporal trend plot: {label}, skipping.")
+            continue
+
+        years = year_stats["document_publication_year"].to_list()
+        means = year_stats["mean_jac"].to_list()
+        stds = [s or 0.0 for s in year_stats["std_jac"].to_list()]
+        ns = year_stats["n"].to_list()
+        ci = [1.96 * s / (n**0.5) for s, n in zip(stds, ns, strict=False)]
+        lower = [max(0.0, m - c) for m, c in zip(means, ci, strict=False)]
+        upper = [m + c for m, c in zip(means, ci, strict=False)]
+
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.plot(years, means, marker="o", linewidth=2)
+        ax.fill_between(years, lower, upper, alpha=0.2)
+        ax.set_xlabel("Publication Year")
+        ax.set_ylabel("Mean Jaccard Similarity")
+        ax.set_title(f"{label} Over Time")
+        ax.set_ylim(bottom=0)
+        plt.tight_layout()
+        out_name = f"rq3-jaccard-trend-{tag}.png"
+        fig.savefig(output_dir / out_name, bbox_inches="tight")
+        plt.close(fig)
+        log.info(f"Saved {out_name}")
 
 
 def _plot_software_frequency_distributions(
@@ -858,6 +1102,394 @@ def _plot_software_frequency_distributions(
     log.info("Saved software_frequency_distributions.png")
 
     return gini_values
+
+
+###############################################################################
+# Logistic Regression
+###############################################################################
+
+
+def _format_logit_result(result: object, model_name: str) -> str:
+    """Format a statsmodels Logit result as a readable text block."""
+    import pandas as pd
+
+    lines = [
+        f"\n{'─' * 70}",
+        f"  {model_name}",
+        f"{'─' * 70}",
+        f"  N = {int(result.nobs):,}",  # type: ignore[attr-defined]
+        f"  Pseudo-R² (McFadden) = {result.prsquared:.4f}",  # type: ignore[attr-defined]
+        f"  AIC = {result.aic:.2f}  |  BIC = {result.bic:.2f}",  # type: ignore[attr-defined]
+        "",
+        f"  {'Variable':<44} {'Coef':>8} {'SE':>8} {'z':>7} {'p':>8} "
+        f"{'[0.025':>8} {'0.975]':>8} {'OR':>8}",
+        f"  {'─' * 103}",
+    ]
+
+    params = result.params  # type: ignore[attr-defined]
+    bse = result.bse  # type: ignore[attr-defined]
+    tvalues = result.tvalues  # type: ignore[attr-defined]
+    pvalues = result.pvalues  # type: ignore[attr-defined]
+    conf_int: pd.DataFrame = result.conf_int()  # type: ignore[attr-defined]
+
+    for name in params.index:
+        coef = params[name]
+        se = bse[name]
+        z = tvalues[name]
+        p = pvalues[name]
+        lo = conf_int.loc[name, 0]
+        hi = conf_int.loc[name, 1]
+        or_ = np.exp(coef)
+        p_str = f"{p:.4f}" if p >= 0.0001 else "<.0001"
+        # Truncate long variable names (one-hot labels can be verbose)
+        short_name = name[:44]
+        lines.append(
+            f"  {short_name:<44} {coef:>8.4f} {se:>8.4f} {z:>7.3f} {p_str:>8} "
+            f"{lo:>8.4f} {hi:>8.4f} {or_:>8.4f}"
+        )
+    return "\n".join(lines)
+
+
+def _run_logistic_regressions(
+    results_df: pl.DataFrame,
+    all_im_records: list[dict],
+    all_dm_records: list[dict],
+    imports_df: pl.DataFrame,
+    deps_df: pl.DataFrame,
+    pairs: pl.DataFrame,
+    filter_mode: str,
+    output_path: "Path",
+) -> None:
+    """Fit logistic regressions predicting mention status from prevalence features."""
+    import warnings
+
+    import pandas as pd
+
+    log.info(f"[{filter_mode}] Building logistic regression datasets...")
+
+    # ── pair metadata lookup ──────────────────────────────────────────────────
+    pair_meta: dict[int, dict] = {}
+    for row in results_df.iter_rows(named=True):
+        pair_meta[row["document_id"]] = {
+            "field": row["document_field_name"] or "Unknown",
+            "year": row["document_publication_year"],
+            "language": row["repository_primary_language"] or "Unknown",
+            "repository_id": row["repository_id"],
+        }
+
+    # ── prevalence features ──────────────────────────────────────────────────
+    n_total_repos = pairs["repository_id"].n_unique()
+
+    # Global import prevalence per (unique) library
+    import_global = dict(
+        zip(
+            imports_df.group_by("software_name_normalized")
+            .agg(pl.n_unique("repository_id").alias("c"))
+            .with_columns((pl.col("c") / n_total_repos).alias("p"))["software_name_normalized"]
+            .to_list(),
+            imports_df.group_by("software_name_normalized")
+            .agg(pl.n_unique("repository_id").alias("c"))
+            .with_columns((pl.col("c") / n_total_repos).alias("p"))["p"]
+            .to_list(),
+            strict=False,
+        )
+    )
+
+    # Field-level import prevalence per (library, field)
+    repo_to_field = dict(
+        zip(
+            pairs["repository_id"].to_list(),
+            pairs["document_field_name"].to_list(),
+            strict=False,
+        )
+    )
+    field_repo_n = (
+        pairs.group_by("document_field_name")
+        .agg(pl.n_unique("repository_id").alias("n"))
+        .filter(pl.col("n") > 0)
+    )
+    field_n_dict = dict(
+        zip(
+            field_repo_n["document_field_name"].to_list(),
+            field_repo_n["n"].to_list(),
+            strict=False,
+        )
+    )
+    imports_with_field = imports_df.with_columns(
+        pl.col("repository_id").replace(repo_to_field, default=None).alias("field")
+    )
+    import_field_raw = (
+        imports_with_field.filter(pl.col("field").is_not_null())
+        .group_by(["software_name_normalized", "field"])
+        .agg(pl.n_unique("repository_id").alias("c"))
+    )
+    import_field: dict[tuple[str, str], float] = {
+        (row["software_name_normalized"], row["field"]): row["c"]
+        / field_n_dict.get(row["field"], 1)
+        for row in import_field_raw.iter_rows(named=True)
+    }
+
+    # Global dep prevalence
+    dep_global = dict(
+        zip(
+            deps_df.group_by("software_name_normalized")
+            .agg(pl.n_unique("repository_id").alias("c"))
+            .with_columns((pl.col("c") / n_total_repos).alias("p"))["software_name_normalized"]
+            .to_list(),
+            deps_df.group_by("software_name_normalized")
+            .agg(pl.n_unique("repository_id").alias("c"))
+            .with_columns((pl.col("c") / n_total_repos).alias("p"))["p"]
+            .to_list(),
+            strict=False,
+        )
+    )
+
+    # Field-level dep prevalence
+    deps_with_field = deps_df.with_columns(
+        pl.col("repository_id").replace(repo_to_field, default=None).alias("field")
+    )
+    dep_field_raw = (
+        deps_with_field.filter(pl.col("field").is_not_null())
+        .group_by(["software_name_normalized", "field"])
+        .agg(pl.n_unique("repository_id").alias("c"))
+    )
+    dep_field: dict[tuple[str, str], float] = {
+        (row["software_name_normalized"], row["field"]): row["c"]
+        / field_n_dict.get(row["field"], 1)
+        for row in dep_field_raw.iter_rows(named=True)
+    }
+
+    # ── filter-mode eligible document IDs ────────────────────────────────────
+    if filter_mode == "complete-cases":
+        im_eligible = set(
+            results_df.filter((pl.col("im_n_imports") > 0) & (pl.col("im_n_mentions") > 0))[
+                "document_id"
+            ].to_list()
+        )
+        dm_eligible = set(
+            results_df.filter((pl.col("dm_n_deps") > 0) & (pl.col("dm_n_mentions") > 0))[
+                "document_id"
+            ].to_list()
+        )
+    else:
+        im_eligible = set(
+            results_df.filter((pl.col("im_n_imports") > 0) | (pl.col("im_n_mentions") > 0))[
+                "document_id"
+            ].to_list()
+        )
+        dm_eligible = set(
+            results_df.filter((pl.col("dm_n_deps") > 0) | (pl.col("dm_n_mentions") > 0))[
+                "document_id"
+            ].to_list()
+        )
+
+    # ── build regression DataFrames ──────────────────────────────────────────
+    def _build_im_df() -> pd.DataFrame:
+        rows = []
+        for rec in all_im_records:
+            if rec["status"] == "source_b_only":
+                continue  # mention only — no import to anchor prevalence
+            doc_id = rec["document_id"]
+            if doc_id not in im_eligible:
+                continue
+            meta = pair_meta.get(doc_id)
+            if meta is None or meta["year"] is None:
+                continue
+            norm = rec["normalized_name"]
+            field = meta["field"]
+            rows.append(
+                {
+                    "is_mentioned": int(rec["status"] == "matched"),
+                    "import_global_prev": import_global.get(norm, 0.0),
+                    "import_field_prev": import_field.get((norm, field), 0.0),
+                    "year": meta["year"],
+                    "field": field,
+                    "language": meta["language"],
+                }
+            )
+        return pd.DataFrame(rows)
+
+    def _build_dm_df() -> pd.DataFrame:
+        rows = []
+        for rec in all_dm_records:
+            if rec["status"] == "source_b_only":
+                continue  # mention only — no dep to anchor prevalence
+            doc_id = rec["document_id"]
+            if doc_id not in dm_eligible:
+                continue
+            meta = pair_meta.get(doc_id)
+            if meta is None or meta["year"] is None:
+                continue
+            norm = rec["normalized_name"]
+            field = meta["field"]
+            rows.append(
+                {
+                    "is_mentioned": int(rec["status"] == "matched"),
+                    "dep_global_prev": dep_global.get(norm, 0.0),
+                    "dep_field_prev": dep_field.get((norm, field), 0.0),
+                    "year": meta["year"],
+                    "field": field,
+                    "language": meta["language"],
+                }
+            )
+        return pd.DataFrame(rows)
+
+    im_df = _build_im_df()
+    dm_df = _build_dm_df()
+
+    def _clean_df(df: pd.DataFrame) -> pd.DataFrame:
+        df = df.dropna(subset=["year", "field", "language"]).copy()
+        # Sanitize categorical values for formula API (remove chars that break C())
+        df["field"] = df["field"].str.replace(r"[^A-Za-z0-9_]", "_", regex=True).str.strip("_")
+        df["language"] = (
+            df["language"].str.replace(r"[^A-Za-z0-9_]", "_", regex=True).str.strip("_")
+        )
+        # Drop rare categories to prevent perfect separation
+        for col in ("field", "language"):
+            counts = df[col].value_counts()
+            keep = counts[counts >= 10].index
+            df = df[df[col].isin(keep)]
+        df["year_c"] = df["year"] - df["year"].median()
+        return df
+
+    im_df = _clean_df(im_df)
+    dm_df = _clean_df(dm_df)
+
+    # ── model specs ──────────────────────────────────────────────────────────
+    im_models = [
+        ("M1: Uncontrolled", "is_mentioned ~ import_global_prev + import_field_prev"),
+        ("M2: + Year", "is_mentioned ~ import_global_prev + import_field_prev + year_c"),
+        ("M3: + Field", "is_mentioned ~ import_global_prev + import_field_prev + C(field)"),
+        (
+            "M4: + Language",
+            "is_mentioned ~ import_global_prev + import_field_prev + C(language)",
+        ),
+        (
+            "M5: Fully controlled",
+            "is_mentioned ~ import_global_prev + import_field_prev + year_c + C(field) + C(language)",
+        ),
+    ]
+    dm_models = [
+        ("M1: Uncontrolled", "is_mentioned ~ dep_global_prev + dep_field_prev"),
+        ("M2: + Year", "is_mentioned ~ dep_global_prev + dep_field_prev + year_c"),
+        ("M3: + Field", "is_mentioned ~ dep_global_prev + dep_field_prev + C(field)"),
+        (
+            "M4: + Language",
+            "is_mentioned ~ dep_global_prev + dep_field_prev + C(language)",
+        ),
+        (
+            "M5: Fully controlled",
+            "is_mentioned ~ dep_global_prev + dep_field_prev + year_c + C(field) + C(language)",
+        ),
+    ]
+
+    def _fit_models(
+        df: pd.DataFrame,
+        model_specs: list[tuple[str, str]],
+        section_title: str,
+        min_n: int = 50,
+    ) -> str:
+        if len(df) < min_n:
+            return f"\n  {section_title}: insufficient data (N={len(df)}), skipping.\n"
+        out_lines = [f"\n{'=' * 70}", f"  {section_title}  (N rows = {len(df):,})", "=" * 70]
+        for model_name, formula in model_specs:
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    result = smf.logit(formula, data=df).fit(disp=0, maxiter=500, method="bfgs")
+                out_lines.append(_format_logit_result(result, model_name))
+            except Exception as exc:
+                out_lines.append(f"\n  {model_name}: failed — {exc}\n")
+        return "\n".join(out_lines)
+
+    # ── imports → mentions ────────────────────────────────────────────────────
+    im_text = _fit_models(
+        im_df, im_models, "Logistic Regression: Import Prevalence → Mention Status"
+    )
+    log.info(f"[{filter_mode}] Logistic regression (imports) complete")
+    with open(output_path / "rq3-logistic-regression-imports.txt", "w") as f:
+        f.write(im_text)
+
+    # ── deps → mentions ───────────────────────────────────────────────────────
+    dm_text = _fit_models(
+        dm_df, dm_models, "Logistic Regression: Dependency Prevalence → Mention Status"
+    )
+    log.info(f"[{filter_mode}] Logistic regression (deps) complete")
+    with open(output_path / "rq3-logistic-regression-deps.txt", "w") as f:
+        f.write(dm_text)
+
+    # ── combined model (M6) ───────────────────────────────────────────────────
+    # Union of IM and DM eligible records; is_mentioned = 1 if matched in either
+    combined_eligible = im_eligible | dm_eligible
+    combined_rows: dict[tuple[str, int], dict] = {}
+    for rec in all_im_records:
+        if rec["status"] == "source_b_only":
+            continue
+        doc_id = rec["document_id"]
+        if doc_id not in combined_eligible:
+            continue
+        meta = pair_meta.get(doc_id)
+        if meta is None or meta["year"] is None:
+            continue
+        norm = rec["normalized_name"]
+        field = meta["field"]
+        key = (norm, doc_id)
+        entry = combined_rows.setdefault(
+            key,
+            {
+                "is_mentioned": 0,
+                "import_global_prev": import_global.get(norm, 0.0),
+                "import_field_prev": import_field.get((norm, field), 0.0),
+                "dep_global_prev": dep_global.get(norm, 0.0),
+                "dep_field_prev": dep_field.get((norm, field), 0.0),
+                "year": meta["year"],
+                "field": field,
+                "language": meta["language"],
+            },
+        )
+        entry["is_mentioned"] = max(entry["is_mentioned"], int(rec["status"] == "matched"))
+
+    for rec in all_dm_records:
+        if rec["status"] == "source_b_only":
+            continue
+        doc_id = rec["document_id"]
+        if doc_id not in combined_eligible:
+            continue
+        meta = pair_meta.get(doc_id)
+        if meta is None or meta["year"] is None:
+            continue
+        norm = rec["normalized_name"]
+        field = meta["field"]
+        key = (norm, doc_id)
+        entry = combined_rows.setdefault(
+            key,
+            {
+                "is_mentioned": 0,
+                "import_global_prev": import_global.get(norm, 0.0),
+                "import_field_prev": import_field.get((norm, field), 0.0),
+                "dep_global_prev": dep_global.get(norm, 0.0),
+                "dep_field_prev": dep_field.get((norm, field), 0.0),
+                "year": meta["year"],
+                "field": field,
+                "language": meta["language"],
+            },
+        )
+        entry["is_mentioned"] = max(entry["is_mentioned"], int(rec["status"] == "matched"))
+
+    combined_df = _clean_df(pd.DataFrame(list(combined_rows.values())))
+    combined_formula = (
+        "is_mentioned ~ import_global_prev + import_field_prev "
+        "+ dep_global_prev + dep_field_prev "
+        "+ year_c + C(field) + C(language)"
+    )
+    combined_text = _fit_models(
+        combined_df,
+        [("M6: Combined (fully controlled)", combined_formula)],
+        "Logistic Regression: Combined Prevalence → Mention Status",
+    )
+    log.info(f"[{filter_mode}] Logistic regression (combined) complete")
+    with open(output_path / "rq3-logistic-regression-combined.txt", "w") as f:
+        f.write(combined_text)
 
 
 ###############################################################################
@@ -941,6 +1573,13 @@ def analyze(
         f"{len(deps_by_repo)} repos with deps, "
         f"{len(mentions_by_doc)} docs with mentions"
     )
+
+    # Coverage summary (printed before the main loop so the user can see processing state)
+    log.info("Computing coverage summary...")
+    _coverage_text_early = _print_coverage_summary(
+        pairs, imports_by_repo, deps_by_repo, mentions_by_doc
+    )
+    print(_coverage_text_early)
 
     # Run pairwise analysis per pair
     results: list[dict] = []
@@ -1083,7 +1722,7 @@ def analyze(
     log.info(f"Built results DataFrame with {results_df.height} rows")
     log.debug(f"Results DataFrame schema:\n{results_df.schema}")
 
-    # Save to parquet (drop nested record cols which are for in-memory use only)
+    # Save to parquet at top level (drop nested record cols which are for in-memory use only)
     parquet_df = results_df.drop(
         "im_software_records", "id_software_records", "dm_software_records"
     )
@@ -1091,31 +1730,30 @@ def analyze(
     parquet_df.write_parquet(parquet_path)
     log.info(f"Saved results to {parquet_path}")
 
-    # Summary statistics
-    log.info("Printing summary stats...")
-    stats_by_comparison = _print_summary_stats(
-        results_df,
-        all_im_records,
-        all_id_records,
-        all_dm_records,
-        top_n,
-    )
-    filename_map = {
-        "Imports vs Mentions": "rq3-summary-stats-imports-vs-mentions.txt",
-        "Imports vs Dependencies": "rq3-summary-stats-imports-vs-dependencies.txt",
-        "Dependencies vs Mentions": "rq3-summary-stats-dependencies-vs-mentions.txt",
-    }
-    for comparison_label, stats_text in stats_by_comparison.items():
-        print(stats_text)
-        fname = filename_map[comparison_label]
-        with open(output_path / fname, "w") as f:
-            f.write(stats_text)
-        log.info(f"Saved {fname}")
-    log.info("Summary stats complete.")
-
-    # Gini coefficients + frequency distribution plot
     pair_repo_ids = set(pairs["repository_id"].to_list())
     pair_doc_ids = set(pairs["document_id"].to_list())
+
+    # Coverage summary (top-level, shared across filter modes)
+    log.info("Computing coverage summary...")
+    coverage_text = _print_coverage_summary(
+        pairs, imports_by_repo, deps_by_repo, mentions_by_doc
+    )
+    print(coverage_text)
+    with open(output_path / "rq3-coverage-summary.txt", "w") as f:
+        f.write(coverage_text)
+    log.info("Saved rq3-coverage-summary.txt")
+
+    # Hidden infrastructure table (top-level, not per filter mode)
+    log.info("Computing hidden infrastructure table...")
+    infra_text = _print_hidden_infrastructure(
+        imports_df, deps_df, mentions_df, pair_repo_ids, pair_doc_ids, top_n=top_n * 5
+    )
+    print(infra_text)
+    with open(output_path / "rq3-hidden-infrastructure.txt", "w") as f:
+        f.write(infra_text)
+    log.info("Saved rq3-hidden-infrastructure.txt")
+
+    # Gini coefficients + frequency distribution plot (top-level)
     gini_values = _plot_software_frequency_distributions(
         imports_df,
         deps_df,
@@ -1129,10 +1767,16 @@ def analyze(
     for source_label, gini in gini_values.items():
         print(f"  {source_label}: {gini:.4f}")
 
-    # Remaining visualizations
-    _plot_jaccard_boxplot(results_df, output_path)
-    _plot_score_histograms(results_df, output_path)
-
+    # Per-filter-mode analysis
+    filter_modes = [
+        ("complete-cases", output_path / "complete-cases"),
+        ("full-population", output_path / "full-population"),
+    ]
+    filename_map = {
+        "Imports vs Mentions": "rq3-summary-stats-imports-vs-mentions.txt",
+        "Imports vs Dependencies": "rq3-summary-stats-imports-vs-dependencies.txt",
+        "Dependencies vs Mentions": "rq3-summary-stats-dependencies-vs-mentions.txt",
+    }
     grouping_cols = [
         ("document_domain_name", "Domain"),
         ("document_field_name", "Field"),
@@ -1142,8 +1786,45 @@ def analyze(
         ("country_code", "Country"),
         ("document_is_open_access", "Open Access"),
     ]
-    for col, col_label in grouping_cols:
-        _plot_jaccard_by_group(results_df, col, col_label, output_path)
+
+    for filter_mode, mode_path in filter_modes:
+        mode_path.mkdir(parents=True, exist_ok=True)
+        log.info(f"Running analysis for filter mode: {filter_mode}")
+
+        # Summary statistics
+        stats_by_comparison = _print_summary_stats(
+            results_df,
+            all_im_records,
+            all_id_records,
+            all_dm_records,
+            top_n,
+            filter_mode,
+        )
+        for comparison_label, stats_text in stats_by_comparison.items():
+            print(stats_text)
+            fname = filename_map[comparison_label]
+            with open(mode_path / fname, "w") as f:
+                f.write(stats_text)
+            log.info(f"[{filter_mode}] Saved {fname}")
+
+        # Visualizations
+        _plot_jaccard_boxplot(results_df, mode_path, filter_mode)
+        _plot_score_histograms(results_df, mode_path, filter_mode)
+        _plot_jaccard_trend_by_year(results_df, mode_path, filter_mode)
+        for col, col_label in grouping_cols:
+            _plot_jaccard_by_group(results_df, col, col_label, mode_path, filter_mode)
+
+        # Logistic regressions
+        _run_logistic_regressions(
+            results_df,
+            all_im_records,
+            all_dm_records,
+            imports_df,
+            deps_df,
+            pairs,
+            filter_mode,
+            mode_path,
+        )
 
     log.info("Done.")
 
