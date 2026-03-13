@@ -539,6 +539,29 @@ def ingest_softcite_mentions(
 ###############################################################################
 
 
+def _collect_batch_results(
+    batch_futures: list,
+    batch: list[UnprocessedRepository],
+) -> list[RepoExtractionResult | types.ErrorResult]:
+    results = []
+    for future, repo in zip(batch_futures, batch, strict=False):
+        try:
+            results.append(future.result())
+        except TimeoutError:
+            repo_full_name = f"{repo.owner}/{repo.name}"
+            print(f"Timeout reached for {repo_full_name}, skipping.")
+            results.append(
+                types.ErrorResult(
+                    source="used-software-extraction",
+                    step="task_timeout",
+                    identifier=repo_full_name,
+                    error="Task timed out",
+                    traceback="",
+                )
+            )
+    return results
+
+
 @flow(log_prints=True)
 def _used_software_extraction_flow(
     use_prod: bool,
@@ -618,22 +641,7 @@ def _used_software_extraction_flow(
             owner=[r.owner for r in batch],
             name=[r.name for r in batch],
         )
-        batch_results = []
-        for future, repo in zip(batch_futures, batch, strict=False):
-            try:
-                batch_results.append(future.result())
-            except TimeoutError:
-                repo_full_name = f"{repo.owner}/{repo.name}"
-                print(f"Timeout reached for {repo_full_name}, skipping.")
-                batch_results.append(
-                    types.ErrorResult(
-                        source="used-software-extraction",
-                        step="task_timeout",
-                        identifier=repo_full_name,
-                        error="Task timed out",
-                        traceback="",
-                    )
-                )
+        batch_results = _collect_batch_results(batch_futures, batch)
 
         # Split out successful results vs errors
         batch_success_results: list[RepoExtractionResult] = []
@@ -666,10 +674,9 @@ def _used_software_extraction_flow(
                 existing_errors = pl.DataFrame()
 
             # Convert new errors to a DataFrame and concatenate with existing errors
-            new_errors_df = pl.DataFrame([
-                {**e.to_dict(), "timeout_seconds": timeout_seconds}
-                for e in batch_errors
-            ])
+            new_errors_df = pl.DataFrame(
+                [{**e.to_dict(), "timeout_seconds": timeout_seconds} for e in batch_errors]
+            )
             combined_errors = pl.concat([existing_errors, new_errors_df])
 
             # Write combined errors back to the parquet file
