@@ -548,6 +548,7 @@ def _used_software_extraction_flow(
     coiled_workers: int,
     batch_size: int,
     limit: int | None,
+    timeout_seconds: int,
     errors_cache_file: str,
 ) -> None:
     # Construct the actual full path of the errors cache file
@@ -563,6 +564,7 @@ def _used_software_extraction_flow(
     print(f"Coiled Workers: {coiled_workers}")
     # print(f"Batch Size: {batch_size}")
     print(f"Total Processing Limit: {limit}")
+    print(f"Task Timeout (seconds): {timeout_seconds}")
     print(f"Errors Cache File: {errors_cache_path}")
     print("-" * 80)
 
@@ -574,6 +576,17 @@ def _used_software_extraction_flow(
     )
     repos = repos[:limit] if limit is not None else repos
     print(f"Retrieved {len(repos)} repositories to process")
+
+    # Filter out repos that already errored under the same timeout configuration
+    if errors_cache_path.exists():
+        errors_df = pl.read_parquet(errors_cache_path)
+        already_errored = set(
+            errors_df.filter(pl.col("timeout_seconds") == timeout_seconds)
+            .get_column("identifier")
+            .to_list()
+        )
+        repos = [r for r in repos if f"{r.owner}/{r.name}" not in already_errored]
+        print(f"{len(repos)} repositories remaining after filtering cached errors")
 
     # Handle no repos to process
     if not repos:
@@ -590,8 +603,8 @@ def _used_software_extraction_flow(
             use_coiled=use_coiled,
             coiled_region=coiled_region,
         ),
-        timeout_seconds=120,
-        warmup_timeout_seconds=600,
+        timeout_seconds=timeout_seconds,
+        warmup_timeout_seconds=max(timeout_seconds, 600),
     )
 
     # Process in batches
@@ -653,7 +666,10 @@ def _used_software_extraction_flow(
                 existing_errors = pl.DataFrame()
 
             # Convert new errors to a DataFrame and concatenate with existing errors
-            new_errors_df = pl.DataFrame([e.to_dict() for e in batch_errors])
+            new_errors_df = pl.DataFrame([
+                {**e.to_dict(), "timeout_seconds": timeout_seconds}
+                for e in batch_errors
+            ])
             combined_errors = pl.concat([existing_errors, new_errors_df])
 
             # Write combined errors back to the parquet file
@@ -665,16 +681,19 @@ def used_software_extraction(
     use_prod: bool = False,
     use_coiled: bool = False,
     coiled_region: str = "us-west-2",
-    coiled_workers: int = 24,
+    coiled_workers: int = 48,
     language_filter: list[str] | None = None,
-    batch_size: int = 48,
+    batch_size: int = 64,
     limit: int | None = None,
+    timeout_seconds: int = 60,
     errors_cache_file: str = "used-software-extraction-errors.parquet",
 ) -> None:
     """
     Extract software imports and dependencies from document-linked repositories.
 
     Default language filter is Python, Jupyter Notebook, and R.
+    Repos that exceed --timeout-seconds are skipped and remain unprocessed,
+    so a subsequent run with a larger timeout will pick them up automatically.
     """
     _used_software_extraction_flow(
         use_prod=use_prod,
@@ -686,6 +705,7 @@ def used_software_extraction(
         coiled_workers=coiled_workers,
         batch_size=batch_size,
         limit=limit,
+        timeout_seconds=timeout_seconds,
         errors_cache_file=errors_cache_file,
     )
 
