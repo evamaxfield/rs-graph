@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import logging
+import operator
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,6 +9,7 @@ from pathlib import Path
 import connectorx  # noqa: F401
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import polars as pl
 import seaborn as sns
 import statsmodels.formula.api as smf
@@ -1109,6 +1111,11 @@ def _plot_software_frequency_distributions(
 ###############################################################################
 
 
+def _bin_top_n(series: pd.Series, top_n: int) -> pd.Series:
+    top = series.value_counts().head(top_n).index
+    return series.where(series.isin(top), other="Other")
+
+
 def _format_logit_result(result: object, model_name: str) -> str:
     """Format a statsmodels Logit result as a readable text block."""
     import pandas as pd
@@ -1132,6 +1139,17 @@ def _format_logit_result(result: object, model_name: str) -> str:
     pvalues = result.pvalues  # type: ignore[attr-defined]
     conf_int: pd.DataFrame = result.conf_int()  # type: ignore[attr-defined]
 
+    has_separation = any(
+        abs(z) > 50 or np.exp(c) > 1e10
+        for c, z in zip(params.values, tvalues.values, strict=False)
+    )
+    if has_separation:
+        lines.insert(
+            0,
+            "  ⚠ SEPARATION WARNING: one or more predictors nearly perfectly predict\n"
+            "    the outcome. MLE coefficients are unreliable; interpret direction only.\n",
+        )
+
     for name in params.index:
         coef = params[name]
         se = bse[name]
@@ -1150,24 +1168,8 @@ def _format_logit_result(result: object, model_name: str) -> str:
     return "\n".join(lines)
 
 
-def _run_logistic_regressions(
-    results_df: pl.DataFrame,
-    all_im_records: list[dict],
-    all_dm_records: list[dict],
-    imports_df: pl.DataFrame,
-    deps_df: pl.DataFrame,
-    pairs: pl.DataFrame,
-    filter_mode: str,
-    output_path: "Path",
-) -> None:
-    """Fit logistic regressions predicting mention status from prevalence features."""
-    import warnings
-
-    import pandas as pd
-
-    log.info(f"[{filter_mode}] Building logistic regression datasets...")
-
-    # ── pair metadata lookup ──────────────────────────────────────────────────
+def _build_pair_metadata(results_df: pl.DataFrame) -> dict[int, dict]:
+    """Build a document_id → metadata lookup from the results DataFrame."""
     pair_meta: dict[int, dict] = {}
     for row in results_df.iter_rows(named=True):
         pair_meta[row["document_id"]] = {
@@ -1176,26 +1178,62 @@ def _run_logistic_regressions(
             "language": row["repository_primary_language"] or "Unknown",
             "repository_id": row["repository_id"],
         }
+    return pair_meta
 
-    # ── prevalence features ──────────────────────────────────────────────────
-    n_total_repos = pairs["repository_id"].n_unique()
 
-    # Global import prevalence per (unique) library
-    import_global = dict(
+def _compute_global_prevalence(
+    df: pl.DataFrame,
+    n_total_repos: int,
+) -> dict[str, float]:
+    """Compute global prevalence: fraction of repos using each library."""
+    agg = (
+        df.group_by("software_name_normalized")
+        .agg(pl.n_unique("repository_id").alias("c"))
+        .with_columns((pl.col("c") / n_total_repos).alias("p"))
+    )
+    return dict(
         zip(
-            imports_df.group_by("software_name_normalized")
-            .agg(pl.n_unique("repository_id").alias("c"))
-            .with_columns((pl.col("c") / n_total_repos).alias("p"))["software_name_normalized"]
-            .to_list(),
-            imports_df.group_by("software_name_normalized")
-            .agg(pl.n_unique("repository_id").alias("c"))
-            .with_columns((pl.col("c") / n_total_repos).alias("p"))["p"]
-            .to_list(),
+            agg["software_name_normalized"].to_list(),
+            agg["p"].to_list(),
             strict=False,
         )
     )
 
-    # Field-level import prevalence per (library, field)
+
+def _compute_field_prevalence(
+    df: pl.DataFrame,
+    repo_to_field: dict,
+    field_n_dict: dict[str, int],
+) -> dict[tuple[str, str], float]:
+    """Compute field-level prevalence: fraction of field repos using each library."""
+    with_field = df.with_columns(
+        pl.col("repository_id").replace(repo_to_field, default=None).alias("field")
+    )
+    field_raw = (
+        with_field.filter(pl.col("field").is_not_null())
+        .group_by(["software_name_normalized", "field"])
+        .agg(pl.n_unique("repository_id").alias("c"))
+    )
+    return {
+        (row["software_name_normalized"], row["field"]): row["c"]
+        / field_n_dict.get(row["field"], 1)
+        for row in field_raw.iter_rows(named=True)
+    }
+
+
+def _compute_prevalence_features(
+    imports_df: pl.DataFrame,
+    deps_df: pl.DataFrame,
+    pairs: pl.DataFrame,
+) -> tuple[
+    dict[str, float],
+    dict[tuple[str, str], float],
+    dict[str, float],
+    dict[tuple[str, str], float],
+]:
+    """Compute global and field-level prevalence for imports and deps."""
+    n_total_repos = pairs["repository_id"].n_unique()
+
     repo_to_field = dict(
         zip(
             pairs["repository_id"].to_list(),
@@ -1215,281 +1253,306 @@ def _run_logistic_regressions(
             strict=False,
         )
     )
-    imports_with_field = imports_df.with_columns(
-        pl.col("repository_id").replace(repo_to_field, default=None).alias("field")
+
+    import_global = _compute_global_prevalence(imports_df, n_total_repos)
+    import_field = _compute_field_prevalence(imports_df, repo_to_field, field_n_dict)
+    dep_global = _compute_global_prevalence(deps_df, n_total_repos)
+    dep_field = _compute_field_prevalence(deps_df, repo_to_field, field_n_dict)
+
+    return import_global, import_field, dep_global, dep_field
+
+
+def _get_eligible_document_ids(
+    results_df: pl.DataFrame,
+    filter_mode: str,
+) -> tuple[set, set]:
+    """Determine which document IDs are eligible for IM and DM analyses."""
+    combiner = operator.and_ if filter_mode == "complete-cases" else operator.or_
+    im_eligible = set(
+        results_df.filter(combiner(pl.col("im_n_imports") > 0, pl.col("im_n_mentions") > 0))[
+            "document_id"
+        ].to_list()
     )
-    import_field_raw = (
-        imports_with_field.filter(pl.col("field").is_not_null())
-        .group_by(["software_name_normalized", "field"])
-        .agg(pl.n_unique("repository_id").alias("c"))
+    dm_eligible = set(
+        results_df.filter(combiner(pl.col("dm_n_deps") > 0, pl.col("dm_n_mentions") > 0))[
+            "document_id"
+        ].to_list()
     )
-    import_field: dict[tuple[str, str], float] = {
-        (row["software_name_normalized"], row["field"]): row["c"]
-        / field_n_dict.get(row["field"], 1)
-        for row in import_field_raw.iter_rows(named=True)
-    }
+    return im_eligible, dm_eligible
 
-    # Global dep prevalence
-    dep_global = dict(
-        zip(
-            deps_df.group_by("software_name_normalized")
-            .agg(pl.n_unique("repository_id").alias("c"))
-            .with_columns((pl.col("c") / n_total_repos).alias("p"))["software_name_normalized"]
-            .to_list(),
-            deps_df.group_by("software_name_normalized")
-            .agg(pl.n_unique("repository_id").alias("c"))
-            .with_columns((pl.col("c") / n_total_repos).alias("p"))["p"]
-            .to_list(),
-            strict=False,
+
+def _build_analysis_df(
+    records: list[dict],
+    eligible: set,
+    pair_meta: dict[int, dict],
+    global_prev: dict[str, float],
+    field_prev: dict[tuple[str, str], float],
+    global_col: str,
+    field_col: str,
+) -> "pd.DataFrame":
+    """Build a DataFrame for one analysis variant (imports or deps)."""
+    import pandas as pd
+
+    rows = []
+    for rec in records:
+        if rec["status"] == "source_b_only":
+            continue
+        doc_id = rec["document_id"]
+        if doc_id not in eligible:
+            continue
+        meta = pair_meta.get(doc_id)
+        if meta is None or meta["year"] is None:
+            continue
+        norm = rec["normalized_name"]
+        field = meta["field"]
+        rows.append(
+            {
+                "is_mentioned": int(rec["status"] == "matched"),
+                global_col: global_prev.get(norm, 0.0),
+                field_col: field_prev.get((norm, field), 0.0),
+                "year": meta["year"],
+                "field": field,
+                "language": meta["language"],
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _clean_logistic_df(df: "pd.DataFrame") -> "pd.DataFrame":
+    """Clean and prepare a DataFrame for logistic regression."""
+    df = df.dropna(subset=["year", "field", "language"]).copy()
+    df["field"] = df["field"].str.replace(r"[^A-Za-z0-9_]", "_", regex=True).str.strip("_")
+    df["language"] = (
+        df["language"].str.replace(r"[^A-Za-z0-9_]", "_", regex=True).str.strip("_")
+    )
+    df["field_binned"] = _bin_top_n(df["field"], top_n=9)
+    df["language_binned"] = _bin_top_n(df["language"], top_n=8)
+    for col in (
+        "import_global_prev",
+        "import_field_prev",
+        "dep_global_prev",
+        "dep_field_prev",
+    ):
+        if col in df.columns:
+            mu, sigma = df[col].mean(), df[col].std()
+            df[f"{col}_z"] = (df[col] - mu) / sigma if sigma > 0 else 0.0
+    df["year_c"] = df["year"] - df["year"].median()
+    return df
+
+
+def _fit_models(
+    df: "pd.DataFrame",
+    model_specs: list[tuple[str, str]],
+    section_title: str,
+    min_n: int = 50,
+) -> str:
+    """Fit a series of logistic regression models and return formatted results."""
+    import warnings
+
+    if len(df) < min_n:
+        return f"\n  {section_title}: insufficient data (N={len(df)}), skipping.\n"
+    out_lines = [f"\n{'=' * 70}", f"  {section_title}  (N rows = {len(df):,})", "=" * 70]
+    for model_name, formula in model_specs:
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                result = smf.logit(formula, data=df).fit(disp=0, maxiter=500, method="bfgs")
+            out_lines.append(_format_logit_result(result, model_name))
+        except Exception as exc:
+            out_lines.append(f"\n  {model_name}: failed — {exc}\n")
+    return "\n".join(out_lines)
+
+
+def _fit_and_write_models(
+    df: "pd.DataFrame",
+    model_specs: list[tuple[str, str]],
+    section_title: str,
+    output_path: "Path",
+    filename: str,
+    filter_mode: str,
+    label: str,
+) -> None:
+    """Fit models, log completion, and write results to file."""
+    text = _fit_models(df, model_specs, section_title)
+    log.info(f"[{filter_mode}] Logistic regression ({label}) complete")
+    with open(output_path / filename, "w") as f:
+        f.write(text)
+
+
+def _build_combined_rows(
+    all_im_records: list[dict],
+    all_dm_records: list[dict],
+    combined_eligible: set,
+    pair_meta: dict[int, dict],
+    import_global: dict[str, float],
+    import_field: dict[tuple[str, str], float],
+    dep_global: dict[str, float],
+    dep_field: dict[tuple[str, str], float],
+) -> list[dict]:
+    """Build combined rows from both IM and DM records for the M6 model."""
+    from itertools import chain
+
+    combined: dict[tuple[str, int], dict] = {}
+    for rec in chain(all_im_records, all_dm_records):
+        if rec["status"] == "source_b_only":
+            continue
+        doc_id = rec["document_id"]
+        if doc_id not in combined_eligible:
+            continue
+        meta = pair_meta.get(doc_id)
+        if meta is None or meta["year"] is None:
+            continue
+        norm = rec["normalized_name"]
+        field = meta["field"]
+        key = (norm, doc_id)
+        entry = combined.setdefault(
+            key,
+            {
+                "is_mentioned": 0,
+                "import_global_prev": import_global.get(norm, 0.0),
+                "import_field_prev": import_field.get((norm, field), 0.0),
+                "dep_global_prev": dep_global.get(norm, 0.0),
+                "dep_field_prev": dep_field.get((norm, field), 0.0),
+                "year": meta["year"],
+                "field": field,
+                "language": meta["language"],
+            },
+        )
+        entry["is_mentioned"] = max(entry["is_mentioned"], int(rec["status"] == "matched"))
+    return list(combined.values())
+
+
+def _run_logistic_regressions(
+    results_df: pl.DataFrame,
+    all_im_records: list[dict],
+    all_dm_records: list[dict],
+    imports_df: pl.DataFrame,
+    deps_df: pl.DataFrame,
+    pairs: pl.DataFrame,
+    filter_mode: str,
+    output_path: "Path",
+) -> None:
+    """Fit logistic regressions predicting mention status from prevalence features."""
+    import pandas as pd
+
+    log.info(f"[{filter_mode}] Building logistic regression datasets...")
+
+    pair_meta = _build_pair_metadata(results_df)
+    import_global, import_field, dep_global, dep_field = _compute_prevalence_features(
+        imports_df, deps_df, pairs
+    )
+    im_eligible, dm_eligible = _get_eligible_document_ids(results_df, filter_mode)
+
+    # Build and clean per-analysis DataFrames
+    im_df = _clean_logistic_df(
+        _build_analysis_df(
+            all_im_records,
+            im_eligible,
+            pair_meta,
+            import_global,
+            import_field,
+            "import_global_prev",
+            "import_field_prev",
         )
     )
-
-    # Field-level dep prevalence
-    deps_with_field = deps_df.with_columns(
-        pl.col("repository_id").replace(repo_to_field, default=None).alias("field")
+    dm_df = _clean_logistic_df(
+        _build_analysis_df(
+            all_dm_records,
+            dm_eligible,
+            pair_meta,
+            dep_global,
+            dep_field,
+            "dep_global_prev",
+            "dep_field_prev",
+        )
     )
-    dep_field_raw = (
-        deps_with_field.filter(pl.col("field").is_not_null())
-        .group_by(["software_name_normalized", "field"])
-        .agg(pl.n_unique("repository_id").alias("c"))
-    )
-    dep_field: dict[tuple[str, str], float] = {
-        (row["software_name_normalized"], row["field"]): row["c"]
-        / field_n_dict.get(row["field"], 1)
-        for row in dep_field_raw.iter_rows(named=True)
-    }
-
-    # ── filter-mode eligible document IDs ────────────────────────────────────
-    if filter_mode == "complete-cases":
-        im_eligible = set(
-            results_df.filter((pl.col("im_n_imports") > 0) & (pl.col("im_n_mentions") > 0))[
-                "document_id"
-            ].to_list()
-        )
-        dm_eligible = set(
-            results_df.filter((pl.col("dm_n_deps") > 0) & (pl.col("dm_n_mentions") > 0))[
-                "document_id"
-            ].to_list()
-        )
-    else:
-        im_eligible = set(
-            results_df.filter((pl.col("im_n_imports") > 0) | (pl.col("im_n_mentions") > 0))[
-                "document_id"
-            ].to_list()
-        )
-        dm_eligible = set(
-            results_df.filter((pl.col("dm_n_deps") > 0) | (pl.col("dm_n_mentions") > 0))[
-                "document_id"
-            ].to_list()
-        )
-
-    # ── build regression DataFrames ──────────────────────────────────────────
-    def _build_im_df() -> pd.DataFrame:
-        rows = []
-        for rec in all_im_records:
-            if rec["status"] == "source_b_only":
-                continue  # mention only — no import to anchor prevalence
-            doc_id = rec["document_id"]
-            if doc_id not in im_eligible:
-                continue
-            meta = pair_meta.get(doc_id)
-            if meta is None or meta["year"] is None:
-                continue
-            norm = rec["normalized_name"]
-            field = meta["field"]
-            rows.append(
-                {
-                    "is_mentioned": int(rec["status"] == "matched"),
-                    "import_global_prev": import_global.get(norm, 0.0),
-                    "import_field_prev": import_field.get((norm, field), 0.0),
-                    "year": meta["year"],
-                    "field": field,
-                    "language": meta["language"],
-                }
-            )
-        return pd.DataFrame(rows)
-
-    def _build_dm_df() -> pd.DataFrame:
-        rows = []
-        for rec in all_dm_records:
-            if rec["status"] == "source_b_only":
-                continue  # mention only — no dep to anchor prevalence
-            doc_id = rec["document_id"]
-            if doc_id not in dm_eligible:
-                continue
-            meta = pair_meta.get(doc_id)
-            if meta is None or meta["year"] is None:
-                continue
-            norm = rec["normalized_name"]
-            field = meta["field"]
-            rows.append(
-                {
-                    "is_mentioned": int(rec["status"] == "matched"),
-                    "dep_global_prev": dep_global.get(norm, 0.0),
-                    "dep_field_prev": dep_field.get((norm, field), 0.0),
-                    "year": meta["year"],
-                    "field": field,
-                    "language": meta["language"],
-                }
-            )
-        return pd.DataFrame(rows)
-
-    im_df = _build_im_df()
-    dm_df = _build_dm_df()
-
-    def _clean_df(df: pd.DataFrame) -> pd.DataFrame:
-        df = df.dropna(subset=["year", "field", "language"]).copy()
-        # Sanitize categorical values for formula API (remove chars that break C())
-        df["field"] = df["field"].str.replace(r"[^A-Za-z0-9_]", "_", regex=True).str.strip("_")
-        df["language"] = (
-            df["language"].str.replace(r"[^A-Za-z0-9_]", "_", regex=True).str.strip("_")
-        )
-        # Drop rare categories to prevent perfect separation
-        for col in ("field", "language"):
-            counts = df[col].value_counts()
-            keep = counts[counts >= 10].index
-            df = df[df[col].isin(keep)]
-        df["year_c"] = df["year"] - df["year"].median()
-        return df
-
-    im_df = _clean_df(im_df)
-    dm_df = _clean_df(dm_df)
 
     # ── model specs ──────────────────────────────────────────────────────────
     im_models = [
-        ("M1: Uncontrolled", "is_mentioned ~ import_global_prev + import_field_prev"),
-        ("M2: + Year", "is_mentioned ~ import_global_prev + import_field_prev + year_c"),
-        ("M3: + Field", "is_mentioned ~ import_global_prev + import_field_prev + C(field)"),
+        ("M1: Uncontrolled", "is_mentioned ~ import_global_prev_z + import_field_prev_z"),
+        ("M2: + Year", "is_mentioned ~ import_global_prev_z + import_field_prev_z + year_c"),
+        (
+            "M3: + Field",
+            "is_mentioned ~ import_global_prev_z + import_field_prev_z + C(field_binned)",
+        ),
         (
             "M4: + Language",
-            "is_mentioned ~ import_global_prev + import_field_prev + C(language)",
+            "is_mentioned ~ import_global_prev_z + import_field_prev_z + C(language_binned)",
         ),
         (
             "M5: Fully controlled",
-            "is_mentioned ~ import_global_prev + import_field_prev + year_c + C(field) + C(language)",
+            "is_mentioned ~ import_global_prev_z + import_field_prev_z + year_c"
+            " + C(field_binned) + C(language_binned)",
         ),
     ]
     dm_models = [
-        ("M1: Uncontrolled", "is_mentioned ~ dep_global_prev + dep_field_prev"),
-        ("M2: + Year", "is_mentioned ~ dep_global_prev + dep_field_prev + year_c"),
-        ("M3: + Field", "is_mentioned ~ dep_global_prev + dep_field_prev + C(field)"),
+        ("M1: Uncontrolled", "is_mentioned ~ dep_global_prev_z + dep_field_prev_z"),
+        ("M2: + Year", "is_mentioned ~ dep_global_prev_z + dep_field_prev_z + year_c"),
+        (
+            "M3: + Field",
+            "is_mentioned ~ dep_global_prev_z + dep_field_prev_z + C(field_binned)",
+        ),
         (
             "M4: + Language",
-            "is_mentioned ~ dep_global_prev + dep_field_prev + C(language)",
+            "is_mentioned ~ dep_global_prev_z + dep_field_prev_z + C(language_binned)",
         ),
         (
             "M5: Fully controlled",
-            "is_mentioned ~ dep_global_prev + dep_field_prev + year_c + C(field) + C(language)",
+            "is_mentioned ~ dep_global_prev_z + dep_field_prev_z + year_c"
+            " + C(field_binned) + C(language_binned)",
         ),
     ]
 
-    def _fit_models(
-        df: pd.DataFrame,
-        model_specs: list[tuple[str, str]],
-        section_title: str,
-        min_n: int = 50,
-    ) -> str:
-        if len(df) < min_n:
-            return f"\n  {section_title}: insufficient data (N={len(df)}), skipping.\n"
-        out_lines = [f"\n{'=' * 70}", f"  {section_title}  (N rows = {len(df):,})", "=" * 70]
-        for model_name, formula in model_specs:
-            try:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    result = smf.logit(formula, data=df).fit(disp=0, maxiter=500, method="bfgs")
-                out_lines.append(_format_logit_result(result, model_name))
-            except Exception as exc:
-                out_lines.append(f"\n  {model_name}: failed — {exc}\n")
-        return "\n".join(out_lines)
-
-    # ── imports → mentions ────────────────────────────────────────────────────
-    im_text = _fit_models(
-        im_df, im_models, "Logistic Regression: Import Prevalence → Mention Status"
+    # ── fit and write results ────────────────────────────────────────────────
+    _fit_and_write_models(
+        im_df,
+        im_models,
+        "Logistic Regression: Import Prevalence → Mention Status",
+        output_path,
+        "rq3-logistic-regression-imports.txt",
+        filter_mode,
+        "imports",
     )
-    log.info(f"[{filter_mode}] Logistic regression (imports) complete")
-    with open(output_path / "rq3-logistic-regression-imports.txt", "w") as f:
-        f.write(im_text)
-
-    # ── deps → mentions ───────────────────────────────────────────────────────
-    dm_text = _fit_models(
-        dm_df, dm_models, "Logistic Regression: Dependency Prevalence → Mention Status"
+    _fit_and_write_models(
+        dm_df,
+        dm_models,
+        "Logistic Regression: Dependency Prevalence → Mention Status",
+        output_path,
+        "rq3-logistic-regression-deps.txt",
+        filter_mode,
+        "deps",
     )
-    log.info(f"[{filter_mode}] Logistic regression (deps) complete")
-    with open(output_path / "rq3-logistic-regression-deps.txt", "w") as f:
-        f.write(dm_text)
 
     # ── combined model (M6) ───────────────────────────────────────────────────
-    # Union of IM and DM eligible records; is_mentioned = 1 if matched in either
     combined_eligible = im_eligible | dm_eligible
-    combined_rows: dict[tuple[str, int], dict] = {}
-    for rec in all_im_records:
-        if rec["status"] == "source_b_only":
-            continue
-        doc_id = rec["document_id"]
-        if doc_id not in combined_eligible:
-            continue
-        meta = pair_meta.get(doc_id)
-        if meta is None or meta["year"] is None:
-            continue
-        norm = rec["normalized_name"]
-        field = meta["field"]
-        key = (norm, doc_id)
-        entry = combined_rows.setdefault(
-            key,
-            {
-                "is_mentioned": 0,
-                "import_global_prev": import_global.get(norm, 0.0),
-                "import_field_prev": import_field.get((norm, field), 0.0),
-                "dep_global_prev": dep_global.get(norm, 0.0),
-                "dep_field_prev": dep_field.get((norm, field), 0.0),
-                "year": meta["year"],
-                "field": field,
-                "language": meta["language"],
-            },
+    combined_df = _clean_logistic_df(
+        pd.DataFrame(
+            _build_combined_rows(
+                all_im_records,
+                all_dm_records,
+                combined_eligible,
+                pair_meta,
+                import_global,
+                import_field,
+                dep_global,
+                dep_field,
+            )
         )
-        entry["is_mentioned"] = max(entry["is_mentioned"], int(rec["status"] == "matched"))
-
-    for rec in all_dm_records:
-        if rec["status"] == "source_b_only":
-            continue
-        doc_id = rec["document_id"]
-        if doc_id not in combined_eligible:
-            continue
-        meta = pair_meta.get(doc_id)
-        if meta is None or meta["year"] is None:
-            continue
-        norm = rec["normalized_name"]
-        field = meta["field"]
-        key = (norm, doc_id)
-        entry = combined_rows.setdefault(
-            key,
-            {
-                "is_mentioned": 0,
-                "import_global_prev": import_global.get(norm, 0.0),
-                "import_field_prev": import_field.get((norm, field), 0.0),
-                "dep_global_prev": dep_global.get(norm, 0.0),
-                "dep_field_prev": dep_field.get((norm, field), 0.0),
-                "year": meta["year"],
-                "field": field,
-                "language": meta["language"],
-            },
-        )
-        entry["is_mentioned"] = max(entry["is_mentioned"], int(rec["status"] == "matched"))
-
-    combined_df = _clean_df(pd.DataFrame(list(combined_rows.values())))
+    )
     combined_formula = (
         "is_mentioned ~ import_global_prev + import_field_prev "
         "+ dep_global_prev + dep_field_prev "
         "+ year_c + C(field) + C(language)"
     )
-    combined_text = _fit_models(
+    _fit_and_write_models(
         combined_df,
         [("M6: Combined (fully controlled)", combined_formula)],
         "Logistic Regression: Combined Prevalence → Mention Status",
+        output_path,
+        "rq3-logistic-regression-combined.txt",
+        filter_mode,
+        "combined",
     )
-    log.info(f"[{filter_mode}] Logistic regression (combined) complete")
-    with open(output_path / "rq3-logistic-regression-combined.txt", "w") as f:
-        f.write(combined_text)
 
 
 ###############################################################################

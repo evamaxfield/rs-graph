@@ -14,6 +14,7 @@ import polars as pl
 import rustworkx as rx
 import seaborn as sns
 import typer
+from scipy.stats import chi2_contingency, kruskal, mannwhitneyu
 from tqdm import tqdm
 
 from rs_graph.bin.typer_utils import setup_logger
@@ -2346,6 +2347,818 @@ def analyze_network_role_by_code_contribution_status(  # noqa: C901
 
 
 ###############################################################################
+# Additional analyses
+###############################################################################
+
+# Regex patterns matched against the full license name string (case-insensitive).
+# Permissive: MIT, Apache, BSD family, Unlicense, ISC, Boost, zlib, CC0, etc.
+_PERMISSIVE_LICENSE_RE = (
+    r"(?i)^mit\b|apache|bsd|unlicense|isc license|boost software"
+    r"|zlib|ncsa|creative commons zero|cc0|blue oak|academic free"
+    r"|universal permissive|mulan permissive|cern.*permissive"
+    r"|mit no attribution"
+)
+# Copyleft: GPL, LGPL, AGPL, MPL, EUPL, Eclipse, etc.
+_COPYLEFT_LICENSE_RE = (
+    r"(?i)gnu general public|gnu lesser|gnu affero|mozilla public"
+    r"|european union public|eclipse public|cecill|open software license"
+    r"|strongly reciprocal|weakly reciprocal"
+)
+_LICENSE_ORDER = ["Permissive", "Copyleft", "Other", "No License"]
+
+
+def analyze_license_distribution(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+    top_n: int,
+) -> None:
+    """Analyze repository license distribution by field and relationship with FWCI."""
+    license_df = pairs.with_columns(
+        pl.when(pl.col("repository_license").is_null())
+        .then(pl.lit("No License"))
+        .when(pl.col("repository_license").str.contains(_PERMISSIVE_LICENSE_RE))
+        .then(pl.lit("Permissive"))
+        .when(pl.col("repository_license").str.contains(_COPYLEFT_LICENSE_RE))
+        .then(pl.lit("Copyleft"))
+        .otherwise(pl.lit("Other"))
+        .alias("license_category")
+    )
+
+    license_counts = (
+        license_df["license_category"].value_counts(sort=True).rename({"count": "n_pairs"})
+    )
+    license_counts.write_csv(results_dir / "license_category_counts.csv")
+
+    field_license_df = license_df.filter(
+        pl.col("document_field_name").is_not_null(),
+        pl.col("document_field_name") != "",
+    )
+    field_license_df, top_fields, field_col = _add_top_n_other_column(
+        field_license_df, "document_field_name", top_n
+    )
+
+    field_license_counts = field_license_df.group_by([field_col, "license_category"]).agg(
+        pl.len().alias("n_pairs")
+    )
+    field_totals = field_license_df.group_by(field_col).agg(pl.len().alias("total_pairs"))
+    field_license_pct = field_license_counts.join(
+        field_totals, on=field_col, how="left"
+    ).with_columns((pl.col("n_pairs") / pl.col("total_pairs") * 100).alias("pct_pairs"))
+    field_license_pct.write_csv(results_dir / "license_by_field_pct.csv")
+
+    # Chi-square: field x license category
+    contingency = field_license_counts.pivot(
+        on="license_category", index=field_col, values="n_pairs"
+    ).fill_null(0)
+    ct_matrix = contingency.select(
+        [c for c in contingency.columns if c != field_col]
+    ).to_numpy()
+    if ct_matrix.shape[0] >= 2 and ct_matrix.shape[1] >= 2:
+        chi2_stat, chi2_p, _, _ = chi2_contingency(ct_matrix)
+        with open(results_dir / "license_field_chisq.json", "w") as f:
+            json.dump({"chi2": float(chi2_stat), "p_value": float(chi2_p)}, f, indent=2)
+
+    # Kruskal-Wallis: FWCI by license category
+    fwci_license_df = _filter_finite(license_df, ["document_fwci"])
+    kw_groups = [
+        fwci_license_df.filter(pl.col("license_category") == cat)["document_fwci"].to_numpy()
+        for cat in _LICENSE_ORDER
+        if fwci_license_df.filter(pl.col("license_category") == cat).height >= 5
+    ]
+    if len(kw_groups) >= 2:
+        kw_stat, kw_p = kruskal(*kw_groups)
+        with open(results_dir / "license_fwci_kruskal.json", "w") as f:
+            json.dump({"kruskal_h": float(kw_stat), "p_value": float(kw_p)}, f, indent=2)
+
+    license_fwci_order = (
+        fwci_license_df.group_by("license_category")
+        .agg(pl.col("document_fwci").median().alias("median_fwci"))
+        .sort("median_fwci", descending=True)["license_category"]
+        .to_list()
+    )
+
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(18, 7), constrained_layout=True)
+
+    # Panel 1: Stacked bar of license categories by field
+    field_order = (
+        field_license_df.group_by(field_col)
+        .agg(pl.len().alias("total"))
+        .sort("total", descending=True)[field_col]
+        .to_list()
+    )
+    pivot_pandas = (
+        field_license_pct.pivot(on="license_category", index=field_col, values="pct_pairs")
+        .fill_null(0)
+        .to_pandas()
+        .set_index(field_col)
+        .reindex(field_order)
+    )
+    present_license_cols = [c for c in _LICENSE_ORDER if c in pivot_pandas.columns]
+    pivot_pandas[present_license_cols].plot(
+        kind="barh",
+        stacked=True,
+        ax=axes[0],
+        colormap="Set2",
+    )
+    axes[0].set_title(
+        f"License Category Composition by Field (Top {top_n} + Other)\n(% of pairs per field)",
+        fontsize=12,
+    )
+    axes[0].set_xlabel("Percentage of Pairs (%)")
+    axes[0].set_ylabel("")
+    axes[0].legend(title="License Category", bbox_to_anchor=(1.02, 1), loc="upper left")
+
+    # Panel 2: FWCI by license category
+    kw_label = ""
+    if len(kw_groups) >= 2:
+        kw_label = f"\nKruskal-Wallis H={kw_stat:.1f}, p={kw_p:.3e}"
+    sns.boxplot(
+        data=fwci_license_df,
+        y="license_category",
+        x="document_fwci",
+        order=license_fwci_order,
+        showfliers=False,
+        ax=axes[1],
+    )
+    axes[1].set_title(
+        f"Document FWCI by License Category{kw_label}",
+        fontsize=12,
+    )
+    axes[1].set_xlabel("Document FWCI")
+    axes[1].set_ylabel("")
+
+    fig.savefig(results_dir / "license_distribution.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
+def analyze_lifecycle_vs_fwci(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+) -> None:
+    """Test whether lifecycle phases predict article citation impact (FWCI)."""
+    lc_df = _filter_finite(
+        pairs,
+        [
+            "document_fwci",
+            "days_from_repo_creation_to_publication",
+            "days_from_publication_to_last_push",
+        ],
+    ).with_columns(
+        pl.when(
+            pl.col("days_from_repo_creation_to_publication") > LIFECYCLE_RELEASE_WINDOW_DAYS
+        )
+        .then(pl.lit(f"Repo before pub (>{LIFECYCLE_RELEASE_WINDOW_DAYS}d)"))
+        .when(pl.col("days_from_repo_creation_to_publication") < -LIFECYCLE_RELEASE_WINDOW_DAYS)
+        .then(pl.lit(f"Repo after pub (>{LIFECYCLE_RELEASE_WINDOW_DAYS}d)"))
+        .otherwise(pl.lit(f"Concurrent (within {LIFECYCLE_RELEASE_WINDOW_DAYS}d)"))
+        .alias("creation_timing"),
+        pl.when(pl.col("days_from_publication_to_last_push") <= 0)
+        .then(pl.lit("No post-pub maintenance"))
+        .when(pl.col("days_from_publication_to_last_push") <= LIFECYCLE_LONG_MAINTENANCE_DAYS)
+        .then(pl.lit(f"Short-term (<={LIFECYCLE_LONG_MAINTENANCE_DAYS}d)"))
+        .otherwise(pl.lit(f"Long-term (>{LIFECYCLE_LONG_MAINTENANCE_DAYS}d)"))
+        .alias("maintenance_timing"),
+    )
+
+    if lc_df.height == 0:
+        log.warning("No lifecycle-FWCI rows available. Skipping.")
+        return
+
+    creation_cats = [
+        f"Repo before pub (>{LIFECYCLE_RELEASE_WINDOW_DAYS}d)",
+        f"Concurrent (within {LIFECYCLE_RELEASE_WINDOW_DAYS}d)",
+        f"Repo after pub (>{LIFECYCLE_RELEASE_WINDOW_DAYS}d)",
+    ]
+    maintenance_cats = [
+        "No post-pub maintenance",
+        f"Short-term (<={LIFECYCLE_LONG_MAINTENANCE_DAYS}d)",
+        f"Long-term (>{LIFECYCLE_LONG_MAINTENANCE_DAYS}d)",
+    ]
+
+    def _kw_label(cats: list[str], col: str) -> tuple[list[str], str]:
+        present = [c for c in cats if lc_df.filter(pl.col(col) == c).height >= 5]
+        groups = [lc_df.filter(pl.col(col) == c)["document_fwci"].to_numpy() for c in present]
+        label = ""
+        if len(groups) >= 2:
+            h, p = kruskal(*groups)
+            label = f"\nKruskal-Wallis H={h:.1f}, p={p:.3e}"
+        return present, label
+
+    creation_order, creation_label = _kw_label(creation_cats, "creation_timing")
+    maintenance_order, maintenance_label = _kw_label(maintenance_cats, "maintenance_timing")
+
+    summary_rows: list[dict] = []
+    for dim, cats_order, col in [
+        ("creation_timing", creation_order, "creation_timing"),
+        ("maintenance_timing", maintenance_order, "maintenance_timing"),
+    ]:
+        for cat in cats_order:
+            vals = lc_df.filter(pl.col(col) == cat)["document_fwci"].to_numpy()
+            summary_rows.append(
+                {
+                    "dimension": dim,
+                    "category": cat,
+                    "n": len(vals),
+                    "median_fwci": float(np.median(vals)),
+                    "mean_fwci": float(np.mean(vals)),
+                }
+            )
+    pl.DataFrame(summary_rows).write_csv(results_dir / "lifecycle_fwci_summary.csv")
+
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(18, 6), constrained_layout=True)
+
+    sns.boxplot(
+        data=lc_df,
+        y="creation_timing",
+        x="document_fwci",
+        order=creation_order,
+        showfliers=False,
+        ax=axes[0],
+    )
+    axes[0].set_title(
+        f"FWCI by Repository Creation Timing{creation_label}",
+        fontsize=12,
+    )
+    axes[0].set_xlabel("Document FWCI")
+    axes[0].set_ylabel("")
+
+    sns.boxplot(
+        data=lc_df,
+        y="maintenance_timing",
+        x="document_fwci",
+        order=maintenance_order,
+        showfliers=False,
+        ax=axes[1],
+    )
+    axes[1].set_title(
+        f"FWCI by Post-Publication Maintenance Duration{maintenance_label}",
+        fontsize=12,
+    )
+    axes[1].set_xlabel("Document FWCI")
+    axes[1].set_ylabel("")
+
+    fig.savefig(results_dir / "lifecycle_vs_fwci.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
+def analyze_geographic_diversity_vs_fwci(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+    top_n: int,
+) -> None:
+    """Correlate author-team geographic diversity with article citation impact (FWCI)."""
+    geo_fwci_df = _filter_finite(pairs, ["document_fwci", "document_author_country_entropy"])
+
+    if geo_fwci_df.height < 10:
+        log.warning("Insufficient rows for geographic diversity vs FWCI. Skipping.")
+        return
+
+    x_all = geo_fwci_df["document_author_country_entropy"].to_numpy()
+    y_all = geo_fwci_df["document_fwci"].to_numpy()
+    overall_rho = _compute_spearman_rho(x_all, y_all)
+
+    geo_field_df = geo_fwci_df.filter(
+        pl.col("document_field_name").is_not_null(),
+        pl.col("document_field_name") != "",
+    )
+    geo_field_df, top_fields, field_col = _add_top_n_other_column(
+        geo_field_df, "document_field_name", top_n
+    )
+    field_rho_rows: list[dict] = []
+    for field_name in top_fields:
+        fd = geo_field_df.filter(pl.col(field_col) == field_name)
+        if fd.height < 25:
+            continue
+        field_rho_rows.append(
+            {
+                "field": field_name,
+                "n": fd.height,
+                "spearman_rho": _compute_spearman_rho(
+                    fd["document_author_country_entropy"].to_numpy(),
+                    fd["document_fwci"].to_numpy(),
+                ),
+            }
+        )
+
+    pl.DataFrame(
+        [
+            {"field": "Overall", "n": geo_fwci_df.height, "spearman_rho": overall_rho},
+            *field_rho_rows,
+        ]
+    ).write_csv(results_dir / "geographic_diversity_vs_fwci_correlations.csv")
+
+    # Mann-Whitney: single-country vs multi-country FWCI
+    single_fwci = geo_fwci_df.filter(pl.col("document_n_unique_author_countries") == 1)[
+        "document_fwci"
+    ].to_numpy()
+    multi_fwci = geo_fwci_df.filter(pl.col("document_n_unique_author_countries") > 1)[
+        "document_fwci"
+    ].to_numpy()
+
+    mw_label = ""
+    if len(single_fwci) >= 2 and len(multi_fwci) >= 2:
+        u_stat, p_val = mannwhitneyu(single_fwci, multi_fwci, alternative="two-sided")
+        n1, n2 = len(single_fwci), len(multi_fwci)
+        r = 1 - (2 * u_stat) / (n1 * n2)
+        mw_label = f"U={u_stat:.0f}, p={p_val:.3e}, r={r:.3f}"
+        with open(results_dir / "single_vs_multi_country_fwci.json", "w") as f:
+            json.dump(
+                {
+                    "n_single_country": int(n1),
+                    "n_multi_country": int(n2),
+                    "median_fwci_single": float(np.median(single_fwci)),
+                    "median_fwci_multi": float(np.median(multi_fwci)),
+                    "u_statistic": float(u_stat),
+                    "p_value": float(p_val),
+                    "rank_biserial_r": float(r),
+                },
+                f,
+                indent=2,
+            )
+
+    reg = _fit_simple_linear_regression(x_all, y_all)
+
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(18, 7), constrained_layout=True)
+
+    # Panel 1: Scatter entropy vs FWCI with trend line
+    p99_fwci = float(geo_fwci_df["document_fwci"].quantile(0.99))
+    sns.scatterplot(
+        data=geo_fwci_df.filter(pl.col("document_fwci") < p99_fwci),
+        x="document_author_country_entropy",
+        y="document_fwci",
+        alpha=0.15,
+        ax=axes[0],
+    )
+    if np.isfinite(reg["slope"]):
+        x_line = np.linspace(float(x_all.min()), float(x_all.max()), 100)
+        axes[0].plot(
+            x_line,
+            reg["intercept"] + reg["slope"] * x_line,
+            color="black",
+            linestyle="--",
+            linewidth=2,
+        )
+    axes[0].set_title(
+        f"Country Diversity Entropy vs Document FWCI\nSpearman rho={overall_rho:.3f}",
+        fontsize=13,
+    )
+    axes[0].set_xlabel("Author Country Entropy (0=single country)")
+    axes[0].set_ylabel("Document FWCI")
+
+    # Panel 2: Single vs multi-country FWCI box plot
+    country_group_df = geo_fwci_df.with_columns(
+        pl.when(pl.col("document_n_unique_author_countries") == 1)
+        .then(pl.lit("Single Country"))
+        .otherwise(pl.lit("Multi-Country"))
+        .alias("country_group")
+    ).filter(pl.col("document_fwci") < p99_fwci)
+    sns.boxplot(
+        data=country_group_df,
+        x="country_group",
+        y="document_fwci",
+        order=["Single Country", "Multi-Country"],
+        showfliers=False,
+        ax=axes[1],
+    )
+    axes[1].set_title(
+        f"FWCI: Single Country vs Multi-Country Author Teams\n{mw_label}",
+        fontsize=12,
+    )
+    axes[1].set_xlabel("")
+    axes[1].set_ylabel("Document FWCI")
+
+    fig.savefig(results_dir / "geographic_diversity_vs_fwci.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
+def analyze_code_contributor_ratio(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+    top_n: int,
+) -> None:
+    """Analyze confirmed author-coder overlap ratio vs total contributor ratio by field."""
+    pair_links = pairs.select("document_id", "repository_id").unique()
+
+    confirmed_overlaps = (
+        _get_author_developer_pairs_connected_to_pairs(
+            pair_links,
+            confidence_threshold=0.97,
+        )
+        .group_by(["document_id", "repository_id"])
+        .agg(pl.n_unique("developer_account_id").alias("confirmed_overlap_count"))
+    )
+
+    ratio_df = (
+        pairs.select(
+            "document_id",
+            "repository_id",
+            "document_n_authors",
+            "repository_n_contributors",
+            "document_fwci",
+            "document_field_name",
+        )
+        .join(confirmed_overlaps, on=["document_id", "repository_id"], how="left")
+        .with_columns(pl.col("confirmed_overlap_count").fill_null(0))
+        .filter(
+            pl.col("document_n_authors").is_not_null(),
+            pl.col("document_n_authors") > 0,
+            pl.col("repository_n_contributors").is_not_null(),
+            pl.col("repository_n_contributors") > 0,
+        )
+        .with_columns(
+            (pl.col("repository_n_contributors") / pl.col("document_n_authors"))
+            .clip(upper_bound=1.0)
+            .alias("total_code_author_ratio"),
+            (pl.col("confirmed_overlap_count") / pl.col("document_n_authors"))
+            .clip(upper_bound=1.0)
+            .alias("confirmed_overlap_ratio"),
+        )
+    )
+
+    if ratio_df.height == 0:
+        log.warning("No rows available for code contributor ratio analysis. Skipping.")
+        return
+
+    with open(results_dir / "code_contributor_ratio_summary.json", "w") as f:
+        json.dump(
+            {
+                "n_pairs": int(ratio_df.height),
+                "pairs_with_zero_confirmed_overlap": int(
+                    ratio_df.filter(pl.col("confirmed_overlap_count") == 0).height
+                ),
+                "pct_zero_confirmed_overlap": round(
+                    100
+                    * ratio_df.filter(pl.col("confirmed_overlap_count") == 0).height
+                    / ratio_df.height,
+                    2,
+                ),
+                "median_total_ratio": float(ratio_df["total_code_author_ratio"].median()),
+                "median_confirmed_ratio": float(ratio_df["confirmed_overlap_ratio"].median()),
+            },
+            f,
+            indent=2,
+        )
+
+    ratio_field_df = ratio_df.filter(
+        pl.col("document_field_name").is_not_null(),
+        pl.col("document_field_name") != "",
+    )
+    ratio_field_df, top_fields, field_col = _add_top_n_other_column(
+        ratio_field_df, "document_field_name", top_n
+    )
+    field_ratio_stats = (
+        ratio_field_df.group_by(field_col)
+        .agg(
+            pl.len().alias("n_pairs"),
+            pl.col("total_code_author_ratio").median().alias("median_total_ratio"),
+            pl.col("confirmed_overlap_ratio").median().alias("median_confirmed_ratio"),
+        )
+        .sort("median_confirmed_ratio", descending=True)
+    )
+    field_ratio_stats.write_csv(results_dir / "code_contributor_ratio_by_field.csv")
+
+    # Spearman correlations with FWCI
+    fwci_ratio_df = _filter_finite(ratio_df, ["document_fwci"])
+    if fwci_ratio_df.height >= 10:
+        total_rho = _compute_spearman_rho(
+            fwci_ratio_df["total_code_author_ratio"].to_numpy(),
+            fwci_ratio_df["document_fwci"].to_numpy(),
+        )
+        conf_rho = _compute_spearman_rho(
+            fwci_ratio_df["confirmed_overlap_ratio"].to_numpy(),
+            fwci_ratio_df["document_fwci"].to_numpy(),
+        )
+        with open(results_dir / "code_contributor_ratio_fwci_correlations.json", "w") as f:
+            json.dump(
+                {
+                    "total_ratio_spearman_rho_vs_fwci": float(total_rho),
+                    "confirmed_ratio_spearman_rho_vs_fwci": float(conf_rho),
+                    "n_pairs_with_fwci": int(fwci_ratio_df.height),
+                },
+                f,
+                indent=2,
+            )
+
+    field_order = field_ratio_stats[field_col].to_list()
+
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(18, 7), constrained_layout=True)
+    fig.suptitle(
+        "Code Contributor Overlap Ratios by Academic Field\n"
+        "(Total = all GitHub contributors / paper authors; "
+        "Confirmed = matched author-devs who contributed to the linked repo / paper authors)",
+        fontsize=11,
+    )
+
+    sns.boxplot(
+        data=ratio_field_df,
+        y=field_col,
+        x="total_code_author_ratio",
+        order=field_order,
+        showfliers=False,
+        ax=axes[0],
+    )
+    axes[0].set_title("Total Contributor / Author Ratio by Field", fontsize=12)
+    axes[0].set_xlabel("Ratio (clipped to 1.0)")
+    axes[0].set_ylabel("")
+
+    sns.boxplot(
+        data=ratio_field_df,
+        y=field_col,
+        x="confirmed_overlap_ratio",
+        order=field_order,
+        showfliers=False,
+        ax=axes[1],
+    )
+    axes[1].set_title("Confirmed Author-Coder Overlap Ratio by Field", fontsize=12)
+    axes[1].set_xlabel("Ratio (clipped to 1.0)")
+    axes[1].set_ylabel("")
+
+    fig.savefig(results_dir / "code_contributor_ratio.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
+def plot_correlation_matrix(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+) -> None:
+    """Compute Spearman correlation matrix for all numeric features; rank vs FWCI and FWSI."""
+    numeric_cols = [
+        "document_fwci",
+        "document_cited_by_count",
+        "document_n_authors",
+        "document_n_unique_author_countries",
+        "document_author_country_entropy",
+        "document_publication_year",
+        "repository_fwsi",
+        "repository_stargazers_count",
+        "repository_forks_count",
+        "repository_commits_count",
+        "repository_n_contributors",
+        "repository_n_files",
+        "repository_n_languages",
+        "repository_size_kb",
+        "repository_commit_duration_days",
+        "days_from_repo_creation_to_publication",
+        "days_from_publication_to_last_push",
+    ]
+    log1p_cols = frozenset(
+        {
+            "document_fwci",
+            "document_cited_by_count",
+            "repository_fwsi",
+            "repository_stargazers_count",
+            "repository_forks_count",
+            "repository_commits_count",
+            "repository_n_contributors",
+            "repository_n_files",
+            "repository_size_kb",
+            "repository_commit_duration_days",
+        }
+    )
+
+    available_cols = [c for c in numeric_cols if c in pairs.columns]
+    if len(available_cols) < 2:
+        log.warning("Fewer than 2 numeric columns available. Skipping correlation matrix.")
+        return
+
+    transformed_col_names: list[str] = []
+    transform_exprs = []
+    for c in available_cols:
+        if c in log1p_cols:
+            new_name = f"{c}_log1p"
+            transform_exprs.append(
+                (pl.lit(1) + pl.col(c).cast(pl.Float64)).log().alias(new_name)
+            )
+            transformed_col_names.append(new_name)
+        else:
+            transform_exprs.append(pl.col(c).cast(pl.Float64))
+            transformed_col_names.append(c)
+
+    pairs_transformed = pairs.select(transform_exprs)
+
+    n = len(transformed_col_names)
+    corr_matrix = np.full((n, n), float("nan"))
+    for i in range(n):
+        corr_matrix[i, i] = 1.0
+    for i in range(n):
+        for j in range(i + 1, n):
+            ci, cj = transformed_col_names[i], transformed_col_names[j]
+            pair_df = _filter_finite(pairs_transformed.select(ci, cj), [ci, cj])
+            if pair_df.height >= 5:
+                rho = _compute_spearman_rho(
+                    pair_df[ci].to_numpy(),
+                    pair_df[cj].to_numpy(),
+                )
+                corr_matrix[i, j] = rho
+                corr_matrix[j, i] = rho
+
+    corr_out = pl.DataFrame(
+        {
+            "feature": transformed_col_names,
+            **{transformed_col_names[j]: corr_matrix[:, j].tolist() for j in range(n)},
+        }
+    )
+    corr_out.write_csv(results_dir / "spearman_correlation_matrix.csv")
+
+    # Ranked correlations vs FWCI and FWSI
+    for raw_col, _target_name, out_filename in [
+        ("document_fwci", "Document FWCI", "correlations_vs_fwci.csv"),
+        ("repository_fwsi", "Repository FWSI", "correlations_vs_fwsi.csv"),
+    ]:
+        t_col = f"{raw_col}_log1p" if raw_col in log1p_cols else raw_col
+        if t_col not in transformed_col_names:
+            continue
+        idx = transformed_col_names.index(t_col)
+        rho_vals = corr_matrix[idx, :]
+        ranked = sorted(
+            zip(transformed_col_names, rho_vals, strict=False),
+            key=lambda x: abs(x[1]) if np.isfinite(x[1]) else 0,
+            reverse=True,
+        )
+        pl.DataFrame(
+            {
+                "feature": [r[0] for r in ranked],
+                "spearman_rho_vs_" + raw_col: [float(r[1]) for r in ranked],
+            }
+        ).filter(pl.col("feature") != t_col).write_csv(results_dir / out_filename)
+
+    # Heatmap
+    short_labels = [
+        c.replace("_log1p", "")
+        .replace("document_", "doc.")
+        .replace("repository_", "repo.")
+        .replace("_", " ")
+        for c in transformed_col_names
+    ]
+
+    fig, ax = plt.subplots(figsize=(14, 12), constrained_layout=True)
+    mask = np.isnan(corr_matrix)
+    sns.heatmap(
+        corr_matrix,
+        xticklabels=short_labels,
+        yticklabels=short_labels,
+        vmin=-1,
+        vmax=1,
+        center=0,
+        cmap="RdBu_r",
+        annot=True,
+        fmt=".2f",
+        linewidths=0.5,
+        mask=mask,
+        ax=ax,
+    )
+    ax.set_title(
+        "Spearman Correlation Matrix — All Numeric Features\n"
+        "(right-skewed features log(1+x) transformed before ranking)",
+        fontsize=13,
+    )
+    ax.tick_params(axis="x", rotation=45)
+    ax.tick_params(axis="y", rotation=0)
+
+    fig.savefig(results_dir / "correlation_matrix.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
+def analyze_multilanguage_repositories(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+    top_n: int,
+) -> None:
+    """Analyze multi-language repositories: field patterns and impact on FWCI."""
+    ml_df = pairs.filter(
+        pl.col("repository_n_languages").is_not_null(),
+        pl.col("repository_n_languages") > 0,
+    ).with_columns(
+        pl.when(pl.col("repository_n_languages") == 1)
+        .then(pl.lit("1 language"))
+        .when(pl.col("repository_n_languages") <= 3)
+        .then(pl.lit("2-3 languages"))
+        .otherwise(pl.lit("4+ languages"))
+        .alias("language_count_bin")
+    )
+
+    lang_bin_order = ["1 language", "2-3 languages", "4+ languages"]
+
+    ml_df["language_count_bin"].value_counts(sort=True).write_csv(
+        results_dir / "multilanguage_distribution.csv"
+    )
+
+    ml_field_df = ml_df.filter(
+        pl.col("document_field_name").is_not_null(),
+        pl.col("document_field_name") != "",
+    )
+    ml_field_df, top_fields, field_col = _add_top_n_other_column(
+        ml_field_df, "document_field_name", top_n
+    )
+
+    # Kruskal-Wallis: n_languages by field
+    kw_groups = [
+        ml_field_df.filter(pl.col(field_col) == f)["repository_n_languages"].to_numpy()
+        for f in [*top_fields, "Other"]
+        if ml_field_df.filter(pl.col(field_col) == f).height >= 5
+    ]
+    kw_h, kw_p = float("nan"), float("nan")
+    if len(kw_groups) >= 2:
+        kw_h, kw_p = kruskal(*kw_groups)
+        with open(results_dir / "multilanguage_field_kruskal.json", "w") as f:
+            json.dump({"kruskal_h": float(kw_h), "p_value": float(kw_p)}, f, indent=2)
+
+    # Mann-Whitney: single vs multi-language FWCI
+    fwci_ml_df = _filter_finite(ml_df, ["document_fwci"])
+    single_fwci = fwci_ml_df.filter(pl.col("repository_n_languages") == 1)[
+        "document_fwci"
+    ].to_numpy()
+    multi_fwci = fwci_ml_df.filter(pl.col("repository_n_languages") > 1)[
+        "document_fwci"
+    ].to_numpy()
+    mw_label = ""
+    if len(single_fwci) >= 2 and len(multi_fwci) >= 2:
+        u_stat, p_val = mannwhitneyu(single_fwci, multi_fwci, alternative="two-sided")
+        n1, n2 = len(single_fwci), len(multi_fwci)
+        r = 1 - (2 * u_stat) / (n1 * n2)
+        mw_label = f"Mann-Whitney U={u_stat:.0f}, p={p_val:.3e}, r={r:.3f}"
+        with open(results_dir / "multilanguage_fwci_mw.json", "w") as f:
+            json.dump(
+                {
+                    "n_single_lang": int(n1),
+                    "n_multi_lang": int(n2),
+                    "median_fwci_single": float(np.median(single_fwci)),
+                    "median_fwci_multi": float(np.median(multi_fwci)),
+                    "u_statistic": float(u_stat),
+                    "p_value": float(p_val),
+                    "rank_biserial_r": float(r),
+                },
+                f,
+                indent=2,
+            )
+
+    # Spearman rho: n_languages vs n_contributors
+    ml_contrib_df = _filter_finite(
+        ml_df, ["repository_n_languages", "repository_n_contributors"]
+    )
+    contrib_rho = _compute_spearman_rho(
+        ml_contrib_df["repository_n_languages"].to_numpy().astype(float),
+        ml_contrib_df["repository_n_contributors"].to_numpy().astype(float),
+    )
+    with open(results_dir / "multilanguage_contributors_correlation.json", "w") as f:
+        json.dump(
+            {
+                "n_languages_vs_n_contributors_spearman_rho": float(contrib_rho),
+                "n_pairs": int(ml_contrib_df.height),
+            },
+            f,
+            indent=2,
+        )
+
+    mean_lang_by_field = (
+        ml_field_df.group_by(field_col)
+        .agg(
+            pl.col("repository_n_languages").mean().alias("mean_n_languages"),
+            pl.len().alias("n_pairs"),
+        )
+        .sort("mean_n_languages", descending=True)
+    )
+    mean_lang_by_field.write_csv(results_dir / "multilanguage_mean_by_field.csv")
+
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(18, 7), constrained_layout=True)
+
+    sns.barplot(
+        data=mean_lang_by_field,
+        y=field_col,
+        x="mean_n_languages",
+        hue=field_col,
+        order=mean_lang_by_field[field_col].to_list(),
+        legend=False,
+        ax=axes[0],
+    )
+    kw_subtitle = f"\nKruskal-Wallis H={kw_h:.1f}, p={kw_p:.3e}" if np.isfinite(kw_h) else ""
+    axes[0].set_title(
+        f"Mean Number of Repository Languages by Field{kw_subtitle}",
+        fontsize=12,
+    )
+    axes[0].set_xlabel("Mean Number of Languages")
+    axes[0].set_ylabel("")
+
+    sns.boxplot(
+        data=fwci_ml_df,
+        y="language_count_bin",
+        x="document_fwci",
+        order=lang_bin_order,
+        showfliers=False,
+        ax=axes[1],
+    )
+    axes[1].set_title(
+        f"Document FWCI by Repository Language Count\n{mw_label}",
+        fontsize=12,
+    )
+    axes[1].set_xlabel("Document FWCI")
+    axes[1].set_ylabel("")
+
+    fig.savefig(results_dir / "multilanguage_analysis.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
+###############################################################################
 # CLI
 ###############################################################################
 
@@ -2376,7 +3189,7 @@ def _run_pair_analyses(
         Whether to run the (potentially time-consuming) network analyses. Set to
         False to skip those steps and produce results for the other analyses only.
     """
-    total_steps = 12 if run_network_analyses else 10
+    total_steps = 18 if run_network_analyses else 16
     step = 0
 
     def _step_dir(step_num: int) -> Path:
@@ -2425,6 +3238,30 @@ def _run_pair_analyses(
     step += 1
     log.info("[%s] Step %d/%d: Lifecycle and survival analyses...", label, step, total_steps)
     plot_lifecycle_and_survival(pairs, _step_dir(step))
+
+    step += 1
+    log.info("[%s] Step %d/%d: License distribution analysis...", label, step, total_steps)
+    analyze_license_distribution(pairs, _step_dir(step), top_n)
+
+    step += 1
+    log.info("[%s] Step %d/%d: Lifecycle phases vs FWCI...", label, step, total_steps)
+    analyze_lifecycle_vs_fwci(pairs, _step_dir(step))
+
+    step += 1
+    log.info("[%s] Step %d/%d: Geographic diversity vs FWCI...", label, step, total_steps)
+    analyze_geographic_diversity_vs_fwci(pairs, _step_dir(step), top_n)
+
+    step += 1
+    log.info("[%s] Step %d/%d: Code contributor ratio analysis...", label, step, total_steps)
+    analyze_code_contributor_ratio(pairs, _step_dir(step), top_n)
+
+    step += 1
+    log.info("[%s] Step %d/%d: Pairwise correlation matrix...", label, step, total_steps)
+    plot_correlation_matrix(pairs, _step_dir(step))
+
+    step += 1
+    log.info("[%s] Step %d/%d: Multi-language repository analysis...", label, step, total_steps)
+    analyze_multilanguage_repositories(pairs, _step_dir(step), top_n)
 
     if run_network_analyses:
         step += 1

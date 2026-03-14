@@ -14,7 +14,7 @@ import polars as pl
 import rustworkx as rx
 import seaborn as sns
 import typer
-from scipy.stats import chi2_contingency, mannwhitneyu
+from scipy.stats import chi2_contingency, kruskal, mannwhitneyu
 from scipy.stats.contingency import association
 from tqdm import tqdm
 
@@ -44,6 +44,8 @@ NUMERIC_FEATURES = [
     "document_publication_year",
     "document_n_authors",
     "repository_commit_duration_days",
+    "document_n_unique_author_countries",
+    "document_author_country_entropy",
 ]
 
 CATEGORICAL_FEATURES = [
@@ -71,6 +73,8 @@ FEATURE_DISPLAY_NAMES: dict[str, str] = {
     "document_field_name": "Research Field",
     "document_type": "Document Type",
     "repository_primary_language": "Primary Language",
+    "document_n_unique_author_countries": "Unique Author Countries",
+    "document_author_country_entropy": "Author Country Entropy",
 }
 
 ###############################################################################
@@ -367,8 +371,34 @@ def load_rq2_pairs(
             ON dci.institution_id = i.id
     """)
 
-    doc_author_countries = doc_author_country_rows.group_by("document_id").agg(
-        pl.len().alias("document_n_authors")
+    doc_author_country_entropy = (
+        doc_author_country_rows.group_by(["document_id", "country_code"])
+        .agg(pl.len().alias("author_count"))
+        .with_columns(
+            (pl.col("author_count") / pl.col("author_count").sum().over("document_id")).alias(
+                "country_share"
+            )
+        )
+        .with_columns(
+            (-(pl.col("country_share") * pl.col("country_share").log())).alias(
+                "entropy_component"
+            )
+        )
+        .group_by("document_id")
+        .agg(
+            pl.col("entropy_component").sum().alias("document_author_country_entropy"),
+            pl.col("country_code").n_unique().alias("document_n_unique_author_countries"),
+        )
+    )
+
+    doc_author_countries = (
+        doc_author_country_rows.group_by("document_id")
+        .agg(pl.len().alias("document_n_authors"))
+        .join(doc_author_country_entropy, on="document_id", how="left")
+        .with_columns(
+            pl.col("document_author_country_entropy").fill_null(0.0),
+            pl.col("document_n_unique_author_countries").fill_null(0),
+        )
     )
 
     repo_contribs = _read_sql("""
@@ -1604,6 +1634,395 @@ def write_summary(base_dir: Path, results_dir: Path) -> None:  # noqa: C901
 
 
 ###############################################################################
+# Additional analyses
+###############################################################################
+
+_FINE_SOURCE_LABEL_EXPR = (
+    pl.when(pl.col("dataset_source_names_str").str.to_lowercase().str.contains("joss"))
+    .then(pl.lit("JOSS"))
+    .when(pl.col("dataset_source_names_str").str.to_lowercase().str.contains("plos"))
+    .then(pl.lit("PLOS"))
+    .when(pl.col("dataset_source_names_str").str.to_lowercase().str.contains("pwc"))
+    .then(pl.lit("PwC"))
+    .when(pl.col("dataset_source_names_str").str.to_lowercase().str.contains("softwarex"))
+    .then(pl.lit("SoftwareX"))
+    .when(pl.col("dataset_source_names_str").str.to_lowercase().str.contains("snowball"))
+    .then(pl.lit("Mined"))
+    .otherwise(pl.lit("Other"))
+    .alias("fine_source_label")
+)
+
+_FINE_SOURCE_ORDER = ["JOSS", "PLOS", "PwC", "SoftwareX", "Mined"]
+
+
+def run_source_level_comparison(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+    top_n: int,
+) -> None:
+    """Supplementary: disaggregate shared sources into JOSS/PLOS/PwC/SoftwareX vs Mined."""
+    log.info("Starting source-level comparison...")
+
+    source_df = pairs.with_columns(_FINE_SOURCE_LABEL_EXPR)
+    present_sources = [
+        s
+        for s in _FINE_SOURCE_ORDER
+        if source_df.filter(pl.col("fine_source_label") == s).height >= 5
+    ]
+
+    source_df["fine_source_label"].value_counts(sort=True).write_csv(
+        results_dir / "source-level-counts.csv"
+    )
+
+    # Kruskal-Wallis across sources for key numeric features
+    numeric_cols = [c for c in NUMERIC_FEATURES if c in source_df.columns]
+    kw_rows: list[dict] = []
+    for col_name in numeric_cols:
+        groups = [
+            source_df.filter(pl.col("fine_source_label") == s)[col_name]
+            .drop_nulls()
+            .drop_nans()
+            .to_numpy()
+            for s in present_sources
+        ]
+        valid_groups = [g for g in groups if len(g) >= 2]
+        if len(valid_groups) < 2:
+            continue
+        kw_stat, kw_p = kruskal(*valid_groups)
+        kw_rows.append(
+            {
+                "feature": col_name,
+                "kruskal_h": round(float(kw_stat), 4),
+                "p_value": float(kw_p),
+            }
+        )
+    if kw_rows:
+        pl.DataFrame(kw_rows).sort("p_value").write_csv(
+            results_dir / "source-level-numeric-kruskal.csv"
+        )
+
+    # Field composition by source
+    field_source_df = source_df.filter(
+        pl.col("document_field_name").is_not_null(),
+        pl.col("document_field_name") != "",
+    )
+    field_source_df, _, field_col = _add_top_n_other_column(
+        field_source_df, "document_field_name", top_n
+    )
+    field_source_counts = field_source_df.group_by(["fine_source_label", field_col]).agg(
+        pl.len().alias("n_pairs")
+    )
+    source_totals = source_df.group_by("fine_source_label").agg(pl.len().alias("total_pairs"))
+    field_source_pct = field_source_counts.join(
+        source_totals, on="fine_source_label", how="left"
+    ).with_columns((pl.col("n_pairs") / pl.col("total_pairs") * 100).alias("pct_pairs"))
+    field_source_pct.write_csv(results_dir / "source-level-field-composition.csv")
+
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(18, 7), constrained_layout=True)
+
+    # Panel 1: Field composition stacked bar
+    try:
+        pivot_pandas = (
+            field_source_pct.filter(pl.col("fine_source_label").is_in(present_sources))
+            .pivot(on=field_col, index="fine_source_label", values="pct_pairs")
+            .fill_null(0)
+            .to_pandas()
+            .set_index("fine_source_label")
+            .reindex(present_sources)
+        )
+        pivot_pandas.plot(
+            kind="barh",
+            stacked=True,
+            ax=axes[0],
+            colormap="tab10",
+        )
+        axes[0].set_title(
+            f"Field Composition by Data Source (Top {top_n} + Other)\n(% of pairs per source)",
+            fontsize=12,
+        )
+        axes[0].set_xlabel("Percentage of Pairs (%)")
+        axes[0].set_ylabel("")
+        axes[0].legend(title="Field", bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=7)
+    except Exception as exc:
+        log.warning("Failed to render source field composition chart: %s", exc)
+        axes[0].set_axis_off()
+
+    # Panel 2: FWCI violin by source
+    fwci_source_df = source_df.filter(
+        pl.col("fine_source_label").is_in(present_sources),
+        pl.col("document_fwci_log1p").is_not_null(),
+        pl.col("document_fwci_log1p").is_not_nan(),
+        pl.col("document_fwci_log1p").is_finite(),
+    )
+    if fwci_source_df.height > 0:
+        sns.violinplot(
+            data=fwci_source_df.to_pandas(),
+            y="fine_source_label",
+            x="document_fwci_log1p",
+            order=present_sources,
+            ax=axes[1],
+            inner="quartile",
+            density_norm="width",
+        )
+        axes[1].set_title(
+            "Article FWCI Distribution by Data Source\n(log(1+FWCI))",
+            fontsize=12,
+        )
+        axes[1].set_xlabel("Article FWCI (log)")
+        axes[1].set_ylabel("")
+    else:
+        axes[1].set_axis_off()
+
+    fig.savefig(results_dir / "source-level-comparison.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+    log.info("Source-level comparison complete.")
+
+
+def analyze_field_coverage_gap(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+    top_n: int,
+) -> None:
+    """Quantify per-field mining dependence and characterize most mining-dependent fields."""
+    log.info("Starting field coverage gap analysis...")
+
+    field_df = pairs.filter(
+        pl.col("document_field_name").is_not_null(),
+        pl.col("document_field_name") != "",
+    )
+    field_df, top_fields, field_col = _add_top_n_other_column(
+        field_df, "document_field_name", top_n
+    )
+
+    field_source_counts = field_df.group_by([field_col, "pair_source_label"]).agg(
+        pl.len().alias("n_pairs")
+    )
+    field_totals = field_df.group_by(field_col).agg(pl.len().alias("total_pairs"))
+
+    field_gap = (
+        field_source_counts.pivot(on="pair_source_label", index=field_col, values="n_pairs")
+        .fill_null(0)
+        .join(field_totals, on=field_col, how="left")
+    )
+
+    if "mined" not in field_gap.columns or "shared" not in field_gap.columns:
+        log.warning("Missing mined or shared column in field_gap; skipping.")
+        return
+
+    field_gap = field_gap.with_columns(
+        (pl.col("mined") / pl.col("total_pairs") * 100).alias("pct_mined")
+    ).sort("pct_mined", descending=True)
+    field_gap.write_csv(results_dir / "field-coverage-gap.csv")
+
+    # For top-5 most mining-dependent fields: compare FWCI within field
+    top_mined_fields = field_gap.head(5)[field_col].to_list()
+    within_field_rows: list[dict] = []
+    for field_name in top_mined_fields:
+        sub = field_df.filter(pl.col(field_col) == field_name)
+        shared_fwci = sub.filter(
+            pl.col("pair_source_label") == "shared",
+            pl.col("document_fwci_log1p").is_not_null(),
+            pl.col("document_fwci_log1p").is_not_nan(),
+            pl.col("document_fwci_log1p").is_finite(),
+        )["document_fwci_log1p"].to_numpy()
+        mined_fwci = sub.filter(
+            pl.col("pair_source_label") == "mined",
+            pl.col("document_fwci_log1p").is_not_null(),
+            pl.col("document_fwci_log1p").is_not_nan(),
+            pl.col("document_fwci_log1p").is_finite(),
+        )["document_fwci_log1p"].to_numpy()
+        within_field_rows.append(
+            {
+                "field": field_name,
+                "n_shared": len(shared_fwci),
+                "n_mined": len(mined_fwci),
+                "median_fwci_log1p_shared": float(np.median(shared_fwci))
+                if len(shared_fwci) > 0
+                else float("nan"),
+                "median_fwci_log1p_mined": float(np.median(mined_fwci))
+                if len(mined_fwci) > 0
+                else float("nan"),
+            }
+        )
+    pl.DataFrame(within_field_rows).write_csv(
+        results_dir / "top-mined-fields-fwci-comparison.csv"
+    )
+
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(18, 7), constrained_layout=True)
+
+    # Panel 1: Lollipop — % mined by field (ascending order)
+    plot_data = field_gap.sort("pct_mined", descending=False)
+    field_plot_order = plot_data[field_col].to_list()
+    pct_mined_vals = plot_data["pct_mined"].to_list()
+    y_pos = list(range(len(field_plot_order)))
+
+    axes[0].hlines(y=y_pos, xmin=0, xmax=pct_mined_vals, color="gray", linewidth=1.5, alpha=0.7)
+    axes[0].scatter(pct_mined_vals, y_pos, color=PALETTE[0], s=80, zorder=3)
+    axes[0].set_yticks(y_pos)
+    axes[0].set_yticklabels(field_plot_order, fontsize=10)
+    axes[0].set_xlabel("% of Field's Pairs from Mining")
+    axes[0].set_ylabel("")
+    axes[0].set_title(
+        f"Field Dependence on Mining (Top {top_n} + Other)\n"
+        "(% of pairs per field that came from snowball sampling)",
+        fontsize=12,
+    )
+    axes[0].axvline(x=50, color="red", linestyle="--", alpha=0.5, label="50%")
+    axes[0].legend()
+
+    # Panel 2: Stacked bar shared vs mined by field (sorted by % mined descending)
+    try:
+        field_source_pct = field_source_counts.join(
+            field_totals, on=field_col, how="left"
+        ).with_columns((pl.col("n_pairs") / pl.col("total_pairs") * 100).alias("pct_pairs"))
+        pivot_pandas = (
+            field_source_pct.pivot(on="pair_source_label", index=field_col, values="pct_pairs")
+            .fill_null(0)
+            .to_pandas()
+            .set_index(field_col)
+            .reindex(field_gap.sort("pct_mined", descending=True)[field_col].to_list())
+        )
+        source_cols = [c for c in ["shared", "mined"] if c in pivot_pandas.columns]
+        pivot_pandas[source_cols].plot(
+            kind="barh",
+            stacked=True,
+            ax=axes[1],
+            color=[PALETTE[0], PALETTE[1]],
+        )
+        axes[1].set_title(
+            "Shared vs Mined Composition by Field\n(% of pairs per field)",
+            fontsize=12,
+        )
+        axes[1].set_xlabel("Percentage of Pairs (%)")
+        axes[1].set_ylabel("")
+        axes[1].legend(title="Source", loc="lower right")
+    except Exception as exc:
+        log.warning("Failed to render field coverage gap stacked bar: %s", exc)
+        axes[1].set_axis_off()
+
+    fig.savefig(results_dir / "field-coverage-gap.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+    log.info("Field coverage gap analysis complete.")
+
+
+def plot_publication_year_by_source(
+    pairs: pl.DataFrame,
+    results_dir: Path,
+) -> None:
+    """KDE and era-bin comparison of publication year distributions per data source."""
+    log.info("Starting publication year by source analysis...")
+
+    source_df = pairs.with_columns(_FINE_SOURCE_LABEL_EXPR).filter(
+        pl.col("document_publication_year").is_not_null(),
+        pl.col("document_publication_year") > 2010,
+        pl.col("document_publication_year") < 2025,
+    )
+
+    present_sources = [
+        s
+        for s in _FINE_SOURCE_ORDER
+        if source_df.filter(pl.col("fine_source_label") == s).height >= 10
+    ]
+
+    median_years = (
+        source_df.filter(pl.col("fine_source_label").is_in(present_sources))
+        .group_by("fine_source_label")
+        .agg(pl.col("document_publication_year").median().alias("median_year"))
+        .sort("median_year")
+    )
+    median_years.write_csv(results_dir / "publication-year-median-by-source.csv")
+
+    binned_df = source_df.filter(
+        pl.col("fine_source_label").is_in(present_sources)
+    ).with_columns(
+        pl.when(pl.col("document_publication_year") < 2015)
+        .then(pl.lit("pre-2015"))
+        .when(pl.col("document_publication_year") < 2020)
+        .then(pl.lit("2015-2019"))
+        .otherwise(pl.lit("2020+"))
+        .alias("year_bin")
+    )
+    year_bin_order = ["pre-2015", "2015-2019", "2020+"]
+
+    binned_counts = binned_df.group_by(["fine_source_label", "year_bin"]).agg(
+        pl.len().alias("n_pairs")
+    )
+    source_totals = binned_df.group_by("fine_source_label").agg(pl.len().alias("total_pairs"))
+    binned_pct = binned_counts.join(
+        source_totals, on="fine_source_label", how="left"
+    ).with_columns((pl.col("n_pairs") / pl.col("total_pairs") * 100).alias("pct_pairs"))
+    binned_pct.write_csv(results_dir / "publication-year-bins-by-source.csv")
+
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(18, 6), constrained_layout=True)
+
+    # Panel 1: Histogram + KDE per source
+    median_year_lut = {
+        row["fine_source_label"]: int(row["median_year"])
+        for row in median_years.iter_rows(named=True)
+    }
+    for i, src in enumerate(present_sources):
+        src_years = (
+            source_df.filter(pl.col("fine_source_label") == src)["document_publication_year"]
+            .cast(pl.Float64)
+            .to_numpy()
+        )
+        if len(src_years) < 10:
+            continue
+        color = PALETTE[i % len(PALETTE)]
+        med = median_year_lut.get(src, "?")
+        axes[0].hist(
+            src_years,
+            bins=range(2010, 2026),
+            density=True,
+            alpha=0.25,
+            color=color,
+            label=f"{src} (median={med})",
+        )
+        sns.kdeplot(
+            data=src_years, ax=axes[0], color=color, linewidth=2.0, bw_adjust=1.2, label=""
+        )
+    axes[0].set_title(
+        "Publication Year Distribution by Data Source\n(histogram + KDE; median in legend)",
+        fontsize=12,
+    )
+    axes[0].set_xlabel("Publication Year")
+    axes[0].set_ylabel("Density")
+    axes[0].legend(title="Source", fontsize=8)
+
+    # Panel 2: Stacked bar of era bins by source
+    try:
+        pivot_pandas = (
+            binned_pct.filter(pl.col("fine_source_label").is_in(present_sources))
+            .pivot(on="year_bin", index="fine_source_label", values="pct_pairs")
+            .fill_null(0)
+            .to_pandas()
+            .set_index("fine_source_label")
+            .reindex(present_sources)
+        )
+        bin_cols = [c for c in year_bin_order if c in pivot_pandas.columns]
+        pivot_pandas[bin_cols].plot(
+            kind="barh",
+            stacked=True,
+            ax=axes[1],
+            colormap="viridis",
+        )
+        axes[1].set_title(
+            "Era Composition by Data Source\n(% of pairs per era)",
+            fontsize=12,
+        )
+        axes[1].set_xlabel("Percentage of Pairs (%)")
+        axes[1].set_ylabel("")
+        axes[1].legend(title="Era", loc="lower right")
+    except Exception as exc:
+        log.warning("Failed to render year bins stacked bar: %s", exc)
+        axes[1].set_axis_off()
+
+    fig.savefig(results_dir / "publication-year-by-source.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+    log.info("Publication year by source analysis complete.")
+
+
+###############################################################################
 # CLI
 ###############################################################################
 
@@ -1617,7 +2036,7 @@ def _run_rq2_analyses(
     run_network_analyses: bool = True,
 ) -> None:
     """Run all RQ2 per-subset analyses and save results under results_dir."""
-    total_steps = 6 if run_network_analyses else 4
+    total_steps = 9 if run_network_analyses else 7
 
     def _step_dir(n: int) -> Path:
         d = results_dir / f"step-{n}"
@@ -1700,6 +2119,21 @@ def _run_rq2_analyses(
         step += 1
         log.info("[%s] Step %d/%d: Shortest path analysis...", label, step, total_steps)
         analyze_shortest_paths(pairs, _step_dir(step), n_shortest_path_iterations)
+
+    # Step: Source-level disaggregation (supplementary)
+    step += 1
+    log.info("[%s] Step %d/%d: Source-level comparison...", label, step, total_steps)
+    run_source_level_comparison(pairs, _step_dir(step), top_n)
+
+    # Step: Field coverage gap
+    step += 1
+    log.info("[%s] Step %d/%d: Field coverage gap analysis...", label, step, total_steps)
+    analyze_field_coverage_gap(pairs, _step_dir(step), top_n)
+
+    # Step: Publication year by source
+    step += 1
+    log.info("[%s] Step %d/%d: Publication year by source...", label, step, total_steps)
+    plot_publication_year_by_source(pairs, _step_dir(step))
 
     # Final step: Summary
     step += 1
