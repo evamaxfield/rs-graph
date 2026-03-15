@@ -662,7 +662,10 @@ def _used_software_extraction_flow(
         # losing everything if something goes wrong at the end
         print("Storing results for batch")
         for result in batch_success_results:
-            _store_repo_result(result=result, use_prod=use_prod)
+            try:
+                _store_repo_result(result=result, use_prod=use_prod)
+            except UnicodeEncodeError:
+                print(f"Skipping repo {result.owner}/{result.name} due to UnicodeEncodeError")
 
         # Store errors to parquet file
         if batch_errors:
