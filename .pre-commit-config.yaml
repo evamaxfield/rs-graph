@@ -17,9 +17,9 @@ repos:
 
   - repo: local
     hooks:
-      - id: ty-check
-        name: ty check
-        entry: ty check
+      - id: zuban-check
+        name: zuban check
+        entry: zuban check
         language: system
         types: [python]
         exclude: ^(migrations/|notebooks/|rapidfuzz-example\.py)
