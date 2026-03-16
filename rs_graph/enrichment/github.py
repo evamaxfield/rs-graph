@@ -15,7 +15,7 @@ from cachetools import LRUCache, cached
 from cachetools.keys import hashkey
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
-from fastcore.net import HTTP403ForbiddenError  # type: ignore[import-not-found]
+from fastcore.net import HTTP403ForbiddenError  # type: ignore[import-not-found,attr-defined]
 from ghapi.all import GhApi, paged
 
 from .. import types
@@ -52,7 +52,7 @@ def _setup_gh_api(github_api_key: str | None = None) -> GhApi:
     return api
 
 
-@backoff.on_exception(
+@backoff.on_exception(  # type: ignore[misc]
     backoff.expo,
     (HTTP403ForbiddenError),
     max_time=16,
@@ -69,7 +69,7 @@ def _get_user_info_from_login(
     api = _setup_gh_api(github_api_key)
 
     # Get user info
-    user_info = api.users.get_by_username(username=login)
+    user_info = api.users.get_by_username(username=login)  # type: ignore[attr-defined]
 
     # Sleep to avoid API limits
     time.sleep(0.75)
@@ -97,7 +97,7 @@ def get_repo_contributors(
     assert repo_parts is not None
 
     # Get contributors
-    contributors = api.repos.list_contributors(
+    contributors = api.repos.list_contributors(  # type: ignore[attr-defined]
         owner=repo_parts.owner,
         repo=repo_parts.name,
         per_page=top_n,
@@ -157,7 +157,7 @@ def process_github_repo(  # noqa: C901
 
         # Get repo info
         if fetch_repo_data:
-            repo_info = api.repos.get(
+            repo_info = api.repos.get(  # type: ignore[attr-defined]
                 owner=repo_parts.owner,
                 repo=repo_parts.name,
             )
@@ -177,7 +177,7 @@ def process_github_repo(  # noqa: C901
 
         # Get repo languages
         if fetch_repo_languages:
-            repo_languages = api.repos.list_languages(
+            repo_languages = api.repos.list_languages(  # type: ignore[attr-defined]
                 owner=repo_parts.owner,
                 repo=repo_parts.name,
             )
@@ -202,7 +202,7 @@ def process_github_repo(  # noqa: C901
         # Get repo README
         if fetch_repo_readme:
             try:
-                repo_readme_response = api.repos.get_readme(
+                repo_readme_response = api.repos.get_readme(  # type: ignore[attr-defined]
                     owner=repo_parts.owner,
                     repo=repo_parts.name,
                 )
@@ -336,7 +336,7 @@ def process_github_repo(  # noqa: C901
             repo_file_models = []
             try:
                 # Use the git trees API to get the files in the repository
-                tree_results = api.git.get_tree(
+                tree_results = api.git.get_tree(  # type: ignore[attr-defined]
                     owner=repo_parts.owner,
                     repo=repo_parts.name,
                     tree_sha=default_branch,
@@ -513,7 +513,7 @@ def get_github_repos_for_developer(
     try:
         # Page and get repos
         repo_pager = paged(
-            api.repos.list_for_user,
+            api.repos.list_for_user,  # type: ignore[attr-defined]
             username=username,
             type="all",
             per_page=100,

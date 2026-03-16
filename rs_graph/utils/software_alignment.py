@@ -82,7 +82,7 @@ def align_software_names(
                     item_two_source=source_b,
                     item_two=items_b[i],
                     normalized_item_two=lut_b[items_b[i]],
-                    score=score,
+                    score=float(score),
                 )
             )
 

@@ -64,48 +64,48 @@ SOURCEFORGE_REPO_PARSER = Parser(
 
 def _parse_github_urls(url: str) -> types.CodeHostResult | None:
     if result := GITHUB_COM_REPO_PARSER.parse(url):
-        return types.CodeHostResult("github", result["owner"], result["repo"])
+        return types.CodeHostResult("github", result["owner"], result["repo"])  # type: ignore[index]
     if result := GITHUB_IO_REPO_PARSER.parse(url):
-        return types.CodeHostResult("github", result["owner"], result["repo"])
+        return types.CodeHostResult("github", result["owner"], result["repo"])  # type: ignore[index]
     if result := GITHUB_IO_REPO_PARSER_TYPO.parse(url):
-        return types.CodeHostResult("github", result["owner"], result["repo"])
+        return types.CodeHostResult("github", result["owner"], result["repo"])  # type: ignore[index]
     if result := GITHUB_COM_OWNER_PARSER.parse(url):
-        return types.CodeHostResult("github", result["owner"], None)
+        return types.CodeHostResult("github", result["owner"], None)  # type: ignore[index]
     if result := GITHUB_IO_OWNER_PARSER.parse(url):
-        return types.CodeHostResult("github", result["owner"], None)
+        return types.CodeHostResult("github", result["owner"], None)  # type: ignore[index]
     if result := GITHUB_IO_OWNER_PARSER_TYPO.parse(url):
-        return types.CodeHostResult("github", result["owner"], None)
+        return types.CodeHostResult("github", result["owner"], None)  # type: ignore[index]
 
     return None
 
 
 def _parse_gitlab_urls(url: str) -> types.CodeHostResult | None:
     if result := GITLAB_COM_REPO_PARSER.parse(url):
-        return types.CodeHostResult("gitlab", result["owner"], result["repo"])
+        return types.CodeHostResult("gitlab", result["owner"], result["repo"])  # type: ignore[index]
     if result := GITLAB_IO_REPO_PARSER.parse(url):
-        return types.CodeHostResult("gitlab", result["owner"], result["repo"])
+        return types.CodeHostResult("gitlab", result["owner"], result["repo"])  # type: ignore[index]
     if result := GITLAB_IO_REPO_PARSER_TYPO.parse(url):
-        return types.CodeHostResult("gitlab", result["owner"], result["repo"])
+        return types.CodeHostResult("gitlab", result["owner"], result["repo"])  # type: ignore[index]
     if result := GITLAB_COM_OWNER_PARSER.parse(url):
-        return types.CodeHostResult("gitlab", result["owner"], None)
+        return types.CodeHostResult("gitlab", result["owner"], None)  # type: ignore[index]
     if result := GITLAB_IO_OWNER_PARSER.parse(url):
-        return types.CodeHostResult("gitlab", result["owner"], None)
+        return types.CodeHostResult("gitlab", result["owner"], None)  # type: ignore[index]
     if result := GITLAB_IO_OWNER_PARSER_TYPO.parse(url):
-        return types.CodeHostResult("gitlab", result["owner"], None)
+        return types.CodeHostResult("gitlab", result["owner"], None)  # type: ignore[index]
 
     return None
 
 
 def _parse_bitbucket_urls(url: str) -> types.CodeHostResult | None:
     if result := BITBUCKET_ORG_REPO_PARSER.parse(url):
-        return types.CodeHostResult("bitbucket", result["owner"], result["repo"])
+        return types.CodeHostResult("bitbucket", result["owner"], result["repo"])  # type: ignore[index]
 
     return None
 
 
 def _parse_sourceforge_urls(url: str) -> types.CodeHostResult | None:
     if result := SOURCEFORGE_REPO_PARSER.parse(url):
-        return types.CodeHostResult("sourceforge", None, result["repo"])
+        return types.CodeHostResult("sourceforge", None, result["repo"])  # type: ignore[index]
 
     return None
 

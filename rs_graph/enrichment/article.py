@@ -165,7 +165,7 @@ def _increment_call_count_and_check() -> None:
 #######################################################################################
 
 
-@cached(
+@cached(  # type: ignore[misc]
     cache=LRUCache(maxsize=2**12),
     key=lambda doi, semantic_scholar_api_key: hashkey(normalize_doi(doi)),
 )
@@ -214,7 +214,7 @@ def get_updated_doi_from_semantic_scholar(
         ) from e
 
 
-@cached(
+@cached(  # type: ignore[misc]
     cache=LRUCache(maxsize=2**12),
     key=lambda open_alex_token, doi: hashkey(doi.lower()),
 )
@@ -238,7 +238,7 @@ def get_open_alex_work_from_doi(
 
     # Increment call count and then actually request
     _increment_call_count_and_check()
-    return open_alex_works[doi]
+    return open_alex_works[doi]  # type: ignore[return-value]
 
 
 def convert_from_inverted_index_abstract(abstract: dict) -> str:
@@ -264,7 +264,7 @@ def convert_from_inverted_index_abstract(abstract: dict) -> str:
     return " ".join(abstract_as_list_of_str)
 
 
-@cached(
+@cached(  # type: ignore[misc]
     cache=LRUCache(maxsize=2**12),
     key=lambda open_alex_token, author_id: hashkey(author_id),
 )
@@ -281,7 +281,7 @@ def get_open_alex_author_from_id(
 
     # Increment call count and then actually request
     _increment_call_count_and_check()
-    return open_alex_authors[author_id]
+    return open_alex_authors[author_id]  # type: ignore[return-value]
 
 
 def process_article(  # noqa: C901
@@ -335,45 +335,48 @@ def process_article(  # noqa: C901
                         doi=paper_doi,
                     )
 
+            # Cast to dict for type checker (pyalex.Work is an untyped dict subclass)
+            work: dict[str, Any] = open_alex_work  # type: ignore[assignment]
+
             # Convert inverted index abstract to string
-            if open_alex_work["abstract_inverted_index"] is None:
+            if work["abstract_inverted_index"] is None:
                 abstract_text = None
             else:
                 abstract_text = convert_from_inverted_index_abstract(
-                    open_alex_work["abstract_inverted_index"]
+                    work["abstract_inverted_index"]
                 )
 
             # Create Primary Document Source and Primary Location
-            if open_alex_work["primary_location"] is not None:
-                if open_alex_work["primary_location"]["source"] is not None:
+            if work["primary_location"] is not None:
+                if work["primary_location"]["source"] is not None:
                     primary_document_source = db_models.Source(
-                        name=open_alex_work["primary_location"]["source"]["display_name"],
-                        open_alex_id=open_alex_work["primary_location"]["source"]["id"],
-                        source_type=open_alex_work["primary_location"]["source"]["type"],
-                        host_organization_name=open_alex_work["primary_location"]["source"][
+                        name=work["primary_location"]["source"]["display_name"],
+                        open_alex_id=work["primary_location"]["source"]["id"],
+                        source_type=work["primary_location"]["source"]["type"],
+                        host_organization_name=work["primary_location"]["source"][
                             "host_organization_name"
                         ],
-                        host_organization_open_alex_id=open_alex_work["primary_location"][
-                            "source"
-                        ]["host_organization"],
+                        host_organization_open_alex_id=work["primary_location"]["source"][
+                            "host_organization"
+                        ],
                     )
 
                     primary_location = db_models.Location(
-                        is_open_access=open_alex_work["primary_location"]["is_oa"],
-                        landing_page_url=open_alex_work["primary_location"]["landing_page_url"],
-                        pdf_url=open_alex_work["primary_location"]["pdf_url"],
-                        license=open_alex_work["primary_location"]["license"],
-                        version=open_alex_work["primary_location"]["version"],
+                        is_open_access=work["primary_location"]["is_oa"],
+                        landing_page_url=work["primary_location"]["landing_page_url"],
+                        pdf_url=work["primary_location"]["pdf_url"],
+                        license=work["primary_location"]["license"],
+                        version=work["primary_location"]["version"],
                         source_id=primary_document_source.id,
                     )
                 else:
                     primary_document_source = None
                     primary_location = db_models.Location(
-                        is_open_access=open_alex_work["primary_location"]["is_oa"],
-                        landing_page_url=open_alex_work["primary_location"]["landing_page_url"],
-                        pdf_url=open_alex_work["primary_location"]["pdf_url"],
-                        license=open_alex_work["primary_location"]["license"],
-                        version=open_alex_work["primary_location"]["version"],
+                        is_open_access=work["primary_location"]["is_oa"],
+                        landing_page_url=work["primary_location"]["landing_page_url"],
+                        pdf_url=work["primary_location"]["pdf_url"],
+                        license=work["primary_location"]["license"],
+                        version=work["primary_location"]["version"],
                         source_id=None,
                     )
 
@@ -383,36 +386,36 @@ def process_article(  # noqa: C901
                 primary_location = None
 
             # Create Best OA Document Source and Best OA Location
-            if open_alex_work["best_oa_location"] is not None:
-                if open_alex_work["best_oa_location"]["source"] is not None:
+            if work["best_oa_location"] is not None:
+                if work["best_oa_location"]["source"] is not None:
                     best_oa_document_source = db_models.Source(
-                        name=open_alex_work["best_oa_location"]["source"]["display_name"],
-                        open_alex_id=open_alex_work["best_oa_location"]["source"]["id"],
-                        source_type=open_alex_work["best_oa_location"]["source"]["type"],
-                        host_organization_name=open_alex_work["best_oa_location"]["source"][
+                        name=work["best_oa_location"]["source"]["display_name"],
+                        open_alex_id=work["best_oa_location"]["source"]["id"],
+                        source_type=work["best_oa_location"]["source"]["type"],
+                        host_organization_name=work["best_oa_location"]["source"][
                             "host_organization_name"
                         ],
-                        host_organization_open_alex_id=open_alex_work["best_oa_location"][
-                            "source"
-                        ]["host_organization"],
+                        host_organization_open_alex_id=work["best_oa_location"]["source"][
+                            "host_organization"
+                        ],
                     )
                     best_oa_location = db_models.Location(
-                        is_open_access=open_alex_work["best_oa_location"]["is_oa"],
-                        landing_page_url=open_alex_work["best_oa_location"]["landing_page_url"],
-                        pdf_url=open_alex_work["best_oa_location"]["pdf_url"],
-                        license=open_alex_work["best_oa_location"]["license"],
-                        version=open_alex_work["best_oa_location"]["version"],
+                        is_open_access=work["best_oa_location"]["is_oa"],
+                        landing_page_url=work["best_oa_location"]["landing_page_url"],
+                        pdf_url=work["best_oa_location"]["pdf_url"],
+                        license=work["best_oa_location"]["license"],
+                        version=work["best_oa_location"]["version"],
                         source_id=best_oa_document_source.id,
                     )
 
                 else:
                     best_oa_document_source = None
                     best_oa_location = db_models.Location(
-                        is_open_access=open_alex_work["best_oa_location"]["is_oa"],
-                        landing_page_url=open_alex_work["best_oa_location"]["landing_page_url"],
-                        pdf_url=open_alex_work["best_oa_location"]["pdf_url"],
-                        license=open_alex_work["best_oa_location"]["license"],
-                        version=open_alex_work["best_oa_location"]["version"],
+                        is_open_access=work["best_oa_location"]["is_oa"],
+                        landing_page_url=work["best_oa_location"]["landing_page_url"],
+                        pdf_url=work["best_oa_location"]["pdf_url"],
+                        license=work["best_oa_location"]["license"],
+                        version=work["best_oa_location"]["version"],
                         source_id=None,
                     )
             else:
@@ -425,14 +428,14 @@ def process_article(  # noqa: C901
 
             # Check for citation_normalized_percentile
             citation_normalized_percentile = _safe_get(
-                open_alex_work, "citation_normalized_percentile", "value"
+                work, "citation_normalized_percentile", "value"
             )
 
             # Validate required fields for Document
-            open_alex_id = _require_field(open_alex_work, "id", "OpenAlex work response")
-            title = _require_field(open_alex_work, "title", "OpenAlex work response")
+            open_alex_id = _require_field(work, "id", "OpenAlex work response")
+            title = _require_field(work, "title", "OpenAlex work response")
             publication_date_str = _require_field(
-                open_alex_work, "publication_date", "OpenAlex work response"
+                work, "publication_date", "OpenAlex work response"
             )
             try:
                 publication_date_parsed = date.fromisoformat(publication_date_str)
@@ -447,13 +450,13 @@ def process_article(  # noqa: C901
                 open_alex_id=open_alex_id,
                 title=title,
                 publication_date=publication_date_parsed,
-                cited_by_count=open_alex_work.get("cited_by_count", 0),
-                fwci=open_alex_work.get("fwci"),
+                cited_by_count=work.get("cited_by_count", 0),
+                fwci=work.get("fwci"),
                 citation_normalized_percentile=citation_normalized_percentile,
-                document_type=open_alex_work.get("type", "unknown"),
-                is_open_access=_safe_get(open_alex_work, "open_access", "is_oa", default=False),
+                document_type=work.get("type", "unknown"),
+                is_open_access=_safe_get(work, "open_access", "is_oa", default=False),
                 open_access_status=_safe_get(
-                    open_alex_work, "open_access", "oa_status", default="unknown"
+                    work, "open_access", "oa_status", default="unknown"
                 ),
                 primary_location_id=primary_location.id if primary_location else None,
                 best_open_access_location_id=best_oa_location.id if best_oa_location else None,
@@ -467,7 +470,7 @@ def process_article(  # noqa: C901
 
             # For each Topic, create the Topic
             all_topic_details = []
-            for topic_details in open_alex_work["topics"]:
+            for topic_details in work["topics"]:
                 # Create the topic
                 topic = db_models.Topic(
                     open_alex_id=topic_details["id"],
@@ -510,28 +513,31 @@ def process_article(  # noqa: C901
                     doi=paper_doi,
                 )
 
+            # Cast to dict for type checker (pyalex.Work is an untyped dict subclass)
+            work = open_alex_work  # type: ignore[assignment]
+
         # For each author, create the Researcher
         if fetch_author_details:
             all_researcher_details = []
-            for author_details in open_alex_work["authorships"]:
+            for author_details in work["authorships"]:
                 # Fetch extra author details
                 open_alex_author = get_open_alex_author_from_id(
                     open_alex_token=open_alex_token,
                     author_id=author_details["author"]["id"],
                 )
+                # Cast to dict for type checker
+                author: dict[str, Any] = open_alex_author  # type: ignore[assignment]
 
                 # Create the Researcher
                 researcher = db_models.Researcher(
-                    open_alex_id=open_alex_author["id"],
-                    orcid=open_alex_author["orcid"],
-                    name=open_alex_author["display_name"],
-                    works_count=open_alex_author["works_count"],
-                    cited_by_count=open_alex_author["cited_by_count"],
-                    h_index=open_alex_author["summary_stats"]["h_index"],
-                    i10_index=open_alex_author["summary_stats"]["i10_index"],
-                    two_year_mean_citedness=open_alex_author["summary_stats"][
-                        "2yr_mean_citedness"
-                    ],
+                    open_alex_id=author["id"],
+                    orcid=author["orcid"],
+                    name=author["display_name"],
+                    works_count=author["works_count"],
+                    cited_by_count=author["cited_by_count"],
+                    h_index=author["summary_stats"]["h_index"],
+                    i10_index=author["summary_stats"]["i10_index"],
+                    two_year_mean_citedness=author["summary_stats"]["2yr_mean_citedness"],
                 )
 
                 # Create the connection between researcher and document
@@ -571,7 +577,7 @@ def process_article(  # noqa: C901
         # Funder, FundingInstance, and DocumentFundingInstance
         if fetch_grant_details:
             all_funding_instance_details = []
-            for grant_details in open_alex_work["awards"]:
+            for grant_details in work["awards"]:
                 # Create the Funder
                 funder = db_models.Funder(
                     open_alex_id=grant_details["funder_id"],
@@ -738,8 +744,8 @@ def get_articles_for_researcher(
         # Deduplicate based on DOI
         # This can happen if open alex has multiple versions of the same paper
         # listed separately and SemanticScholar correctly points to the same DOI
-        known_dois = []
-        deduplicated_results = []
+        known_dois: list[str] = []
+        deduplicated_results: list[WorkAndOAResultModels | types.ErrorResult] = []
         for result in all_results:
             if isinstance(result, WorkAndOAResultModels):
                 if result.open_alex_results.document_model.doi not in known_dois:

@@ -33,7 +33,7 @@ def _process_elsevier_repo(
 
     # Get Elsevier repo details
     github_api = GhApi(token=github_api_token)
-    repo_details = github_api.repos.get(
+    repo_details = github_api.repos.get(  # type: ignore[attr-defined]
         owner="ElsevierSoftwareX",
         repo=repo_name,
     )
@@ -105,7 +105,7 @@ def get_dataset(
 
     # Get softwareX repos names
     paged_repos = paged(
-        github_api.repos.list_for_org,
+        github_api.repos.list_for_org,  # type: ignore[attr-defined]
         org="ElsevierSoftwareX",
     )
     all_softwarex_repos = []
