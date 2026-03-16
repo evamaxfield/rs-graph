@@ -146,10 +146,9 @@ class _TqdmProgress(RemoteProgress):
         exc_type: type | None,
         exc_val: BaseException | None,
         exc_tb: object,
-    ) -> bool:
+    ) -> None:
         self._tqdm.clear()
         self._tqdm.close()
-        return False
 
 
 ###############################################################################
@@ -171,10 +170,12 @@ def _query_unprocessed_repositories(
     with Session(engine) as session:
         # Collect repo IDs that already have imports or dependencies
         imported_ids = set(
-            session.exec(select(db_models.RepositoryImport.repository_id).distinct()).all()
+            session.exec(select(col(db_models.RepositoryImport.repository_id)).distinct()).all()
         )
         dep_ids = set(
-            session.exec(select(db_models.RepositoryDependency.repository_id).distinct()).all()
+            session.exec(
+                select(col(db_models.RepositoryDependency.repository_id)).distinct()
+            ).all()
         )
         processed_ids = imported_ids | dep_ids
 
@@ -471,7 +472,7 @@ def ingest_softcite_mentions(
         with Session(engine) as session:
             processed_doc_ids = set(
                 session.exec(
-                    select(db_models.DocumentSoftwareMention.document_id).distinct()
+                    select(col(db_models.DocumentSoftwareMention.document_id)).distinct()
                 ).all()
             )
             if processed_doc_ids:
