@@ -5,11 +5,13 @@ import shutil
 from collections import defaultdict
 from itertools import combinations
 from pathlib import Path
+from typing import Any, cast
 
 import colormaps as cmaps
 import connectorx  # noqa: F401
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import polars as pl
 import rustworkx as rx
 import seaborn as sns
@@ -25,7 +27,7 @@ from rs_graph.db import constants as db_constants
 # Constants
 ###############################################################################
 
-PALETTE = cmaps.bold._colors.tolist()
+PALETTE = cmaps.bold._colors.tolist()  # type: ignore[attr-defined]
 
 SHARED_SOURCES = frozenset({"pwc", "plos", "joss", "softwarex"})
 MINED_SOURCES = frozenset({"snowball-sampling-discovery"})
@@ -733,14 +735,11 @@ def run_feature_comparison(  # noqa: C901
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
         # Violin plot
-        plot_data = pl.DataFrame(
-            {
-                feat: np.concatenate([shared_vals, mined_vals]),
-                "pair_source_label": (
-                    ["shared"] * len(shared_vals) + ["mined"] * len(mined_vals)
-                ),
-            }
-        ).to_pandas()
+        plot_dict: dict[str, Any] = {
+            feat: np.concatenate([shared_vals, mined_vals]),
+            "pair_source_label": (["shared"] * len(shared_vals) + ["mined"] * len(mined_vals)),
+        }
+        plot_data = pl.DataFrame(plot_dict).to_pandas()
         sns.violinplot(
             data=plot_data,
             x="pair_source_label",
@@ -795,14 +794,13 @@ def run_feature_comparison(  # noqa: C901
             y_lo -= y_pad
             y_hi += y_pad
 
-            plot_data = pl.DataFrame(
-                {
-                    feat: np.concatenate([shared_vals, mined_vals]),
-                    "pair_source_label": (
-                        ["shared"] * len(shared_vals) + ["mined"] * len(mined_vals)
-                    ),
-                }
-            ).to_pandas()
+            plot_dict2: dict[str, Any] = {
+                feat: np.concatenate([shared_vals, mined_vals]),
+                "pair_source_label": (
+                    ["shared"] * len(shared_vals) + ["mined"] * len(mined_vals)
+                ),
+            }
+            plot_data = pl.DataFrame(plot_dict2).to_pandas()
             sns.violinplot(
                 data=plot_data,
                 x="pair_source_label",
@@ -855,13 +853,19 @@ def run_feature_comparison(  # noqa: C901
         shared_props = []
         mined_props = []
         for cat in categories:
-            s = props_pd[
-                (props_pd["pair_source_label"] == "shared") & (props_pd[top_col] == cat)
-            ]["proportion"]
+            s = cast(
+                pd.Series,
+                props_pd[
+                    (props_pd["pair_source_label"] == "shared") & (props_pd[top_col] == cat)
+                ]["proportion"],
+            )
             shared_props.append(float(s.iloc[0]) if len(s) > 0 else 0)
-            m = props_pd[
-                (props_pd["pair_source_label"] == "mined") & (props_pd[top_col] == cat)
-            ]["proportion"]
+            m = cast(
+                pd.Series,
+                props_pd[
+                    (props_pd["pair_source_label"] == "mined") & (props_pd[top_col] == cat)
+                ]["proportion"],
+            )
             mined_props.append(float(m.iloc[0]) if len(m) > 0 else 0)
 
         ax.bar(x - width / 2, shared_props, width, label="Shared", color=PALETTE[0])
@@ -923,13 +927,19 @@ def run_feature_comparison(  # noqa: C901
         shared_props = []
         mined_props = []
         for cat in categories:
-            s = props_pd[
-                (props_pd["pair_source_label"] == "shared") & (props_pd[top_col] == cat)
-            ]["proportion"]
+            s = cast(
+                pd.Series,
+                props_pd[
+                    (props_pd["pair_source_label"] == "shared") & (props_pd[top_col] == cat)
+                ]["proportion"],
+            )
             shared_props.append(float(s.iloc[0]) if len(s) > 0 else 0)
-            m = props_pd[
-                (props_pd["pair_source_label"] == "mined") & (props_pd[top_col] == cat)
-            ]["proportion"]
+            m = cast(
+                pd.Series,
+                props_pd[
+                    (props_pd["pair_source_label"] == "mined") & (props_pd[top_col] == cat)
+                ]["proportion"],
+            )
             mined_props.append(float(m.iloc[0]) if len(m) > 0 else 0)
 
         ax.bar(x - width / 2, shared_props, width, label="Shared", color=PALETTE[0])
@@ -1168,7 +1178,7 @@ def compute_coverage(
 def _compute_graph_stats(
     graph: rx.PyGraph,
     label: str,
-) -> dict[str, int | float | list[int]]:
+) -> dict[str, int | float | str | list[int]]:
     """Compute standard network statistics for a graph."""
     components = rx.connected_components(graph) if graph.num_nodes() > 0 else []
     component_sizes = sorted([len(c) for c in components], reverse=True)
@@ -1273,9 +1283,11 @@ def analyze_network_components(  # noqa: C901
     bridging_summary = {
         "n_shared_components": stats_shared["total_components"],
         "n_full_components": stats_full["total_components"],
-        "delta_components": stats_full["total_components"] - stats_shared["total_components"],
+        "delta_components": int(stats_full["total_components"])
+        - int(stats_shared["total_components"]),
         "delta_coverage_pct": round(
-            stats_full["coverage_pct"] - stats_shared["coverage_pct"], 2
+            cast(float, stats_full["coverage_pct"]) - cast(float, stats_shared["coverage_pct"]),
+            2,
         ),
         "n_merging_full_components": n_merging_full_components,
         "n_shared_components_that_merged": n_shared_comps_merged,
@@ -1411,7 +1423,7 @@ def _sample_shortest_paths(
             lambda _: 1,
             goal=target,
         )
-        dijkstra_lengths.append(dijkstra_res[target])
+        dijkstra_lengths.append(int(dijkstra_res[target]))
 
     vec = np.array(dijkstra_lengths)
     stats: dict[str, float | int] = {

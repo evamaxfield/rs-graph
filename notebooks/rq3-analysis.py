@@ -5,6 +5,7 @@ import operator
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import connectorx  # noqa: F401
 import matplotlib.pyplot as plt
@@ -527,7 +528,10 @@ def _print_group_breakdown(
         grouped = grouped.head(top_n_filter)
 
     show_top_n = all_records is not None and a_label is not None and b_label is not None
-    doc_id_to_records = _build_doc_id_lookup(all_records) if show_top_n else {}
+    assert all_records is not None or not show_top_n
+    doc_id_to_records = (
+        _build_doc_id_lookup(all_records) if show_top_n and all_records is not None else {}
+    )
 
     for row in grouped.iter_rows(named=True):
         group_val = row[group_col] if row[group_col] is not None else "Unknown"
@@ -1113,7 +1117,7 @@ def _plot_software_frequency_distributions(
 
 def _bin_top_n(series: pd.Series, top_n: int) -> pd.Series:
     top = series.value_counts().head(top_n).index
-    return series.where(series.isin(top), other="Other")
+    return pd.Series(series.where(series.isin(top), other="Other"))
 
 
 def _format_logit_result(result: object, model_name: str) -> str:
@@ -1325,8 +1329,10 @@ def _clean_logistic_df(df: "pd.DataFrame") -> "pd.DataFrame":
     df["language"] = (
         df["language"].str.replace(r"[^A-Za-z0-9_]", "_", regex=True).str.strip("_")
     )
-    df["field_binned"] = _bin_top_n(df["field"], top_n=9)
-    df["language_binned"] = _bin_top_n(df["language"], top_n=8)
+    field_series = cast(pd.Series, df["field"])
+    language_series = cast(pd.Series, df["language"])
+    df["field_binned"] = _bin_top_n(field_series, top_n=9)
+    df["language_binned"] = _bin_top_n(language_series, top_n=8)
     for col in (
         "import_global_prev",
         "import_field_prev",

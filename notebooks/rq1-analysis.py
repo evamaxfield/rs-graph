@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import random
@@ -5,6 +6,7 @@ import shutil
 from collections import defaultdict
 from itertools import combinations
 from pathlib import Path
+from typing import cast
 
 import colormaps as cmaps
 import connectorx  # noqa: F401
@@ -24,7 +26,7 @@ from rs_graph.db import constants as db_constants
 # Constants
 ###############################################################################
 
-PALETTE = cmaps.bold._colors.tolist()
+PALETTE = cmaps.bold._colors.tolist()  # type: ignore[attr-defined]
 
 FEATURE_NAME_TO_VIZ_NAME_LUT = {
     "document_fwci": "Document FWCI",
@@ -119,11 +121,16 @@ def _add_45_degree_line(
     """Draw a dashed red 45-degree reference line spanning the range of two date series."""
     x_dates = x_series.dt.date()
     y_dates = y_series.dt.date()
-    min_date = min(x_dates.min(), y_dates.min())
-    max_date = max(x_dates.max(), y_dates.max())
+    x_min = cast(datetime.date, x_dates.min())
+    y_min = cast(datetime.date, y_dates.min())
+    x_max = cast(datetime.date, x_dates.max())
+    y_max = cast(datetime.date, y_dates.max())
+    min_date = min(x_min, y_min)
+    max_date = max(x_max, y_max)
+    date_range = [min_date, max_date]
     ax.plot(
-        [min_date, max_date],
-        [min_date, max_date],
+        date_range,  # type: ignore[arg-type]
+        date_range,  # type: ignore[arg-type]
         color="red",
         linestyle="--",
     )
@@ -1900,7 +1907,7 @@ def plot_lifecycle_and_survival(pairs: pl.DataFrame, results_dir: Path) -> None:
             {
                 "group": group_name,
                 "n_pairs": int(group_df.height),
-                "event_rate": float(group_df["event_observed"].mean()),
+                "event_rate": cast(float, group_df["event_observed"].mean()),
                 "median_survival_days": median_days,
             }
         )
@@ -2033,7 +2040,7 @@ def analyze_network_coverage(
             lambda _: 1,
             goal=target,
         )
-        dijkstra_lengths.append(dijkstra_res[target])
+        dijkstra_lengths.append(int(dijkstra_res[target]))
 
     dijkstra_vec = np.array(dijkstra_lengths)
     path_stats = {
@@ -2111,7 +2118,7 @@ def analyze_network_role_by_code_contribution_status(  # noqa: C901
         "non_contributor_non_contributor": 0,
     }
 
-    edge_list = graph.edge_list() if hasattr(graph, "edge_list") else []
+    edge_list = list(graph.edge_list()) if hasattr(graph, "edge_list") else []
     for idx_u, idx_v in edge_list:
         u_is_contrib = idx_to_node[idx_u] in code_contrib_researcher_ids
         v_is_contrib = idx_to_node[idx_v] in code_contrib_researcher_ids
@@ -2124,7 +2131,7 @@ def analyze_network_role_by_code_contribution_status(  # noqa: C901
             edge_type_counts["non_contributor_non_contributor"] += 1
 
     components = rx.connected_components(graph)
-    largest_cc = max(components, key=len) if components else []
+    largest_cc: set[int] = max(components, key=len) if components else set()
     largest_cc_researchers = {idx_to_node[idx] for idx in largest_cc}
 
     path_lengths_by_status: defaultdict[str, list[int]] = defaultdict(list)
@@ -2143,7 +2150,7 @@ def analyze_network_role_by_code_contribution_status(  # noqa: C901
                 lambda _: 1,
                 goal=target,
             )
-            path_len = dijkstra_res[target]
+            path_len = int(dijkstra_res[target])
 
             source_rid = subgraph[source]
             target_rid = subgraph[target]
@@ -2283,10 +2290,7 @@ def analyze_network_role_by_code_contribution_status(  # noqa: C901
 
             sample_subgraph = graph.subgraph(sample_nodes)
             layout = rx.spring_layout(sample_subgraph, seed=42)
-            if isinstance(layout, dict):
-                coords = {i: layout[i] for i in range(sample_subgraph.num_nodes())}
-            else:
-                coords = {i: layout[i] for i in range(len(layout))}
+            coords = {i: layout[i] for i in range(sample_subgraph.num_nodes())}
 
             for idx_u, idx_v in (
                 sample_subgraph.edge_list() if hasattr(sample_subgraph, "edge_list") else []
@@ -2681,7 +2685,7 @@ def analyze_geographic_diversity_vs_fwci(
     fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(18, 7), constrained_layout=True)
 
     # Panel 1: Scatter entropy vs FWCI with trend line
-    p99_fwci = float(geo_fwci_df["document_fwci"].quantile(0.99))
+    p99_fwci = cast(float, geo_fwci_df["document_fwci"].quantile(0.99))
     sns.scatterplot(
         data=geo_fwci_df.filter(pl.col("document_fwci") < p99_fwci),
         x="document_author_country_entropy",
@@ -2792,8 +2796,10 @@ def analyze_code_contributor_ratio(
                     / ratio_df.height,
                     2,
                 ),
-                "median_total_ratio": float(ratio_df["total_code_author_ratio"].median()),
-                "median_confirmed_ratio": float(ratio_df["confirmed_overlap_ratio"].median()),
+                "median_total_ratio": cast(float, ratio_df["total_code_author_ratio"].median()),
+                "median_confirmed_ratio": cast(
+                    float, ratio_df["confirmed_overlap_ratio"].median()
+                ),
             },
             f,
             indent=2,
