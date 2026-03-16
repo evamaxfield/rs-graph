@@ -6,25 +6,30 @@ Pipeline to discover and store alternate DOIs for existing documents.
 This pipeline iterates through documents in the database, queries OpenAlex
 and Semantic Scholar for alternate DOI versions (preprints, published versions, etc.),
 and stores any discovered alternates in the document_alternate_doi table.
+
+Both APIs are queried in batch mode for efficiency:
+- Semantic Scholar: POST /paper/batch (up to 500 IDs per request)
+- OpenAlex: pipe-separated DOI filter (up to 50 DOIs per request)
 """
 
 from __future__ import annotations
 
-import itertools
 import math
 import os
+import signal
+import threading
 import time
 import traceback
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import requests
 import typer
 from dataclasses_json import DataClassJsonMixin
 from dotenv import load_dotenv
-from prefect import Task, flow, task, unmapped
 from sqlmodel import Session, select
 from tqdm import tqdm
 
@@ -42,6 +47,28 @@ from rs_graph.utils.identifier_normalization import normalize_doi
 app = typer.Typer()
 
 DEFAULT_OPEN_ALEX_TOKENS_FILE = ".open-alex-tokens.yml"
+
+# Max IDs per request for each API
+SS_BATCH_SIZE = 500
+OA_BATCH_SIZE = 50
+
+# Event used to signal a graceful shutdown on keyboard interrupt.
+# When set, the pipeline will finish any in-progress critical storage
+# and exit at the next safe point.
+_shutdown_requested = threading.Event()
+
+
+def _handle_sigint(signum: int, frame: object) -> None:
+    if _shutdown_requested.is_set():
+        # Second interrupt — restore default handler and re-raise to force quit
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        os.kill(os.getpid(), signal.SIGINT)
+    _shutdown_requested.set()
+    print(
+        "\nInterrupt received. Will exit at next safe point "
+        "(after current batch storage completes). Press Ctrl+C again to force quit."
+    )
+
 
 ###############################################################################
 
@@ -88,158 +115,202 @@ class ProcessingTimes:
 ###############################################################################
 
 
-def _get_doi_from_semantic_scholar(
-    doi: str,
+def _doi_to_ss_id(doi: str) -> str:
+    """Convert a DOI to a Semantic Scholar paper ID string."""
+    normalized = normalize_doi(doi)
+    if "arxiv" in normalized:
+        search_id = normalized.split("arxiv.")[-1]
+        return f"ARXIV:{search_id}"
+    return f"DOI:{normalized}"
+
+
+def _get_dois_from_semantic_scholar_batch(
+    dois: list[str],
     api_key: str | None = None,
-) -> str | None:
+) -> dict[str, str | None]:
     """
-    Query Semantic Scholar for a paper's DOI.
+    Batch query Semantic Scholar for paper DOIs.
 
-    Returns the DOI that Semantic Scholar has on file, which may differ
-    from the input DOI if Semantic Scholar has resolved it to a different version.
+    Uses POST /paper/batch to fetch up to 500 papers at once.
+    Returns a mapping from input DOI -> resolved DOI (or None if not found).
     """
-    normalized_doi = normalize_doi(doi)
+    results: dict[str, str | None] = {}
 
-    # Handle arXiv IDs
-    if "arxiv" in normalized_doi:
-        search_id = normalized_doi.split("arxiv.")[-1]
-        search_string = f"ARXIV:{search_id}"
-    else:
-        search_string = f"DOI:{normalized_doi}"
+    for chunk_start in range(0, len(dois), SS_BATCH_SIZE):
+        chunk = dois[chunk_start : chunk_start + SS_BATCH_SIZE]
+        ss_ids = [_doi_to_ss_id(doi) for doi in chunk]
 
-    url = f"https://api.semanticscholar.org/graph/v1/paper/{search_string}"
-    headers = {}
-    if api_key:
-        headers["x-api-key"] = api_key
-    params = {"fields": "externalIds"}
+        url = "https://api.semanticscholar.org/graph/v1/paper/batch"
+        headers: dict[str, str] = {}
+        if api_key:
+            headers["x-api-key"] = api_key
+        params = {"fields": "externalIds"}
 
-    try:
-        response = requests.get(url, headers=headers, params=params, timeout=10)
-        # Rate limit: ~1 request/sec with API key
-        time.sleep(3.05 if not api_key else 1.05)
+        try:
+            response = requests.post(
+                url,
+                headers=headers,
+                params=params,
+                json={"ids": ss_ids},
+                timeout=30,
+            )
+            # Rate limit: one sleep per batch request
+            time.sleep(3.05 if not api_key else 1.05)
 
-        if response.status_code == 404:
-            return None
-        response.raise_for_status()
+            response.raise_for_status()
+            papers = response.json()
 
-        paper_details = response.json()
-        if "externalIds" in paper_details and "DOI" in paper_details["externalIds"]:
-            return paper_details["externalIds"]["DOI"]
-        return None
-    except Exception as e:
-        raise RuntimeError(
-            f"Error fetching updated DOI from Semantic Scholar for DOI '{doi}': {e}. "
-            f"Be sure to check that your Semantic Scholar API key is valid."
-        ) from e
+            # Response is a list in the same order as input IDs.
+            # Entries may be None if a paper was not found.
+            for doi, paper in zip(chunk, papers, strict=False):
+                if paper is None:
+                    results[doi] = None
+                elif (
+                    "externalIds" in paper
+                    and paper["externalIds"] is not None
+                    and "DOI" in paper["externalIds"]
+                ):
+                    results[doi] = paper["externalIds"]["DOI"]
+                else:
+                    results[doi] = None
+
+        except Exception as e:
+            # On batch failure, mark all DOIs in chunk as None
+            print(f"Semantic Scholar batch request failed: {e}")
+            for doi in chunk:
+                results[doi] = None
+
+    return results
 
 
-def _get_dois_from_openalex(
-    doi: str,
+def _get_dois_from_openalex_batch(
+    dois: list[str],
     open_alex_token: str,
-) -> list[str]:
+) -> dict[str, list[str]]:
     """
-    Query OpenAlex for all DOI variants of a work.
+    Batch query OpenAlex for DOI variants of multiple works.
 
-    OpenAlex may have the canonical DOI plus knowledge of alternate versions
-    through its "ids" field and related works.
+    Uses pipe-separated DOI filter to query up to 50 DOIs per request.
+    Returns a mapping from input DOI -> list of DOIs found in OpenAlex.
     """
     import pyalex
 
     _setup_open_alex(open_alex_token=open_alex_token)
-    _increment_call_count_and_check()
 
-    # Normalize DOI for query
-    query_doi = normalize_doi(doi)
-    query_doi = f"https://doi.org/{query_doi}"
+    results: dict[str, list[str]] = {doi: [] for doi in dois}
 
-    try:
-        print("Querying OpenAlex for DOI:", query_doi)
-        work = pyalex.Works()[query_doi]
-        if work is None:
-            return []
+    for chunk_start in range(0, len(dois), OA_BATCH_SIZE):
+        chunk = dois[chunk_start : chunk_start + OA_BATCH_SIZE]
+        _increment_call_count_and_check()
 
-        dois = []
+        # Build pipe-separated DOI filter
+        query_dois = [f"https://doi.org/{normalize_doi(doi)}" for doi in chunk]
+        doi_filter = "|".join(query_dois)
 
-        # Get the primary DOI
-        print("Parsing OpenAlex work for DOIs...")
-        if work.get("doi"):
-            dois.append(normalize_doi(work["doi"]))
+        try:
+            works = pyalex.Works().filter(doi=doi_filter).get(per_page=OA_BATCH_SIZE)
 
-        # Check for DOI in ids field
-        if work.get("ids"):
-            if work["ids"].get("doi"):
-                doi_from_ids = normalize_doi(work["ids"]["doi"])
-                if doi_from_ids not in dois:
-                    dois.append(doi_from_ids)
+            # Build a lookup from normalized DOI -> work
+            for work_item in works:
+                work: dict[str, Any] = work_item  # type: ignore[assignment]
+                work_dois: list[str] = []
 
-        return dois
-    except Exception as e:
-        print(f"Error querying OpenAlex for DOI {doi}: {e}")
-        return []
+                if work.get("doi"):
+                    work_dois.append(normalize_doi(work["doi"]))
+
+                if work.get("ids") and work["ids"].get("doi"):
+                    doi_from_ids = normalize_doi(work["ids"]["doi"])
+                    if doi_from_ids not in work_dois:
+                        work_dois.append(doi_from_ids)
+
+                # Match this work back to the input DOI(s) it corresponds to
+                for input_doi in chunk:
+                    input_normalized = normalize_doi(input_doi)
+                    if input_normalized in work_dois:
+                        results[input_doi] = work_dois
+                        break
+
+        except Exception as e:
+            print(f"OpenAlex batch request failed: {e}")
+            # Results for this chunk remain as empty lists
+
+    return results
 
 
-def discover_alternate_dois(
-    doc_info: DocumentDOIInfo,
+def discover_alternate_dois_batch(
+    doc_infos: list[DocumentDOIInfo],
     open_alex_token: str,
     semantic_scholar_api_key: str | None = None,
-) -> AlternateDOIResult | ErrorResult:
+) -> list[AlternateDOIResult | ErrorResult]:
     """
-    Discover alternate DOIs for a single document.
+    Discover alternate DOIs for a batch of documents.
 
-    Queries both OpenAlex and Semantic Scholar to find any DOI variants.
+    Queries both Semantic Scholar and OpenAlex in batch mode,
+    then merges results per document.
     """
     start_time = time.time()
+    dois = [doc.doi for doc in doc_infos]
+
+    # Batch query both APIs
+    try:
+        ss_results = _get_dois_from_semantic_scholar_batch(
+            dois, api_key=semantic_scholar_api_key
+        )
+    except Exception as e:
+        print(f"Semantic Scholar batch failed entirely: {e}")
+        ss_results = dict.fromkeys(dois)
 
     try:
-        original_normalized = normalize_doi(doc_info.doi)
-        alternate_dois: set[str] = set()
-        print(f"Discovering alternates for DOI: {doc_info.doi}")
-
-        # Query Semantic Scholar
-        print("About to query Semantic Scholar...")
-        ss_doi = _get_doi_from_semantic_scholar(
-            doc_info.doi,
-            api_key=semantic_scholar_api_key,
-        )
-        ss_doi_normalized = normalize_doi(ss_doi) if ss_doi else None
-
-        # Query OpenAlex
-        print("About to query OpenAlex...")
-        oa_dois = _get_dois_from_openalex(
-            doc_info.doi,
-            open_alex_token=open_alex_token,
-        )
-
-        # Collect alternates (any DOI that differs from the original)
-        print("Collecting alternate DOIs...")
-        if ss_doi_normalized and ss_doi_normalized != original_normalized:
-            alternate_dois.add(ss_doi_normalized)
-
-        for oa_doi in oa_dois:
-            oa_doi_normalized = normalize_doi(oa_doi)
-            if oa_doi_normalized != original_normalized:
-                alternate_dois.add(oa_doi_normalized)
-
-        end_time = time.time()
-
-        return AlternateDOIResult(
-            document_id=doc_info.document_id,
-            original_doi=doc_info.doi,
-            alternate_dois=list(alternate_dois),
-            openalex_doi=oa_dois[0] if oa_dois else None,
-            semantic_scholar_doi=ss_doi,
-            processing_time_seconds=end_time - start_time,
-        )
-
+        oa_results = _get_dois_from_openalex_batch(dois, open_alex_token=open_alex_token)
     except Exception as e:
-        print(f"Error discovering alternates for DOI {doc_info.doi}: {e}")
-        return ErrorResult(
-            source="alternate_doi_discovery",
-            step="discover_alternate_dois",
-            identifier=f"doc_id={doc_info.document_id}, doi={doc_info.doi}",
-            error=str(e),
-            traceback_str=traceback.format_exc(),
-        )
+        print(f"OpenAlex batch failed entirely: {e}")
+        oa_results = {doi: [] for doi in dois}
+
+    batch_time = time.time() - start_time
+    per_doc_time = batch_time / len(doc_infos) if doc_infos else 0
+
+    # Build per-document results
+    results: list[AlternateDOIResult | ErrorResult] = []
+    for doc_info in doc_infos:
+        try:
+            original_normalized = normalize_doi(doc_info.doi)
+            alternate_dois: set[str] = set()
+
+            # Semantic Scholar result
+            ss_doi = ss_results.get(doc_info.doi)
+            ss_doi_normalized = normalize_doi(ss_doi) if ss_doi else None
+            if ss_doi_normalized and ss_doi_normalized != original_normalized:
+                alternate_dois.add(ss_doi_normalized)
+
+            # OpenAlex results
+            oa_dois = oa_results.get(doc_info.doi, [])
+            for oa_doi in oa_dois:
+                oa_doi_normalized = normalize_doi(oa_doi)
+                if oa_doi_normalized != original_normalized:
+                    alternate_dois.add(oa_doi_normalized)
+
+            results.append(
+                AlternateDOIResult(
+                    document_id=doc_info.document_id,
+                    original_doi=doc_info.doi,
+                    alternate_dois=list(alternate_dois),
+                    openalex_doi=oa_dois[0] if oa_dois else None,
+                    semantic_scholar_doi=ss_doi,
+                    processing_time_seconds=per_doc_time,
+                )
+            )
+        except Exception as e:
+            results.append(
+                ErrorResult(
+                    source="alternate_doi_discovery",
+                    step="discover_alternate_dois",
+                    identifier=f"doc_id={doc_info.document_id}, doi={doc_info.doi}",
+                    error=str(e),
+                    traceback_str=traceback.format_exc(),
+                )
+            )
+
+    return results
 
 
 ###############################################################################
@@ -279,9 +350,8 @@ def get_documents_without_alternates(
         results = session.exec(docs_query).all()
 
         # Filter out documents that already have alternates processed
-        # (We'll track processed docs separately to avoid re-querying)
         doc_infos = [
-            DocumentDOIInfo(document_id=doc_id, doi=doi)
+            DocumentDOIInfo(document_id=int(doc_id), doi=str(doi))
             for doc_id, doi in results
             if doc_id not in existing_doc_ids
         ]
@@ -289,86 +359,69 @@ def get_documents_without_alternates(
         return doc_infos
 
 
-def store_alternate_dois(
-    result: AlternateDOIResult | ErrorResult,
+def store_alternate_dois_batch(
+    results: list[AlternateDOIResult | ErrorResult],
     use_prod: bool = False,
-) -> AlternateDOIResult | ErrorResult:
-    """Store discovered alternate DOIs in the database."""
-    if isinstance(result, ErrorResult):
-        return result
-
-    if not result.alternate_dois:
-        # No alternates to store
-        return result
-
+) -> list[AlternateDOIResult | ErrorResult]:
+    """Store discovered alternate DOIs in the database for a batch of results."""
     engine = get_engine(use_prod=use_prod)
 
+    stored_results: list[AlternateDOIResult | ErrorResult] = []
     try:
         with Session(engine) as session:
-            for alt_doi in result.alternate_dois:
-                # Check if this alternate DOI already exists
-                existing = session.exec(
-                    select(db_models.DocumentAlternateDOI).where(
-                        db_models.DocumentAlternateDOI.doi == alt_doi
-                    )
-                ).first()
+            for result in results:
+                if isinstance(result, ErrorResult) or not result.alternate_dois:
+                    stored_results.append(result)
+                    continue
 
-                if existing is None:
-                    alternate_model = db_models.DocumentAlternateDOI(
-                        document_id=result.document_id,
-                        doi=alt_doi,
+                try:
+                    for alt_doi in result.alternate_dois:
+                        existing = session.exec(
+                            select(db_models.DocumentAlternateDOI).where(
+                                db_models.DocumentAlternateDOI.doi == alt_doi
+                            )
+                        ).first()
+
+                        if existing is None:
+                            alternate_model = db_models.DocumentAlternateDOI(
+                                document_id=result.document_id,
+                                doi=alt_doi,
+                            )
+                            session.add(alternate_model)
+
+                    stored_results.append(result)
+                except Exception as e:
+                    stored_results.append(
+                        ErrorResult(
+                            source="alternate_doi_discovery",
+                            step="store_alternate_dois",
+                            identifier=f"doc_id={result.document_id}",
+                            error=str(e),
+                            traceback_str=traceback.format_exc(),
+                        )
                     )
-                    session.add(alternate_model)
 
             session.commit()
 
-        return result
-
     except Exception as e:
-        return ErrorResult(
-            source="alternate_doi_discovery",
-            step="store_alternate_dois",
-            identifier=f"doc_id={result.document_id}",
-            error=str(e),
-            traceback_str=traceback.format_exc(),
-        )
+        # If the entire commit fails, convert remaining to errors
+        print(f"Batch commit failed: {e}")
+        for result in results:
+            if isinstance(result, AlternateDOIResult) and result.alternate_dois:
+                stored_results.append(
+                    ErrorResult(
+                        source="alternate_doi_discovery",
+                        step="store_alternate_dois",
+                        identifier=f"doc_id={result.document_id}",
+                        error=str(e),
+                        traceback_str=traceback.format_exc(),
+                    )
+                )
+
+    return stored_results
 
 
 ###############################################################################
-
-
-@task(
-    log_prints=True,
-    # retries=2,
-    # retry_delay_seconds=3,
-    # retry_jitter_factor=0.5,
-    timeout_seconds=4,
-)
-def discover_alternate_dois_task(
-    doc_info: DocumentDOIInfo,
-    open_alex_token: str,
-    semantic_scholar_api_key: str | None = None,
-) -> AlternateDOIResult | ErrorResult:
-    """Prefect task wrapper for discover_alternate_dois."""
-    return discover_alternate_dois(
-        doc_info=doc_info,
-        open_alex_token=open_alex_token,
-        semantic_scholar_api_key=semantic_scholar_api_key,
-    )
-
-
-@task(
-    log_prints=True,
-    retries=3,
-    retry_delay_seconds=3,
-    retry_jitter_factor=0.5,
-)
-def store_alternate_dois_task(
-    result: AlternateDOIResult | ErrorResult,
-    use_prod: bool = False,
-) -> AlternateDOIResult | ErrorResult:
-    """Prefect task wrapper for store_alternate_dois."""
-    return store_alternate_dois(result=result, use_prod=use_prod)
 
 
 def _report_statistics(
@@ -394,44 +447,9 @@ def _report_statistics(
         )
 
 
-@flow(log_prints=True)
-def alternate_doi_discovery_flow(
-    use_prod: bool = False,
-    use_coiled: bool = False,
-    coiled_region: str = "us-west-2",
-    open_alex_tokens_file: str = DEFAULT_OPEN_ALEX_TOKENS_FILE,
-    semantic_scholar_api_key: str | None = None,
-    batch_size: int = 50,
-    limit: int | None = None,
-) -> None:
-    """
-    Discover alternate DOIs for documents in the database.
-
-    Args:
-        use_prod: Whether to use production database
-        use_coiled: Whether to use Coiled for distributed execution
-        coiled_region: AWS region for Coiled cluster
-        open_alex_tokens_file: Path to OpenAlex tokens YAML file
-        semantic_scholar_api_key: Semantic Scholar API key
-        batch_size: Number of documents to process per batch
-        limit: Maximum number of documents to process (None for all)
-    """
-    # Load credentials and process documents
-    _run_alternate_doi_discovery(
-        use_prod=use_prod,
-        use_coiled=use_coiled,
-        coiled_region=coiled_region,
-        open_alex_tokens_file=open_alex_tokens_file,
-        semantic_scholar_api_key=semantic_scholar_api_key,
-        batch_size=batch_size,
-        limit=limit,
-    )
-
-
 def _process_batches(
     doc_infos: list[DocumentDOIInfo],
-    discover_task: Task,
-    cycled_tokens: itertools.cycle,
+    open_alex_token: str,
     semantic_scholar_api_key: str | None,
     use_prod: bool,
     batch_size: int,
@@ -448,21 +466,19 @@ def _process_batches(
     for i in tqdm(range(0, len(doc_infos), batch_size), total=n_batches, desc="Batches"):
         batch = doc_infos[i : i + batch_size]
 
-        # Discover alternate DOIs
-        discovery_futures = discover_task.map(
-            doc_info=batch,
-            open_alex_token=[next(cycled_tokens) for _ in range(len(batch))],
-            semantic_scholar_api_key=unmapped(semantic_scholar_api_key),
+        # Batch discover alternate DOIs
+        batch_results = discover_alternate_dois_batch(
+            doc_infos=batch,
+            open_alex_token=open_alex_token,
+            semantic_scholar_api_key=semantic_scholar_api_key,
         )
 
-        # Store results
-        store_futures = store_alternate_dois_task.map(
-            result=discovery_futures,
-            use_prod=unmapped(use_prod),
+        # Batch store results
+        batch_results = store_alternate_dois_batch(
+            results=batch_results,
+            use_prod=use_prod,
         )
 
-        # Collect results
-        batch_results = [f.result() for f in store_futures]
         all_results.extend(batch_results)
 
         # Track statistics
@@ -481,13 +497,15 @@ def _process_batches(
                 f"{total_alternates_found} alternates found, {total_errors} errors"
             )
 
+        if _shutdown_requested.is_set():
+            print("Shutdown requested — exiting after completing current batch.")
+            break
+
     return all_results, processing_times, total_alternates_found, total_errors
 
 
 def _run_alternate_doi_discovery(
     use_prod: bool,
-    use_coiled: bool,
-    coiled_region: str,
     open_alex_tokens_file: str,
     semantic_scholar_api_key: str | None,
     batch_size: int,
@@ -497,7 +515,6 @@ def _run_alternate_doi_discovery(
     # Load credentials
     open_alex_tokens = pipeline_utils._load_open_alex_tokens(open_alex_tokens_file)
     n_open_alex_tokens = len(open_alex_tokens)
-    cycled_tokens = itertools.cycle(open_alex_tokens)
 
     print(f"Loaded {n_open_alex_tokens} OpenAlex tokens")
     ss_status = "loaded" if semantic_scholar_api_key else "not configured"
@@ -512,27 +529,13 @@ def _run_alternate_doi_discovery(
         print("No documents to process. Exiting.")
         return
 
-    # Setup task wrapper with coiled if enabled
-    if use_coiled:
-        discover_task = pipeline_utils._wrap_func_with_coiled_prefect_task(
-            discover_alternate_dois,
-            coiled_kwargs=pipeline_utils._get_small_cpu_api_cluster(
-                # TODO:
-                # Hardcoded to 10 workers because I know it can handle it
-                # Ideally will go back to dynamic based on number of tokens
-                n_workers=10,
-                use_coiled=use_coiled,
-                coiled_region=coiled_region,
-            ),
-        )
-    else:
-        discover_task = discover_alternate_dois_task
+    # Use first token for batch queries (token cycling not needed with batch)
+    open_alex_token = open_alex_tokens[0]
 
     # Process in batches
     all_results, processing_times, total_alternates_found, total_errors = _process_batches(
         doc_infos=doc_infos,
-        discover_task=discover_task,
-        cycled_tokens=cycled_tokens,
+        open_alex_token=open_alex_token,
         semantic_scholar_api_key=semantic_scholar_api_key,
         use_prod=use_prod,
         batch_size=batch_size,
@@ -561,10 +564,8 @@ def _run_alternate_doi_discovery(
 @app.command()
 def alternate_doi_discovery(
     use_prod: bool = False,
-    use_coiled: bool = False,
-    coiled_region: str = "us-west-2",
     open_alex_tokens_file: str = DEFAULT_OPEN_ALEX_TOKENS_FILE,
-    batch_size: int = 50,
+    batch_size: int = 500,
     limit: int | None = None,
 ) -> None:
     """
@@ -573,15 +574,18 @@ def alternate_doi_discovery(
     This pipeline queries OpenAlex and Semantic Scholar to find alternate
     DOI versions (preprints, published versions, etc.) for documents
     already in the database.
+
+    Both APIs are queried in batch mode for efficiency.
     """
+    # Install graceful shutdown handler
+    signal.signal(signal.SIGINT, _handle_sigint)
+
     # Load env for semantic scholar API key
     load_dotenv()
     semantic_scholar_api_key = os.environ.get("SEMANTIC_SCHOLAR_API_KEY")
 
-    alternate_doi_discovery_flow(
+    _run_alternate_doi_discovery(
         use_prod=use_prod,
-        use_coiled=use_coiled,
-        coiled_region=coiled_region,
         open_alex_tokens_file=open_alex_tokens_file,
         semantic_scholar_api_key=semantic_scholar_api_key,
         batch_size=batch_size,
