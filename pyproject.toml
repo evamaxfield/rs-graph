@@ -167,5 +167,6 @@ lint.extend-ignore = [
 "**/tests/*.py" = ["D"]
 "**/migrations/*.py" = ["D"]
 
-[tool.ty.src]
-exclude = [".github", ".pre-commit-config.yaml", "pyproject.toml", "migrations/"]
+[tool.zuban]
+exclude = [".github", ".pre-commit-config.yaml", "pyproject.toml", "migrations/", "notebooks/*.ipynb"]
+exclude_gitignore = true

@@ -22,13 +22,3 @@ repos:
         entry: zuban check
         language: system
         types: [python]
-        exclude: ^(migrations/|notebooks/|rapidfuzz-example\.py)
-
-  # Notebooks
-  - repo: https://github.com/nbQA-dev/nbQA
-    rev: 1.9.1
-    hooks:
-      - id: nbqa-ruff-format
-      - id: nbqa-ruff-check
-      - id: nbqa-ruff
-        args: ["--fix"]
