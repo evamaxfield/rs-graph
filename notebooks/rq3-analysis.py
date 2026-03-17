@@ -220,8 +220,11 @@ def load_pairs() -> pl.DataFrame:
             how="left",
         )
     ).filter(
-        (pl.col("document_repository_link_confidence") >= 0.995)
-        | (pl.col("document_repository_link_confidence").is_null())
+        (
+            (pl.col("document_repository_link_confidence") >= 0.995)
+            | (pl.col("document_repository_link_confidence").is_null())
+        )
+        & (pl.col("document_publication_date") < pl.date(2024, 1, 1))
     )
 
 
