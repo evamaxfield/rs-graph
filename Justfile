@@ -24,6 +24,7 @@ clean:
 	rm -fr .ipynb_checkpoints
 	rm -fr processing-results
 	rm -fr client.log
+	rm -fr .venv
 
 # install with all deps
 install:

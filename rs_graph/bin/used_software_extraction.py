@@ -2,12 +2,14 @@
 
 import json
 import platform
+import random
 import shutil
 import subprocess
 import tarfile
 import tempfile
 import traceback
 import urllib.request
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -159,13 +161,14 @@ class UnprocessedRepository:
     repo_id: int
     owner: str
     name: str
+    language: str
 
 
 def _query_unprocessed_repositories(
     use_prod: bool,
     language_filter: list[str],
-) -> list[UnprocessedRepository]:
-    """Return (repo_id, owner, name) for repos not yet extracted, filtered by language."""
+) -> tuple[list[UnprocessedRepository], Counter[str]]:
+    """Return unprocessed repos and a count of already-processed repos by language."""
     engine = db_utils.get_engine(use_prod=use_prod)
     with Session(engine) as session:
         # Collect repo IDs that already have imports or dependencies
@@ -192,11 +195,19 @@ def _query_unprocessed_repositories(
         )
         all_repos = session.exec(stmt).all()
 
-    return [
-        UnprocessedRepository(repo_id=r.id, owner=r.owner, name=r.name)
-        for r in all_repos
-        if r.id is not None and r.id not in processed_ids
-    ]
+    processed_by_language: Counter[str] = Counter()
+    unprocessed: list[UnprocessedRepository] = []
+    for r in all_repos:
+        if r.id is None:
+            continue
+        lang = r.primary_language or "Unknown"
+        if r.id in processed_ids:
+            processed_by_language[lang] += 1
+        else:
+            unprocessed.append(
+                UnprocessedRepository(repo_id=r.id, owner=r.owner, name=r.name, language=lang)
+            )
+    return unprocessed, processed_by_language
 
 
 ###############################################################################
@@ -563,6 +574,39 @@ def _collect_batch_results(
     return results
 
 
+def _print_language_counts(label: str, counts: "Counter[str]") -> None:
+    """Print a language-grouped count table."""
+    print(f"\n--- {label} (by language) ---")
+    for lang, count in sorted(counts.items(), key=lambda x: -x[1]):
+        print(f"  {lang}: {count}")
+    print(f"  TOTAL: {sum(counts.values())}")
+
+
+def _filter_cached_errors(
+    repos: list[UnprocessedRepository],
+    errors_cache_path: Path,
+    timeout_seconds: int,
+) -> tuple[list[UnprocessedRepository], "Counter[str]"]:
+    """Filter out repos that already errored, returning filtered list and error counts."""
+    errored_by_language: Counter[str] = Counter()
+    if not errors_cache_path.exists():
+        return repos, errored_by_language
+
+    errors_df = pl.read_parquet(errors_cache_path)
+    already_errored = set(
+        errors_df.filter(pl.col("timeout_seconds") == timeout_seconds)
+        .get_column("identifier")
+        .to_list()
+    )
+    filtered = []
+    for r in repos:
+        if f"{r.owner}/{r.name}" in already_errored:
+            errored_by_language[r.language] += 1
+        else:
+            filtered.append(r)
+    return filtered, errored_by_language
+
+
 @flow(log_prints=True)
 def _used_software_extraction_flow(
     use_prod: bool,
@@ -594,28 +638,34 @@ def _used_software_extraction_flow(
 
     # Get list of repos to process
     print("Retrieving list of repositories to process...")
-    repos = _query_unprocessed_repositories(
+    repos, processed_by_language = _query_unprocessed_repositories(
         use_prod=use_prod,
         language_filter=language_filter,
     )
     repos = repos[:limit] if limit is not None else repos
-    print(f"Retrieved {len(repos)} repositories to process")
+
+    _print_language_counts("Already Processed", processed_by_language)
 
     # Filter out repos that already errored under the same timeout configuration
-    if errors_cache_path.exists():
-        errors_df = pl.read_parquet(errors_cache_path)
-        already_errored = set(
-            errors_df.filter(pl.col("timeout_seconds") == timeout_seconds)
-            .get_column("identifier")
-            .to_list()
+    repos, errored_by_language = _filter_cached_errors(
+        repos, errors_cache_path, timeout_seconds
+    )
+    if errored_by_language:
+        _print_language_counts(
+            f"Cached Errors (timeout={timeout_seconds}s)", errored_by_language
         )
-        repos = [r for r in repos if f"{r.owner}/{r.name}" not in already_errored]
-        print(f"{len(repos)} repositories remaining after filtering cached errors")
+
+    remaining_by_language: Counter[str] = Counter(r.language for r in repos)
+    _print_language_counts("Remaining to Process", remaining_by_language)
+    print("-" * 80)
 
     # Handle no repos to process
     if not repos:
         print("No repositories to process. Exiting.")
         return
+
+    # Shuffle the repos so that we get a mix of languages in each batch
+    random.shuffle(repos)
 
     # Construct extract tasks — warmup task uses a longer timeout to absorb
     # cold-start cluster provisioning (~5-8 min for t4g.large spot instances).
@@ -687,6 +737,69 @@ def _used_software_extraction_flow(
             combined_errors.write_parquet(errors_cache_path)
 
 
+def _print_extraction_result(result: RepoExtractionResult) -> None:
+    """Print extraction results to stdout."""
+    print(f"\n{'=' * 60}")
+    print(f"IMPORTS ({len(result.imports)} found):")
+    print(f"{'=' * 60}")
+    for imp in result.imports:
+        norm = normalize_name(imp.software_name)
+        print(f"  {imp.software_name} (normalized: {norm})")
+        if imp.file_paths:
+            for fp in imp.file_paths.split(";"):
+                print(f"    -> {fp}")
+
+    print(f"\n{'=' * 60}")
+    print(f"DEPENDENCIES ({len(result.dependencies)} found):")
+    print(f"{'=' * 60}")
+    for dep in result.dependencies:
+        norm = normalize_name(dep.software_name)
+        print(f"  {dep.software_name} (normalized: {norm})")
+        print(f"    ecosystem: {dep.ecosystem}, type: {dep.dependency_type}")
+        if dep.version_spec:
+            print(f"    version: {dep.version_spec}")
+        if dep.manifest_paths:
+            print(f"    manifests: {dep.manifest_paths}")
+
+
+def _dry_run_single_repo(repo_spec: str, use_prod: bool) -> None:
+    """Dry-run extraction for a single repo (owner/name). Prints results, saves nothing."""
+    owner, name = repo_spec.split("/", 1)
+
+    engine = db_utils.get_engine(use_prod=use_prod)
+    with Session(engine) as session:
+        stmt = select(db_models.Repository).where(
+            col(db_models.Repository.owner) == owner.lower(),
+            col(db_models.Repository.name) == name.lower(),
+        )
+        repo = session.exec(stmt).first()
+        if repo is None:
+            print(f"Repository {repo_spec} not found in database")
+            return
+        if repo.id is None:
+            print(f"Repository {repo_spec} has no ID in database")
+            return
+        repo_id: int = repo.id
+        print(f"Found repository: id={repo_id}, language={repo.primary_language}")
+
+    print(f"\nExtracting imports and dependencies for {repo_spec}...")
+    result = _extract_repo_imports_and_deps(
+        repository_id=repo_id,
+        owner=owner,
+        name=name,
+    )
+
+    if isinstance(result, types.ErrorResult):
+        print(f"\nERROR during '{result.step}':")
+        print(f"  {result.error}")
+        if result.traceback:
+            print(f"  Traceback:\n{result.traceback}")
+        return
+
+    _print_extraction_result(result)
+    print("\nDry run complete. Nothing saved to database.")
+
+
 @app.command()
 def used_software_extraction(
     use_prod: bool = False,
@@ -698,6 +811,7 @@ def used_software_extraction(
     limit: int | None = None,
     timeout_seconds: int = 60,
     errors_cache_file: str = "used-software-extraction-errors.parquet",
+    dry_run_repo: str | None = None,
 ) -> None:
     """
     Extract software imports and dependencies from document-linked repositories.
@@ -705,7 +819,13 @@ def used_software_extraction(
     Default language filter is Python, Jupyter Notebook, and R.
     Repos that exceed --timeout-seconds are skipped and remain unprocessed,
     so a subsequent run with a larger timeout will pick them up automatically.
+
+    Use --dry-run-repo owner/name to extract a single repo without saving results.
     """
+    if dry_run_repo:
+        _dry_run_single_repo(dry_run_repo, use_prod=use_prod)
+        return
+
     _used_software_extraction_flow(
         use_prod=use_prod,
         language_filter=language_filter
