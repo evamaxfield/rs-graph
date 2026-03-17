@@ -23,7 +23,7 @@ from rs_graph.utils.identifier_normalization import (
     normalize_doi_col,
     prep_name_for_printing,
 )
-from rs_graph.utils.software_alignment import align_software_names
+from rs_graph.utils.software_alignment import AlignmentMethod, align_software_names
 
 ###############################################################################
 # Constants
@@ -276,6 +276,7 @@ def run_pairwise_analysis(
     source_a_label: str,
     source_b_label: str,
     score_cutoff: float = SCORE_CUTOFF,
+    method: AlignmentMethod = "global_min_diff",
 ) -> tuple[list[PairwiseSoftwareRecord], dict[str, float]]:
     """
     Run pairwise alignment between two software sources.
@@ -297,6 +298,7 @@ def run_pairwise_analysis(
         source_a=source_a_label,
         source_b=source_b_label,
         cutoff=score_cutoff,
+        method=method,
     )
 
     matched_a_norms: set[str] = set()
@@ -1175,6 +1177,60 @@ def _format_logit_result(result: object, model_name: str) -> str:
     return "\n".join(lines)
 
 
+def _collinearity_diagnostics(
+    df: "pd.DataFrame",
+    cols: list[str],
+) -> str:
+    """Compute collinearity diagnostics for prevalence z-score columns.
+
+    Returns a formatted text block with Pearson r, Spearman rho, and VIF values.
+    """
+    from scipy.stats import pearsonr, spearmanr
+    from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+    lines = [
+        f"\n{'=' * 70}",
+        "  Collinearity Diagnostics",
+        "=" * 70,
+    ]
+
+    # Pairwise correlations
+    if len(cols) == 2:
+        a, b = cols
+        pr, pp = pearsonr(df[a], df[b])
+        sr, sp = spearmanr(df[a], df[b])
+        lines.append(f"\n  Pearson  r({a}, {b}) = {pr:.4f}  (p = {pp:.4e})")
+        lines.append(f"  Spearman rho({a}, {b}) = {sr:.4f}  (p = {sp:.4e})")
+    else:
+        for i in range(len(cols)):
+            for j in range(i + 1, len(cols)):
+                a, b = cols[i], cols[j]
+                pr, pp = pearsonr(df[a], df[b])
+                sr, sp = spearmanr(df[a], df[b])
+                lines.append(f"\n  Pearson  r({a}, {b}) = {pr:.4f}  (p = {pp:.4e})")
+                lines.append(f"  Spearman rho({a}, {b}) = {sr:.4f}  (p = {sp:.4e})")
+
+    # VIF
+
+    design_mat = df[cols].copy()
+    design_mat.insert(0, "const", 1.0)
+    lines.append("")
+    for i, col in enumerate(cols):
+        vif = variance_inflation_factor(design_mat.values, i + 1)  # +1 to skip const
+        flag = "  ** HIGH" if vif > 5 else ""
+        lines.append(f"  VIF({col}) = {vif:.2f}{flag}")
+
+    if any(variance_inflation_factor(design_mat.values, i + 1) > 5 for i in range(len(cols))):
+        lines.append(
+            "\n  ** NOTE: VIF > 5 indicates substantial collinearity."
+            "\n    Coefficients may be unstable;"
+            " interpret relative magnitudes with caution."
+        )
+
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _build_pair_metadata(results_df: pl.DataFrame) -> dict[int, dict]:
     """Build a document_id → metadata lookup from the results DataFrame."""
     pair_meta: dict[int, dict] = {}
@@ -1484,8 +1540,8 @@ def _run_logistic_regressions(
         )
     )
 
-    # ── model specs ──────────────────────────────────────────────────────────
-    im_models = [
+    # ── field-prevalence model specs ─────────────────────────────────────────
+    im_field_models = [
         ("M1: Uncontrolled", "is_mentioned ~ import_field_prev_z"),
         ("M2: + Year", "is_mentioned ~ import_field_prev_z + year_c"),
         (
@@ -1502,7 +1558,7 @@ def _run_logistic_regressions(
             " + C(field_binned) + C(language_binned)",
         ),
     ]
-    dm_models = [
+    dm_field_models = [
         ("M1: Uncontrolled", "is_mentioned ~ dep_field_prev_z"),
         ("M2: + Year", "is_mentioned ~ dep_field_prev_z + year_c"),
         (
@@ -1519,27 +1575,82 @@ def _run_logistic_regressions(
         ),
     ]
 
-    # ── fit and write results ────────────────────────────────────────────────
+    # ── global-prevalence model specs ─────────────────────────────────────────
+    im_global_models = [
+        ("M1: Uncontrolled", "is_mentioned ~ import_global_prev_z"),
+        ("M2: + Year", "is_mentioned ~ import_global_prev_z + year_c"),
+        (
+            "M3: + Field",
+            "is_mentioned ~ import_global_prev_z + C(field_binned)",
+        ),
+        (
+            "M4: + Language",
+            "is_mentioned ~ import_global_prev_z + C(language_binned)",
+        ),
+        (
+            "M5: Fully controlled",
+            "is_mentioned ~ import_global_prev_z + year_c"
+            " + C(field_binned) + C(language_binned)",
+        ),
+    ]
+    dm_global_models = [
+        ("M1: Uncontrolled", "is_mentioned ~ dep_global_prev_z"),
+        ("M2: + Year", "is_mentioned ~ dep_global_prev_z + year_c"),
+        (
+            "M3: + Field",
+            "is_mentioned ~ dep_global_prev_z + C(field_binned)",
+        ),
+        (
+            "M4: + Language",
+            "is_mentioned ~ dep_global_prev_z + C(language_binned)",
+        ),
+        (
+            "M5: Fully controlled",
+            "is_mentioned ~ dep_global_prev_z + year_c + C(field_binned) + C(language_binned)",
+        ),
+    ]
+
+    # ── fit and write field-prevalence results ────────────────────────────────
     _fit_and_write_models(
         im_df,
-        im_models,
-        "Logistic Regression: Import Prevalence → Mention Status",
+        im_field_models,
+        "Logistic Regression: Import Field Prevalence → Mention Status",
         output_path,
-        "rq3-logistic-regression-imports.txt",
+        "rq3-logistic-regression-imports-field.txt",
         filter_mode,
-        "imports",
+        "imports-field",
     )
     _fit_and_write_models(
         dm_df,
-        dm_models,
-        "Logistic Regression: Dependency Prevalence → Mention Status",
+        dm_field_models,
+        "Logistic Regression: Dependency Field Prevalence → Mention Status",
         output_path,
-        "rq3-logistic-regression-deps.txt",
+        "rq3-logistic-regression-deps-field.txt",
         filter_mode,
-        "deps",
+        "deps-field",
     )
 
-    # ── combined model (M6) ───────────────────────────────────────────────────
+    # ── fit and write global-prevalence results ───────────────────────────────
+    _fit_and_write_models(
+        im_df,
+        im_global_models,
+        "Logistic Regression: Import Global Prevalence → Mention Status",
+        output_path,
+        "rq3-logistic-regression-imports-global.txt",
+        filter_mode,
+        "imports-global",
+    )
+    _fit_and_write_models(
+        dm_df,
+        dm_global_models,
+        "Logistic Regression: Dependency Global Prevalence → Mention Status",
+        output_path,
+        "rq3-logistic-regression-deps-global.txt",
+        filter_mode,
+        "deps-global",
+    )
+
+    # ── combined models (M6) ─────────────────────────────────────────────────
     combined_eligible = im_eligible | dm_eligible
     combined_df = _clean_logistic_df(
         pd.DataFrame(
@@ -1555,20 +1666,106 @@ def _run_logistic_regressions(
             )
         )
     )
-    combined_formula = (
+    combined_field_formula = (
         "is_mentioned ~ import_field_prev_z "
         "+ dep_field_prev_z "
         "+ year_c + C(field_binned) + C(language_binned)"
     )
     _fit_and_write_models(
         combined_df,
-        [("M6: Combined (fully controlled)", combined_formula)],
-        "Logistic Regression: Combined Prevalence → Mention Status",
+        [("M6: Combined (fully controlled)", combined_field_formula)],
+        "Logistic Regression: Combined Field Prevalence → Mention Status",
         output_path,
-        "rq3-logistic-regression-combined.txt",
+        "rq3-logistic-regression-combined-field.txt",
         filter_mode,
-        "combined",
+        "combined-field",
     )
+    combined_global_formula = (
+        "is_mentioned ~ import_global_prev_z "
+        "+ dep_global_prev_z "
+        "+ year_c + C(field_binned) + C(language_binned)"
+    )
+    _fit_and_write_models(
+        combined_df,
+        [("M6: Combined (fully controlled)", combined_global_formula)],
+        "Logistic Regression: Combined Global Prevalence → Mention Status",
+        output_path,
+        "rq3-logistic-regression-combined-global.txt",
+        filter_mode,
+        "combined-global",
+    )
+
+    # ── field + global prevalence together (collinearity check) ──────────────
+    im_both_models = [
+        (
+            "M1: Uncontrolled",
+            "is_mentioned ~ import_field_prev_z + import_global_prev_z",
+        ),
+        (
+            "M5: Fully controlled",
+            "is_mentioned ~ import_field_prev_z + import_global_prev_z"
+            " + year_c + C(field_binned) + C(language_binned)",
+        ),
+    ]
+    dm_both_models = [
+        (
+            "M1: Uncontrolled",
+            "is_mentioned ~ dep_field_prev_z + dep_global_prev_z",
+        ),
+        (
+            "M5: Fully controlled",
+            "is_mentioned ~ dep_field_prev_z + dep_global_prev_z"
+            " + year_c + C(field_binned) + C(language_binned)",
+        ),
+    ]
+
+    # Imports: field + global
+    im_both_diag = _collinearity_diagnostics(
+        im_df, ["import_field_prev_z", "import_global_prev_z"]
+    )
+    im_both_text = _fit_models(
+        im_df,
+        im_both_models,
+        "Logistic Regression: Import Field + Global Prevalence → Mention Status",
+    )
+    with open(output_path / "rq3-logistic-regression-imports-both.txt", "w") as f:
+        f.write(im_both_diag + im_both_text)
+    log.info(f"[{filter_mode}] Logistic regression (imports-both) complete")
+
+    # Deps: field + global
+    dm_both_diag = _collinearity_diagnostics(dm_df, ["dep_field_prev_z", "dep_global_prev_z"])
+    dm_both_text = _fit_models(
+        dm_df,
+        dm_both_models,
+        "Logistic Regression: Dependency Field + Global Prevalence → Mention Status",
+    )
+    with open(output_path / "rq3-logistic-regression-deps-both.txt", "w") as f:
+        f.write(dm_both_diag + dm_both_text)
+    log.info(f"[{filter_mode}] Logistic regression (deps-both) complete")
+
+    # Combined (all four prevalence terms)
+    combined_both_diag = _collinearity_diagnostics(
+        combined_df,
+        [
+            "import_field_prev_z",
+            "import_global_prev_z",
+            "dep_field_prev_z",
+            "dep_global_prev_z",
+        ],
+    )
+    combined_both_formula = (
+        "is_mentioned ~ import_field_prev_z + import_global_prev_z"
+        " + dep_field_prev_z + dep_global_prev_z"
+        " + year_c + C(field_binned) + C(language_binned)"
+    )
+    combined_both_text = _fit_models(
+        combined_df,
+        [("M6: Combined (fully controlled)", combined_both_formula)],
+        "Logistic Regression: Combined Field + Global Prevalence → Mention Status",
+    )
+    with open(output_path / "rq3-logistic-regression-combined-both.txt", "w") as f:
+        f.write(combined_both_diag + combined_both_text)
+    log.info(f"[{filter_mode}] Logistic regression (combined-both) complete")
 
 
 ###############################################################################
@@ -1724,6 +1921,38 @@ def analyze(
             score_cutoff,
         )
 
+        # Greedy variants for comparison
+        _, g_im_stats = run_pairwise_analysis(
+            import_names,
+            import_norms,
+            mention_names,
+            mention_norms,
+            "import",
+            "mention",
+            score_cutoff,
+            method="greedy_max_first",
+        )
+        _, g_id_stats = run_pairwise_analysis(
+            import_names,
+            import_norms,
+            dep_names,
+            dep_norms,
+            "import",
+            "dependency",
+            score_cutoff,
+            method="greedy_max_first",
+        )
+        _, g_dm_stats = run_pairwise_analysis(
+            dep_names,
+            dep_norms,
+            mention_names,
+            mention_norms,
+            "dependency",
+            "mention",
+            score_cutoff,
+            method="greedy_max_first",
+        )
+
         def _to_dicts(records: list[PairwiseSoftwareRecord], d_id: int) -> list[dict]:
             return [
                 {
@@ -1775,6 +2004,21 @@ def analyze(
                 "dm_jaccard": dm_stats["jaccard"],
                 "dm_avg_score": dm_stats["avg_match_score"],
                 "dm_median_score": dm_stats["median_match_score"],
+                # Greedy IM
+                "g_im_n_matched": g_im_stats["n_matched"],
+                "g_im_jaccard": g_im_stats["jaccard"],
+                "g_im_avg_score": g_im_stats["avg_match_score"],
+                "g_im_median_score": g_im_stats["median_match_score"],
+                # Greedy ID
+                "g_id_n_matched": g_id_stats["n_matched"],
+                "g_id_jaccard": g_id_stats["jaccard"],
+                "g_id_avg_score": g_id_stats["avg_match_score"],
+                "g_id_median_score": g_id_stats["median_match_score"],
+                # Greedy DM
+                "g_dm_n_matched": g_dm_stats["n_matched"],
+                "g_dm_jaccard": g_dm_stats["jaccard"],
+                "g_dm_avg_score": g_dm_stats["avg_match_score"],
+                "g_dm_median_score": g_dm_stats["median_match_score"],
                 # Nested software records
                 "im_software_records": im_dicts,
                 "id_software_records": id_dicts,
