@@ -7,7 +7,8 @@ import numpy as np
 from rapidfuzz import fuzz
 from scipy.optimize import linear_sum_assignment
 
-from rs_graph.utils.identifier_normalization import normalize_name
+from .identifier_normalization import normalize_name
+from .software_alternates import are_alternates
 
 AlignmentMethod = Literal["global_min_diff", "greedy_max_first"]
 
@@ -70,6 +71,7 @@ def align_software_names(
     source_b: str,
     cutoff: float = 75.0,
     method: AlignmentMethod = "global_min_diff",
+    use_alternates: bool = True,
 ) -> list[PairwiseAlignmentResult]:
     """
     Align two lists of software names using fuzzy matching.
@@ -87,6 +89,8 @@ def align_software_names(
             "global_min_diff" — Hungarian algorithm for globally optimal assignment.
             "greedy_max_first" — Greedily pick the highest-scoring pair, remove both
             items, and repeat.
+        use_alternates: When True, names that belong to the same alternate group
+            (from software-name-alternates.yaml) are scored as 100.0.
 
     Returns:
         One `PairwiseAlignmentResult` per accepted match. Unmatched items are not
@@ -106,7 +110,10 @@ def align_software_names(
     sim_matrix = np.zeros((len(norm_b), len(norm_a)))
     for i, nb in enumerate(norm_b):
         for j, na in enumerate(norm_a):
-            sim_matrix[i, j] = fuzz.ratio(nb, na)
+            if use_alternates and are_alternates(na, nb):
+                sim_matrix[i, j] = 100.0
+            else:
+                sim_matrix[i, j] = fuzz.ratio(nb, na)
 
     # Solve assignment
     if method == "global_min_diff":

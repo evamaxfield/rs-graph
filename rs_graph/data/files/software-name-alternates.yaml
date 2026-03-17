@@ -1,0 +1,23 @@
+# Software name alternates for alignment.
+#
+# Keys are official package / install names.
+# Values list all other known names (import names, abbreviations, full names).
+# The alignment system normalizes everything (lowercase, strip hyphens/underscores/spaces)
+# before lookup, so casing and punctuation here are for human readability only.
+#
+# To add a new group: use the install name as key, list all alternates as values.
+# Every name must appear in at most one group.
+
+opencv-python:
+  - cv2
+  - opencv
+  - opencv-contrib-python
+
+Pillow:
+  - pil
+  - python imaging library
+  - python image library
+
+beautifulsoup4:
+  - bs4
+  - beautifulsoup

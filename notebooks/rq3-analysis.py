@@ -224,7 +224,7 @@ def load_pairs() -> pl.DataFrame:
             (pl.col("document_repository_link_confidence") >= 0.995)
             | (pl.col("document_repository_link_confidence").is_null())
         )
-        & (pl.col("document_publication_date") < pl.date(2024, 1, 1))
+        & (pl.col("document_publication_date") < pl.date(2022, 1, 1))
     )
 
 
@@ -300,6 +300,15 @@ def run_pairwise_analysis(
         cutoff=score_cutoff,
         method=method,
     )
+
+    # Uncomment to debug certain disambiguation cases
+    # if source_a_label is "mention" or source_b_label is "mention":
+    #     use_source = source_a_normalized if source_a_label is "mention" else source_b_normalized
+    #     for variant in ["cv2", "opencv"]:
+    #          if variant in use_source:
+    #             print(source_a_label, source_a_normalized)
+    #             print(source_b_label, source_b_normalized)
+    #             print("matched pairs", matches)
 
     matched_a_norms: set[str] = set()
     matched_b_norms: set[str] = set()
@@ -656,84 +665,118 @@ def _print_coverage_summary(
 
 
 def _print_hidden_infrastructure(
-    imports_df: pl.DataFrame,
-    deps_df: pl.DataFrame,
-    mentions_df: pl.DataFrame,
-    pair_repo_ids: set[int],
-    pair_doc_ids: set[int],
+    all_records: list[dict],
+    valid_doc_ids: set[int],
+    source_a_label: str,
+    source_b_label: str,
     top_n: int = 50,
 ) -> str:
-    """Ranked table of most-imported libraries with import:mention and import:dep ratios."""
-    import_counts = (
-        imports_df.filter(pl.col("repository_id").is_in(list(pair_repo_ids)))
-        .group_by("software_name_normalized")
-        .agg(pl.len().alias("import_count"))
-        .sort("import_count", descending=True)
-        .head(top_n)
-    )
-    dep_counts = (
-        deps_df.filter(pl.col("repository_id").is_in(list(pair_repo_ids)))
-        .group_by("software_name_normalized")
-        .agg(pl.len().alias("dep_count"))
-    )
-    mention_counts = (
-        mentions_df.filter(pl.col("document_id").is_in(list(pair_doc_ids)))
-        .group_by("software_name_normalized")
-        .agg(pl.len().alias("mention_count"))
-    )
+    """Ranked table using matched pair records from pairwise alignment.
 
-    n_repos = len(pair_repo_ids)
-    n_docs = len(pair_doc_ids)
+    Counts source_a occurrences (matched + unmatched) and compares against
+    matched source_b occurrences.  Avoids cross-namespace exact-name joins
+    by relying on the fuzzy matching already performed per doc-repo pair.
+    """
+    filtered = [r for r in all_records if r["document_id"] in valid_doc_ids]
 
-    table = (
-        import_counts.join(dep_counts, on="software_name_normalized", how="left")
-        .join(mention_counts, on="software_name_normalized", how="left")
-        .with_columns(
-            pl.col("dep_count").fill_null(0),
-            pl.col("mention_count").fill_null(0),
-        )
-        .with_columns(
-            (pl.col("import_count") / n_repos * 100).round(2).alias("import_pct"),
-            (pl.col("dep_count") / n_repos * 100).round(2).alias("dep_pct"),
-            (pl.col("mention_count") / n_docs * 100).round(2).alias("mention_pct"),
-            (pl.col("import_count") / (pl.col("mention_count") + 1))
-            .round(1)
-            .alias("import_mention_ratio"),
-            (pl.col("import_count") / (pl.col("dep_count") + 1))
-            .round(1)
-            .alias("import_dep_ratio"),
-        )
-    )
+    # Count source_a appearances (matched + source_a_only)
+    a_counts: Counter[str] = Counter()
+    # Count source_b appearances via matched records only
+    b_counts: Counter[str] = Counter()
+
+    for r in filtered:
+        norm = r["normalized_name"]
+        if r["status"] == "matched":
+            a_counts[norm] += 1
+            b_counts[norm] += 1
+        elif r["status"] == "source_a_only":
+            a_counts[norm] += 1
+
+    # Build table sorted by source_a count
+    top_names = [name for name, _ in a_counts.most_common(top_n)]
+
+    n_pairs = len(valid_doc_ids)
+    a_short = source_a_label[:3]
+    b_short = source_b_label[:3]
+    ratio_label = f"{a_short[0]}:{b_short[0]} Ratio"
 
     col_w = 32
     header = (
-        f"  {'Library':<{col_w}} {'Imports':>8} {'Imp%':>6} "
-        f"{'Mentions':>9} {'Men%':>6} {'I:M Ratio':>10} "
-        f"{'Deps':>7} {'Dep%':>6} {'I:D Ratio':>10}"
+        f"  {'Library':<{col_w}} {source_a_label:>10} {a_short + '%':>6} "
+        f"{source_b_label:>10} {b_short + '%':>6} {ratio_label:>10}"
     )
     sep = "  " + "-" * (len(header) - 2)
     lines = [
         "",
         "=" * 70,
-        f"  Hidden Infrastructure: top {top_n} most-imported libraries",
-        "  I:M Ratio = import_count / (mention_count + 1)  — high = rarely mentioned",
-        "  I:D Ratio = import_count / (dep_count + 1)      — high = rarely declared as dep",
+        f"  Hidden Infrastructure ({source_a_label} vs {source_b_label}): "
+        f"top {top_n} most-used {source_a_label.lower()}",
+        f"  {ratio_label} = {source_a_label.lower()}_count / "
+        f"({source_b_label.lower()}_count + 1)  — high = rarely in {source_b_label.lower()}",
         "=" * 70,
         header,
         sep,
     ]
 
-    for row in table.iter_rows(named=True):
-        name = prep_name_for_printing(row["software_name_normalized"])[:col_w]
+    for name in top_names:
+        a_count = a_counts[name]
+        b_count = b_counts.get(name, 0)
+        a_pct = a_count / n_pairs * 100 if n_pairs > 0 else 0.0
+        b_pct = b_count / n_pairs * 100 if n_pairs > 0 else 0.0
+        ratio = a_count / (b_count + 1)
+        display = prep_name_for_printing(name)[:col_w]
         lines.append(
-            f"  {name:<{col_w}} {row['import_count']:>8,} {row['import_pct']:>5.1f}% "
-            f"{row['mention_count']:>9,} {row['mention_pct']:>5.1f}% "
-            f"{row['import_mention_ratio']:>10.1f} "
-            f"{row['dep_count']:>7,} {row['dep_pct']:>5.1f}% "
-            f"{row['import_dep_ratio']:>10.1f}"
+            f"  {display:<{col_w}} {a_count:>10,} {a_pct:>5.1f}% "
+            f"{b_count:>10,} {b_pct:>5.1f}% "
+            f"{ratio:>10.1f}"
         )
 
     return "\n".join(lines)
+
+
+def _write_hidden_infrastructure_tables(
+    results_df: pl.DataFrame,
+    all_im_records: list[dict],
+    all_dm_records: list[dict],
+    filter_mode: str,
+    mode_path: Path,
+    top_n: int = 50,
+) -> None:
+    """Compute and write hidden infrastructure tables for a given filter mode."""
+    if filter_mode == "complete-cases":
+        im_filter = (pl.col("im_n_imports") > 0) & (pl.col("im_n_mentions") > 0)
+        dm_filter = (pl.col("dm_n_deps") > 0) & (pl.col("dm_n_mentions") > 0)
+    else:
+        im_filter = (pl.col("im_n_imports") > 0) | (pl.col("im_n_mentions") > 0)
+        dm_filter = (pl.col("dm_n_deps") > 0) | (pl.col("dm_n_mentions") > 0)
+
+    im_doc_ids = set(results_df.filter(im_filter)["document_id"].to_list())
+    dm_doc_ids = set(results_df.filter(dm_filter)["document_id"].to_list())
+
+    log.info(f"[{filter_mode}] Computing hidden infrastructure tables...")
+    for records, doc_ids, a_label, b_label, fname in [
+        (
+            all_im_records,
+            im_doc_ids,
+            "Imports",
+            "Mentions",
+            "rq3-hidden-infrastructure-imports.txt",
+        ),
+        (
+            all_dm_records,
+            dm_doc_ids,
+            "Dependencies",
+            "Mentions",
+            "rq3-hidden-infrastructure-deps.txt",
+        ),
+    ]:
+        infra_text = _print_hidden_infrastructure(
+            records, doc_ids, a_label, b_label, top_n=top_n
+        )
+        print(infra_text)
+        with open(mode_path / fname, "w") as f:
+            f.write(infra_text)
+        log.info(f"[{filter_mode}] Saved {fname}")
 
 
 ###############################################################################
@@ -2066,16 +2109,6 @@ def analyze(
         f.write(coverage_text)
     log.info("Saved rq3-coverage-summary.txt")
 
-    # Hidden infrastructure table (top-level, not per filter mode)
-    log.info("Computing hidden infrastructure table...")
-    infra_text = _print_hidden_infrastructure(
-        imports_df, deps_df, mentions_df, pair_repo_ids, pair_doc_ids, top_n=top_n * 5
-    )
-    print(infra_text)
-    with open(output_path / "rq3-hidden-infrastructure.txt", "w") as f:
-        f.write(infra_text)
-    log.info("Saved rq3-hidden-infrastructure.txt")
-
     # Gini coefficients + frequency distribution plot (top-level)
     gini_values = _plot_software_frequency_distributions(
         imports_df,
@@ -2113,6 +2146,16 @@ def analyze(
     for filter_mode, mode_path in filter_modes:
         mode_path.mkdir(parents=True, exist_ok=True)
         log.info(f"Running analysis for filter mode: {filter_mode}")
+
+        # Hidden infrastructure tables
+        _write_hidden_infrastructure_tables(
+            results_df,
+            all_im_records,
+            all_dm_records,
+            filter_mode,
+            mode_path,
+            top_n=top_n * 5,
+        )
 
         # Summary statistics
         stats_by_comparison = _print_summary_stats(
