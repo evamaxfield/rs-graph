@@ -1311,6 +1311,7 @@ def _build_analysis_df(
         field = meta["field"]
         rows.append(
             {
+                "document_id": doc_id,
                 "is_mentioned": int(rec["status"] == "matched"),
                 global_col: global_prev.get(norm, 0.0),
                 field_col: field_prev.get((norm, field), 0.0),
@@ -1362,7 +1363,13 @@ def _fit_models(
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                result = smf.logit(formula, data=df).fit(disp=0, maxiter=500, method="bfgs")
+                result = smf.logit(formula, data=df).fit(
+                    disp=0,
+                    maxiter=500,
+                    method="bfgs",
+                    cov_type="cluster",
+                    cov_kwds={"groups": df["document_id"]},
+                )
             out_lines.append(_format_logit_result(result, model_name))
         except Exception as exc:
             out_lines.append(f"\n  {model_name}: failed — {exc}\n")
@@ -1414,6 +1421,7 @@ def _build_combined_rows(
         entry = combined.setdefault(
             key,
             {
+                "document_id": doc_id,
                 "is_mentioned": 0,
                 "import_global_prev": import_global.get(norm, 0.0),
                 "import_field_prev": import_field.get((norm, field), 0.0),
@@ -1475,37 +1483,36 @@ def _run_logistic_regressions(
 
     # ── model specs ──────────────────────────────────────────────────────────
     im_models = [
-        ("M1: Uncontrolled", "is_mentioned ~ import_global_prev_z + import_field_prev_z"),
-        ("M2: + Year", "is_mentioned ~ import_global_prev_z + import_field_prev_z + year_c"),
+        ("M1: Uncontrolled", "is_mentioned ~ import_field_prev_z"),
+        ("M2: + Year", "is_mentioned ~ import_field_prev_z + year_c"),
         (
             "M3: + Field",
-            "is_mentioned ~ import_global_prev_z + import_field_prev_z + C(field_binned)",
+            "is_mentioned ~ import_field_prev_z + C(field_binned)",
         ),
         (
             "M4: + Language",
-            "is_mentioned ~ import_global_prev_z + import_field_prev_z + C(language_binned)",
+            "is_mentioned ~ import_field_prev_z + C(language_binned)",
         ),
         (
             "M5: Fully controlled",
-            "is_mentioned ~ import_global_prev_z + import_field_prev_z + year_c"
+            "is_mentioned ~ import_field_prev_z + year_c"
             " + C(field_binned) + C(language_binned)",
         ),
     ]
     dm_models = [
-        ("M1: Uncontrolled", "is_mentioned ~ dep_global_prev_z + dep_field_prev_z"),
-        ("M2: + Year", "is_mentioned ~ dep_global_prev_z + dep_field_prev_z + year_c"),
+        ("M1: Uncontrolled", "is_mentioned ~ dep_field_prev_z"),
+        ("M2: + Year", "is_mentioned ~ dep_field_prev_z + year_c"),
         (
             "M3: + Field",
-            "is_mentioned ~ dep_global_prev_z + dep_field_prev_z + C(field_binned)",
+            "is_mentioned ~ dep_field_prev_z + C(field_binned)",
         ),
         (
             "M4: + Language",
-            "is_mentioned ~ dep_global_prev_z + dep_field_prev_z + C(language_binned)",
+            "is_mentioned ~ dep_field_prev_z + C(language_binned)",
         ),
         (
             "M5: Fully controlled",
-            "is_mentioned ~ dep_global_prev_z + dep_field_prev_z + year_c"
-            " + C(field_binned) + C(language_binned)",
+            "is_mentioned ~ dep_field_prev_z + year_c + C(field_binned) + C(language_binned)",
         ),
     ]
 
@@ -1546,9 +1553,9 @@ def _run_logistic_regressions(
         )
     )
     combined_formula = (
-        "is_mentioned ~ import_global_prev + import_field_prev "
-        "+ dep_global_prev + dep_field_prev "
-        "+ year_c + C(field) + C(language)"
+        "is_mentioned ~ import_field_prev_z "
+        "+ dep_field_prev_z "
+        "+ year_c + C(field_binned) + C(language_binned)"
     )
     _fit_and_write_models(
         combined_df,
