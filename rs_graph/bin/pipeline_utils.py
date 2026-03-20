@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from collections.abc import Callable
+import math
 from pathlib import Path
 from typing import Any, overload
 
@@ -29,7 +30,7 @@ def _get_small_cpu_api_cluster(
     return {
         "keepalive": keepalive,
         "vm_type": "t4g.xlarge",
-        "n_workers": round(n_workers / 4),
+        "n_workers": math.ceil(n_workers / 4),
         "threads_per_worker": 4,  # t4g.xlarge has 4 vCPUs, so we can use all of them
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
