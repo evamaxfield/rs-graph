@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import time
 import traceback
 import urllib.request
 from collections import Counter
@@ -398,6 +399,7 @@ def _store_repo_result(result: RepoExtractionResult, use_prod: bool) -> None:
                 ),
                 session,
             )
+            time.sleep(0.02)
         for record in result.dependencies:
             db_utils._get_or_add_and_flush(
                 db_models.RepositoryDependency(
@@ -411,6 +413,7 @@ def _store_repo_result(result: RepoExtractionResult, use_prod: bool) -> None:
                 ),
                 session,
             )
+            time.sleep(0.02)
         session.commit()
 
 

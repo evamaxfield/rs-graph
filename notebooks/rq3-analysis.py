@@ -441,6 +441,145 @@ def _print_descriptive_stats(
     )
 
 
+_PAIR_STAT_COLS: list[tuple[str, str]] = [
+    ("im_n_imports", "imports"),
+    ("im_n_mentions", "mentions"),
+    ("dm_n_deps", "deps"),
+    ("im_n_matched", "matched_im"),
+    ("dm_n_matched", "matched_dm"),
+    ("id_n_matched", "matched_id"),
+]
+
+
+def _pair_stats_grouped_lines(
+    df: pl.DataFrame,
+    group_col: str,
+    top_n: int | None = None,
+) -> list[str]:
+    """Return mean/median/std lines for pair-level counts grouped by a column."""
+    lines: list[str] = []
+    grouped = (
+        df.group_by(group_col).agg(pl.len().alias("n_pairs")).sort("n_pairs", descending=True)
+    )
+    if top_n is not None:
+        grouped = grouped.head(top_n)
+
+    for row in grouped.iter_rows(named=True):
+        gv = row[group_col]
+        gdf = (
+            df.filter(pl.col(group_col).is_null())
+            if gv is None
+            else df.filter(pl.col(group_col) == gv)
+        )
+        display = "Unknown" if gv is None else str(gv)
+        lines.append(f"\n  [{display}] (n={gdf.height})")
+        for col, short in _PAIR_STAT_COLS:
+            vals = gdf[col].drop_nulls()
+            if vals.len() > 0:
+                std = vals.std() if vals.len() > 1 else 0.0
+                lines.append(
+                    f"    {short}: mean={vals.mean():.2f}, "
+                    f"median={vals.median():.2f}, "
+                    f"std={std:.2f}"
+                )
+    return lines
+
+
+def _pair_stats_correlations(df: pl.DataFrame) -> list[str]:
+    """Compute Spearman correlations between pair-level count columns."""
+    from scipy.stats import spearmanr
+
+    lines: list[str] = []
+    for col_a, col_b, label in [
+        ("im_n_imports", "im_n_mentions", "imports vs mentions count"),
+        ("dm_n_deps", "dm_n_mentions", "deps vs mentions count"),
+        ("id_n_imports", "id_n_deps", "imports vs deps count"),
+    ]:
+        vals_a = df[col_a].to_numpy()
+        vals_b = df[col_b].to_numpy()
+        if len(vals_a) > 2:
+            rho, p = spearmanr(vals_a, vals_b)
+            p_str = f"{p:.4e}" if p >= 0.0001 else "<.0001"
+            lines.append(f"  {label}: rho={rho:.4f}, p={p_str}")
+        else:
+            lines.append(f"  {label}: insufficient data")
+    return lines
+
+
+def _write_pair_level_stats(
+    results_df: pl.DataFrame,
+    filter_mode: str,
+    mode_path: Path,
+    top_n_fields: int = 15,
+) -> None:
+    """Write per-pair descriptive statistics to a text file."""
+    if filter_mode == "complete-cases":
+        df = results_df.filter(
+            ((pl.col("im_n_imports") > 0) & (pl.col("im_n_mentions") > 0))
+            | ((pl.col("id_n_imports") > 0) & (pl.col("id_n_deps") > 0))
+            | ((pl.col("dm_n_deps") > 0) & (pl.col("dm_n_mentions") > 0))
+        )
+    else:
+        df = results_df.filter(
+            (pl.col("im_n_imports") > 0)
+            | (pl.col("im_n_mentions") > 0)
+            | (pl.col("dm_n_deps") > 0)
+        )
+
+    lines: list[str] = [
+        "=" * 70,
+        f"  Per-Pair Descriptive Statistics  ({filter_mode}, N = {df.height})",
+        "=" * 70,
+        "",
+        "─" * 70,
+        "  Overall Per-Pair Counts",
+        "─" * 70,
+    ]
+
+    for col, label in [
+        ("im_n_imports", "Imports per pair"),
+        ("im_n_mentions", "Mentions per pair"),
+        ("dm_n_deps", "Dependencies per pair"),
+        ("im_n_matched", "Matched imports-mentions per pair"),
+        ("dm_n_matched", "Matched deps-mentions per pair"),
+        ("id_n_matched", "Matched imports-deps per pair"),
+    ]:
+        lines.append(_print_descriptive_stats(df, col, label))
+
+    # Fraction with zero
+    n = df.height
+    lines.extend(["", "─" * 70, "  Zero-Count Fractions", "─" * 70])
+    for col, label in [
+        ("im_n_imports", "imports"),
+        ("im_n_mentions", "mentions"),
+        ("dm_n_deps", "dependencies"),
+    ]:
+        n_zero = df.filter(pl.col(col) == 0).height
+        pct = n_zero / n * 100 if n > 0 else 0
+        lines.append(f"  Pairs with zero {label}: {n_zero:,} / {n:,} ({pct:.1f}%)")
+
+    # Correlations
+    lines.extend(["", "─" * 70, "  Pairwise Correlations (Spearman rank)", "─" * 70])
+    lines.extend(_pair_stats_correlations(df))
+
+    # Per-field breakdown
+    lines.extend(
+        ["", "─" * 70, f"  Per-Field Breakdown (top {top_n_fields} by pair count)", "─" * 70]
+    )
+    lines.extend(_pair_stats_grouped_lines(df, "document_field_name", top_n=top_n_fields))
+
+    # Over time breakdown
+    lines.extend(["", "─" * 70, "  Over Time Breakdown (by publication year)", "─" * 70])
+    year_df = df.with_columns(pl.col("document_publication_date").dt.year().alias("pub_year"))
+    lines.extend(_pair_stats_grouped_lines(year_df, "pub_year"))
+
+    text = "\n".join(lines)
+    print(text)
+    with open(mode_path / "rq3-pair-level-stats.txt", "w") as f:
+        f.write(text)
+    log.info(f"[{filter_mode}] Saved rq3-pair-level-stats.txt")
+
+
 def _build_doc_id_lookup(all_records: list[dict]) -> dict[int, list[dict]]:
     """Build a document_id → records lookup for efficient per-group filtering."""
     lookup: dict[int, list[dict]] = {}
@@ -2156,6 +2295,9 @@ def analyze(
             mode_path,
             top_n=top_n * 5,
         )
+
+        # Per-pair descriptive statistics
+        _write_pair_level_stats(results_df, filter_mode, mode_path, top_n_fields=top_n * 2)
 
         # Summary statistics
         stats_by_comparison = _print_summary_stats(
