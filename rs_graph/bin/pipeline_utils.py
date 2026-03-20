@@ -28,14 +28,9 @@ def _get_small_cpu_api_cluster(
 ) -> dict:
     return {
         "keepalive": keepalive,
-        "vm_type": "t4g.large",
-        # One worker per token to avoid rate limiting
-        # This isn't deterministic, that is,
-        # a single token might be used by multiple workers,
-        # but this does spread the load out a bit
-        # and should help avoid rate limiting
-        "n_workers": n_workers,
-        "threads_per_worker": 1,
+        "vm_type": "t4g.xlarge",
+        "n_workers": round(n_workers / 4),
+        "threads_per_worker": 4,  # t4g.xlarge has 4 vCPUs, so we can use all of them
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
         "region": coiled_region,
