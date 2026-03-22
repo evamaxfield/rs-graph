@@ -35,7 +35,7 @@ def generate_snowball_sampling_input(
         ),
     ),
     researcher_developer_links_filter_confidence_threshold: float = 0.97,
-    researcher_developer_links_duration_since_last_process_filter: str | None = None,
+    researcher_developer_links_duration_since_last_process_filter: str | None = "2 years",
     top_unique: bool = True,
     use_prod: bool = False,
     overwrite: bool = False,
