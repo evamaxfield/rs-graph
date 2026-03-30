@@ -2,9 +2,12 @@
 
 """Upload rs-graph-v2 database tables to HuggingFace Hub as a dataset."""
 
+import os
+
 import polars as pl
 import typer
 from datasets import Dataset, DatasetDict
+from dotenv import load_dotenv
 from sqlalchemy import inspect as sa_inspect
 from tqdm import tqdm
 
@@ -45,6 +48,13 @@ def upload_to_huggingface(
     Requires authentication via `huggingface-cli login` or the HF_TOKEN
     environment variable.
     """
+    # Load environment variables from .env file, if it exists
+    load_dotenv()
+
+    # Check for HF_TOKEN environment variable
+    if not os.getenv("HF_TOKEN"):
+        raise ValueError("Environment variable 'HF_TOKEN' is not set")
+
     engine = get_engine(use_prod=use_prod)
     table_names = sa_inspect(engine).get_table_names()
     to_process_table_names = [
