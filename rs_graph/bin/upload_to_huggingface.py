@@ -73,6 +73,7 @@ def upload_to_huggingface(
         df = pl.read_database(
             f"SELECT * FROM {table_name}",
             connection=engine,
+            infer_schema_length=None,
         )
         hf_datasets[table_name] = Dataset.from_polars(df)
 
