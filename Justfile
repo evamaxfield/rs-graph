@@ -29,7 +29,7 @@ clean:
 # install with all deps
 install:
 	pip install uv
-	uv pip install -e ".[dev,lint,modeling,data,pipeline]"
+	uv pip install -e ".[dev,lint,modeling,data-v2,pipeline]"
 
 # lint, format, and check all files
 lint:

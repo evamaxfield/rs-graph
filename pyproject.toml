@@ -61,11 +61,19 @@ modeling = [
   "tqdm>=4,<5",
   "typer>=0.15",
 ]
-data = [
+data-v1 = [
   "dataclasses-json>=0.6,<0.7",
   "dvuploader>=0.3,<0.4",
   "easyDataverse>=0.4,<0.5",
   "python-dotenv>=1,<2",
+  "tqdm>=4,<5",
+  "typer>=0.15",
+]
+data-v2 = [
+  "datasets>=3,<4",
+  "huggingface_hub>=0.20",
+  "polars>=1,<2",
+  "pyarrow>=12",
   "tqdm>=4,<5",
   "typer>=0.15",
 ]
@@ -116,6 +124,7 @@ rs-graph-snowball-sampling-discovery = "rs_graph.bin.snowball_sampling_discovery
 rs-graph-alternate-doi-discovery = "rs_graph.bin.alternate_doi_discovery:main"
 rs-graph-generate-snowball-sampling-input = "rs_graph.bin.generate_snowball_sampling_input:main"
 rs-graph-used-software-extraction = "rs_graph.bin.used_software_extraction:main"
+rs-graph-upload-to-huggingface = "rs_graph.bin.upload_to_huggingface:main"
 
 # build settings
 # https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html

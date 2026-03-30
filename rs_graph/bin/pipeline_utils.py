@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-from collections.abc import Callable
 import math
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, overload
 
