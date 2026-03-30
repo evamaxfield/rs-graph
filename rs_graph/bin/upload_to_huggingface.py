@@ -6,9 +6,9 @@ import polars as pl
 import typer
 from datasets import Dataset, DatasetDict
 from sqlalchemy import inspect as sa_inspect
+from tqdm import tqdm
 
 from rs_graph.db.utils import get_engine
-from tqdm import tqdm
 
 ###############################################################################
 
