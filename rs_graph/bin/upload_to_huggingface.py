@@ -3,10 +3,12 @@
 """Upload rs-graph-v2 database tables to HuggingFace Hub as a dataset."""
 
 import os
+import tempfile
+from pathlib import Path
 
 import polars as pl
 import typer
-from datasets import Dataset, DatasetDict
+from datasets import DatasetDict, load_dataset
 from dotenv import load_dotenv
 from sqlalchemy import inspect as sa_inspect
 from tqdm import tqdm
@@ -37,7 +39,7 @@ SKIPPED_TABLES: set[str] = {
 
 @app.command()
 def upload_to_huggingface(
-    repo_id: str = "evamaxfield/rs-graph-v2",
+    repo_id: str = "evamxb/rs-graph-v2",
     use_prod: bool = False,
     redact: bool = True,
 ) -> None:
@@ -64,23 +66,34 @@ def upload_to_huggingface(
         and (not redact or table_name not in REDACTED_TABLES)
     ]
 
-    hf_datasets: dict[str, Dataset] = {}
-    for table_name in tqdm(
-        to_process_table_names,
-        desc="Reading tables",
-    ):
-        print(f"Reading table: {table_name}")
-        df = pl.read_database(
-            f"SELECT * FROM {table_name}",
-            connection=engine,
-            infer_schema_length=None,
-        )
-        hf_datasets[table_name] = Dataset.from_polars(df)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
 
-    dataset_dict = DatasetDict(hf_datasets)
+        # Write each table to parquet one at a time to avoid OOM
+        for table_name in tqdm(
+            to_process_table_names,
+            desc="Writing tables to parquet",
+        ):
+            print(f"Reading table: {table_name}")
+            df = pl.read_database(
+                f"SELECT * FROM {table_name}",
+                connection=engine,
+                infer_schema_length=None,
+            )
+            df.write_parquet(tmpdir_path / f"{table_name}.parquet")
+            del df
 
-    print(f"Uploading {len(hf_datasets)} tables to {repo_id}")
-    dataset_dict.push_to_hub(repo_id, private=True)
+        # Build DatasetDict from parquet files (memory-mapped, not loaded into RAM)
+        data_files = {
+            table_name: str(tmpdir_path / f"{table_name}.parquet")
+            for table_name in to_process_table_names
+        }
+        dataset_dict = load_dataset("parquet", data_files=data_files)
+        assert isinstance(dataset_dict, DatasetDict)
+
+        print(f"Uploading {len(to_process_table_names)} tables to {repo_id}")
+        dataset_dict.push_to_hub(repo_id, private=True)
+
     print("Upload complete.")
 
 
