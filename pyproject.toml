@@ -34,7 +34,7 @@ dependencies = [
 # https://peps.python.org/pep-0621/#dependencies-optional-dependencies
 [project.optional-dependencies]
 lint = [
-  "prek>=0.2.29",
+  "ruff>=0.12.12",
   "zuban>=0.6.1",
   "pyarrow-stubs>=20",
 ]

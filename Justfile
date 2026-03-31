@@ -33,7 +33,9 @@ install:
 
 # lint, format, and check all files
 lint:
-	prek run --all-files
+	ruff check . --fix
+	ruff format .
+	zuban check
 
 ###############################################################################
 # Release and versioning

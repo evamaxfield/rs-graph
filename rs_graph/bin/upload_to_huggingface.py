@@ -4,6 +4,7 @@
 
 import math
 import os
+import shutil
 import time
 from pathlib import Path
 
@@ -33,7 +34,7 @@ REDACTED_TABLES: set[str] = {
 
 SKIPPED_TABLES: set[str] = {
     "alembic_version",
-    "repository_file",  # This table is massive
+    "repository_file",  # This table is massive, skip it for now.
 }
 
 BATCH_SIZE: int = 2**20  # 1,048,576 rows per batch
@@ -43,7 +44,6 @@ BATCH_SIZE: int = 2**20  # 1,048,576 rows per batch
 
 @app.command()
 def upload_to_huggingface(
-    repo_id: str = "evamxb/rs-graph-v2",
     use_prod: bool = False,
     redact: bool = True,
 ) -> None:
@@ -54,6 +54,12 @@ def upload_to_huggingface(
     Requires authentication via `huggingface-cli login` or the HF_TOKEN
     environment variable.
     """
+    # Decide repo id based on redact flag
+    if redact:
+        repo_id = "evamxb/rs-graph-v2-redacted"
+    else:
+        repo_id = "evamxb/rs-graph-v2-full"
+
     # Load environment variables from .env file, if it exists
     load_dotenv()
 
@@ -61,9 +67,18 @@ def upload_to_huggingface(
     if not os.getenv("HF_TOKEN"):
         raise ValueError("Environment variable 'HF_TOKEN' is not set")
 
+    print(f"Will upload dataset to HuggingFace Hub repo: {repo_id}")
+
     # Output directory
-    output_dir = Path("rs-graph-v2-hf-upload/")
-    output_dir.mkdir(exist_ok=True)
+    redact_flag = "redacted" if redact else "full"
+    output_dir = Path(f"rs-graph-v2-hf-upload-{redact_flag}/")
+
+    # Remove existing output directory if it exists to ensure a clean slate
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+
+    # Remake
+    output_dir.mkdir()
 
     engine = get_engine(use_prod=use_prod)
     table_names = sa_inspect(engine).get_table_names()
@@ -96,7 +111,7 @@ def upload_to_huggingface(
             continue
 
         batch_dir = output_dir / f"{table_name}_batches"
-        batch_dir.mkdir(exist_ok=True)
+        batch_dir.mkdir()
 
         for i, offset in tqdm(
             enumerate(range(0, row_count, BATCH_SIZE)),

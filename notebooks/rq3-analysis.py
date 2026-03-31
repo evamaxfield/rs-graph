@@ -15,6 +15,8 @@ import polars as pl
 import seaborn as sns
 import statsmodels.formula.api as smf
 import typer
+from scipy.stats import chi2_contingency, mannwhitneyu
+from scipy.stats.contingency import association
 from tqdm import tqdm
 
 from rs_graph.bin.typer_utils import setup_logger
@@ -158,6 +160,7 @@ def load_pairs() -> pl.DataFrame:
                 pl.col("fwci").alias("document_fwci"),
                 pl.col("is_open_access").alias("document_is_open_access"),
                 pl.col("publication_date").alias("document_publication_date"),
+                pl.col("document_type").alias("document_type"),
             ).with_columns(normalize_doi_col("document_doi").alias("document_doi")),
             on="document_id",
             how="left",
@@ -1951,6 +1954,807 @@ def _run_logistic_regressions(
 
 
 ###############################################################################
+# Extended Analyses (CCR, Temporal, Citation Classes, FWMP/FWIP)
+###############################################################################
+
+
+def _compute_ccr_for_pair(
+    im_records: list[PairwiseSoftwareRecord],
+    dm_records: list[PairwiseSoftwareRecord],
+) -> tuple[float, float, float]:
+    """Compute Credit Coverage Ratio for a single pair.
+
+    CCR = |mentions ∩ (imports ∪ deps)| / |imports ∪ deps|
+
+    Returns (ccr, ccr_imports, ccr_deps).
+    """
+    im_matched = {r.normalized_name for r in im_records if r.status == "matched"}
+    dm_matched = {r.normalized_name for r in dm_records if r.status == "matched"}
+    all_imports = {
+        r.normalized_name for r in im_records if r.status in ("matched", "source_a_only")
+    }
+    all_deps = {
+        r.normalized_name for r in dm_records if r.status in ("matched", "source_a_only")
+    }
+
+    code_union = all_imports | all_deps
+    credited = im_matched | dm_matched
+
+    ccr = len(credited) / len(code_union) if code_union else float("nan")
+    ccr_imports = len(im_matched) / len(all_imports) if all_imports else float("nan")
+    ccr_deps = len(dm_matched) / len(all_deps) if all_deps else float("nan")
+    return ccr, ccr_imports, ccr_deps
+
+
+def _write_ccr_analysis(
+    results_df: pl.DataFrame,
+    filter_mode: str,
+    mode_path: Path,
+) -> None:
+    """Write Credit Coverage Ratio analysis to file."""
+    from scipy.stats import kruskal
+
+    if filter_mode == "complete-cases":
+        df = results_df.filter((pl.col("im_n_imports") > 0) | (pl.col("dm_n_deps") > 0)).filter(
+            pl.col("ccr").is_not_nan()
+        )
+    else:
+        df = results_df.filter(pl.col("ccr").is_not_nan())
+
+    lines: list[str] = [
+        "=" * 70,
+        f"  Credit Coverage Ratio Analysis  ({filter_mode}, N = {df.height})",
+        "=" * 70,
+        "",
+        "─" * 70,
+        "  Overall CCR Distribution",
+        "─" * 70,
+    ]
+
+    for col, label in [
+        ("ccr", "CCR (combined)"),
+        ("ccr_imports", "CCR (imports only)"),
+        ("ccr_deps", "CCR (deps only)"),
+    ]:
+        lines.append(_print_descriptive_stats(df, col, label))
+
+    # Kruskal-Wallis across top fields
+    lines.extend(["", "─" * 70, "  Kruskal-Wallis: CCR across Fields", "─" * 70])
+    top_fields = (
+        df.group_by("document_field_name")
+        .agg(pl.len().alias("n"))
+        .sort("n", descending=True)
+        .head(10)["document_field_name"]
+        .to_list()
+    )
+    field_groups = []
+    for field in top_fields:
+        if field is None:
+            continue
+        vals = df.filter(pl.col("document_field_name") == field)["ccr"].drop_nulls().to_list()
+        vals = [v for v in vals if not np.isnan(v)]
+        if vals:
+            field_groups.append(vals)
+
+    if len(field_groups) >= 2:
+        h_stat, p_val = kruskal(*field_groups)
+        p_str = f"{p_val:.4e}" if p_val >= 0.0001 else "<.0001"
+        lines.append(f"  H-statistic = {h_stat:.4f}, p = {p_str}")
+    else:
+        lines.append("  Insufficient field groups for Kruskal-Wallis test")
+
+    # Mann-Whitney U for binary splits
+    lines.extend(["", "─" * 70, "  Mann-Whitney U: Binary Splits", "─" * 70])
+
+    binary_splits: list[tuple[str, str, pl.Expr, pl.Expr]] = [
+        (
+            "Shared vs Mined",
+            "dataset_source_name",
+            pl.col("dataset_source_name") == "mined",
+            pl.col("dataset_source_name") != "mined",
+        ),
+        (
+            "Open Access vs Closed",
+            "document_is_open_access",
+            pl.col("document_is_open_access") == True,  # noqa: E712
+            pl.col("document_is_open_access") == False,  # noqa: E712
+        ),
+    ]
+    for split_label, _col, expr_a, expr_b in binary_splits:
+        vals_a = [v for v in df.filter(expr_a)["ccr"].to_list() if not np.isnan(v)]
+        vals_b = [v for v in df.filter(expr_b)["ccr"].to_list() if not np.isnan(v)]
+        if len(vals_a) >= 5 and len(vals_b) >= 5:
+            u_stat, p_val = mannwhitneyu(vals_a, vals_b, alternative="two-sided")
+            p_str = f"{p_val:.4e}" if p_val >= 0.0001 else "<.0001"
+            lines.append(
+                f"  {split_label}: U = {u_stat:.1f}, p = {p_str}, "
+                f"median_a = {np.median(vals_a):.4f}, median_b = {np.median(vals_b):.4f}"
+            )
+        else:
+            lines.append(f"  {split_label}: insufficient data")
+
+    # Breakdowns by grouping variables
+    grouping_cols: list[tuple[str, str, int | None]] = [
+        ("document_field_name", "Field", 15),
+        ("document_publication_year", "Publication Year", None),
+        ("repository_primary_language", "Language", 10),
+        ("dataset_source_name", "Dataset Source", None),
+    ]
+    for col, col_label, tnf in grouping_cols:
+        lines.append(_print_group_breakdown(df, col, col_label, "ccr", "ccr", top_n_filter=tnf))
+
+    text = "\n".join(lines)
+    print(text)
+    with open(mode_path / "rq3-ccr-analysis.txt", "w") as f:
+        f.write(text)
+    log.info(f"[{filter_mode}] Saved rq3-ccr-analysis.txt")
+
+
+def _write_temporal_trends(
+    results_df: pl.DataFrame,
+    filter_mode: str,
+    mode_path: Path,
+) -> None:
+    """Write temporal trend analysis for CCR and software counts."""
+    from scipy.stats import theilslopes
+
+    df = results_df.filter(pl.col("ccr").is_not_nan())
+
+    year_stats = (
+        df.group_by("document_publication_year")
+        .agg(
+            pl.col("ccr").median().alias("median_ccr"),
+            pl.col("ccr").mean().alias("mean_ccr"),
+            pl.col("im_n_imports").median().alias("median_imports"),
+            pl.col("dm_n_deps").median().alias("median_deps"),
+            pl.col("im_n_mentions").median().alias("median_mentions"),
+            pl.col("im_n_matched").median().alias("median_matched_im"),
+            pl.col("dm_n_matched").median().alias("median_matched_dm"),
+            pl.len().alias("n_pairs"),
+        )
+        .filter(pl.col("n_pairs") >= 5)
+        .sort("document_publication_year")
+    )
+
+    lines: list[str] = [
+        "=" * 70,
+        f"  Temporal Trends Analysis  ({filter_mode})",
+        "=" * 70,
+        "",
+    ]
+
+    # Yearly table
+    lines.append(
+        f"  {'Year':<6} {'N':>6} {'CCR med':>8} {'CCR mean':>9} "
+        f"{'Imp med':>8} {'Dep med':>8} {'Men med':>8}"
+    )
+    lines.append(f"  {'─' * 60}")
+    for row in year_stats.iter_rows(named=True):
+        year = row["document_publication_year"]
+        if year is None:
+            continue
+        lines.append(
+            f"  {year:<6} {row['n_pairs']:>6} "
+            f"{row['median_ccr'] or 0:>8.4f} {row['mean_ccr'] or 0:>9.4f} "
+            f"{row['median_imports'] or 0:>8.1f} {row['median_deps'] or 0:>8.1f} "
+            f"{row['median_mentions'] or 0:>8.1f}"
+        )
+
+    # Theil-Sen regression: CCR on year
+    years = year_stats["document_publication_year"].drop_nulls().to_list()
+    ccr_medians = year_stats["median_ccr"].drop_nulls().to_list()
+    if len(years) >= 3:
+        slope, intercept, lo_slope, hi_slope = theilslopes(ccr_medians, years)
+        lines.extend(
+            [
+                "",
+                "─" * 70,
+                "  Theil-Sen Regression: median CCR ~ year",
+                "─" * 70,
+                f"  Slope = {slope:.6f} per year",
+                f"  95% CI: [{lo_slope:.6f}, {hi_slope:.6f}]",
+                f"  Intercept = {intercept:.4f}",
+                f"  Interpretation: {'increasing' if slope > 0 else 'decreasing'} trend "
+                f"({'significant' if lo_slope > 0 or hi_slope < 0 else 'not significant'} "
+                f"at 95% CI)",
+            ]
+        )
+
+        # Decomposition: denominator vs numerator slopes
+        import_medians = year_stats["median_imports"].drop_nulls().to_list()
+        dep_medians = year_stats["median_deps"].drop_nulls().to_list()
+        mention_medians = year_stats["median_mentions"].drop_nulls().to_list()
+
+        lines.extend(["", "  Decomposition (Theil-Sen slopes of component medians):"])
+        for label, vals in [
+            ("Imports", import_medians),
+            ("Dependencies", dep_medians),
+            ("Mentions", mention_medians),
+        ]:
+            if len(vals) >= 3:
+                s, _i, _lo, _hi = theilslopes(vals, years[: len(vals)])
+                lines.append(f"    {label}: slope = {s:.4f} per year")
+    else:
+        lines.append("\n  Insufficient years for Theil-Sen regression")
+
+    text = "\n".join(lines)
+    print(text)
+    with open(mode_path / "rq3-temporal-trends.txt", "w") as f:
+        f.write(text)
+    log.info(f"[{filter_mode}] Saved rq3-temporal-trends.txt")
+
+
+def _plot_temporal_trends(
+    results_df: pl.DataFrame,
+    filter_mode: str,
+    mode_path: Path,
+) -> None:
+    """Plot temporal trends for CCR and software counts."""
+    from scipy.stats import theilslopes
+
+    df = results_df.filter(pl.col("ccr").is_not_nan())
+
+    year_stats = (
+        df.group_by("document_publication_year")
+        .agg(
+            pl.col("ccr").median().alias("median_ccr"),
+            pl.col("ccr").mean().alias("mean_ccr"),
+            pl.col("ccr").std().alias("std_ccr"),
+            pl.col("im_n_imports").median().alias("median_imports"),
+            pl.col("dm_n_deps").median().alias("median_deps"),
+            pl.col("im_n_mentions").median().alias("median_mentions"),
+            pl.len().alias("n_pairs"),
+        )
+        .filter(pl.col("n_pairs") >= 5)
+        .sort("document_publication_year")
+    )
+
+    years = year_stats["document_publication_year"].drop_nulls().to_list()
+    if len(years) < 2:
+        log.warning("Insufficient data for temporal trend plots, skipping.")
+        return
+
+    # Panel 1: CCR median by year with Theil-Sen line
+    ccr_medians = year_stats["median_ccr"].to_list()
+    ccr_stds = [s or 0.0 for s in year_stats["std_ccr"].to_list()]
+    ns = year_stats["n_pairs"].to_list()
+    ci = [1.96 * s / (n**0.5) for s, n in zip(ccr_stds, ns, strict=False)]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+
+    ax1.plot(years, ccr_medians, marker="o", linewidth=2, label="Median CCR")
+    lower = [max(0.0, m - c) for m, c in zip(ccr_medians, ci, strict=False)]
+    upper = [m + c for m, c in zip(ccr_medians, ci, strict=False)]
+    ax1.fill_between(years, lower, upper, alpha=0.2)
+
+    if len(years) >= 3:
+        slope, intercept, _lo, _hi = theilslopes(ccr_medians, years)
+        trend_y = [intercept + slope * y for y in years]
+        ax1.plot(years, trend_y, "--", color="red", alpha=0.7, label="Theil-Sen trend")
+
+    ax1.set_xlabel("Publication Year")
+    ax1.set_ylabel("Median CCR")
+    ax1.set_title("Credit Coverage Ratio Over Time")
+    ax1.set_ylim(bottom=0)
+    ax1.legend()
+
+    # Panel 2: Counts over time
+    ax2.plot(
+        years,
+        year_stats["median_imports"].to_list(),
+        marker="s",
+        label="Imports",
+    )
+    ax2.plot(
+        years,
+        year_stats["median_deps"].to_list(),
+        marker="^",
+        label="Dependencies",
+    )
+    ax2.plot(
+        years,
+        year_stats["median_mentions"].to_list(),
+        marker="D",
+        label="Mentions",
+    )
+    ax2.set_xlabel("Publication Year")
+    ax2.set_ylabel("Median Count per Pair")
+    ax2.set_title("Software Counts Over Time")
+    ax2.legend()
+
+    plt.tight_layout()
+    fig.savefig(mode_path / "rq3-temporal-trends.png", bbox_inches="tight")
+    plt.close(fig)
+    log.info(f"[{filter_mode}] Saved rq3-temporal-trends.png")
+
+
+# ── Citation Classes ────────────────────────────────────────────────────────
+
+_CITATION_CLASSES: list[tuple[int, str, bool, bool, bool]] = [
+    # (class_id, label, in_mentions, in_imports, in_deps)
+    (1, "Fully visible", True, True, True),
+    (2, "Mentioned & imported", True, True, False),
+    (3, "Mentioned & declared", True, False, True),
+    (4, "Cited but not in code", True, False, False),
+    (5, "Used & declared, uncredited", False, True, True),
+    (6, "Used but uncredited", False, True, False),
+    (7, "Declared but invisible", False, False, True),
+]
+
+
+def _compute_citation_classes(
+    all_im_records: list[dict],
+    all_dm_records: list[dict],
+    all_id_records: list[dict],
+    results_df: pl.DataFrame,
+    filter_mode: str,
+) -> tuple[pl.DataFrame, dict[str, list[tuple[str, int]]]]:
+    """Classify each unique software entity by presence across three views.
+
+    Returns:
+        class_df: DataFrame with class_id, class_label, n_unique_packages, n_total_occurrences
+        top_per_class: dict mapping class_label to list of (name, occurrence_count)
+    """
+    # Determine eligible doc_ids
+    if filter_mode == "complete-cases":
+        eligible = set(
+            results_df.filter(
+                ((pl.col("im_n_imports") > 0) & (pl.col("im_n_mentions") > 0))
+                | ((pl.col("id_n_imports") > 0) & (pl.col("id_n_deps") > 0))
+                | ((pl.col("dm_n_deps") > 0) & (pl.col("dm_n_mentions") > 0))
+            )["document_id"].to_list()
+        )
+    else:
+        eligible = set(
+            results_df.filter(
+                (pl.col("im_n_imports") > 0)
+                | (pl.col("im_n_mentions") > 0)
+                | (pl.col("dm_n_deps") > 0)
+            )["document_id"].to_list()
+        )
+
+    # Build per-software presence sets and occurrence counts
+    in_mentions: set[str] = set()
+    in_imports: set[str] = set()
+    in_deps: set[str] = set()
+    occurrence_counts: Counter[str] = Counter()
+
+    for rec in all_im_records:
+        if rec["document_id"] not in eligible:
+            continue
+        norm = rec["normalized_name"]
+        if rec["status"] in ("matched", "source_a_only"):
+            in_imports.add(norm)
+            occurrence_counts[norm] += 1
+        if rec["status"] in ("matched", "source_b_only"):
+            in_mentions.add(norm)
+            if rec["status"] == "source_b_only":
+                occurrence_counts[norm] += 1
+
+    for rec in all_dm_records:
+        if rec["document_id"] not in eligible:
+            continue
+        norm = rec["normalized_name"]
+        if rec["status"] in ("matched", "source_a_only"):
+            in_deps.add(norm)
+            occurrence_counts[norm] += 1
+        if rec["status"] in ("matched", "source_b_only"):
+            in_mentions.add(norm)
+            if rec["status"] == "source_b_only":
+                occurrence_counts[norm] += 1
+
+    for rec in all_id_records:
+        if rec["document_id"] not in eligible:
+            continue
+        norm = rec["normalized_name"]
+        if rec["status"] in ("matched", "source_a_only"):
+            in_imports.add(norm)
+        if rec["status"] in ("matched", "source_b_only"):
+            in_deps.add(norm)
+
+    # Classify each software entity
+    all_software = in_mentions | in_imports | in_deps
+    class_counts: dict[int, int] = {c[0]: 0 for c in _CITATION_CLASSES}
+    class_occurrences: dict[int, int] = {c[0]: 0 for c in _CITATION_CLASSES}
+    software_to_class: dict[str, int] = {}
+    top_per_class: dict[str, list[tuple[str, int]]] = {}
+
+    for norm in all_software:
+        m = norm in in_mentions
+        i = norm in in_imports
+        d = norm in in_deps
+        for class_id, _label, cm, ci, cd in _CITATION_CLASSES:
+            if m == cm and i == ci and d == cd:
+                class_counts[class_id] += 1
+                class_occurrences[class_id] += occurrence_counts.get(norm, 0)
+                software_to_class[norm] = class_id
+                break
+
+    # Build top-10 per class
+    for class_id, label, *_ in _CITATION_CLASSES:
+        class_software = [
+            (norm, occurrence_counts.get(norm, 0))
+            for norm, cid in software_to_class.items()
+            if cid == class_id
+        ]
+        class_software.sort(key=lambda x: x[1], reverse=True)
+        top_per_class[label] = class_software[:10]
+
+    rows = []
+    for class_id, label, *_ in _CITATION_CLASSES:
+        rows.append(
+            {
+                "class_id": class_id,
+                "class_label": label,
+                "n_unique_packages": class_counts[class_id],
+                "n_total_occurrences": class_occurrences[class_id],
+            }
+        )
+
+    return pl.DataFrame(rows), top_per_class
+
+
+def _write_citation_classes(
+    all_im_records: list[dict],
+    all_dm_records: list[dict],
+    all_id_records: list[dict],
+    results_df: pl.DataFrame,
+    filter_mode: str,
+    mode_path: Path,
+) -> None:
+    """Compute and write software citation class analysis."""
+    class_df, top_per_class = _compute_citation_classes(
+        all_im_records, all_dm_records, all_id_records, results_df, filter_mode
+    )
+
+    total_packages = class_df["n_unique_packages"].sum()
+    total_occurrences = class_df["n_total_occurrences"].sum()
+
+    lines: list[str] = [
+        "=" * 70,
+        f"  Software Citation Classes  ({filter_mode})",
+        f"  Total unique packages: {total_packages:,}",
+        f"  Total occurrences: {total_occurrences:,}",
+        "=" * 70,
+        "",
+        f"  {'#':<3} {'Class':<35} {'Packages':>10} {'%':>7} {'Occurrences':>13} {'%':>7}",
+        f"  {'─' * 78}",
+    ]
+
+    for row in class_df.iter_rows(named=True):
+        pkg_pct = row["n_unique_packages"] / total_packages * 100 if total_packages > 0 else 0
+        occ_pct = (
+            row["n_total_occurrences"] / total_occurrences * 100 if total_occurrences > 0 else 0
+        )
+        lines.append(
+            f"  {row['class_id']:<3} {row['class_label']:<35} "
+            f"{row['n_unique_packages']:>10,} {pkg_pct:>6.1f}% "
+            f"{row['n_total_occurrences']:>13,} {occ_pct:>6.1f}%"
+        )
+
+    # Top 10 per class
+    lines.extend(["", "─" * 70, "  Top 10 Packages per Class", "─" * 70])
+    for class_id, label, *_ in _CITATION_CLASSES:
+        top = top_per_class.get(label, [])
+        if not top:
+            continue
+        lines.append(f"\n  [{class_id}] {label}:")
+        for rank, (norm, count) in enumerate(top, 1):
+            display = prep_name_for_printing(norm)
+            lines.append(f"    {rank:>2}. {display:<40} ({count:,} occurrences)")
+
+    text = "\n".join(lines)
+    print(text)
+    with open(mode_path / "rq3-citation-classes.txt", "w") as f:
+        f.write(text)
+    log.info(f"[{filter_mode}] Saved rq3-citation-classes.txt")
+
+
+# ── Field-Weighted Mention/Import Prevalence ────────────────────────────────
+
+
+def _compute_fwmp_fwip(
+    all_im_records: list[dict],
+    results_df: pl.DataFrame,
+    pairs: pl.DataFrame,
+    filter_mode: str,
+    min_imports: int = 10,
+    min_stratum_pairs: int = 5,
+) -> pl.DataFrame:
+    """Compute Field-Weighted Mention Prevalence and Import Prevalence.
+
+    For each software with >=min_imports, compute FWMP and FWIP using
+    per-(field, year) stratum normalization.
+    """
+    # Build pair metadata lookup: document_id -> (field, year)
+    pair_meta: dict[int, tuple[str | None, int | None]] = {}
+    for row in results_df.iter_rows(named=True):
+        pair_meta[row["document_id"]] = (
+            row["document_field_name"],
+            row["document_publication_year"],
+        )
+
+    # Determine eligible doc_ids
+    if filter_mode == "complete-cases":
+        eligible = set(
+            results_df.filter((pl.col("im_n_imports") > 0) & (pl.col("im_n_mentions") > 0))[
+                "document_id"
+            ].to_list()
+        )
+    else:
+        eligible = set(
+            results_df.filter((pl.col("im_n_imports") > 0) | (pl.col("im_n_mentions") > 0))[
+                "document_id"
+            ].to_list()
+        )
+
+    # Build per-software, per-stratum counts from IM records
+    # For each (software, field, year): count imported, count mentioned
+    StratumKey = tuple[str | None, int | None]
+    sw_stratum_imported: dict[str, dict[StratumKey, int]] = {}
+    sw_stratum_mentioned: dict[str, dict[StratumKey, int]] = {}
+    stratum_all_imported: dict[StratumKey, int] = Counter()
+    stratum_all_mentioned: dict[StratumKey, int] = Counter()
+
+    for rec in all_im_records:
+        doc_id = rec["document_id"]
+        if doc_id not in eligible:
+            continue
+        meta = pair_meta.get(doc_id)
+        if meta is None or meta[0] is None or meta[1] is None:
+            continue
+        stratum = meta  # (field, year)
+        norm = rec["normalized_name"]
+
+        if rec["status"] in ("matched", "source_a_only"):
+            sw_stratum_imported.setdefault(norm, Counter())[stratum] += 1
+            stratum_all_imported[stratum] += 1
+        if rec["status"] == "matched":
+            sw_stratum_mentioned.setdefault(norm, Counter())[stratum] += 1
+            stratum_all_mentioned[stratum] += 1
+
+    # Filter to software with >= min_imports
+    total_imports: dict[str, int] = {
+        sw: sum(counts.values()) for sw, counts in sw_stratum_imported.items()
+    }
+    qualifying = {sw for sw, n in total_imports.items() if n >= min_imports}
+
+    # Compute expected mention rate per stratum (mean across all software in stratum)
+    # expected_rate_k = total_mentioned_in_k / total_imported_in_k
+    stratum_expected_rate: dict[StratumKey, float] = {}
+    for stratum in stratum_all_imported:
+        n_imp = stratum_all_imported[stratum]
+        n_men = stratum_all_mentioned.get(stratum, 0)
+        stratum_expected_rate[stratum] = n_men / n_imp if n_imp > 0 else 0.0
+
+    # Compute FWMP for each qualifying software
+    rows: list[dict] = []
+    for sw in qualifying:
+        strata = sw_stratum_imported.get(sw, {})
+        total_weight = 0.0
+        weighted_ratio_sum = 0.0
+        n_strata_used = 0
+        fields_seen: set[str | None] = set()
+
+        for stratum, n_imported_here in strata.items():
+            if n_imported_here < 1:
+                continue
+            # Check stratum has enough total pairs
+            total_in_stratum = stratum_all_imported.get(stratum, 0)
+            if total_in_stratum < min_stratum_pairs:
+                continue
+
+            expected = stratum_expected_rate.get(stratum, 0.0)
+            if expected <= 0:
+                continue
+
+            n_mentioned_here = sw_stratum_mentioned.get(sw, {}).get(stratum, 0)
+            observed_rate = n_mentioned_here / n_imported_here
+            ratio = observed_rate / expected
+
+            weighted_ratio_sum += n_imported_here * ratio
+            total_weight += n_imported_here
+            n_strata_used += 1
+            fields_seen.add(stratum[0])
+
+        fwmp = weighted_ratio_sum / total_weight if total_weight > 0 else float("nan")
+
+        # FWIP: among pairs that mention S, what fraction also import S,
+        # relative to the stratum average import rate given mention
+        # For simplicity and symmetry, compute FWIP as the analogous metric
+        # where we ask: how prevalent is this import relative to expected?
+        # FWIP = weighted_avg of (observed_import_rate / expected_import_rate)
+        # But since we condition on imports in the main loop, FWIP simplifies to:
+        # the absolute prevalence as import rate (fraction of all pairs importing S)
+        total_mentioned = sum(sw_stratum_mentioned.get(sw, {}).values())
+
+        rows.append(
+            {
+                "normalized_name": sw,
+                "n_total_imports": total_imports[sw],
+                "n_total_mentions": total_mentioned,
+                "fwmp": fwmp,
+                "n_strata": n_strata_used,
+                "n_fields": len(fields_seen - {None}),
+            }
+        )
+
+    result = pl.DataFrame(rows)
+
+    # Compute FWIP as the raw import prevalence (fraction of eligible pairs importing S)
+    n_eligible = len(eligible)
+    if n_eligible > 0:
+        result = result.with_columns(
+            (pl.col("n_total_imports") / n_eligible).alias("fwip"),
+        )
+    else:
+        result = result.with_columns(pl.lit(float("nan")).alias("fwip"))
+
+    return result.sort("n_total_imports", descending=True)
+
+
+def _plot_fwmp_vs_fwip(
+    fwmp_fwip_df: pl.DataFrame,
+    mode_path: Path,
+) -> None:
+    """Scatter plot of FWMP vs FWIP with fair-credit diagonal."""
+    df = fwmp_fwip_df.filter(
+        pl.col("fwmp").is_not_nan()
+        & pl.col("fwip").is_not_nan()
+        & (pl.col("fwmp") > 0)
+        & (pl.col("fwip") > 0)
+    )
+    if df.height < 5:
+        log.warning("Insufficient data for FWMP vs FWIP scatter, skipping.")
+        return
+
+    fwmp_log = np.log10(1 + df["fwmp"].to_numpy())
+    fwip_log = np.log10(1 + df["fwip"].to_numpy())
+    names = df["normalized_name"].to_list()
+    n_imports = df["n_total_imports"].to_list()
+
+    fig, ax = plt.subplots(figsize=(9, 8))
+    scatter = ax.scatter(
+        fwip_log,
+        fwmp_log,
+        s=np.clip(np.array(n_imports) / 5, 5, 200),
+        alpha=0.4,
+        edgecolors="white",
+        linewidth=0.5,
+    )
+
+    # Fair credit diagonal
+    lim_min = min(fwip_log.min(), fwmp_log.min()) - 0.05
+    lim_max = max(fwip_log.max(), fwmp_log.max()) + 0.05
+    ax.plot([lim_min, lim_max], [lim_min, lim_max], "--", color="gray", alpha=0.5)
+
+    # Label outliers (top 5 most overcredited and undercredited)
+    ratio = fwmp_log - fwip_log
+    top_over = np.argsort(ratio)[-5:]
+    top_under = np.argsort(ratio)[:5]
+    for idx in list(top_over) + list(top_under):
+        display = prep_name_for_printing(names[idx])
+        ax.annotate(
+            display,
+            (fwip_log[idx], fwmp_log[idx]),
+            fontsize=7,
+            alpha=0.8,
+            textcoords="offset points",
+            xytext=(5, 5),
+        )
+
+    ax.set_xlabel("log10(1 + FWIP)")
+    ax.set_ylabel("log10(1 + FWMP)")
+    ax.set_title("Field-Weighted Mention vs Import Prevalence")
+
+    # Quadrant labels
+    ax.text(
+        0.05,
+        0.95,
+        "Overcredited",
+        transform=ax.transAxes,
+        fontsize=9,
+        alpha=0.5,
+        va="top",
+    )
+    ax.text(
+        0.95,
+        0.05,
+        "Undercredited",
+        transform=ax.transAxes,
+        fontsize=9,
+        alpha=0.5,
+        ha="right",
+    )
+
+    plt.tight_layout()
+    fig.savefig(mode_path / "rq3-fwmp-vs-fwip-scatter.png", bbox_inches="tight")
+    plt.close(fig)
+    log.info("Saved rq3-fwmp-vs-fwip-scatter.png")
+
+
+def _write_fwmp_fwip_analysis(
+    all_im_records: list[dict],
+    results_df: pl.DataFrame,
+    pairs: pl.DataFrame,
+    filter_mode: str,
+    mode_path: Path,
+) -> None:
+    """Orchestrate FWMP/FWIP computation, reporting, and plotting."""
+    log.info(f"[{filter_mode}] Computing FWMP/FWIP...")
+    fwmp_fwip_df = _compute_fwmp_fwip(all_im_records, results_df, pairs, filter_mode)
+
+    valid = fwmp_fwip_df.filter(pl.col("fwmp").is_not_nan())
+    lines: list[str] = [
+        "=" * 70,
+        f"  Field-Weighted Mention/Import Prevalence  ({filter_mode})",
+        f"  Qualifying software (>=10 imports): {fwmp_fwip_df.height}",
+        f"  With valid FWMP: {valid.height}",
+        "=" * 70,
+        "",
+    ]
+
+    # Overall FWMP distribution
+    if valid.height > 0:
+        lines.append(_print_descriptive_stats(valid, "fwmp", "FWMP"))
+        lines.append(_print_descriptive_stats(valid, "fwip", "FWIP"))
+        lines.append(_print_descriptive_stats(valid, "n_strata", "Strata per software"))
+        lines.append(_print_descriptive_stats(valid, "n_fields", "Fields per software"))
+
+    # Top overcredited (high FWMP)
+    col_w = 35
+    overcredited = valid.sort("fwmp", descending=True).head(20)
+    lines.extend(
+        [
+            "",
+            "─" * 70,
+            "  Top 20 Overcredited (highest FWMP — mentioned more than expected)",
+            "─" * 70,
+            f"  {'Package':<{col_w}} {'FWMP':>8} {'FWIP':>8} "
+            f"{'Imports':>8} {'Mentions':>8} {'Fields':>6}",
+            f"  {'─' * 76}",
+        ]
+    )
+    for row in overcredited.iter_rows(named=True):
+        display = prep_name_for_printing(row["normalized_name"])[:col_w]
+        lines.append(
+            f"  {display:<{col_w}} {row['fwmp']:>8.3f} {row['fwip']:>8.6f} "
+            f"{row['n_total_imports']:>8,} {row['n_total_mentions']:>8,} "
+            f"{row['n_fields']:>6}"
+        )
+
+    # Top undercredited (low FWMP, high imports)
+    undercredited = valid.filter(pl.col("n_total_imports") >= 50).sort("fwmp").head(20)
+    lines.extend(
+        [
+            "",
+            "─" * 70,
+            "  Top 20 Undercredited (lowest FWMP, >=50 imports)",
+            "─" * 70,
+            f"  {'Package':<{col_w}} {'FWMP':>8} {'FWIP':>8} "
+            f"{'Imports':>8} {'Mentions':>8} {'Fields':>6}",
+            f"  {'─' * 76}",
+        ]
+    )
+    for row in undercredited.iter_rows(named=True):
+        display = prep_name_for_printing(row["normalized_name"])[:col_w]
+        lines.append(
+            f"  {display:<{col_w}} {row['fwmp']:>8.3f} {row['fwip']:>8.6f} "
+            f"{row['n_total_imports']:>8,} {row['n_total_mentions']:>8,} "
+            f"{row['n_fields']:>6}"
+        )
+
+    text = "\n".join(lines)
+    print(text)
+    with open(mode_path / "rq3-fwmp-fwip.txt", "w") as f:
+        f.write(text)
+    log.info(f"[{filter_mode}] Saved rq3-fwmp-fwip.txt")
+
+    # Scatter plot
+    _plot_fwmp_vs_fwip(fwmp_fwip_df, mode_path)
+
+
+###############################################################################
 # Pipeline Helpers
 ###############################################################################
 
@@ -1968,6 +2772,225 @@ def _build_lookup(
         lut[key][0].append(row["software_name"])
         lut[key][1].append(row["software_name_normalized"])
     return lut
+
+
+###############################################################################
+# Processing-Time Bias Check
+###############################################################################
+
+_BIAS_NUMERIC_FEATURES = [
+    "document_cited_by_count",
+    "document_fwci",
+    "document_n_authors",
+    "repository_stargazers_count",
+    "repository_commits_count",
+    "repository_n_contributors",
+]
+
+_BIAS_CATEGORICAL_FEATURES = [
+    "document_is_open_access",
+    "document_field_name",
+    "document_type",
+    "repository_primary_language",
+]
+
+
+def _effect_magnitude(val: float) -> str:
+    """Classify absolute effect size magnitude."""
+    val = abs(val)
+    if val < 0.1:
+        return "negligible"
+    if val < 0.3:
+        return "small"
+    if val < 0.5:
+        return "medium"
+    return "large"
+
+
+def _bias_numeric_tests(
+    group_yes: pl.DataFrame,
+    group_no: pl.DataFrame,
+    columns: list[str],
+) -> pl.DataFrame:
+    """Run Mann-Whitney U tests on numeric features for the bias check."""
+    n_tests = len(columns)
+    rows: list[dict[str, str | int | float]] = []
+
+    for col_name in columns:
+        yes_vals = group_yes[col_name].drop_nulls().drop_nans().to_numpy()
+        no_vals = group_no[col_name].drop_nulls().drop_nans().to_numpy()
+
+        if len(yes_vals) < 2 or len(no_vals) < 2:
+            log.warning("Skipping %s: too few non-null values.", col_name)
+            continue
+
+        u_stat, p_val = mannwhitneyu(yes_vals, no_vals, alternative="two-sided")
+        n1, n2 = len(yes_vals), len(no_vals)
+        r = 1 - (2 * u_stat) / (n1 * n2)
+        p_bonf = min(p_val * n_tests, 1.0)
+
+        rows.append(
+            {
+                "feature": col_name,
+                "n_has": n1,
+                "n_missing": n2,
+                "median_has": float(np.median(yes_vals)),
+                "median_missing": float(np.median(no_vals)),
+                "mean_has": float(np.mean(yes_vals)),
+                "mean_missing": float(np.mean(no_vals)),
+                "u_statistic": float(u_stat),
+                "p_value": float(p_val),
+                "p_value_bonferroni": float(p_bonf),
+                "rank_biserial_r": round(r, 4),
+                "direction": "higher_in_has" if r > 0 else "higher_in_missing",
+                "effect_magnitude": _effect_magnitude(r),
+            }
+        )
+
+    return pl.DataFrame(rows).sort("p_value")
+
+
+def _bias_categorical_tests(
+    work: pl.DataFrame,
+    top_n: int,
+) -> pl.DataFrame:
+    """Run Chi-square tests on categorical features for the bias check."""
+    n_tests = len(_BIAS_CATEGORICAL_FEATURES)
+    rows: list[dict[str, str | int | float]] = []
+
+    for cat_col in _BIAS_CATEGORICAL_FEATURES:
+        if cat_col not in work.columns:
+            continue
+
+        cat_work = work.with_columns(pl.col(cat_col).fill_null("Unknown"))
+        top_values = (
+            cat_work.filter(pl.col(cat_col).is_not_null())[cat_col]
+            .value_counts(sort=True)
+            .head(top_n)[cat_col]
+            .to_list()
+        )
+        top_col = f"{cat_col}_top_n_plus_other"
+        cat_work = cat_work.with_columns(
+            pl.when(pl.col(cat_col).is_in(top_values))
+            .then(pl.col(cat_col))
+            .otherwise(pl.lit("Other"))
+            .alias(top_col)
+        )
+
+        crosstab = (
+            cat_work.group_by(["has_imports_or_deps", top_col])
+            .len()
+            .pivot(on=top_col, index="has_imports_or_deps", values="len")
+            .fill_null(0)
+        )
+
+        value_cols = [c for c in crosstab.columns if c != "has_imports_or_deps"]
+        table = crosstab.select(value_cols).to_numpy()
+
+        chi2, p_val, dof, _ = chi2_contingency(table)
+        v = association(table, method="cramer")
+        p_bonf = min(p_val * n_tests, 1.0)
+
+        rows.append(
+            {
+                "feature": cat_col,
+                "n_total": int(table.sum()),
+                "n_levels": len(value_cols),
+                "chi2": round(chi2, 2),
+                "dof": int(dof),
+                "p_value": float(p_val),
+                "p_value_bonferroni": float(p_bonf),
+                "cramers_v": round(v, 4),
+                "effect_magnitude": _effect_magnitude(v),
+            }
+        )
+
+    return pl.DataFrame(rows).sort("p_value")
+
+
+def _bias_significance_marker(p_bonf: float) -> str:
+    """Return significance stars for a Bonferroni-corrected p-value."""
+    if p_bonf < 0.001:
+        return "***"
+    if p_bonf < 0.01:
+        return "**"
+    if p_bonf < 0.05:
+        return "*"
+    return ""
+
+
+def _check_processing_bias(
+    pairs: pl.DataFrame,
+    imports_by_repo: dict[int, tuple[list[str], list[str]]],
+    deps_by_repo: dict[int, tuple[list[str], list[str]]],
+    output_path: Path,
+    top_n: int = 10,
+) -> None:
+    """Compare repo/article metrics between pairs with vs without imports or deps.
+
+    Import and dependency extraction was limited to repositories processable
+    within a 120s clone+process time limit. This check tests whether that
+    filter introduces systematic bias in observable metrics.
+    """
+    log.info("Running processing-time bias check...")
+
+    available_repo_ids = set(imports_by_repo.keys()) | set(deps_by_repo.keys())
+    work = pairs.with_columns(
+        pl.col("repository_id").is_in(list(available_repo_ids)).alias("has_imports_or_deps"),
+    )
+
+    group_yes = work.filter(pl.col("has_imports_or_deps"))
+    group_no = work.filter(~pl.col("has_imports_or_deps"))
+    n_yes, n_no = group_yes.height, group_no.height
+    log.info("Bias check groups — has imports/deps: %d, missing: %d", n_yes, n_no)
+
+    lines: list[str] = [
+        "Processing-Time Bias Check",
+        "=" * 60,
+        f"Repos with imports or deps available: {n_yes}",
+        f"Repos without imports or deps:        {n_no}",
+        "",
+    ]
+
+    # ── Numeric features: Mann-Whitney U ──
+    numeric_cols = [c for c in _BIAS_NUMERIC_FEATURES if c in work.columns]
+    numeric_df = _bias_numeric_tests(group_yes, group_no, numeric_cols)
+    numeric_df.write_csv(output_path / "rq3-processing-bias-numeric.csv")
+
+    lines.append("Numeric Features (Mann-Whitney U)")
+    lines.append("-" * 40)
+    for row in numeric_df.iter_rows(named=True):
+        sig = _bias_significance_marker(row["p_value_bonferroni"])
+        lines.append(
+            f"  {sig}{row['feature']}{sig}: "
+            f"r={row['rank_biserial_r']:.3f} ({row['effect_magnitude']}), "
+            f"{row['direction']}, "
+            f"median has={row['median_has']:.2f} vs missing={row['median_missing']:.2f}, "
+            f"p={row['p_value']:.2e} (Bonf: {row['p_value_bonferroni']:.2e})"
+        )
+    lines.append("")
+
+    # ── Categorical features: Chi-square ──
+    cat_df = _bias_categorical_tests(work, top_n)
+    cat_df.write_csv(output_path / "rq3-processing-bias-categorical.csv")
+
+    lines.append("Categorical Features (Chi-square)")
+    lines.append("-" * 40)
+    for row in cat_df.iter_rows(named=True):
+        sig = _bias_significance_marker(row["p_value_bonferroni"])
+        lines.append(
+            f"  {sig}{row['feature']}{sig}: "
+            f"Cramer's V={row['cramers_v']:.3f} ({row['effect_magnitude']}), "
+            f"chi2={row['chi2']:.1f}, dof={row['dof']}, "
+            f"p={row['p_value']:.2e} (Bonf: {row['p_value_bonferroni']:.2e})"
+        )
+    lines.append("")
+
+    summary_text = "\n".join(lines)
+    print(summary_text)
+    with open(output_path / "rq3-processing-bias-check.txt", "w") as f:
+        f.write(summary_text)
+    log.info("Saved rq3-processing-bias-check.txt")
 
 
 ###############################################################################
@@ -2148,6 +3171,9 @@ def analyze(
                 for r in records
             ]
 
+        # CCR: Credit Coverage Ratio
+        ccr, ccr_imports, ccr_deps = _compute_ccr_for_pair(im_records, dm_records)
+
         im_dicts = _to_dicts(im_records, doc_id)
         id_dicts = _to_dicts(id_records, doc_id)
         dm_dicts = _to_dicts(dm_records, doc_id)
@@ -2201,6 +3227,10 @@ def analyze(
                 "g_dm_jaccard": g_dm_stats["jaccard"],
                 "g_dm_avg_score": g_dm_stats["avg_match_score"],
                 "g_dm_median_score": g_dm_stats["median_match_score"],
+                # Credit Coverage Ratio
+                "ccr": ccr,
+                "ccr_imports": ccr_imports,
+                "ccr_deps": ccr_deps,
                 # Nested software records
                 "im_software_records": im_dicts,
                 "id_software_records": id_dicts,
@@ -2247,6 +3277,9 @@ def analyze(
     with open(output_path / "rq3-coverage-summary.txt", "w") as f:
         f.write(coverage_text)
     log.info("Saved rq3-coverage-summary.txt")
+
+    # Processing-time bias check
+    _check_processing_bias(pairs, imports_by_repo, deps_by_repo, output_path, top_n)
 
     # Gini coefficients + frequency distribution plot (top-level)
     gini_values = _plot_software_frequency_distributions(
@@ -2329,6 +3362,32 @@ def analyze(
             all_dm_records,
             imports_df,
             deps_df,
+            pairs,
+            filter_mode,
+            mode_path,
+        )
+
+        # Credit Coverage Ratio analysis
+        _write_ccr_analysis(results_df, filter_mode, mode_path)
+
+        # Temporal trends
+        _write_temporal_trends(results_df, filter_mode, mode_path)
+        _plot_temporal_trends(results_df, filter_mode, mode_path)
+
+        # Software citation classes
+        _write_citation_classes(
+            all_im_records,
+            all_dm_records,
+            all_id_records,
+            results_df,
+            filter_mode,
+            mode_path,
+        )
+
+        # Field-Weighted Mention/Import Prevalence
+        _write_fwmp_fwip_analysis(
+            all_im_records,
+            results_df,
             pairs,
             filter_mode,
             mode_path,
