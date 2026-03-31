@@ -50,6 +50,59 @@ In short, the current version of the library produces a dataset which contains t
 
 While there is more information available in the dataset, these are the primary entities and their associated details.
 
+### rs-graph-v2
+
+The second release of data from our processing pipeline is available on HuggingFace: [evamxb/rs-graph-v2](https://huggingface.co/datasets/evamxb/rs-graph-v2)
+
+The publicly available (redacted) version of the dataset excludes tables containing personally identifiable information about researchers and developers (i.e. the `researcher`, `developer_account`, `document_contributor`, `document_contributor_institution`, `repository_contributor`, and `researcher_developer_account_link` tables).
+
+The database schema/models are available at: [./rs_graph/db/models.py](./rs_graph/db/models.py)
+
+#### Usage
+
+```bash
+pip install datasets polars
+```
+
+Each table is stored as a separate config on HuggingFace. Load individual tables by name:
+
+```python
+from datasets import load_dataset
+import polars as pl
+
+# Helper to load a table as a polars DataFrame (zero-copy via Arrow)
+def load_table(table: str) -> pl.DataFrame:
+    ds = load_dataset("evamxb/rs-graph-v2", table, split="train")
+    return pl.from_arrow(ds.data.table)
+
+# Load all article info
+documents = load_table("document")
+print(documents.head(10))
+
+# Load and join article-repository links with repository info
+article_repo_links = load_table("document_repository_link")
+repositories = load_table("repository")
+
+merged = (
+    article_repo_links
+    .join(
+        documents.select("id", "title", "cited_by_count").rename({"id": "document_id"}),
+        on="document_id",
+    )
+    .join(
+        repositories.select("id", "name", "description").rename({
+            "id": "repository_id",
+            "name": "repository_name",
+            "description": "repository_description",
+        }),
+        on="repository_id",
+    )
+)
+print(merged.select(
+    "title", "repository_name", "repository_description", "cited_by_count",
+).head(10))
+```
+
 ### rs-graph-v1
 
 The initial release of data from our processing pipeline is stored in Harvard Dataverse: [https://doi.org/10.7910/DVN/KPYVI1](https://doi.org/10.7910/DVN/KPYVI1)
