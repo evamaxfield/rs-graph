@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 
+import json
 import logging
 import operator
 from collections import Counter
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import cast
 
@@ -25,7 +27,11 @@ from rs_graph.utils.identifier_normalization import (
     normalize_doi_col,
     prep_name_for_printing,
 )
-from rs_graph.utils.software_alignment import AlignmentMethod, align_software_names
+from rs_graph.utils.software_alignment import (
+    AlignmentMethod,
+    PairwiseAlignmentResult,
+    align_software_names,
+)
 
 ###############################################################################
 # Constants
@@ -147,6 +153,7 @@ def load_pairs() -> pl.DataFrame:
     # Join the tables to get the positive examples
     return (
         pairs.select(
+            pl.col("id").alias("document_repository_link_id"),
             "document_id",
             "repository_id",
             "dataset_source_id",
@@ -159,6 +166,7 @@ def load_pairs() -> pl.DataFrame:
                 pl.col("cited_by_count").alias("document_cited_by_count"),
                 pl.col("fwci").alias("document_fwci"),
                 pl.col("is_open_access").alias("document_is_open_access"),
+                pl.col("title").alias("document_title"),
                 pl.col("publication_date").alias("document_publication_date"),
                 pl.col("document_type").alias("document_type"),
             ).with_columns(normalize_doi_col("document_doi").alias("document_doi")),
@@ -453,6 +461,48 @@ _PAIR_STAT_COLS: list[tuple[str, str]] = [
     ("id_n_matched", "matched_id"),
 ]
 
+# For each comparison prefix, the two count columns that must both be > 0
+# to qualify as a "non-zero subsample" pair.
+_NZ_FILTER_COLS: dict[str, tuple[str, str]] = {
+    "im": ("im_n_imports", "im_n_mentions"),
+    "id": ("id_n_imports", "id_n_deps"),
+    "dm": ("dm_n_deps", "dm_n_mentions"),
+}
+
+# Non-zero subsample: (tag, prefix, [(col, short_label), ...]) for reporting
+_NZ_REPORT_COLS: list[tuple[str, str, list[tuple[str, str]]]] = [
+    (
+        "IM",
+        "im",
+        [
+            ("im_n_imports", "imports"),
+            ("im_n_mentions", "mentions"),
+            ("im_n_matched", "matched_im"),
+            ("im_jaccard", "jaccard_im"),
+        ],
+    ),
+    (
+        "ID",
+        "id",
+        [
+            ("id_n_imports", "imports"),
+            ("id_n_deps", "deps"),
+            ("id_n_matched", "matched_id"),
+            ("id_jaccard", "jaccard_id"),
+        ],
+    ),
+    (
+        "DM",
+        "dm",
+        [
+            ("dm_n_deps", "deps"),
+            ("dm_n_mentions", "mentions"),
+            ("dm_n_matched", "matched_dm"),
+            ("dm_jaccard", "jaccard_dm"),
+        ],
+    ),
+]
+
 
 def _pair_stats_grouped_lines(
     df: pl.DataFrame,
@@ -485,6 +535,21 @@ def _pair_stats_grouped_lines(
                     f"median={vals.median():.2f}, "
                     f"std={std:.2f}"
                 )
+        # Non-zero subsample stats within this group
+        for tag, prefix, cols in _NZ_REPORT_COLS:
+            col_a, col_b = _NZ_FILTER_COLS[prefix]
+            nz_gdf = gdf.filter((pl.col(col_a) > 0) & (pl.col(col_b) > 0))
+            if nz_gdf.height >= 10:
+                for col, short in cols:
+                    vals = nz_gdf[col].drop_nulls()
+                    if vals.len() > 0:
+                        std = vals.std() if vals.len() > 1 else 0.0
+                        lines.append(
+                            f"    {short} (nz-{tag}, n={nz_gdf.height}): "
+                            f"mean={vals.mean():.2f}, "
+                            f"median={vals.median():.2f}, "
+                            f"std={std:.2f}"
+                        )
     return lines
 
 
@@ -506,6 +571,24 @@ def _pair_stats_correlations(df: pl.DataFrame) -> list[str]:
             lines.append(f"  {label}: rho={rho:.4f}, p={p_str}")
         else:
             lines.append(f"  {label}: insufficient data")
+
+    # Non-zero subsample correlations
+    lines.append("  --- Non-zero subsample (both sides > 0) ---")
+    for col_a, col_b, label in [
+        ("im_n_imports", "im_n_mentions", "imports vs mentions count"),
+        ("dm_n_deps", "dm_n_mentions", "deps vs mentions count"),
+        ("id_n_imports", "id_n_deps", "imports vs deps count"),
+    ]:
+        nz = df.filter((pl.col(col_a) > 0) & (pl.col(col_b) > 0))
+        vals_a = nz[col_a].to_numpy()
+        vals_b = nz[col_b].to_numpy()
+        if len(vals_a) > 2:
+            rho, p = spearmanr(vals_a, vals_b)
+            p_str = f"{p:.4e}" if p >= 0.0001 else "<.0001"
+            lines.append(f"  {label} (nz, n={nz.height}): rho={rho:.4f}, p={p_str}")
+        else:
+            lines.append(f"  {label} (nz): insufficient data")
+
     return lines
 
 
@@ -548,6 +631,22 @@ def _write_pair_level_stats(
         ("id_n_matched", "Matched imports-deps per pair"),
     ]:
         lines.append(_print_descriptive_stats(df, col, label))
+
+    # Non-zero subsample descriptive stats
+    lines.extend(
+        [
+            "",
+            "─" * 70,
+            "  Non-Zero Subsample Stats (both sides > 0 for each comparison)",
+            "─" * 70,
+        ]
+    )
+    for tag, prefix, cols in _NZ_REPORT_COLS:
+        col_a, col_b = _NZ_FILTER_COLS[prefix]
+        nz_df = df.filter((pl.col(col_a) > 0) & (pl.col(col_b) > 0))
+        lines.append(f"  [{tag}] non-zero subsample: n={nz_df.height}")
+        for col, short in cols:
+            lines.append(_print_descriptive_stats(nz_df, col, f"  {short}"))
 
     # Fraction with zero
     n = df.height
@@ -991,6 +1090,13 @@ def _print_summary_stats(
         lines.append(
             _print_descriptive_stats(non_zero_score, f"{prefix}_avg_score", "Avg Match Score")
         )
+
+        # Non-zero subsample (both sides > 0)
+        col_a, col_b = _NZ_FILTER_COLS[prefix]
+        nz_df = comparison_df.filter((pl.col(col_a) > 0) & (pl.col(col_b) > 0))
+        lines.append(f"  --- Non-zero subsample (n={nz_df.height}) ---")
+        lines.append(_print_descriptive_stats(nz_df, f"{prefix}_jaccard", "Jaccard (nz)"))
+        lines.append(_print_descriptive_stats(nz_df, f"{prefix}_n_matched", "N Matched (nz)"))
 
         top_matched = _get_top_items_by_status(all_records, "matched", "source_a_name", top_n)
         if top_matched:
@@ -3394,6 +3500,406 @@ def analyze(
         )
 
     log.info("Done.")
+
+
+###############################################################################
+# Annotation CSV Generation
+###############################################################################
+
+_YEAR_BIN_LABELS = {
+    "pre-2016": (None, 2016),
+    "2016-2020": (2016, 2021),
+    "2021-2025": (2021, 2026),
+    "2025+": (2026, None),
+}
+
+
+def _bin_year(year: int | None) -> str:
+    if year is None:
+        return "Unknown"
+    for label, (lo, hi) in _YEAR_BIN_LABELS.items():
+        if (lo is None or year >= lo) and (hi is None or year < hi):
+            return label
+    return "Unknown"
+
+
+def _stratified_sample(
+    pairs: pl.DataFrame,
+    n: int,
+    seed: int,
+    top_n_fields: int = 9,
+    top_n_languages: int = 5,
+) -> pl.DataFrame:
+    """Proportionally stratified sample of article-repository pairs."""
+    df = pairs.with_columns(
+        pl.col("document_publication_date").dt.year().alias("_year"),
+    )
+
+    # Determine top categories
+    field_counts = df["document_field_name"].value_counts().sort("count", descending=True)
+    top_fields = set(
+        field_counts.head(top_n_fields)["document_field_name"].drop_nulls().to_list()
+    )
+    lang_counts = (
+        df["repository_primary_language"].value_counts().sort("count", descending=True)
+    )
+    top_languages = set(
+        lang_counts.head(top_n_languages)["repository_primary_language"].drop_nulls().to_list()
+    )
+
+    # Build stratum key
+    df = df.with_columns(
+        pl.col("document_field_name")
+        .fill_null("Other")
+        .map_elements(lambda f: f if f in top_fields else "Other", return_dtype=pl.Utf8)
+        .alias("_field_bin"),
+        pl.col("repository_primary_language")
+        .fill_null("Other")
+        .map_elements(lambda l: l if l in top_languages else "Other", return_dtype=pl.Utf8)
+        .alias("_lang_bin"),
+        pl.col("_year").map_elements(_bin_year, return_dtype=pl.Utf8).alias("_year_bin"),
+    ).with_columns(
+        (pl.col("_field_bin") + "|" + pl.col("_year_bin") + "|" + pl.col("_lang_bin")).alias(
+            "_stratum"
+        ),
+    )
+
+    # Proportional allocation with minimum 1 per stratum
+    stratum_counts = df["_stratum"].value_counts().sort("count", descending=True)
+    total = df.height
+    strata = stratum_counts["_stratum"].to_list()
+    counts = stratum_counts["count"].to_list()
+
+    # Compute allocation
+    allocations: dict[str, int] = {}
+    remaining = n
+    for s, c in zip(strata, counts, strict=False):
+        alloc = max(1, round(n * c / total))
+        allocations[s] = min(alloc, c)  # can't sample more than available
+        remaining -= allocations[s]
+
+    # Adjust if we over-allocated
+    if remaining < 0:
+        # Reduce allocations from the largest strata first
+        for s in strata:
+            if remaining >= 0:
+                break
+            reduction = min(allocations[s] - 1, -remaining)
+            allocations[s] -= reduction
+            remaining += reduction
+
+    # Adjust if we under-allocated
+    if remaining > 0:
+        for s in strata:
+            if remaining <= 0:
+                break
+            s_count = dict(zip(strata, counts, strict=False))[s]
+            can_add = s_count - allocations[s]
+            add = min(can_add, remaining)
+            allocations[s] += add
+            remaining -= add
+
+    # Sample from each stratum
+    sampled_frames: list[pl.DataFrame] = []
+    for s, alloc in allocations.items():
+        if alloc <= 0:
+            continue
+        stratum_df = df.filter(pl.col("_stratum") == s)
+        sampled_frames.append(stratum_df.sample(n=alloc, seed=seed))
+
+    sampled = pl.concat(sampled_frames)
+    # Drop temporary columns
+    sampled = sampled.drop("_year", "_field_bin", "_lang_bin", "_year_bin", "_stratum")
+    log.info(f"Sampled {sampled.height} pairs across {len(allocations)} strata")
+    return sampled
+
+
+def _build_annotation_rows(
+    pair_row: dict,
+    matches: list[PairwiseAlignmentResult],
+    source_a_names: list[str],
+    source_a_norms: list[str],
+    source_b_names: list[str],
+    source_b_norms: list[str],
+    source_a_label: str,
+    source_b_label: str,
+) -> list[dict]:
+    """Build long-format annotation rows for one pair and one comparison type."""
+    # Common pair metadata
+    doi = pair_row.get("document_doi", "")
+    meta = {
+        "document_repository_link_id": pair_row.get("document_repository_link_id"),
+        "document_id": pair_row["document_id"],
+        "document_doi": doi,
+        "document_url": f"https://doi.org/{doi}" if doi else "",
+        "document_title": pair_row.get("document_title", ""),
+        "document_publication_date": pair_row.get("document_publication_date"),
+        "document_field": pair_row.get("document_field_name", ""),
+        "document_domain": pair_row.get("document_domain_name", ""),
+        "repository_id": pair_row["repository_id"],
+        "repository_owner": pair_row.get("repository_owner", ""),
+        "repository_name": pair_row.get("repository_name", ""),
+        "repository_url": (
+            f"https://github.com/{pair_row.get('repository_owner', '')}"
+            f"/{pair_row.get('repository_name', '')}"
+        ),
+        "repository_programming_language": pair_row.get("repository_primary_language", ""),
+    }
+
+    # Column name prefixes based on source labels
+    label_to_prefix = {
+        "import": "imported",
+        "dependency": "dependency",
+        "mention": "mentioned",
+    }
+    a_prefix = label_to_prefix[source_a_label]
+    b_prefix = label_to_prefix[source_b_label]
+
+    rows: list[dict] = []
+
+    # Track which items were matched
+    matched_a_norms: set[str] = set()
+    matched_b_norms: set[str] = set()
+    norm_a_to_orig = dict(zip(source_a_norms, source_a_names, strict=False))
+    norm_b_to_orig = dict(zip(source_b_norms, source_b_names, strict=False))
+
+    for match in matches:
+        matched_a_norms.add(match.item_one)
+        matched_b_norms.add(match.item_two)
+        rows.append(
+            {
+                **meta,
+                f"{a_prefix}_software_name_raw": norm_a_to_orig.get(
+                    match.item_one, match.item_one
+                ),
+                f"{a_prefix}_software_name_cleaned": match.normalized_item_one,
+                f"{b_prefix}_software_name_raw": norm_b_to_orig.get(
+                    match.item_two, match.item_two
+                ),
+                f"{b_prefix}_software_name_cleaned": match.normalized_item_two,
+                "automatically_matched": True,
+                "automatic_match_score": match.score,
+                "annotation_match_correct": None,
+                "annotation_software_type": None,
+                "annotation_software_category": None,
+                "annotation_reason_missing": None,
+                "annotation_notes": None,
+            }
+        )
+
+    # Source A only (unmatched)
+    for orig, norm in zip(source_a_names, source_a_norms, strict=False):
+        if norm not in matched_a_norms:
+            rows.append(
+                {
+                    **meta,
+                    f"{a_prefix}_software_name_raw": orig,
+                    f"{a_prefix}_software_name_cleaned": norm,
+                    f"{b_prefix}_software_name_raw": None,
+                    f"{b_prefix}_software_name_cleaned": None,
+                    "automatically_matched": False,
+                    "automatic_match_score": None,
+                    "annotation_match_correct": None,
+                    "annotation_software_type": None,
+                    "annotation_software_category": None,
+                    "annotation_reason_missing": None,
+                    "annotation_notes": None,
+                }
+            )
+
+    # Source B only (unmatched)
+    for orig, norm in zip(source_b_names, source_b_norms, strict=False):
+        if norm not in matched_b_norms:
+            rows.append(
+                {
+                    **meta,
+                    f"{a_prefix}_software_name_raw": None,
+                    f"{a_prefix}_software_name_cleaned": None,
+                    f"{b_prefix}_software_name_raw": orig,
+                    f"{b_prefix}_software_name_cleaned": norm,
+                    "automatically_matched": False,
+                    "automatic_match_score": None,
+                    "annotation_match_correct": None,
+                    "annotation_software_type": None,
+                    "annotation_software_category": None,
+                    "annotation_reason_missing": None,
+                    "annotation_notes": None,
+                }
+            )
+
+    return rows
+
+
+@app.command()
+def generate_annotation_csvs(
+    n_samples: int = 100,
+    random_seed: int = 42,
+    score_cutoff: float = SCORE_CUTOFF,
+    output_dir: str = str(THIS_DIR / "rq3-annotation"),
+    debug: bool = False,
+) -> None:
+    """Generate stratified-sample annotation CSVs for qualitative analysis."""
+    setup_logger(debug)
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Load pairs and software tables
+    log.info("Loading pairs...")
+    pairs = load_pairs()
+    log.info(f"Loaded {pairs.height} pairs")
+
+    log.info("Loading software tables...")
+    imports_df = _read_table("repository_import")
+    deps_df = _read_table("repository_dependency")
+    raw_mentions_df = _read_table("document_software_mention")
+    mentions_df = raw_mentions_df.filter(
+        ~pl.col("software_name_normalized").is_in(list(MENTION_EXCLUDE_NORMALIZED))
+    )
+
+    imports_by_repo = _build_lookup(imports_df, "repository_id")
+    deps_by_repo = _build_lookup(deps_df, "repository_id")
+    mentions_by_doc = _build_lookup(mentions_df, "document_id")
+
+    # Stratified sample
+    sampled = _stratified_sample(pairs, n_samples, random_seed)
+    log.info(f"Sampled {sampled.height} pairs for annotation")
+
+    # Run pairwise alignment and build annotation rows
+    im_rows: list[dict] = []
+    id_rows: list[dict] = []
+    dm_rows: list[dict] = []
+
+    for row in tqdm(
+        sampled.iter_rows(named=True),
+        total=sampled.height,
+        desc="Building annotation rows",
+    ):
+        doc_id: int = row["document_id"]
+        repo_id: int = row["repository_id"]
+
+        import_names, import_norms = _dedup_by_normalized(
+            *imports_by_repo.get(repo_id, ([], []))
+        )
+        dep_names, dep_norms = _dedup_by_normalized(*deps_by_repo.get(repo_id, ([], [])))
+        mention_names, mention_norms = _dedup_by_normalized(
+            *mentions_by_doc.get(doc_id, ([], []))
+        )
+
+        # IM: imports vs mentions
+        im_matches = align_software_names(
+            import_norms, mention_norms, "import", "mention", score_cutoff
+        )
+        im_rows.extend(
+            _build_annotation_rows(
+                row,
+                im_matches,
+                import_names,
+                import_norms,
+                mention_names,
+                mention_norms,
+                "import",
+                "mention",
+            )
+        )
+
+        # ID: imports vs dependencies
+        id_matches = align_software_names(
+            import_norms, dep_norms, "import", "dependency", score_cutoff
+        )
+        id_rows.extend(
+            _build_annotation_rows(
+                row,
+                id_matches,
+                import_names,
+                import_norms,
+                dep_names,
+                dep_norms,
+                "import",
+                "dependency",
+            )
+        )
+
+        # DM: dependencies vs mentions
+        dm_matches = align_software_names(
+            dep_norms, mention_norms, "dependency", "mention", score_cutoff
+        )
+        dm_rows.extend(
+            _build_annotation_rows(
+                row,
+                dm_matches,
+                dep_names,
+                dep_norms,
+                mention_names,
+                mention_norms,
+                "dependency",
+                "mention",
+            )
+        )
+
+    # Write CSVs
+    for label, rows in [
+        ("imports-vs-mentions", im_rows),
+        ("imports-vs-dependencies", id_rows),
+        ("dependencies-vs-mentions", dm_rows),
+    ]:
+        csv_path = output_path / f"annotation-{label}.csv"
+        if rows:
+            pl.DataFrame(rows, infer_schema_length=None).write_csv(csv_path)
+        else:
+            # Write empty CSV with just a header (no data rows)
+            pl.DataFrame(rows).write_csv(csv_path)
+        log.info(f"Wrote {len(rows)} rows to {csv_path}")
+
+    # Write sample metadata
+    sampled_with_year = sampled.with_columns(
+        pl.col("document_publication_date").dt.year().alias("_year"),
+    )
+    strata_summary: dict[str, dict[str, int]] = {
+        "field_distribution": dict(
+            sampled["document_field_name"]
+            .fill_null("Unknown")
+            .value_counts()
+            .sort("count", descending=True)
+            .iter_rows()
+        ),
+        "year_distribution": dict(
+            sampled_with_year["_year"]
+            .map_elements(_bin_year, return_dtype=pl.Utf8)
+            .value_counts()
+            .sort("count", descending=True)
+            .iter_rows()
+        ),
+        "language_distribution": dict(
+            sampled["repository_primary_language"]
+            .fill_null("Unknown")
+            .value_counts()
+            .sort("count", descending=True)
+            .iter_rows()
+        ),
+    }
+    metadata = {
+        "n_samples": sampled.height,
+        "random_seed": random_seed,
+        "score_cutoff": score_cutoff,
+        "date_generated": date.today().isoformat(),
+        "total_pairs_available": pairs.height,
+        "strata": strata_summary,
+        "csv_row_counts": {
+            "imports_vs_mentions": len(im_rows),
+            "imports_vs_dependencies": len(id_rows),
+            "dependencies_vs_mentions": len(dm_rows),
+        },
+    }
+    meta_path = output_path / "annotation-sample-metadata.json"
+    with open(meta_path, "w") as f:
+        json.dump(metadata, f, indent=2)
+    log.info(f"Wrote metadata to {meta_path}")
+
+    print(f"\nAnnotation CSVs generated in {output_path}/")
+    print(f"  Pairs sampled: {sampled.height}")
+    print(f"  IM rows: {len(im_rows)}")
+    print(f"  ID rows: {len(id_rows)}")
+    print(f"  DM rows: {len(dm_rows)}")
 
 
 ###############################################################################

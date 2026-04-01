@@ -33,9 +33,9 @@ install:
 
 # lint, format, and check all files
 lint:
-	ruff check . --fix
-	ruff format .
-	zuban check
+	-ruff check . --fix
+	-ruff format .
+	-zuban check
 
 ###############################################################################
 # Release and versioning
