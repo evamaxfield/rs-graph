@@ -12,7 +12,7 @@ app = typer.Typer()
 
 THIS_FILE_PATH = Path(__file__).resolve()
 THIS_DIR = THIS_FILE_PATH.parent
-DATA_DIR = THIS_DIR / "data"
+DATA_DIR = THIS_DIR / "data" / "dataset-size-comparison"
 
 ###############################################################################
 
