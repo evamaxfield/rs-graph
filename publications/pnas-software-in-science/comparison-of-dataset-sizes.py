@@ -1,11 +1,10 @@
 import os
 from pathlib import Path
 
-from datasets import Dataset, DatasetDict, load_dataset
 import polars as pl
-from dotenv import load_dotenv
-
 import typer
+from datasets import Dataset, DatasetDict, load_dataset
+from dotenv import load_dotenv
 
 ###############################################################################
 
@@ -43,7 +42,9 @@ def _load_our_dataset() -> pl.DataFrame:
             pl.col("predictive_model_confidence"),
         )
         .join(
-            documents.select(*[pl.col(col).alias(f"document_{col}") for col in documents.columns]),
+            documents.select(
+                *[pl.col(col).alias(f"document_{col}") for col in documents.columns]
+            ),
             on="document_id",
         )
         .join(
@@ -75,6 +76,7 @@ def _load_our_dataset() -> pl.DataFrame:
 
     return merged
 
+
 def _create_many_to_many_csvs(our_dataset: pl.DataFrame) -> None:
     # Get the set of article-repo pairs that has multiple
     # repositories for the same article
@@ -82,18 +84,22 @@ def _create_many_to_many_csvs(our_dataset: pl.DataFrame) -> None:
         our_dataset.group_by("document_id")
         .agg(pl.col("repository_id").n_unique().alias("unique_repo_count"))
         .filter(pl.col("unique_repo_count") > 1)
-        .get_column("document_id").to_list()
+        .get_column("document_id")
+        .to_list()
     )
 
-    our_dataset.filter(
-        pl.col("document_id").is_in(article_multi_repo_doc_ids)
-    ).select(
+    our_dataset.filter(pl.col("document_id").is_in(article_multi_repo_doc_ids)).select(
         "document_repository_link_id",
         "document_id",
         "repository_id",
         "predictive_model_confidence",
         (pl.lit("https://doi.org/") + pl.col("document_doi")).alias("document_url"),
-        (pl.lit("https://github.com/") + pl.col("repository_owner") + pl.lit("/") + pl.col("repository_name")).alias("repository_url"),
+        (
+            pl.lit("https://github.com/")
+            + pl.col("repository_owner")
+            + pl.lit("/")
+            + pl.col("repository_name")
+        ).alias("repository_url"),
     ).sort("document_id").write_csv(DATA_DIR / "high_confidence_multi_repo_pairs.csv")
 
     # Same thing but for the set of article-repo pairs that has multiple
@@ -102,18 +108,23 @@ def _create_many_to_many_csvs(our_dataset: pl.DataFrame) -> None:
         our_dataset.group_by("repository_id")
         .agg(pl.col("document_id").n_unique().alias("unique_doc_count"))
         .filter(pl.col("unique_doc_count") > 1)
-        .get_column("repository_id").to_list()
+        .get_column("repository_id")
+        .to_list()
     )
-    our_dataset.filter(
-        pl.col("repository_id").is_in(repo_multi_article_repo_ids)
-    ).select(
+    our_dataset.filter(pl.col("repository_id").is_in(repo_multi_article_repo_ids)).select(
         "document_repository_link_id",
         "document_id",
         "repository_id",
         "predictive_model_confidence",
         (pl.lit("https://doi.org/") + pl.col("document_doi")).alias("document_url"),
-        (pl.lit("https://github.com/") + pl.col("repository_owner") + pl.lit("/") + pl.col("repository_name")).alias("repository_url"),
+        (
+            pl.lit("https://github.com/")
+            + pl.col("repository_owner")
+            + pl.lit("/")
+            + pl.col("repository_name")
+        ).alias("repository_url"),
     ).sort("repository_id").write_csv(DATA_DIR / "high_confidence_multi_article_pairs.csv")
+
 
 def _load_pwc_dataset() -> pl.DataFrame:
     # Load papers-with-code dataset and filter to only "is_official" repos
@@ -127,10 +138,13 @@ def _load_pwc_dataset() -> pl.DataFrame:
 
 def _load_softcite_dataset() -> pl.DataFrame:
     # Load softcite 2025 dataset
-    softcite_papers = pl.scan_parquet("~/Downloads/softcite-extractions-oa-data/full_dataset/papers.parquet")
+    softcite_papers = pl.scan_parquet(
+        "~/Downloads/softcite-extractions-oa-data/full_dataset/papers.parquet"
+    )
     softcite_papers = softcite_papers.filter(pl.col("has_mentions")).collect().unique("doi")
 
     return softcite_papers
+
 
 def _get_counts() -> pl.DataFrame:
     our_dataset = _load_our_dataset()
@@ -143,27 +157,35 @@ def _get_counts() -> pl.DataFrame:
         | (pl.col("predictive_model_confidence").is_null())
     )
 
-    # Filter to unique one-to-one document-repository pairs (keep the one with highest confidence if multiple)
-    our_dataset_high_conf_filtered_one_to_one = (
-        our_dataset_high_conf_filtered.sort("predictive_model_confidence", descending=True)
-        .unique("document_id", keep="none")
-        .unique("repository_id", keep="none")
-    )
-
     counts = [
         {"dataset": "ours", "subset": "full", "count": len(our_dataset)},
-        {"dataset": "ours", "subset": "high_conf_filtered", "count": len(our_dataset_high_conf_filtered)},
+        {
+            "dataset": "ours",
+            "subset": "high_conf_filtered",
+            "count": len(our_dataset_high_conf_filtered),
+        },
         {"dataset": "pwc", "subset": "full", "count": len(pwc_df)},
-        {"dataset": "pwc", "subset": "is_official_filtered", "count": len(pwc_df.filter(pl.col("is_official")))},
-        {"dataset": "pwc", "subset": "accessible_and_verified", "count": len(
-            our_dataset_high_conf_filtered.filter(
-                pl.col("dataset_source_name") == "pwc"
-            )
-        )},
-        {"dataset": "softcite", "subset": "papers_with_mentions", "count": len(softcite_papers)},
+        {
+            "dataset": "pwc",
+            "subset": "is_official_filtered",
+            "count": len(pwc_df.filter(pl.col("is_official"))),
+        },
+        {
+            "dataset": "pwc",
+            "subset": "accessible_and_verified",
+            "count": len(
+                our_dataset_high_conf_filtered.filter(pl.col("dataset_source_name") == "pwc")
+            ),
+        },
+        {
+            "dataset": "softcite",
+            "subset": "papers_with_mentions",
+            "count": len(softcite_papers),
+        },
     ]
 
     return pl.DataFrame(counts)
+
 
 @app.command()
 def main() -> None:
@@ -187,6 +209,7 @@ def main() -> None:
     # Write counts to CSV for easy reference in the paper
     counts.write_csv(DATA_DIR / "dataset-size-comparison.csv")
     print(counts)
+
 
 ###############################################################################
 
