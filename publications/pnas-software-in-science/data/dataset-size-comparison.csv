@@ -1,0 +1,7 @@
+dataset,subset,count
+ours,full,503023
+ours,high_conf_filtered,282033
+pwc,full,300161
+pwc,is_official_filtered,194541
+pwc,accessible_and_verified,168456
+softcite,papers_with_mentions,6418825
