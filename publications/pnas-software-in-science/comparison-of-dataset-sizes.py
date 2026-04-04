@@ -12,7 +12,7 @@ app = typer.Typer()
 
 THIS_FILE_PATH = Path(__file__).resolve()
 THIS_DIR = THIS_FILE_PATH.parent
-DATA_DIR = THIS_DIR / "data" / "dataset-size-comparison"
+RESULTS_DIR = THIS_DIR / "results" / "dataset-size-comparison"
 
 ###############################################################################
 
@@ -100,7 +100,7 @@ def _create_many_to_many_csvs(our_dataset: pl.DataFrame) -> None:
             + pl.lit("/")
             + pl.col("repository_name")
         ).alias("repository_url"),
-    ).sort("document_id").write_csv(DATA_DIR / "high_confidence_multi_repo_pairs.csv")
+    ).sort("document_id").write_csv(RESULTS_DIR / "high_confidence_multi_repo_pairs.csv")
 
     # Same thing but for the set of article-repo pairs that has multiple
     # articles for the same repository
@@ -123,7 +123,7 @@ def _create_many_to_many_csvs(our_dataset: pl.DataFrame) -> None:
             + pl.lit("/")
             + pl.col("repository_name")
         ).alias("repository_url"),
-    ).sort("repository_id").write_csv(DATA_DIR / "high_confidence_multi_article_pairs.csv")
+    ).sort("repository_id").write_csv(RESULTS_DIR / "high_confidence_multi_article_pairs.csv")
 
 
 def _load_pwc_dataset() -> pl.DataFrame:
@@ -192,8 +192,8 @@ def main() -> None:
     load_dotenv()
     os.environ["HF_DATASETS_OFFLINE"] = "1"
 
-    # Create data dir
-    DATA_DIR.mkdir(exist_ok=True)
+    # Create results dir
+    RESULTS_DIR.mkdir(exist_ok=True)
 
     # Get counts for each dataset and store in a CSV for easy reference in the paper
     counts = _get_counts()
@@ -207,7 +207,7 @@ def main() -> None:
     _create_many_to_many_csvs(high_conf_filtered)
 
     # Write counts to CSV for easy reference in the paper
-    counts.write_csv(DATA_DIR / "dataset-size-comparison.csv")
+    counts.write_csv(RESULTS_DIR / "dataset-size-comparison.csv")
     print(counts)
 
 
