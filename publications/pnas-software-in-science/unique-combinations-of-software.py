@@ -1,14 +1,13 @@
 import os
 from pathlib import Path
 
+import numpy as np
 import polars as pl
+import seaborn as sns
+import torch
 import typer
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
-from tqdm import tqdm
-import numpy as np
-import torch
-import seaborn as sns
 
 ###############################################################################
 
@@ -131,50 +130,47 @@ def _get_imported_software(
 
     # Pre-construct the py and r checks
     check_for_py = (
-        (
-            pl.col("file_paths_lower").str.contains(r"\.py\;")
-            | pl.col("file_paths_lower").str.contains(r"\.py$")
-            | pl.col("file_paths_lower").str.contains(r"\.ipynb\;")
-            | pl.col("file_paths_lower").str.contains(r"\.ipynb$")
-        )
+        pl.col("file_paths_lower").str.contains(r"\.py\;")
+        | pl.col("file_paths_lower").str.contains(r"\.py$")
+        | pl.col("file_paths_lower").str.contains(r"\.ipynb\;")
+        | pl.col("file_paths_lower").str.contains(r"\.ipynb$")
     )
     check_for_r = (
-        (
-            pl.col("file_paths_lower").str.contains(r"\.r\;")
-            | pl.col("file_paths_lower").str.contains(r"\.r$")
-            | pl.col("file_paths_lower").str.contains(r"\.rmd\;")
-            | pl.col("file_paths_lower").str.contains(r"\.rmd$")
-        )
+        pl.col("file_paths_lower").str.contains(r"\.r\;")
+        | pl.col("file_paths_lower").str.contains(r"\.r$")
+        | pl.col("file_paths_lower").str.contains(r"\.rmd\;")
+        | pl.col("file_paths_lower").str.contains(r"\.rmd$")
     )
 
     # Now compute ecosystem and ecosystem normalized software name
-    repository_imports = repository_imports.with_columns(
-        pl.col("file_paths").str.to_lowercase().alias("file_paths_lower")
-    ).with_columns(
-        # Check contains at least one .py or .ipynb
-        # AND at least one .r or .rmd to determine if it's mixed
-        pl.when(
-            check_for_py & check_for_r
-        ).then(pl.lit("mixed"))
-        # Check py and ipynb
-        .when(check_for_py)
-        .then(pl.lit("py"))
-        # Check r and rmd
-        .when(check_for_r)
-        .then(pl.lit("r"))
-        # Other
-        .otherwise(pl.lit("other"))
-        .alias("ecosystem")
-    ).with_columns(
-        (
-            pl.col("ecosystem") + pl.lit(":") + pl.col("software_name_normalized")
-        ).alias("ecosystem_normalized_software_name")
+    repository_imports = (
+        repository_imports.with_columns(
+            pl.col("file_paths").str.to_lowercase().alias("file_paths_lower")
+        )
+        .with_columns(
+            # Check contains at least one .py or .ipynb
+            # AND at least one .r or .rmd to determine if it's mixed
+            pl.when(check_for_py & check_for_r)
+            .then(pl.lit("mixed"))
+            # Check py and ipynb
+            .when(check_for_py)
+            .then(pl.lit("py"))
+            # Check r and rmd
+            .when(check_for_r)
+            .then(pl.lit("r"))
+            # Other
+            .otherwise(pl.lit("other"))
+            .alias("ecosystem")
+        )
+        .with_columns(
+            (pl.col("ecosystem") + pl.lit(":") + pl.col("software_name_normalized")).alias(
+                "ecosystem_normalized_software_name"
+            )
+        )
     )
 
     # Drop "mixed" and "other" ecosystems
-    repository_imports = repository_imports.filter(
-        pl.col("ecosystem").is_in(["py", "r"])
-    )
+    repository_imports = repository_imports.filter(pl.col("ecosystem").is_in(["py", "r"]))
 
     # Remove any imports that were imported less than 3 times across the entire dataset (to remove noise)
     if remove_extremely_rare_imports:
@@ -182,12 +178,16 @@ def _get_imported_software(
         import_counts = repository_imports.group_by("ecosystem_normalized_software_name").agg(
             pl.len().alias("import_count")
         )
-        
+
         # Filter to only imports that were imported at least 3 times
-        pre_filter_unique_package_count = repository_imports.get_column("ecosystem_normalized_software_name").n_unique()
-        non_rare_imports = import_counts.filter(
-            pl.col("import_count") >= rare_import_threshold
-        ).get_column("ecosystem_normalized_software_name").to_list()
+        pre_filter_unique_package_count = repository_imports.get_column(
+            "ecosystem_normalized_software_name"
+        ).n_unique()
+        non_rare_imports = (
+            import_counts.filter(pl.col("import_count") >= rare_import_threshold)
+            .get_column("ecosystem_normalized_software_name")
+            .to_list()
+        )
 
         # # Display examples of rare imports that will be removed
         # rare_imports = import_counts.filter(
@@ -199,13 +199,17 @@ def _get_imported_software(
         repository_imports = repository_imports.filter(
             pl.col("ecosystem_normalized_software_name").is_in(non_rare_imports)
         )
-        post_filter_unique_package_count = repository_imports.get_column("ecosystem_normalized_software_name").n_unique()
+        post_filter_unique_package_count = repository_imports.get_column(
+            "ecosystem_normalized_software_name"
+        ).n_unique()
 
         # Log how many unique packages were removed by this filter
         print(
             f"Removed {pre_filter_unique_package_count - post_filter_unique_package_count} unique packages"
         )
-        print(f"Number of remaining unique imported packages: {post_filter_unique_package_count}")
+        print(
+            f"Number of remaining unique imported packages: {post_filter_unique_package_count}"
+        )
 
     return repository_imports
 
@@ -245,6 +249,7 @@ def _construct_article_to_software_mapping(
     }
 
     return article_to_software_dict
+
 
 def _create_article_vecs(
     article_to_software_mapping: dict[int, set[str]],
@@ -320,7 +325,7 @@ def _compute_pairwise_cosine_similarity(
             software_j = all_software_names[j]
             similarity_score = pairwise_software_cosine_similarity[i, j]
             print(f"{software_i} - {software_j}: {similarity_score:.4f}")
-    
+
     return pairwise_software_cosine_similarity
 
 
@@ -358,9 +363,7 @@ def _compute_article_atypicality(
 
         # Eq. [2]: Atypicality = 1 - (1/N_c^2) * sum of all D_ij
         sum_of_all_pairwise_similarities = similarity_submatrix.sum()
-        atypicality = 1.0 - (
-            sum_of_all_pairwise_similarities / (count_unique_software_used ** 2)
-        )
+        atypicality = 1.0 - (sum_of_all_pairwise_similarities / (count_unique_software_used**2))
 
         article_atypicality_scores[document_id] = atypicality
 
@@ -397,7 +400,7 @@ def main(
         remove_extremely_rare_imports=remove_extremely_rare_imports,
         rare_import_threshold=rare_import_threshold,
     )
-    
+
     # Construct a mapping from article ID to the set of software imported by its linked repositories
     article_to_software_mapping = _construct_article_to_software_mapping(
         pair_metadata,
@@ -412,19 +415,23 @@ def main(
             ecosystem_label = "cross-ecosystem"
         else:
             ecosystem_label = ecosystems.pop()  # "py" or "r"
-        
-        software_to_ecosystem_mapping.append({"document_id": document_id, "ecosystem_label": ecosystem_label})
-    
+
+        software_to_ecosystem_mapping.append(
+            {"document_id": document_id, "ecosystem_label": ecosystem_label}
+        )
+
     software_to_ecosystem_df = pl.DataFrame(software_to_ecosystem_mapping)
 
     # Get total counts and construct document id to index and software name to index mappings
     # for downstream matrix construction
     all_document_ids = sorted(article_to_software_mapping.keys())
-    all_software_names = sorted({
-        software
-        for software_list in article_to_software_mapping.values()
-        for software in software_list
-    })
+    all_software_names = sorted(
+        {
+            software
+            for software_list in article_to_software_mapping.values()
+            for software in software_list
+        }
+    )
 
     # Get counts
     total_documents = len(all_document_ids)
@@ -452,9 +459,9 @@ def main(
 
     # Compute article atypicality scores
     article_atypicality_scores = _compute_article_atypicality(
-         article_to_software_mapping,
-         software_name_to_index,
-         pairwise_software_cosine_similarity,
+        article_to_software_mapping,
+        software_name_to_index,
+        pairwise_software_cosine_similarity,
     )
 
     # Z-score the atypicality scores (ignoring None values)
@@ -469,18 +476,24 @@ def main(
     }
 
     # Merge this data with the original details
-    atypicality_df = pl.DataFrame({
-        "document_id": list(article_atypicality_scores_zscored.keys()),
-        "document_atypicality_score": list(article_atypicality_scores.values()),
-        "document_atypicality_z_score": list(article_atypicality_scores_zscored.values()),
-    })
+    atypicality_df = pl.DataFrame(
+        {
+            "document_id": list(article_atypicality_scores_zscored.keys()),
+            "document_atypicality_score": list(article_atypicality_scores.values()),
+            "document_atypicality_z_score": list(article_atypicality_scores_zscored.values()),
+        }
+    )
     results_df = atypicality_df.join(pair_metadata, on="document_id", how="left")
 
     # Add in the cross-ecosystem vs. single ecosystem label based on the software used in each article
     results_df = results_df.join(software_to_ecosystem_df, on="document_id", how="left")
 
     # Plot the distribution of atypicality scores
-    ax = sns.histplot(results_df.filter(pl.col("document_atypicality_score").is_not_null()).to_pandas(), x="document_atypicality_score", bins=50)
+    ax = sns.histplot(
+        results_df.filter(pl.col("document_atypicality_score").is_not_null()).to_pandas(),
+        x="document_atypicality_score",
+        bins=50,
+    )
     ax.figure.savefig(RESULTS_DIR / "atypicality_score_distribution.png")  # type: ignore
 
     # Remove any documents with null atypicality z-score (i.e. papers with only 0 or 1 software, for which atypicality is not defined)
@@ -488,13 +501,15 @@ def main(
 
     # Keep only the rows that have an FWCI value
     results_df = results_df.filter(pl.col("document_fwci").is_not_null())
-    
+
     # Keep only the rows that have at least 2 cited by count (to ensure log is meaningful)
     results_df = results_df.filter(pl.col("document_cited_by_count") >= 2)
 
     # Take the log of citations and add 1 to avoid log(0)
     results_df = results_df.with_columns(
-        (pl.col("document_cited_by_count").cast(pl.Float64).log()).alias("document_log_cited_by_count"),
+        (pl.col("document_cited_by_count").cast(pl.Float64).log()).alias(
+            "document_log_cited_by_count"
+        ),
         (pl.col("document_fwci").log()).alias("document_log_fwci"),
     )
 
@@ -523,7 +538,7 @@ def main(
             "ecosystem_label",
         ),
         on="document_id",
-        how="left"
+        how="left",
     ).sort("document_id", descending=False)
 
     # Create facet grid of atypicality z-score vs. log citations and FWCI
