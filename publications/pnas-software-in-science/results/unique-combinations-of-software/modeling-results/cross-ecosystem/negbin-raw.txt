@@ -1,17 +1,16 @@
-                    Generalized Linear Model Regression Results                    
+                        NegativeBinomial Regression Results                        
 ===================================================================================
-Dep. Variable:     document_cited_by_count   No. Observations:                 2229
-Model:                                 GLM   Df Residuals:                     2227
-Model Family:             NegativeBinomial   Df Model:                            1
-Link Function:                         Log   Scale:                          1.0000
-Method:                               IRLS   Log-Likelihood:                -11527.
-Date:                     Sun, 05 Apr 2026   Deviance:                       5525.6
-Time:                             19:31:02   Pearson chi2:                 3.01e+04
-No. Iterations:                          8   Pseudo R-squ. (CS):           0.001433
-Covariance Type:                 nonrobust                                         
+Dep. Variable:     document_cited_by_count   No. Observations:                 1834
+Model:                    NegativeBinomial   Df Residuals:                     1832
+Method:                                MLE   Df Model:                            1
+Date:                     Sun, 05 Apr 2026   Pseudo R-squ.:               9.923e-06
+Time:                             21:35:27   Log-Likelihood:                -9464.2
+converged:                            True   LL-Null:                       -9464.3
+Covariance Type:                 nonrobust   LLR p-value:                    0.6647
 ================================================================================================
                                    coef    std err          z      P>|z|      [0.025      0.975]
 ------------------------------------------------------------------------------------------------
-Intercept                        4.1638      0.021    195.069      0.000       4.122       4.206
-document_atypicality_z_score     0.0360      0.021      1.685      0.092      -0.006       0.078
+Intercept                        4.3188      0.032    134.422      0.000       4.256       4.382
+document_atypicality_z_score    -0.0135      0.031     -0.432      0.666      -0.075       0.048
+alpha                            1.8769      0.052     35.897      0.000       1.774       1.979
 ================================================================================================

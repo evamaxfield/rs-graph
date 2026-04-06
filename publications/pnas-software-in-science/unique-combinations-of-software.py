@@ -9,7 +9,7 @@ import torch
 import typer
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
-from statsmodels.discrete.discrete_model import NegativeBinomialP
+from statsmodels.discrete.discrete_model import NegativeBinomial
 from tqdm import tqdm
 
 ###############################################################################
@@ -95,12 +95,22 @@ def _load_our_dataset(
     )
 
     # Create document publication year column as integer (extract year from date)
-    merged = merged.with_columns(
-        pl.col("document_publication_date")
-        .str.to_date("%Y-%m-%d")
-        .alias("document_publication_date_parsed"),
-    ).with_columns(
-        pl.col("document_publication_date_parsed").dt.year().alias("document_publication_year"),
+    merged = (
+        merged.with_columns(
+            pl.col("document_publication_date")
+            .str.to_date("%Y-%m-%d")
+            .alias("document_publication_date_parsed"),
+        )
+        .with_columns(
+            pl.col("document_publication_date_parsed")
+            .dt.year()
+            .alias("document_publication_year"),
+        )
+        .with_columns(
+            (
+                pl.col("document_publication_year") - pl.col("document_publication_year").min()
+            ).alias("document_years_since_earliest")
+        )
     )
 
     # Filter to only pairs published after 2008 (the year GitHub was founded)
@@ -210,12 +220,6 @@ def _get_imported_software(
             .to_list()
         )
 
-        # # Display examples of rare imports that will be removed
-        # rare_imports = import_counts.filter(
-        #     pl.col("import_count") < 3
-        # ).get_column("ecosystem_normalized_software_name").sample(20).to_list()
-        # print(f"Examples of rare imports that will be removed: {rare_imports}")
-
         # Filter repository imports to only non-rare imports
         repository_imports = repository_imports.filter(
             pl.col("ecosystem_normalized_software_name").is_in(non_rare_imports)
@@ -253,15 +257,6 @@ def _construct_article_to_software_mapping(
     article_to_software_df = repository_imports.group_by("document_id").agg(
         pl.col("ecosystem_normalized_software_name").unique().alias("imported_software")
     )
-
-    # Get counts of software imported per article
-    article_to_software_df = article_to_software_df.with_columns(
-        pl.col("imported_software").list.len().alias("num_unique_software_imported")
-    )
-
-    # Describe the distribution of number of unique software imported per article
-    print("Distribution of number of unique software imported per article:")
-    print(article_to_software_df.get_column("num_unique_software_imported").describe())
 
     # Convert article_to_software to a dict of document_id to set of software
     article_to_software_dict = {
@@ -467,7 +462,7 @@ def _compute_document_atypicality_for_ecosystem(
 
 
 @app.command()
-def main(
+def main(  # noqa: C901
     remove_extremely_rare_imports: bool = True,
     rare_import_threshold: int = 3,
     top_n_fields: int = 5,
@@ -534,14 +529,6 @@ def main(
         repository_imports,
     )
 
-    # Create a dataframe of document_id to num_unique_software_imported
-    article_software_counts_df = pl.DataFrame(
-        [
-            {"document_id": doc_id, "num_unique_software_imported": len(software_set)}
-            for doc_id, software_set in article_to_software_mapping.items()
-        ]
-    )
-
     # Create cross-ecosystem mapping to add to results later
     ecosystem_to_documents: dict[str, set[int]] = {}
     for document_id, software_names in article_to_software_mapping.items():
@@ -558,17 +545,96 @@ def main(
         # Add document id to the set of documents in this ecosystem
         ecosystem_to_documents[ecosystem_label].add(document_id)
 
+    # Filter the article_to_software_mapping to remove articles
+    # in the top 1% of number of unique software imported
+    # Do this per-ecosystem so that each ecosystem can have a different threshold for what counts
+    # as an extreme number of software imported
+    filtered_article_to_software_mapping = {}
+    filtered_ecosystem_to_documents: dict[str, set[int]] = {}
+    article_software_counts_rows = []
+    for ecosystem_label, documents_in_ecosystem in ecosystem_to_documents.items():
+        # Get the subset of the article_to_software_mapping for just the documents in this ecosystem
+        ecosystem_specific_article_to_software_mapping = {
+            doc_id: article_to_software_mapping[doc_id] for doc_id in documents_in_ecosystem
+        }
+
+        # This ecosystem-specific software counts
+        ecosystem_article_software_counts_df = pl.DataFrame(
+            [
+                {"document_id": doc_id, "num_unique_software_imported": len(software_set)}
+                for doc_id, software_set in ecosystem_specific_article_to_software_mapping.items()
+            ]
+        )
+
+        # Get the threshold for number of unique software imported for this ecosystem
+        software_count_threshold = (
+            ecosystem_article_software_counts_df.filter(
+                pl.col("document_id").is_in(documents_in_ecosystem)
+            )
+            .get_column("num_unique_software_imported")
+            .quantile(0.99)
+        )
+
+        # Get the articles in this ecosystem that are above this threshold
+        articles_to_exclude = (
+            ecosystem_article_software_counts_df.filter(
+                pl.col("num_unique_software_imported") > software_count_threshold
+            )
+            .get_column("document_id")
+            .to_list()
+        )
+
+        # Add the docs and their software to the new filtered mapping
+        for doc_id, software_set in ecosystem_specific_article_to_software_mapping.items():
+            if doc_id not in articles_to_exclude:
+                filtered_article_to_software_mapping[doc_id] = software_set
+
+        # Remake the filtered ecosystem to documents mapping
+        filtered_ecosystem_to_documents[ecosystem_label] = {
+            doc_id for doc_id in documents_in_ecosystem
+            if doc_id not in articles_to_exclude
+        }
+
+        # Store this document id, num software, and ecosystem label
+        for doc_id, software_set in ecosystem_specific_article_to_software_mapping.items():
+            if doc_id not in articles_to_exclude:
+                article_software_counts_rows.append(
+                    {
+                        "document_id": doc_id,
+                        "num_unique_software_imported": len(software_set),
+                        "ecosystem_label": ecosystem_label,
+                    }
+                )
+
+    # Create a dataframe of document_id to num_unique_software_imported
+    article_software_counts_df = pl.DataFrame(article_software_counts_rows)
+
+    # Describe the distribution of number of unique software imported per article
+    print("Distribution of number of unique software imported per article:")
+    print(
+        article_software_counts_df.group_by("ecosystem_label").agg(
+            pl.col("num_unique_software_imported").min().alias("min"),
+            pl.col("num_unique_software_imported").quantile(0.25).alias("25%"),
+            pl.col("num_unique_software_imported").quantile(0.5).alias("50%"),
+            pl.col("num_unique_software_imported").quantile(0.75).alias("75%"),
+            pl.col("num_unique_software_imported").max().alias("max"),
+            pl.col("num_unique_software_imported").mean().alias("mean"),
+            pl.col("num_unique_software_imported").std().alias("std"),
+        )
+    )
+
     # Calculate atypicality scores per-article
     # but stratified by software ecosystem
     all_ecosystem_results = []
     for ecosystem_label, documents_in_ecosystem in tqdm(
-        ecosystem_to_documents.items(),
-        total=len(ecosystem_to_documents),
+        filtered_ecosystem_to_documents.items(),
+        total=len(filtered_ecosystem_to_documents),
         desc="Computing atypicality scores for each ecosystem",
     ):
         # Get the ecosystem specific article to software mapping
         ecosystem_specific_article_to_software_mapping = {
-            doc_id: article_to_software_mapping[doc_id] for doc_id in documents_in_ecosystem
+            doc_id: filtered_article_to_software_mapping[doc_id]
+            for doc_id in documents_in_ecosystem
         }
 
         # Compute atypicality scores for this ecosystem
@@ -631,11 +697,19 @@ def main(
     g.fig.savefig(RESULTS_DIR / "atypicality-score-distribution.png")
 
     # Take the log of citations and add 1 to avoid log(0)
-    results_df = results_df.with_columns(
-        (pl.col("document_cited_by_count").cast(pl.Float64).log()).alias(
-            "document_log_cited_by_count"
-        ),
-        (pl.col("document_fwci").log()).alias("document_log_fwci"),
+    results_df = (
+        results_df.with_columns(
+            (pl.col("document_cited_by_count").cast(pl.Float64).log()).alias(
+                "document_log_cited_by_count"
+            ),
+            (pl.col("document_fwci").log()).alias("document_log_fwci"),
+        )
+        .filter(
+            pl.col("document_log_fwci").is_not_nan(),
+        )
+        .filter(
+            pl.col("document_log_fwci") > 0,
+        )
     )
 
     # Select down to just atypicality z-score, log citations, and FWCI
@@ -657,6 +731,7 @@ def main(
         results_df.select(
             "document_id",
             "document_publication_year",
+            "document_years_since_earliest",
             "document_field_name",
             "document_field_name_pruned",
             "document_domain_name",
@@ -704,35 +779,34 @@ def main(
         ols_model_controlled = smf.ols(
             "document_log_cited_by_count "
             "~ document_atypicality_z_score "
-            "+ document_publication_year "
+            "+ document_years_since_earliest "
             "+ num_unique_software_imported "
             "+ C(document_field_name_pruned)",
             data=ecosystem_df,
         ).fit()
 
         # Negative Bin raw
-        negative_binomial_model_raw = NegativeBinomialP.from_formula(
+        negative_binomial_model_raw = NegativeBinomial.from_formula(
             "document_cited_by_count ~ document_atypicality_z_score",
             data=ecosystem_df,
-        ).fit()
+        ).fit(maxiter=1000)
 
         # Negative Bin with controls
-        negative_binomial_model_controlled = NegativeBinomialP.from_formula(
+        negative_binomial_model_controlled = NegativeBinomial.from_formula(
             "document_cited_by_count "
             "~ document_atypicality_z_score "
-            "+ document_publication_year "
+            "+ document_years_since_earliest "
             "+ num_unique_software_imported "
             "+ C(document_field_name_pruned)",
             data=ecosystem_df,
-        ).fit()
+        ).fit(maxiter=1000)
 
         # OLS with log FWCI as outcome
         ols_fwci = smf.ols(
             "document_log_fwci "
             "~ document_atypicality_z_score "
-            "+ document_publication_year "
-            "+ num_unique_software_imported "
-            "+ C(document_field_name_pruned)",
+            "+ document_years_since_earliest "
+            "+ num_unique_software_imported",
             data=ecosystem_df,
         ).fit()
 

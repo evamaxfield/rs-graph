@@ -1,23 +1,23 @@
-                    Generalized Linear Model Regression Results                    
+                        NegativeBinomial Regression Results                        
 ===================================================================================
-Dep. Variable:     document_cited_by_count   No. Observations:                 7783
-Model:                                 GLM   Df Residuals:                     7775
-Model Family:             NegativeBinomial   Df Model:                            7
-Link Function:                         Log   Scale:                          1.0000
-Method:                               IRLS   Log-Likelihood:                -36831.
-Date:                     Sun, 05 Apr 2026   Deviance:                       14295.
-Time:                             19:31:02   Pearson chi2:                 2.10e+05
-No. Iterations:                         13   Pseudo R-squ. (CS):             0.5233
-Covariance Type:                 nonrobust                                         
+Dep. Variable:     document_cited_by_count   No. Observations:                 6130
+Model:                    NegativeBinomial   Df Residuals:                     6121
+Method:                                MLE   Df Model:                            8
+Date:                     Sun, 05 Apr 2026   Pseudo R-squ.:                 0.05457
+Time:                             21:35:26   Log-Likelihood:                -29597.
+converged:                            True   LL-Null:                       -31305.
+Covariance Type:                 nonrobust   LLR p-value:                     0.000
 ==========================================================================================================================
                                                              coef    std err          z      P>|z|      [0.025      0.975]
 --------------------------------------------------------------------------------------------------------------------------
-Intercept                                                774.7478      9.552     81.111      0.000     756.027     793.469
-C(document_field_name_pruned)[T.Computer Science]         -0.2077      0.049     -4.247      0.000      -0.304      -0.112
-C(document_field_name_pruned)[T.Engineering]              -0.7090      0.097     -7.285      0.000      -0.900      -0.518
-C(document_field_name_pruned)[T.Medicine]                  0.0948      0.042      2.262      0.024       0.013       0.177
-C(document_field_name_pruned)[T.Other]                    -0.2127      0.030     -7.099      0.000      -0.271      -0.154
-C(document_field_name_pruned)[T.Physics and Astronomy]    -0.8969      0.116     -7.699      0.000      -1.125      -0.669
-document_atypicality_z_score                               0.1816      0.012     15.520      0.000       0.159       0.205
-document_publication_year                                 -0.3814      0.005    -80.689      0.000      -0.391      -0.372
+Intercept                                                 49.7885      0.831     59.944      0.000      48.161      51.416
+C(document_field_name_pruned)[T.Computer Science]         -0.0752      0.067     -1.125      0.261      -0.206       0.056
+C(document_field_name_pruned)[T.Engineering]              -0.6436      0.130     -4.956      0.000      -0.898      -0.389
+C(document_field_name_pruned)[T.Medicine]                  0.0575      0.055      1.051      0.293      -0.050       0.165
+C(document_field_name_pruned)[T.Other]                    -0.2423      0.040     -6.071      0.000      -0.321      -0.164
+C(document_field_name_pruned)[T.Physics and Astronomy]    -0.6810      0.159     -4.280      0.000      -0.993      -0.369
+document_atypicality_z_score                              -0.1398      0.023     -6.171      0.000      -0.184      -0.095
+document_years_since_earliest                             -0.3988      0.007    -55.503      0.000      -0.413      -0.385
+num_unique_software_imported                               0.0424      0.002     17.202      0.000       0.038       0.047
+alpha                                                      1.3136      0.021     62.873      0.000       1.273       1.355
 ==========================================================================================================================
