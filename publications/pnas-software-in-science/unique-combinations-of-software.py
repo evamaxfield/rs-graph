@@ -4,13 +4,12 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import seaborn as sns
-import statsmodels.api as sm
 import statsmodels.formula.api as smf
-import statsmodels.regression.linear_model as lm
 import torch
 import typer
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
+from statsmodels.discrete.discrete_model import NegativeBinomialP
 from tqdm import tqdm
 
 ###############################################################################
@@ -535,6 +534,14 @@ def main(
         repository_imports,
     )
 
+    # Create a dataframe of document_id to num_unique_software_imported
+    article_software_counts_df = pl.DataFrame(
+        [
+            {"document_id": doc_id, "num_unique_software_imported": len(software_set)}
+            for doc_id, software_set in article_to_software_mapping.items()
+        ]
+    )
+
     # Create cross-ecosystem mapping to add to results later
     ecosystem_to_documents: dict[str, set[int]] = {}
     for document_id, software_names in article_to_software_mapping.items():
@@ -576,6 +583,14 @@ def main(
     # Combine results for all ecosystems into one dataframe
     results_df = pl.concat(all_ecosystem_results)
 
+    # Add number of unique software imported to the results dataframe
+    # by joining with article_software_counts_df
+    results_df = results_df.join(
+        article_software_counts_df,
+        on="document_id",
+        how="left",
+    )
+
     # Store results to atypicality parquet
     results_df.write_parquet(RESULTS_DIR / "article-atypicality-scores.parquet")
 
@@ -601,10 +616,13 @@ def main(
     g = sns.displot(
         results_df,
         kind="hist",
+        stat="percent",
+        common_norm=False,
         x="document_atypicality_score",
         col="ecosystem_label",
         hue="ecosystem_label",
         bins=50,
+        facet_kws={"sharey": False},
     )
 
     # Change the subplot titles
@@ -670,14 +688,6 @@ def main(
     # Save fig
     g.fig.savefig(RESULTS_DIR / "atypicality-vs-citation-impact.png")
 
-    def _print_model(
-        title: str,
-        model: lm.RegressionResultsWrapper | lm.OLSResults,
-    ) -> None:
-        print(f"\n{title}:")
-        print(model.summary().tables[1].as_text())
-        print()
-
     # Run statsmodels
     for ecosystem_label in results_df.get_column("ecosystem_label").unique():
         # Get ecosystem specific dataframe
@@ -692,52 +702,66 @@ def main(
 
         # With controls
         ols_model_controlled = smf.ols(
-            "document_log_cited_by_count ~ document_atypicality_z_score + document_publication_year + C(document_field_name_pruned)",
+            "document_log_cited_by_count "
+            "~ document_atypicality_z_score "
+            "+ document_publication_year "
+            "+ num_unique_software_imported "
+            "+ C(document_field_name_pruned)",
             data=ecosystem_df,
         ).fit()
 
-        negative_binomial_model_raw = smf.glm(
+        # Negative Bin raw
+        negative_binomial_model_raw = NegativeBinomialP.from_formula(
             "document_cited_by_count ~ document_atypicality_z_score",
             data=ecosystem_df,
-            family=sm.families.NegativeBinomial(),
         ).fit()
 
-        negative_binomial_model_controlled = smf.glm(
-            "document_cited_by_count ~ document_atypicality_z_score + document_publication_year + C(document_field_name_pruned)",
+        # Negative Bin with controls
+        negative_binomial_model_controlled = NegativeBinomialP.from_formula(
+            "document_cited_by_count "
+            "~ document_atypicality_z_score "
+            "+ document_publication_year "
+            "+ num_unique_software_imported "
+            "+ C(document_field_name_pruned)",
             data=ecosystem_df,
-            family=sm.families.NegativeBinomial(),
         ).fit()
 
-        # Print results
-        print(f"\nResults for programming ecosystem '{ecosystem_label}':")
-        _print_model("OLS model (log citations) - raw", ols_model_raw)
-        _print_model("OLS model (log citations) - controlled", ols_model_controlled)
-        _print_model("Negative binomial model (citations) - raw", negative_binomial_model_raw)
-        _print_model(
-            "Negative binomial model (citations) - controlled",
-            negative_binomial_model_controlled,
-        )
+        # OLS with log FWCI as outcome
+        ols_fwci = smf.ols(
+            "document_log_fwci "
+            "~ document_atypicality_z_score "
+            "+ document_publication_year "
+            "+ num_unique_software_imported "
+            "+ C(document_field_name_pruned)",
+            data=ecosystem_df,
+        ).fit()
 
         # Store each model to its own CSV in a per-ecosystem subdirectory
         eco_dir = RESULTS_DIR / "modeling-results" / ecosystem_label
-        eco_dir.mkdir(exist_ok=True)
+        eco_dir.mkdir(exist_ok=True, parents=True)
         for filename, model in [
-            ("ols-raw.csv", ols_model_raw),
-            ("ols-controlled.csv", ols_model_controlled),
-            ("negbin-raw.csv", negative_binomial_model_raw),
-            ("negbin-controlled.csv", negative_binomial_model_controlled),
+            ("ols-raw.txt", ols_model_raw),
+            ("ols-controlled.txt", ols_model_controlled),
+            ("negbin-raw.txt", negative_binomial_model_raw),
+            ("negbin-controlled.txt", negative_binomial_model_controlled),
+            ("ols-fwci.txt", ols_fwci),
         ]:
             with open(eco_dir / filename, "w") as f:
-                f.write(model.summary().tables[1].as_text())
+                f.write(model.summary().as_text())
 
-    # Create a dataframe with all pairs of software and their cosine similarity and save
-    # software_i_indices, software_j_indices = np.triu_indices(total_software_names, k=1)
-    # software_pairs_df = pl.DataFrame({
-    #     "software_i": [all_software_names[i] for i in software_i_indices],
-    #     "software_j": [all_software_names[j] for j in software_j_indices],
-    #     "cosine_similarity": pairwise_software_cosine_similarity[software_i_indices, software_j_indices],
-    # })
-    # software_pairs_df.write_parquet(DATA_DIR / "software_pairs_cosine_similarity.parquet")
+    # Create dataframes of high-atypicality papers in each ecosystem
+    for ecosystem_label in results_df.get_column("ecosystem_label").unique():
+        ecosystem_df = results_df.filter(pl.col("ecosystem_label") == ecosystem_label)
+
+        # Get the top 10 most atypical papers in this ecosystem
+        top_atypical_papers_df = ecosystem_df.sort(
+            "document_atypicality_z_score", descending=True
+        ).head(10)
+
+        # Save to CSV
+        top_atypical_papers_df.write_csv(
+            RESULTS_DIR / f"top-atypical-papers-{ecosystem_label}.csv"
+        )
 
 
 ###############################################################################

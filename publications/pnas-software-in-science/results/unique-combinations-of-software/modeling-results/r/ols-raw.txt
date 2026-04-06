@@ -1,0 +1,25 @@
+                                 OLS Regression Results                                
+=======================================================================================
+Dep. Variable:     document_log_cited_by_count   R-squared:                       0.000
+Model:                                     OLS   Adj. R-squared:                  0.000
+Method:                          Least Squares   F-statistic:                     2.744
+Date:                         Sun, 05 Apr 2026   Prob (F-statistic):             0.0977
+Time:                                 19:31:02   Log-Likelihood:                -13498.
+No. Observations:                         7783   AIC:                         2.700e+04
+Df Residuals:                             7781   BIC:                         2.701e+04
+Df Model:                                    1                                         
+Covariance Type:                     nonrobust                                         
+================================================================================================
+                                   coef    std err          t      P>|t|      [0.025      0.975]
+------------------------------------------------------------------------------------------------
+Intercept                        2.7542      0.016    177.245      0.000       2.724       2.785
+document_atypicality_z_score     0.0257      0.016      1.656      0.098      -0.005       0.056
+==============================================================================
+Omnibus:                      476.528   Durbin-Watson:                   1.913
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):              571.952
+Skew:                           0.626   Prob(JB):                    6.34e-125
+Kurtosis:                       3.441   Cond. No.                         1.00
+==============================================================================
+
+Notes:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.

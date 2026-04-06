@@ -1,0 +1,17 @@
+                    Generalized Linear Model Regression Results                    
+===================================================================================
+Dep. Variable:     document_cited_by_count   No. Observations:                 7783
+Model:                                 GLM   Df Residuals:                     7781
+Model Family:             NegativeBinomial   Df Model:                            1
+Link Function:                         Log   Scale:                          1.0000
+Method:                               IRLS   Log-Likelihood:                -39627.
+Date:                     Sun, 05 Apr 2026   Deviance:                       19887.
+Time:                             19:31:02   Pearson chi2:                 3.14e+05
+No. Iterations:                         10   Pseudo R-squ. (CS):            0.02212
+Covariance Type:                 nonrobust                                         
+================================================================================================
+                                   coef    std err          z      P>|z|      [0.025      0.975]
+------------------------------------------------------------------------------------------------
+Intercept                        4.0830      0.011    357.178      0.000       4.061       4.105
+document_atypicality_z_score     0.1409      0.011     12.304      0.000       0.118       0.163
+================================================================================================

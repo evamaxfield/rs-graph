@@ -1,0 +1,23 @@
+                    Generalized Linear Model Regression Results                    
+===================================================================================
+Dep. Variable:     document_cited_by_count   No. Observations:                65231
+Model:                                 GLM   Df Residuals:                    65223
+Model Family:             NegativeBinomial   Df Model:                            7
+Link Function:                         Log   Scale:                          1.0000
+Method:                               IRLS   Log-Likelihood:            -3.0198e+05
+Date:                     Sun, 05 Apr 2026   Deviance:                   1.1039e+05
+Time:                             19:31:02   Pearson chi2:                 1.05e+06
+No. Iterations:                         13   Pseudo R-squ. (CS):             0.4894
+Covariance Type:                 nonrobust                                         
+==========================================================================================================================
+                                                             coef    std err          z      P>|z|      [0.025      0.975]
+--------------------------------------------------------------------------------------------------------------------------
+Intercept                                                814.2564      3.922    207.617      0.000     806.570     821.943
+C(document_field_name_pruned)[T.Computer Science]          0.0095      0.018      0.517      0.605      -0.026       0.045
+C(document_field_name_pruned)[T.Engineering]              -0.1185      0.021     -5.579      0.000      -0.160      -0.077
+C(document_field_name_pruned)[T.Medicine]                 -0.1555      0.026     -5.932      0.000      -0.207      -0.104
+C(document_field_name_pruned)[T.Other]                    -0.4684      0.021    -22.698      0.000      -0.509      -0.428
+C(document_field_name_pruned)[T.Physics and Astronomy]    -0.5316      0.024    -22.526      0.000      -0.578      -0.485
+document_atypicality_z_score                               0.0974      0.004     24.037      0.000       0.089       0.105
+document_publication_year                                 -0.4009      0.002   -206.606      0.000      -0.405      -0.397
+==========================================================================================================================

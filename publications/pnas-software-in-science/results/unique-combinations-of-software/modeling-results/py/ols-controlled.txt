@@ -1,0 +1,33 @@
+                                 OLS Regression Results                                
+=======================================================================================
+Dep. Variable:     document_log_cited_by_count   R-squared:                       0.178
+Model:                                     OLS   Adj. R-squared:                  0.178
+Method:                          Least Squares   F-statistic:                     2017.
+Date:                         Sun, 05 Apr 2026   Prob (F-statistic):               0.00
+Time:                                 19:31:02   Log-Likelihood:            -1.0706e+05
+No. Observations:                        65231   AIC:                         2.141e+05
+Df Residuals:                            65223   BIC:                         2.142e+05
+Df Model:                                    7                                         
+Covariance Type:                     nonrobust                                         
+==========================================================================================================================
+                                                             coef    std err          t      P>|t|      [0.025      0.975]
+--------------------------------------------------------------------------------------------------------------------------
+Intercept                                                562.0636      4.821    116.594      0.000     552.615     571.512
+C(document_field_name_pruned)[T.Computer Science]          0.1436      0.023      6.354      0.000       0.099       0.188
+C(document_field_name_pruned)[T.Engineering]               0.1488      0.026      5.696      0.000       0.098       0.200
+C(document_field_name_pruned)[T.Medicine]                  0.1005      0.032      3.122      0.002       0.037       0.164
+C(document_field_name_pruned)[T.Other]                    -0.1074      0.025     -4.238      0.000      -0.157      -0.058
+C(document_field_name_pruned)[T.Physics and Astronomy]    -0.0511      0.029     -1.767      0.077      -0.108       0.006
+document_atypicality_z_score                               0.0263      0.005      5.302      0.000       0.017       0.036
+document_publication_year                                 -0.2767      0.002   -116.015      0.000      -0.281      -0.272
+==============================================================================
+Omnibus:                     1296.630   Durbin-Watson:                   1.964
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):             1381.665
+Skew:                           0.343   Prob(JB):                    9.45e-301
+Kurtosis:                       3.192   Cond. No.                     1.99e+06
+==============================================================================
+
+Notes:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.
+[2] The condition number is large, 1.99e+06. This might indicate that there are
+strong multicollinearity or other numerical problems.
