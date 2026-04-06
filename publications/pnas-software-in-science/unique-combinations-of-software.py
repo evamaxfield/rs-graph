@@ -5,6 +5,7 @@ import numpy as np
 import polars as pl
 import seaborn as sns
 import torch
+from tqdm import tqdm
 import typer
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
@@ -370,65 +371,19 @@ def _compute_article_atypicality(
     return article_atypicality_scores
 
 
-@app.command()
-def main(
-    remove_extremely_rare_imports: bool = True,
-    rare_import_threshold: int = 5,
-    sample: bool = False,
-    sample_size: int = 5000,
+def _compute_document_atypicality_for_ecosystem(
+    ecosystem_label: str,
+    ecosystem_specific_article_to_software_mapping: dict[int, set[str]],
+    pair_metadata: pl.DataFrame,
     log_software_pair_examples: bool = True,
-) -> None:
-    load_dotenv()
-    os.environ["HF_DATASETS_OFFLINE"] = "1"
-
-    # Create data dir
-    RESULTS_DIR.mkdir(exist_ok=True)
-
-    # Load our dataset
-    pair_metadata = _load_our_dataset()
-
-    # Take a sample to speed up development
-    if sample:
-        pair_metadata = pair_metadata.sample(sample_size, seed=42)
-
-    # Get the repository IDs in our dataset
-    repository_ids = pair_metadata.get_column("repository_id").unique().to_list()
-
-    # Load the repository imports for the repositories in our dataset
-    repository_imports = _get_imported_software(
-        repository_ids,
-        remove_extremely_rare_imports=remove_extremely_rare_imports,
-        rare_import_threshold=rare_import_threshold,
-    )
-
-    # Construct a mapping from article ID to the set of software imported by its linked repositories
-    article_to_software_mapping = _construct_article_to_software_mapping(
-        pair_metadata,
-        repository_imports,
-    )
-
-    # Create cross-ecosystem mapping to add to results later
-    software_to_ecosystem_mapping = []
-    for document_id, software_names in article_to_software_mapping.items():
-        ecosystems = {s.split(":")[0] for s in software_names}
-        if len(ecosystems) > 1:
-            ecosystem_label = "cross-ecosystem"
-        else:
-            ecosystem_label = ecosystems.pop()  # "py" or "r"
-
-        software_to_ecosystem_mapping.append(
-            {"document_id": document_id, "ecosystem_label": ecosystem_label}
-        )
-
-    software_to_ecosystem_df = pl.DataFrame(software_to_ecosystem_mapping)
-
+) -> pl.DataFrame:
     # Get total counts and construct document id to index and software name to index mappings
     # for downstream matrix construction
-    all_document_ids = sorted(article_to_software_mapping.keys())
+    all_document_ids = sorted(ecosystem_specific_article_to_software_mapping.keys())
     all_software_names = sorted(
         {
             software
-            for software_list in article_to_software_mapping.values()
+            for software_list in ecosystem_specific_article_to_software_mapping.values()
             for software in software_list
         }
     )
@@ -443,7 +398,7 @@ def main(
 
     # Create the article vectors for each software
     software_article_vecs = _create_article_vecs(
-        article_to_software_mapping,
+        ecosystem_specific_article_to_software_mapping,
         document_id_to_index,
         software_name_to_index,
         total_documents,
@@ -459,7 +414,7 @@ def main(
 
     # Compute article atypicality scores
     article_atypicality_scores = _compute_article_atypicality(
-        article_to_software_mapping,
+        ecosystem_specific_article_to_software_mapping,
         software_name_to_index,
         pairwise_software_cosine_similarity,
     )
@@ -485,25 +440,129 @@ def main(
     )
     results_df = atypicality_df.join(pair_metadata, on="document_id", how="left")
 
-    # Add in the cross-ecosystem vs. single ecosystem label based on the software used in each article
-    results_df = results_df.join(software_to_ecosystem_df, on="document_id", how="left")
+    # Add in a column for the ecosystem label
+    results_df = results_df.with_columns(pl.lit(ecosystem_label).alias("ecosystem_label"))
+
+    return results_df
+
+
+@app.command()
+def main(
+    remove_extremely_rare_imports: bool = True,
+    rare_import_threshold: int = 5,
+    sample: bool = False,
+    sample_size: int = 5000,
+    log_software_pair_examples: bool = True,
+) -> None:
+    load_dotenv()
+    os.environ["HF_DATASETS_OFFLINE"] = "1"
+
+    # Create data dir
+    RESULTS_DIR.mkdir(exist_ok=True)
+
+    # Load our dataset
+    pair_metadata = _load_our_dataset()
+
+    # Remove any pairs that have null FWCI and less than 2 citations
+    # Log how many we are removing by this filter
+    pre_filter_count = len(pair_metadata)
+    pair_metadata = pair_metadata.filter(
+        pl.col("document_fwci").is_not_null(),
+    ).filter(
+        pl.col("document_cited_by_count") >= 2,
+    )
+    post_filter_count = len(pair_metadata)
+    low_or_null_citation_impact_diff_count = pre_filter_count - post_filter_count
+    print(
+        f"Removed {low_or_null_citation_impact_diff_count} pairs "
+        f"with null FWCI or less than 2 citations"
+    )
+
+    # Take a sample to speed up development
+    if sample:
+        pair_metadata = pair_metadata.sample(sample_size, seed=42)
+
+    # Get the repository IDs in our dataset
+    repository_ids = pair_metadata.get_column("repository_id").unique().to_list()
+
+    # Load the repository imports for the repositories in our dataset
+    repository_imports = _get_imported_software(
+        repository_ids,
+        remove_extremely_rare_imports=remove_extremely_rare_imports,
+        rare_import_threshold=rare_import_threshold,
+    )
+
+    # Construct a mapping from article ID to the set of software imported by its linked repositories
+    article_to_software_mapping = _construct_article_to_software_mapping(
+        pair_metadata,
+        repository_imports,
+    )
+
+    # Create cross-ecosystem mapping to add to results later
+    ecosystem_to_documents: dict[str, set[int]] = {}
+    for document_id, software_names in article_to_software_mapping.items():
+        ecosystems = {s.split(":")[0] for s in software_names}
+        if len(ecosystems) > 1:
+            ecosystem_label = "cross-ecosystem"
+        else:
+            ecosystem_label = ecosystems.pop()  # "py" or "r"
+
+        # Add ecosystem label if not already there
+        if ecosystem_label not in ecosystem_to_documents:
+            ecosystem_to_documents[ecosystem_label] = set()
+
+        # Add document id to the set of documents in this ecosystem
+        ecosystem_to_documents[ecosystem_label].add(document_id)
+
+    # Calculate atypicality scores per-article
+    # but stratified by software ecosystem
+    all_ecosystem_results = []
+    for ecosystem_label, documents_in_ecosystem in tqdm(
+        ecosystem_to_documents.items(),
+        total=len(ecosystem_to_documents),
+        desc="Computing atypicality scores for each ecosystem",
+    ):
+        # Get the ecosystem specific article to software mapping
+        ecosystem_specific_article_to_software_mapping = {
+            doc_id: article_to_software_mapping[doc_id] for doc_id in documents_in_ecosystem
+        }
+
+        # Compute atypicality scores for this ecosystem
+        ecosystem_results_df = _compute_document_atypicality_for_ecosystem(
+            ecosystem_label=ecosystem_label,
+            ecosystem_specific_article_to_software_mapping=ecosystem_specific_article_to_software_mapping,
+            pair_metadata=pair_metadata,
+            log_software_pair_examples=log_software_pair_examples,
+        )
+        all_ecosystem_results.append(ecosystem_results_df)
+
+    # Combine results for all ecosystems into one dataframe
+    results_df = pl.concat(all_ecosystem_results)
+
+    # Store results to atypicality parquet
+    results_df.write_parquet(RESULTS_DIR / "article-atypicality-scores.parquet")
+
+    # Filter to not_null atypicality score
+    # Log how many we are filtering out
+    pre_filter_count = len(results_df)
+    results_df = results_df.filter(pl.col("document_atypicality_score").is_not_null())
+    post_filter_count = len(results_df)
+    null_atypicality_count = pre_filter_count - post_filter_count
+    print(
+        f"Removed {null_atypicality_count} pairs with null atypicality score "
+        f"(papers with only 0 or 1 software, for which atypicality is not defined)"
+    )
 
     # Plot the distribution of atypicality scores
-    ax = sns.histplot(
-        results_df.filter(pl.col("document_atypicality_score").is_not_null()).to_pandas(),
+    g = sns.displot(
+        results_df,
+        kind="hist",
         x="document_atypicality_score",
+        col="ecosystem_label",
+        hue="ecosystem_label",
         bins=50,
     )
-    ax.figure.savefig(RESULTS_DIR / "atypicality_score_distribution.png")  # type: ignore
-
-    # Remove any documents with null atypicality z-score (i.e. papers with only 0 or 1 software, for which atypicality is not defined)
-    results_df = results_df.filter(pl.col("document_atypicality_z_score").is_not_null())
-
-    # Keep only the rows that have an FWCI value
-    results_df = results_df.filter(pl.col("document_fwci").is_not_null())
-
-    # Keep only the rows that have at least 2 cited by count (to ensure log is meaningful)
-    results_df = results_df.filter(pl.col("document_cited_by_count") >= 2)
+    g.fig.savefig(RESULTS_DIR / "atypicality-score-distribution.png")
 
     # Take the log of citations and add 1 to avoid log(0)
     results_df = results_df.with_columns(
@@ -543,18 +602,19 @@ def main(
 
     # Create facet grid of atypicality z-score vs. log citations and FWCI
     g = sns.lmplot(
-        data=analysis_df.to_pandas(),
+        data=analysis_df,
         x="document_atypicality_z_score",
         y="citation_impact_value",
         col="citation_impact_metric",
         hue="ecosystem_label",
+        row="ecosystem_label",
         scatter_kws={"alpha": 0.3},
         facet_kws={
             "sharey": False,
             "sharex": True,
         },
     )
-    g.fig.savefig(RESULTS_DIR / "atypicality_vs_citation_impact.png")
+    g.fig.savefig(RESULTS_DIR / "atypicality-vs-citation-impact.png")
 
     # Create a dataframe with all pairs of software and their cosine similarity and save
     # software_i_indices, software_j_indices = np.triu_indices(total_software_names, k=1)
