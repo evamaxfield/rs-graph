@@ -1,19 +1,15 @@
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import numpy as np
 import polars as pl
-import seaborn as sns
-import statsmodels.formula.api as smf
-import torch
 import typer
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
-from dataclasses import dataclass
-from statsmodels.discrete.discrete_model import NegativeBinomial, Poisson
 from tqdm import tqdm
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
 
 from rs_graph.utils.software_alignment import align_software_names
 
@@ -163,7 +159,6 @@ def _load_our_dataset(
     return merged
 
 
-
 def _remove_extremely_rare_software_usage(
     usage_df: pl.DataFrame,
     usage_type: str,
@@ -225,7 +220,7 @@ def _remove_extremely_rare_software_usage(
 
         # Drop "mixed" and "other" ecosystems
         usage_df = usage_df.filter(pl.col("ecosystem").is_in(["py", "r"]))
-    
+
     elif use_ecosystem_from_data:
         # There is an "ecosystem" column in the data already
         # Use it to prefix the software name
@@ -235,15 +230,13 @@ def _remove_extremely_rare_software_usage(
             )
         )
         software_col = f"ecosystem_{software_col}"
-    
+
     elif exclude_generic_mentions:
         # Exclude rows where the software_col is in the MENTION_EXCLUDE_NORMALIZED set
         usage_df = usage_df.filter(~pl.col(software_col).is_in(MENTION_EXCLUDE_NORMALIZED))
 
     # Count usage
-    usage_counts = usage_df.group_by(software_col).agg(
-        pl.len().alias("usage_count")
-    )
+    usage_counts = usage_df.group_by(software_col).agg(pl.len().alias("usage_count"))
 
     # Filter to only usage that were imported at least 3 times
     non_rare_imports = (
@@ -253,9 +246,7 @@ def _remove_extremely_rare_software_usage(
     )
 
     # Filter usage_df to only non-rare usage
-    usage_df = usage_df.filter(
-        pl.col(software_col).is_in(non_rare_imports)
-    )
+    usage_df = usage_df.filter(pl.col(software_col).is_in(non_rare_imports))
 
     return usage_df
 
@@ -285,17 +276,48 @@ def _get_counts_and_proportions_of_each_software_usage_type(
     )
     total_count = len(pair_metadata)
 
-    counts = pl.DataFrame([
-        {"usage_type": "imports", "count": imports_count, "proportion": imports_count / total_count},
-        {"usage_type": "dependencies", "count": dependencies_count, "proportion": dependencies_count / total_count},
-        {"usage_type": "mentions", "count": mentions_count, "proportion": mentions_count / total_count},
-        {"usage_type": "imports+dependencies", "count": imports_and_dependencies_count, "proportion": imports_and_dependencies_count / total_count},
-        {"usage_type": "imports+mentions", "count": imports_and_mentions_count, "proportion": imports_and_mentions_count / total_count},
-        {"usage_type": "dependencies+mentions", "count": dependencies_and_mentions_count, "proportion": dependencies_and_mentions_count / total_count},
-        {"usage_type": "complete-cases", "count": complete_cases_count, "proportion": complete_cases_count / total_count},
-    ])
+    counts = pl.DataFrame(
+        [
+            {
+                "usage_type": "imports",
+                "count": imports_count,
+                "proportion": imports_count / total_count,
+            },
+            {
+                "usage_type": "dependencies",
+                "count": dependencies_count,
+                "proportion": dependencies_count / total_count,
+            },
+            {
+                "usage_type": "mentions",
+                "count": mentions_count,
+                "proportion": mentions_count / total_count,
+            },
+            {
+                "usage_type": "imports+dependencies",
+                "count": imports_and_dependencies_count,
+                "proportion": imports_and_dependencies_count / total_count,
+            },
+            {
+                "usage_type": "imports+mentions",
+                "count": imports_and_mentions_count,
+                "proportion": imports_and_mentions_count / total_count,
+            },
+            {
+                "usage_type": "dependencies+mentions",
+                "count": dependencies_and_mentions_count,
+                "proportion": dependencies_and_mentions_count / total_count,
+            },
+            {
+                "usage_type": "complete-cases",
+                "count": complete_cases_count,
+                "proportion": complete_cases_count / total_count,
+            },
+        ]
+    )
 
     return counts
+
 
 @dataclass
 class MetadataAndSoftwareUsageDataFrames:
@@ -303,6 +325,7 @@ class MetadataAndSoftwareUsageDataFrames:
     repository_imports: pl.DataFrame
     repository_dependencies: pl.DataFrame
     document_software_mentions: pl.DataFrame
+
 
 def _add_has_imports_dependencies_mentions_cols(
     pair_metadata: pl.DataFrame,
@@ -390,29 +413,52 @@ def _remove_pairs_with_extreme_software_usage(
     document_software_mentions: pl.DataFrame,
 ) -> MetadataAndSoftwareUsageDataFrames:
     # Get the threshold value for 99th percentile of number of imports, dependencies, and mentions
-    imports_threshold = repository_imports.group_by("document_repository_link_id").agg(
-        imports_count=pl.len()
-    ).get_column("imports_count").quantile(0.99)
-    dependencies_threshold = repository_dependencies.group_by("document_repository_link_id").agg(
-        dependencies_count=pl.len()
-    ).get_column("dependencies_count").quantile(0.99)
-    mentions_threshold = document_software_mentions.group_by("document_repository_link_id").agg(
-        mentions_count=pl.len()
-    ).get_column("mentions_count").quantile(0.99)
+    imports_threshold = (
+        repository_imports.group_by("document_repository_link_id")
+        .agg(imports_count=pl.len())
+        .get_column("imports_count")
+        .quantile(0.99)
+    )
+    dependencies_threshold = (
+        repository_dependencies.group_by("document_repository_link_id")
+        .agg(dependencies_count=pl.len())
+        .get_column("dependencies_count")
+        .quantile(0.99)
+    )
+    mentions_threshold = (
+        document_software_mentions.group_by("document_repository_link_id")
+        .agg(mentions_count=pl.len())
+        .get_column("mentions_count")
+        .quantile(0.99)
+    )
 
     # Get any document_repository_link_ids that have imports, dependencies, or mentions above these thresholds
-    extreme_imports_ids = repository_imports.group_by("document_repository_link_id").agg(
-        imports_count=pl.len()
-    ).filter(pl.col("imports_count") > imports_threshold).get_column("document_repository_link_id").to_list()
-    extreme_dependencies_ids = repository_dependencies.group_by("document_repository_link_id").agg(
-        dependencies_count=pl.len()
-    ).filter(pl.col("dependencies_count") > dependencies_threshold).get_column("document_repository_link_id").to_list()
-    extreme_mentions_ids = document_software_mentions.group_by("document_repository_link_id").agg(
-        mentions_count=pl.len()
-    ).filter(pl.col("mentions_count") > mentions_threshold).get_column("document_repository_link_id").to_list()
+    extreme_imports_ids = (
+        repository_imports.group_by("document_repository_link_id")
+        .agg(imports_count=pl.len())
+        .filter(pl.col("imports_count") > imports_threshold)
+        .get_column("document_repository_link_id")
+        .to_list()
+    )
+    extreme_dependencies_ids = (
+        repository_dependencies.group_by("document_repository_link_id")
+        .agg(dependencies_count=pl.len())
+        .filter(pl.col("dependencies_count") > dependencies_threshold)
+        .get_column("document_repository_link_id")
+        .to_list()
+    )
+    extreme_mentions_ids = (
+        document_software_mentions.group_by("document_repository_link_id")
+        .agg(mentions_count=pl.len())
+        .filter(pl.col("mentions_count") > mentions_threshold)
+        .get_column("document_repository_link_id")
+        .to_list()
+    )
 
     # Join these lists together to get all extreme usage ids
-    extreme_usage_ids = set(extreme_imports_ids) | set(extreme_dependencies_ids) | set(extreme_mentions_ids)
+    extreme_usage_ids = (
+        set(extreme_imports_ids) | set(extreme_dependencies_ids) | set(extreme_mentions_ids)
+    )
 
     # Filter the pair_metadata to remove these extreme usage ids
     pair_metadata = pair_metadata.filter(
@@ -421,13 +467,19 @@ def _remove_pairs_with_extreme_software_usage(
 
     # Filter the repository_imports, repository_dependencies, and document_software_mentions to only the remaining pairs
     repository_imports = repository_imports.filter(
-        pl.col("document_repository_link_id").is_in(pair_metadata.get_column("document_repository_link_id").to_list())
+        pl.col("document_repository_link_id").is_in(
+            pair_metadata.get_column("document_repository_link_id").to_list()
+        )
     )
     repository_dependencies = repository_dependencies.filter(
-        pl.col("document_repository_link_id").is_in(pair_metadata.get_column("document_repository_link_id").to_list())
+        pl.col("document_repository_link_id").is_in(
+            pair_metadata.get_column("document_repository_link_id").to_list()
+        )
     )
     document_software_mentions = document_software_mentions.filter(
-        pl.col("document_repository_link_id").is_in(pair_metadata.get_column("document_repository_link_id").to_list())
+        pl.col("document_repository_link_id").is_in(
+            pair_metadata.get_column("document_repository_link_id").to_list()
+        )
     )
 
     return MetadataAndSoftwareUsageDataFrames(
@@ -436,6 +488,7 @@ def _remove_pairs_with_extreme_software_usage(
         repository_dependencies=repository_dependencies,
         document_software_mentions=document_software_mentions,
     )
+
 
 def _match_imports_and_mentions_and_get_long_frame(
     pair_metadata: pl.DataFrame,
@@ -496,8 +549,11 @@ def _match_imports_and_mentions_and_get_long_frame(
                     "original_field": this_pair_field,
                     "pruned_field": this_pair_pruned_field,
                     "ecosystem": this_pair_imports.filter(
-                        pl.col("software_name_normalized") == matched_import_and_mention.normalized_item_one
-                    ).get_column("ecosystem").first(),
+                        pl.col("software_name_normalized")
+                        == matched_import_and_mention.normalized_item_one
+                    )
+                    .get_column("ecosystem")
+                    .first(),
                     "library_name_normalized": matched_import_and_mention.normalized_item_one,
                     "is_imported": True,
                     "is_mentioned": True,
@@ -519,7 +575,9 @@ def _match_imports_and_mentions_and_get_long_frame(
                     "pruned_field": this_pair_pruned_field,
                     "ecosystem": this_pair_imports.filter(
                         pl.col("software_name_normalized") == unmatched_import
-                    ).get_column("ecosystem").first(),
+                    )
+                    .get_column("ecosystem")
+                    .first(),
                     "library_name_normalized": unmatched_import,
                     "is_imported": True,
                     "is_mentioned": False,
@@ -562,25 +620,31 @@ def _get_descriptive_stats_and_tables(
     print(imports_and_mentions_long_df.filter(~pl.col("is_imported") & pl.col("is_mentioned")))
 
     # Compute number of unique packages imported, depended on, and mentioned for each document-repository pair
-    total_unique_imports = imports_and_mentions_long_df.filter(
-        pl.col("is_imported")
-    ).get_column("library_name_normalized").n_unique()
-    total_unique_mentions = imports_and_mentions_long_df.filter(
-        pl.col("is_mentioned")
-    ).get_column("library_name_normalized").n_unique()
-    total_unique_matched = imports_and_mentions_long_df.filter(
-        pl.col("is_imported") & pl.col("is_mentioned")
-    ).get_column("library_name_normalized").n_unique()
+    total_unique_imports = (
+        imports_and_mentions_long_df.filter(pl.col("is_imported"))
+        .get_column("library_name_normalized")
+        .n_unique()
+    )
+    total_unique_mentions = (
+        imports_and_mentions_long_df.filter(pl.col("is_mentioned"))
+        .get_column("library_name_normalized")
+        .n_unique()
+    )
+    total_unique_matched = (
+        imports_and_mentions_long_df.filter(pl.col("is_imported") & pl.col("is_mentioned"))
+        .get_column("library_name_normalized")
+        .n_unique()
+    )
     per_pair_imports_counts = imports_and_mentions_long_df.group_by("document_id").agg(
         unique_imports_count=pl.col("library_name_normalized").n_unique()
     )
     per_pair_mentions_counts = imports_and_mentions_long_df.group_by("document_id").agg(
         unique_mentions_count=pl.col("library_name_normalized").n_unique()
     )
-    per_pair_matched_counts = imports_and_mentions_long_df.filter(
-        pl.col("is_imported") & pl.col("is_mentioned")
-    ).group_by("document_id").agg(
-        unique_matched_count=pl.col("library_name_normalized").n_unique()
+    per_pair_matched_counts = (
+        imports_and_mentions_long_df.filter(pl.col("is_imported") & pl.col("is_mentioned"))
+        .group_by("document_id")
+        .agg(unique_matched_count=pl.col("library_name_normalized").n_unique())
     )
     print(f"Total unique imports: {total_unique_imports}")
     print(f"Total unique mentions: {total_unique_mentions}")
@@ -611,17 +675,27 @@ def _get_descriptive_stats_and_tables(
         ("imported-not-mentioned", pl.col("is_imported") & ~pl.col("is_mentioned"), True),
         ("mentioned-not-imported", ~pl.col("is_imported") & pl.col("is_mentioned"), False),
     ]:
-        filtered_set_of_matched_imports_and_mentions = imports_and_mentions_long_df.filter(filter_expr)
-        
+        filtered_set_of_matched_imports_and_mentions = imports_and_mentions_long_df.filter(
+            filter_expr
+        )
+
         # Handle split by ecosystem or not
         if split_ecosystem:
-            for ecosystem in filtered_set_of_matched_imports_and_mentions.get_column("ecosystem").unique():
-                total_documents = filtered_set_of_matched_imports_and_mentions.filter(
-                    pl.col("ecosystem") == ecosystem
-                ).get_column("document_id").n_unique()
+            for ecosystem in filtered_set_of_matched_imports_and_mentions.get_column(
+                "ecosystem"
+            ).unique():
+                total_documents = (
+                    filtered_set_of_matched_imports_and_mentions.filter(
+                        pl.col("ecosystem") == ecosystem
+                    )
+                    .get_column("document_id")
+                    .n_unique()
+                )
 
                 top_libraries = (
-                    filtered_set_of_matched_imports_and_mentions.filter(pl.col("ecosystem") == ecosystem)
+                    filtered_set_of_matched_imports_and_mentions.filter(
+                        pl.col("ecosystem") == ecosystem
+                    )
                     .group_by("library_name_normalized")
                     .agg(pl.len().alias("count"))
                     .sort("count", descending=True)
@@ -633,21 +707,23 @@ def _get_descriptive_stats_and_tables(
                     RESULTS_DIR / f"top-fifty-libraries-{filter_name}-{ecosystem}.csv"
                 )
         else:
-            total_documents = filtered_set_of_matched_imports_and_mentions.get_column("document_id").n_unique()
+            total_documents = filtered_set_of_matched_imports_and_mentions.get_column(
+                "document_id"
+            ).n_unique()
 
-            top_libraries = filtered_set_of_matched_imports_and_mentions.group_by(
-                "library_name_normalized"
-            ).agg(
-                pl.len().alias("count")
-            ).sort(
-                "count",
-                descending=True,
-            ).with_columns(
-                (pl.col("count") / total_documents).alias("proportion_of_documents")
-            ).head(50)
-            top_libraries.write_csv(
-                RESULTS_DIR / f"top-fifty-libraries-{filter_name}.csv"
+            top_libraries = (
+                filtered_set_of_matched_imports_and_mentions.group_by("library_name_normalized")
+                .agg(pl.len().alias("count"))
+                .sort(
+                    "count",
+                    descending=True,
+                )
+                .with_columns(
+                    (pl.col("count") / total_documents).alias("proportion_of_documents")
+                )
+                .head(50)
             )
+            top_libraries.write_csv(RESULTS_DIR / f"top-fifty-libraries-{filter_name}.csv")
 
     # Get the libraries that have the highest ratios of imports to mentions
     # Get the libraries that have the highest ratios of mentions to imports
@@ -657,19 +733,19 @@ def _get_descriptive_stats_and_tables(
         else:
             ecosystem_filter = pl.col("ecosystem") == ecosystem
         library_imports_mentions_ratios = (
-                imports_and_mentions_long_df.filter(ecosystem_filter)
-                .group_by("library_name_normalized")
-                .agg(
-                    imports_count=pl.col("is_imported").sum(),
-                    mentions_count=pl.col("is_mentioned").sum(),
-                )
-                .with_columns(
-                    import_to_mention_ratio=pl.when(pl.col("mentions_count") > 0).then(
-                    pl.col("imports_count") / pl.col("mentions_count")
-                ).otherwise(pl.lit(None)),
-                mention_to_import_ratio=pl.when(pl.col("imports_count") > 0).then(
-                    pl.col("mentions_count") / pl.col("imports_count")
-                ).otherwise(pl.lit(None)),
+            imports_and_mentions_long_df.filter(ecosystem_filter)
+            .group_by("library_name_normalized")
+            .agg(
+                imports_count=pl.col("is_imported").sum(),
+                mentions_count=pl.col("is_mentioned").sum(),
+            )
+            .with_columns(
+                import_to_mention_ratio=pl.when(pl.col("mentions_count") > 0)
+                .then(pl.col("imports_count") / pl.col("mentions_count"))
+                .otherwise(pl.lit(None)),
+                mention_to_import_ratio=pl.when(pl.col("imports_count") > 0)
+                .then(pl.col("mentions_count") / pl.col("imports_count"))
+                .otherwise(pl.lit(None)),
             )
         )
 
@@ -677,19 +753,29 @@ def _get_descriptive_stats_and_tables(
             ("at-least-10", 10),
             ("at-least-100", 100),
         ]:
-            top_import_to_mention_ratio = library_imports_mentions_ratios.filter(
-                pl.col("import_to_mention_ratio").is_not_null()
-                & (pl.col("imports_count") >= threshold_value)
-            ).sort("import_to_mention_ratio", descending=True).head(50)
-            top_mention_to_import_ratio = library_imports_mentions_ratios.filter(
-                pl.col("mention_to_import_ratio").is_not_null()
-                & (pl.col("mentions_count") >= threshold_value)
-            ).sort("mention_to_import_ratio", descending=True).head(50)
+            top_import_to_mention_ratio = (
+                library_imports_mentions_ratios.filter(
+                    pl.col("import_to_mention_ratio").is_not_null()
+                    & (pl.col("imports_count") >= threshold_value)
+                )
+                .sort("import_to_mention_ratio", descending=True)
+                .head(50)
+            )
+            top_mention_to_import_ratio = (
+                library_imports_mentions_ratios.filter(
+                    pl.col("mention_to_import_ratio").is_not_null()
+                    & (pl.col("mentions_count") >= threshold_value)
+                )
+                .sort("mention_to_import_ratio", descending=True)
+                .head(50)
+            )
             top_import_to_mention_ratio.write_csv(
-                RESULTS_DIR / f"top-fifty-libraries-by-import-to-mention-ratio-{ecosystem}-{threshold_name}.csv"
+                RESULTS_DIR
+                / f"top-fifty-libraries-by-import-to-mention-ratio-{ecosystem}-{threshold_name}.csv"
             )
             top_mention_to_import_ratio.write_csv(
-                RESULTS_DIR / f"top-fifty-libraries-by-mention-to-import-ratio-{ecosystem}-{threshold_name}.csv"
+                RESULTS_DIR
+                / f"top-fifty-libraries-by-mention-to-import-ratio-{ecosystem}-{threshold_name}.csv"
             )
 
 
@@ -827,7 +913,9 @@ def _compute_probability_of_mention_given_import_over_time(
     ax2.legend(fontsize=8, loc="upper right", ncol=2)
 
     plt.tight_layout()
-    plt.savefig(RESULTS_DIR / "p-mention-given-import-two-panel.png", dpi=300, bbox_inches="tight")
+    plt.savefig(
+        RESULTS_DIR / "p-mention-given-import-two-panel.png", dpi=300, bbox_inches="tight"
+    )
 
 
 def _compute_probability_of_mention_given_popularity(
@@ -872,7 +960,9 @@ def _compute_probability_of_mention_given_popularity(
     plt.ylabel("p(mention | import)")
     plt.title("p(mention | import) vs total imports")
     plt.grid(True, which="both", ls="--", lw=0.5)
-    plt.savefig(RESULTS_DIR / "p-mention-given-import-vs-popularity.png", dpi=300, bbox_inches="tight")
+    plt.savefig(
+        RESULTS_DIR / "p-mention-given-import-vs-popularity.png", dpi=300, bbox_inches="tight"
+    )
 
     # Also plot this distribution in small multiples of pruned field
     # One ax per field, with a scatter plot of p(mention | import) vs total imports, faceted by pruned_field
@@ -894,9 +984,13 @@ def _compute_probability_of_mention_given_popularity(
     n_fields = len(fields)
     n_cols = 3
     n_rows = (n_fields + n_cols - 1) // n_cols
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 6, n_rows * 5), sharex=True, sharey=True)
+    fig, axes = plt.subplots(
+        n_rows, n_cols, figsize=(n_cols * 6, n_rows * 5), sharex=True, sharey=True
+    )
     for field, ax in zip(fields, axes.flatten(), strict=True):
-        field_data = library_popularity_by_field.filter(pl.col("pruned_field") == field).to_pandas()
+        field_data = library_popularity_by_field.filter(
+            pl.col("pruned_field") == field
+        ).to_pandas()
         ax.scatter(
             field_data["total_imports"],
             field_data["p_mention_given_import"],
@@ -908,7 +1002,11 @@ def _compute_probability_of_mention_given_popularity(
         ax.set_title(f"Field: {field}")
         ax.grid(True, which="both", ls="--", lw=0.5)
     plt.tight_layout()
-    plt.savefig(RESULTS_DIR / "p-mention-given-import-vs-popularity-by-field.png", dpi=300, bbox_inches="tight")
+    plt.savefig(
+        RESULTS_DIR / "p-mention-given-import-vs-popularity-by-field.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
 
 
 @app.command()
@@ -938,7 +1036,7 @@ def main(
     repository_imports = load_table("repository_import")
     repository_dependencies = load_table("repository_dependency")
     document_software_mentions = load_table("document_software_mention")
-    
+
     # Remove extremely rare imports and dependencies if specified (these are likely noise and can skew results)
     repository_imports = _remove_extremely_rare_software_usage(
         repository_imports,
@@ -1028,7 +1126,11 @@ def main(
         )
 
         # Get count of total repositories
-        total_repositories = repository_imports.filter(pl.col("ecosystem") == ecosystem).get_column("repository_id").n_unique()
+        total_repositories = (
+            repository_imports.filter(pl.col("ecosystem") == ecosystem)
+            .get_column("repository_id")
+            .n_unique()
+        )
 
         # Add proportion of repositories with imports of this library, and then take top 50
         top_imports = top_imports.with_columns(
@@ -1036,17 +1138,13 @@ def main(
             (pl.col("import_count") / total_repositories).alias("import_proportion")
         ).head(50)
 
-        top_imports.write_csv(
-            RESULTS_DIR / f"top-fifty-imports-overall-{ecosystem}.csv"
-        )
+        top_imports.write_csv(RESULTS_DIR / f"top-fifty-imports-overall-{ecosystem}.csv")
 
     # Get counts and proportions for each type of software usage
     software_usage_counts = _get_counts_and_proportions_of_each_software_usage_type(
         pair_metadata,
     )
-    software_usage_counts.write_csv(
-        RESULTS_DIR / "software-usage-counts.csv"
-    )
+    software_usage_counts.write_csv(RESULTS_DIR / "software-usage-counts.csv")
     print(software_usage_counts)
 
     # Match imports and mentions for each pair
@@ -1058,7 +1156,7 @@ def main(
         document_software_mentions,
         matching_score_threshold=matching_score_threshold,
     )
-    
+
     # Print descriptive stats and tables about the relationship between imports and mentions
     _get_descriptive_stats_and_tables(imports_and_mentions_long_df)
 
