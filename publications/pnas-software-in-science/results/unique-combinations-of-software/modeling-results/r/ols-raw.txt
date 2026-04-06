@@ -1,24 +1,24 @@
                                  OLS Regression Results                                
 =======================================================================================
 Dep. Variable:     document_log_cited_by_count   R-squared:                       0.000
-Model:                                     OLS   Adj. R-squared:                 -0.000
-Method:                          Least Squares   F-statistic:                    0.8316
-Date:                         Sun, 05 Apr 2026   Prob (F-statistic):              0.362
-Time:                                 21:35:26   Log-Likelihood:                -10466.
-No. Observations:                         6130   AIC:                         2.094e+04
-Df Residuals:                             6128   BIC:                         2.095e+04
+Model:                                     OLS   Adj. R-squared:                  0.000
+Method:                          Least Squares   F-statistic:                     1.120
+Date:                         Sun, 05 Apr 2026   Prob (F-statistic):              0.290
+Time:                                 22:15:25   Log-Likelihood:                -13252.
+No. Observations:                         7656   AIC:                         2.651e+04
+Df Residuals:                             7654   BIC:                         2.652e+04
 Df Model:                                    1                                         
 Covariance Type:                     nonrobust                                         
 ================================================================================================
                                    coef    std err          t      P>|t|      [0.025      0.975]
 ------------------------------------------------------------------------------------------------
-Intercept                        3.0532      0.017    179.027      0.000       3.020       3.087
-document_atypicality_z_score    -0.0157      0.017     -0.912      0.362      -0.049       0.018
+Intercept                        2.7586      0.016    176.659      0.000       2.728       2.789
+document_atypicality_z_score     0.0165      0.016      1.058      0.290      -0.014       0.047
 ==============================================================================
-Omnibus:                      285.588   Durbin-Watson:                   1.925
-Prob(Omnibus):                  0.000   Jarque-Bera (JB):              344.223
-Skew:                           0.504   Prob(JB):                     1.79e-75
-Kurtosis:                       3.575   Cond. No.                         1.04
+Omnibus:                      474.853   Durbin-Watson:                   1.912
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):              572.254
+Skew:                           0.629   Prob(JB):                    5.45e-125
+Kurtosis:                       3.461   Cond. No.                         1.00
 ==============================================================================
 
 Notes:

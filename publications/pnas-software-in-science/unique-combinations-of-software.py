@@ -9,7 +9,7 @@ import torch
 import typer
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
-from statsmodels.discrete.discrete_model import NegativeBinomial
+from statsmodels.discrete.discrete_model import NegativeBinomial, Poisson
 from tqdm import tqdm
 
 ###############################################################################
@@ -25,7 +25,7 @@ RESULTS_DIR = THIS_DIR / "results" / "unique-combinations-of-software"
 
 # Helper to load a table as a polars DataFrame (zero-copy via Arrow)
 def load_table(table: str) -> pl.DataFrame:
-    ds = load_dataset("evamxb/rs-graph-v2", table, split="train")
+    ds = load_dataset("evamxb/rs-graph-v2-full", table, split="train")
     assert isinstance(ds, Dataset)
     df = pl.from_arrow(ds.data.table)
     assert isinstance(df, pl.DataFrame)
@@ -41,6 +41,25 @@ def _load_our_dataset(
     repositories = load_table("repository")
     document_topics = load_table("document_topic")
     topics = load_table("topic")
+    document_contributors = load_table("document_contributor")
+    researchers = load_table("researcher")
+
+    # Create dataframe of document_id,
+    # document_author_count, and document_author_mean_citations
+    document_contributors = document_contributors.join(
+        researchers.select(
+            pl.col("id").alias("researcher_id"),
+            pl.col("cited_by_count").alias("researcher_cited_by_count"),
+        ),
+        on="researcher_id",
+        how="left",
+    )
+    document_author_stats = document_contributors.group_by("document_id").agg(
+        pl.count("researcher_id").alias("document_author_count"),
+        pl.mean("researcher_cited_by_count").alias("document_author_mean_citations"),
+    ).with_columns(
+        pl.col("document_author_mean_citations").log1p().alias("document_log_author_mean_citations")
+    )
 
     # Sort document topics by score (descending)
     # Drop duplicated by document_id to get the top topic for each document
@@ -92,29 +111,27 @@ def _load_our_dataset(
             document_topics,
             on="document_id",
         )
+        .join(
+            document_author_stats,
+            on="document_id",
+        )
     )
 
     # Create document publication year column as integer (extract year from date)
-    merged = (
-        merged.with_columns(
-            pl.col("document_publication_date")
-            .str.to_date("%Y-%m-%d")
-            .alias("document_publication_date_parsed"),
-        )
-        .with_columns(
-            pl.col("document_publication_date_parsed")
-            .dt.year()
-            .alias("document_publication_year"),
-        )
-        .with_columns(
-            (
-                pl.col("document_publication_year") - pl.col("document_publication_year").min()
-            ).alias("document_years_since_earliest")
-        )
+    merged = merged.with_columns(
+        pl.col("document_publication_date")
+        .str.to_date("%Y-%m-%d")
+        .alias("document_publication_date_parsed"),
+    ).with_columns(
+        pl.col("document_publication_date_parsed").dt.year().alias("document_publication_year"),
     )
 
     # Filter to only pairs published after 2008 (the year GitHub was founded)
-    merged = merged.filter(pl.col("document_publication_year") >= 2008)
+    merged = merged.filter(pl.col("document_publication_year") >= 2008).with_columns(
+        (pl.col("document_publication_year") - pl.col("document_publication_year").min()).alias(
+            "document_years_since_earliest"
+        )
+    )
 
     # Reduce to only pairs with confidence of 0.9994
     merged = merged.filter(
@@ -484,10 +501,14 @@ def main(  # noqa: C901
     # Remove any pairs that have null FWCI and less than 2 citations
     # Log how many we are removing by this filter
     pre_filter_count = len(pair_metadata)
-    pair_metadata = pair_metadata.filter(
-        pl.col("document_fwci").is_not_null(),
-    ).filter(
-        pl.col("document_cited_by_count") >= 2,
+    pair_metadata = (
+        pair_metadata.filter(
+            pl.col("document_fwci").is_not_null(),
+        )
+        .filter(pl.col("document_fwci") > 0)
+        .filter(
+            pl.col("document_cited_by_count") >= 2,
+        )
     )
     post_filter_count = len(pair_metadata)
     low_or_null_citation_impact_diff_count = pre_filter_count - post_filter_count
@@ -591,8 +612,7 @@ def main(  # noqa: C901
 
         # Remake the filtered ecosystem to documents mapping
         filtered_ecosystem_to_documents[ecosystem_label] = {
-            doc_id for doc_id in documents_in_ecosystem
-            if doc_id not in articles_to_exclude
+            doc_id for doc_id in documents_in_ecosystem if doc_id not in articles_to_exclude
         }
 
         # Store this document id, num software, and ecosystem label
@@ -652,7 +672,10 @@ def main(  # noqa: C901
     # Add number of unique software imported to the results dataframe
     # by joining with article_software_counts_df
     results_df = results_df.join(
-        article_software_counts_df,
+        article_software_counts_df.select(
+            pl.col("document_id"),
+            pl.col("num_unique_software_imported"),
+        ),
         on="document_id",
         how="left",
     )
@@ -697,19 +720,13 @@ def main(  # noqa: C901
     g.fig.savefig(RESULTS_DIR / "atypicality-score-distribution.png")
 
     # Take the log of citations and add 1 to avoid log(0)
-    results_df = (
-        results_df.with_columns(
-            (pl.col("document_cited_by_count").cast(pl.Float64).log()).alias(
-                "document_log_cited_by_count"
-            ),
-            (pl.col("document_fwci").log()).alias("document_log_fwci"),
-        )
-        .filter(
-            pl.col("document_log_fwci").is_not_nan(),
-        )
-        .filter(
-            pl.col("document_log_fwci") > 0,
-        )
+    results_df = results_df.with_columns(
+        (pl.col("document_cited_by_count").cast(pl.Float64).log()).alias(
+            "document_log_cited_by_count"
+        ),
+        (pl.col("document_fwci").log()).alias("document_log_fwci"),
+    ).filter(
+        pl.col("document_log_fwci").is_not_nan(),
     )
 
     # Select down to just atypicality z-score, log citations, and FWCI
@@ -730,6 +747,9 @@ def main(  # noqa: C901
     analysis_df = analysis_df.join(
         results_df.select(
             "document_id",
+            "document_author_count",
+            "document_author_mean_citations",
+            "document_log_author_mean_citations",
             "document_publication_year",
             "document_years_since_earliest",
             "document_field_name",
@@ -781,6 +801,8 @@ def main(  # noqa: C901
             "~ document_atypicality_z_score "
             "+ document_years_since_earliest "
             "+ num_unique_software_imported "
+            "+ document_author_count "
+            "+ document_log_author_mean_citations "
             "+ C(document_field_name_pruned)",
             data=ecosystem_df,
         ).fit()
@@ -797,6 +819,26 @@ def main(  # noqa: C901
             "~ document_atypicality_z_score "
             "+ document_years_since_earliest "
             "+ num_unique_software_imported "
+            "+ document_author_count "
+            "+ document_log_author_mean_citations "
+            "+ C(document_field_name_pruned)",
+            data=ecosystem_df,
+        ).fit(maxiter=1000)
+
+        # Poisson raw
+        poisson_model_raw = Poisson.from_formula(
+            "document_cited_by_count ~ document_atypicality_z_score",
+            data=ecosystem_df,
+        ).fit(maxiter=1000)
+
+        # Poisson with controls
+        poisson_model_controlled = Poisson.from_formula(
+            "document_cited_by_count "
+            "~ document_atypicality_z_score "
+            "+ document_years_since_earliest "
+            "+ num_unique_software_imported "
+            "+ document_author_count "
+            "+ document_log_author_mean_citations "
             "+ C(document_field_name_pruned)",
             data=ecosystem_df,
         ).fit(maxiter=1000)
@@ -806,7 +848,9 @@ def main(  # noqa: C901
             "document_log_fwci "
             "~ document_atypicality_z_score "
             "+ document_years_since_earliest "
-            "+ num_unique_software_imported",
+            "+ num_unique_software_imported "
+            "+ document_author_count "
+            "+ document_log_author_mean_citations ",
             data=ecosystem_df,
         ).fit()
 
@@ -818,6 +862,8 @@ def main(  # noqa: C901
             ("ols-controlled.txt", ols_model_controlled),
             ("negbin-raw.txt", negative_binomial_model_raw),
             ("negbin-controlled.txt", negative_binomial_model_controlled),
+            ("poisson-raw.txt", poisson_model_raw),
+            ("poisson-controlled.txt", poisson_model_controlled),
             ("ols-fwci.txt", ols_fwci),
         ]:
             with open(eco_dir / filename, "w") as f:

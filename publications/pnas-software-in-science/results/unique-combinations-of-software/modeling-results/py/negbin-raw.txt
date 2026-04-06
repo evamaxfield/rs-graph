@@ -1,16 +1,16 @@
                         NegativeBinomial Regression Results                        
 ===================================================================================
-Dep. Variable:     document_cited_by_count   No. Observations:                53362
-Model:                    NegativeBinomial   Df Residuals:                    53360
+Dep. Variable:     document_cited_by_count   No. Observations:                64409
+Model:                    NegativeBinomial   Df Residuals:                    64407
 Method:                                MLE   Df Model:                            1
-Date:                     Sun, 05 Apr 2026   Pseudo R-squ.:               0.0001193
-Time:                             21:35:27   Log-Likelihood:            -2.6640e+05
-converged:                            True   LL-Null:                   -2.6643e+05
-Covariance Type:                 nonrobust   LLR p-value:                 1.549e-15
+Date:                     Sun, 05 Apr 2026   Pseudo R-squ.:               4.295e-05
+Time:                             22:15:24   Log-Likelihood:            -3.0798e+05
+converged:                            True   LL-Null:                   -3.0800e+05
+Covariance Type:                 nonrobust   LLR p-value:                 2.695e-07
 ================================================================================================
                                    coef    std err          z      P>|z|      [0.025      0.975]
 ------------------------------------------------------------------------------------------------
-Intercept                        4.1319      0.006    703.552      0.000       4.120       4.143
-document_atypicality_z_score    -0.0482      0.006     -7.930      0.000      -0.060      -0.036
-alpha                            1.8237      0.009    192.617      0.000       1.805       1.842
+Intercept                        3.9606      0.006    714.720      0.000       3.950       3.971
+document_atypicality_z_score    -0.0292      0.006     -5.127      0.000      -0.040      -0.018
+alpha                            1.9588      0.009    212.544      0.000       1.941       1.977
 ================================================================================================

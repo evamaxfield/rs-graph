@@ -1,23 +1,25 @@
                         NegativeBinomial Regression Results                        
 ===================================================================================
-Dep. Variable:     document_cited_by_count   No. Observations:                 1834
-Model:                    NegativeBinomial   Df Residuals:                     1825
-Method:                                MLE   Df Model:                            8
-Date:                     Sun, 05 Apr 2026   Pseudo R-squ.:                 0.06205
-Time:                             21:35:27   Log-Likelihood:                -8877.0
-converged:                            True   LL-Null:                       -9464.3
-Covariance Type:                 nonrobust   LLR p-value:                3.073e-248
+Dep. Variable:     document_cited_by_count   No. Observations:                 2199
+Model:                    NegativeBinomial   Df Residuals:                     2188
+Method:                                MLE   Df Model:                           10
+Date:                     Sun, 05 Apr 2026   Pseudo R-squ.:                 0.06952
+Time:                             22:15:24   Log-Likelihood:                -10127.
+converged:                            True   LL-Null:                       -10884.
+Covariance Type:                 nonrobust   LLR p-value:                     0.000
 ==========================================================================================================================
                                                              coef    std err          z      P>|z|      [0.025      0.975]
 --------------------------------------------------------------------------------------------------------------------------
-Intercept                                                 49.9115      1.416     35.256      0.000      47.137      52.686
-C(document_field_name_pruned)[T.Computer Science]         -0.7105      0.079     -8.980      0.000      -0.866      -0.555
-C(document_field_name_pruned)[T.Engineering]              -0.5350      0.176     -3.034      0.002      -0.881      -0.189
-C(document_field_name_pruned)[T.Medicine]                 -0.4523      0.090     -5.041      0.000      -0.628      -0.276
-C(document_field_name_pruned)[T.Other]                    -0.5423      0.062     -8.692      0.000      -0.665      -0.420
-C(document_field_name_pruned)[T.Physics and Astronomy]    -1.3611      0.205     -6.635      0.000      -1.763      -0.959
-document_atypicality_z_score                              -0.0207      0.038     -0.550      0.582      -0.095       0.053
-document_years_since_earliest                             -0.3956      0.012    -32.217      0.000      -0.420      -0.372
-num_unique_software_imported                               0.0210      0.004      5.786      0.000       0.014       0.028
-alpha                                                      1.1677      0.034     33.863      0.000       1.100       1.235
+Intercept                                                  5.1824      0.289     17.938      0.000       4.616       5.749
+C(document_field_name_pruned)[T.Computer Science]         -0.2119      0.076     -2.770      0.006      -0.362      -0.062
+C(document_field_name_pruned)[T.Engineering]               0.0814      0.166      0.492      0.623      -0.243       0.406
+C(document_field_name_pruned)[T.Medicine]                 -0.3251      0.087     -3.758      0.000      -0.495      -0.156
+C(document_field_name_pruned)[T.Other]                    -0.1697      0.061     -2.803      0.005      -0.288      -0.051
+C(document_field_name_pruned)[T.Physics and Astronomy]    -0.8291      0.184     -4.495      0.000      -1.191      -0.468
+document_atypicality_z_score                               0.0455      0.035      1.296      0.195      -0.023       0.114
+document_years_since_earliest                             -0.3409      0.012    -28.333      0.000      -0.364      -0.317
+num_unique_software_imported                               0.0114      0.004      3.214      0.001       0.004       0.018
+document_author_count                                      0.0330      0.004      8.425      0.000       0.025       0.041
+document_log_author_mean_citations                         0.3203      0.023     14.180      0.000       0.276       0.365
+alpha                                                      1.2143      0.033     36.939      0.000       1.150       1.279
 ==========================================================================================================================

@@ -1,34 +1,34 @@
                                  OLS Regression Results                                
 =======================================================================================
-Dep. Variable:     document_log_cited_by_count   R-squared:                       0.345
-Model:                                     OLS   Adj. R-squared:                  0.345
-Method:                          Least Squares   F-statistic:                     3518.
+Dep. Variable:     document_log_cited_by_count   R-squared:                       0.254
+Model:                                     OLS   Adj. R-squared:                  0.254
+Method:                          Least Squares   F-statistic:                     2197.
 Date:                         Sun, 05 Apr 2026   Prob (F-statistic):               0.00
-Time:                                 21:35:27   Log-Likelihood:                -80166.
-No. Observations:                        53362   AIC:                         1.603e+05
-Df Residuals:                            53353   BIC:                         1.604e+05
-Df Model:                                    8                                         
+Time:                                 22:15:24   Log-Likelihood:            -1.0255e+05
+No. Observations:                        64409   AIC:                         2.051e+05
+Df Residuals:                            64398   BIC:                         2.052e+05
+Df Model:                                   10                                         
 Covariance Type:                     nonrobust                                         
 ==========================================================================================================================
                                                              coef    std err          t      P>|t|      [0.025      0.975]
 --------------------------------------------------------------------------------------------------------------------------
-Intercept                                                 46.5196      0.267    174.130      0.000      45.996      47.043
-C(document_field_name_pruned)[T.Computer Science]          0.0786      0.023      3.455      0.001       0.034       0.123
-C(document_field_name_pruned)[T.Engineering]               0.0410      0.026      1.584      0.113      -0.010       0.092
-C(document_field_name_pruned)[T.Medicine]                 -0.0844      0.031     -2.717      0.007      -0.145      -0.024
-C(document_field_name_pruned)[T.Other]                    -0.2383      0.025     -9.460      0.000      -0.288      -0.189
-C(document_field_name_pruned)[T.Physics and Astronomy]    -0.2208      0.028     -7.817      0.000      -0.276      -0.165
-document_atypicality_z_score                              -0.0698      0.007    -10.328      0.000      -0.083      -0.057
-document_years_since_earliest                             -0.3737      0.002   -162.486      0.000      -0.378      -0.369
-num_unique_software_imported                               0.0192      0.001     19.065      0.000       0.017       0.021
+Intercept                                                  3.8178      0.053     72.369      0.000       3.714       3.921
+C(document_field_name_pruned)[T.Computer Science]          0.1928      0.022      8.886      0.000       0.150       0.235
+C(document_field_name_pruned)[T.Engineering]               0.2215      0.025      8.841      0.000       0.172       0.271
+C(document_field_name_pruned)[T.Medicine]                  0.0643      0.031      2.086      0.037       0.004       0.125
+C(document_field_name_pruned)[T.Other]                    -0.0025      0.024     -0.105      0.917      -0.050       0.045
+C(document_field_name_pruned)[T.Physics and Astronomy]    -0.0895      0.028     -3.240      0.001      -0.144      -0.035
+document_atypicality_z_score                              -0.0682      0.007    -10.243      0.000      -0.081      -0.055
+document_years_since_earliest                             -0.2627      0.002   -110.421      0.000      -0.267      -0.258
+num_unique_software_imported                               0.0170      0.001     16.653      0.000       0.015       0.019
+document_author_count                                      0.0209      0.001     23.032      0.000       0.019       0.023
+document_log_author_mean_citations                         0.2645      0.004     67.936      0.000       0.257       0.272
 ==============================================================================
-Omnibus:                     1944.263   Durbin-Watson:                   1.945
-Prob(Omnibus):                  0.000   Jarque-Bera (JB):             2386.490
-Skew:                           0.422   Prob(JB):                         0.00
-Kurtosis:                       3.602   Cond. No.                     6.67e+03
+Omnibus:                      636.178   Durbin-Watson:                   1.980
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):              662.469
+Skew:                           0.234   Prob(JB):                    1.40e-144
+Kurtosis:                       3.169   Cond. No.                         257.
 ==============================================================================
 
 Notes:
 [1] Standard Errors assume that the covariance matrix of the errors is correctly specified.
-[2] The condition number is large, 6.67e+03. This might indicate that there are
-strong multicollinearity or other numerical problems.
