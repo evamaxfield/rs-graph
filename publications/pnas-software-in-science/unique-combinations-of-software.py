@@ -4,11 +4,14 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import seaborn as sns
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+import statsmodels.regression.linear_model as lm
 import torch
-from tqdm import tqdm
 import typer
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
+from tqdm import tqdm
 
 ###############################################################################
 
@@ -30,7 +33,9 @@ def load_table(table: str) -> pl.DataFrame:
     return df
 
 
-def _load_our_dataset() -> pl.DataFrame:
+def _load_our_dataset(
+    top_n_fields: int = 5,
+) -> pl.DataFrame:
     # Load all pair info
     documents = load_table("document")
     article_repo_links = load_table("document_repository_link")
@@ -106,6 +111,22 @@ def _load_our_dataset() -> pl.DataFrame:
     merged = merged.filter(
         (pl.col("predictive_model_confidence") > 0.9994)
         | (pl.col("predictive_model_confidence").is_null())
+    )
+
+    # Create a "document_field_name_pruned" column
+    # that takes the top N most common field names, and then labels the rest as "other"
+    top_n_field_names = (
+        merged.get_column("document_field_name")
+        .value_counts(sort=True)
+        .head(top_n_fields)
+        .get_column("document_field_name")
+        .to_list()
+    )
+    merged = merged.with_columns(
+        pl.when(pl.col("document_field_name").is_in(top_n_field_names))
+        .then(pl.col("document_field_name"))
+        .otherwise(pl.lit("Other"))
+        .alias("document_field_name_pruned")
     )
 
     return merged
@@ -449,7 +470,8 @@ def _compute_document_atypicality_for_ecosystem(
 @app.command()
 def main(
     remove_extremely_rare_imports: bool = True,
-    rare_import_threshold: int = 5,
+    rare_import_threshold: int = 3,
+    top_n_fields: int = 5,
     sample: bool = False,
     sample_size: int = 5000,
     log_software_pair_examples: bool = True,
@@ -461,7 +483,9 @@ def main(
     RESULTS_DIR.mkdir(exist_ok=True)
 
     # Load our dataset
-    pair_metadata = _load_our_dataset()
+    pair_metadata = _load_our_dataset(
+        top_n_fields=top_n_fields,
+    )
 
     # Remove any pairs that have null FWCI and less than 2 citations
     # Log how many we are removing by this filter
@@ -476,6 +500,19 @@ def main(
     print(
         f"Removed {low_or_null_citation_impact_diff_count} pairs "
         f"with null FWCI or less than 2 citations"
+    )
+
+    # Select down to only 1:1 article-repository pairs
+    pair_metadata = pair_metadata.unique(
+        subset="document_id",
+        keep="none",
+    ).unique(
+        subset="repository_id",
+        keep="none",
+    )
+    print(
+        f"Using {len(pair_metadata)} unique article-repository pairs "
+        f"for atypicality calculation"
     )
 
     # Take a sample to speed up development
@@ -553,6 +590,13 @@ def main(
         f"(papers with only 0 or 1 software, for which atypicality is not defined)"
     )
 
+    # Log the final N after all filtering
+    print(f"Final number of papers with atypicality scores: {len(results_df)}")
+
+    # Print the counts per-ecosystem after all filtering
+    print("Counts per ecosystem after all filtering:")
+    print(results_df.get_column("ecosystem_label").value_counts(sort=True))
+
     # Plot the distribution of atypicality scores
     g = sns.displot(
         results_df,
@@ -562,6 +606,10 @@ def main(
         hue="ecosystem_label",
         bins=50,
     )
+
+    # Change the subplot titles
+    g.set_titles(col_template="{col_name}")
+
     g.fig.savefig(RESULTS_DIR / "atypicality-score-distribution.png")
 
     # Take the log of citations and add 1 to avoid log(0)
@@ -592,6 +640,7 @@ def main(
             "document_id",
             "document_publication_year",
             "document_field_name",
+            "document_field_name_pruned",
             "document_domain_name",
             "document_atypicality_z_score",
             "ecosystem_label",
@@ -614,7 +663,72 @@ def main(
             "sharex": True,
         },
     )
+
+    # Change the subplot titles
+    g.set_titles(row_template="{row_name}", col_template="{col_name}")
+
+    # Save fig
     g.fig.savefig(RESULTS_DIR / "atypicality-vs-citation-impact.png")
+
+    def _print_model(
+        title: str,
+        model: lm.RegressionResultsWrapper | lm.OLSResults,
+    ) -> None:
+        print(f"\n{title}:")
+        print(model.summary().tables[1].as_text())
+        print()
+
+    # Run statsmodels
+    for ecosystem_label in results_df.get_column("ecosystem_label").unique():
+        # Get ecosystem specific dataframe
+        ecosystem_df = results_df.filter(
+            pl.col("ecosystem_label") == ecosystem_label
+        ).to_pandas()
+
+        # Raw correlation
+        ols_model_raw = smf.ols(
+            "document_log_cited_by_count ~ document_atypicality_z_score", data=ecosystem_df
+        ).fit()
+
+        # With controls
+        ols_model_controlled = smf.ols(
+            "document_log_cited_by_count ~ document_atypicality_z_score + document_publication_year + C(document_field_name_pruned)",
+            data=ecosystem_df,
+        ).fit()
+
+        negative_binomial_model_raw = smf.glm(
+            "document_cited_by_count ~ document_atypicality_z_score",
+            data=ecosystem_df,
+            family=sm.families.NegativeBinomial(),
+        ).fit()
+
+        negative_binomial_model_controlled = smf.glm(
+            "document_cited_by_count ~ document_atypicality_z_score + document_publication_year + C(document_field_name_pruned)",
+            data=ecosystem_df,
+            family=sm.families.NegativeBinomial(),
+        ).fit()
+
+        # Print results
+        print(f"\nResults for programming ecosystem '{ecosystem_label}':")
+        _print_model("OLS model (log citations) - raw", ols_model_raw)
+        _print_model("OLS model (log citations) - controlled", ols_model_controlled)
+        _print_model("Negative binomial model (citations) - raw", negative_binomial_model_raw)
+        _print_model(
+            "Negative binomial model (citations) - controlled",
+            negative_binomial_model_controlled,
+        )
+
+        # Store each model to its own CSV in a per-ecosystem subdirectory
+        eco_dir = RESULTS_DIR / "modeling-results" / ecosystem_label
+        eco_dir.mkdir(exist_ok=True)
+        for filename, model in [
+            ("ols-raw.csv", ols_model_raw),
+            ("ols-controlled.csv", ols_model_controlled),
+            ("negbin-raw.csv", negative_binomial_model_raw),
+            ("negbin-controlled.csv", negative_binomial_model_controlled),
+        ]:
+            with open(eco_dir / filename, "w") as f:
+                f.write(model.summary().tables[1].as_text())
 
     # Create a dataframe with all pairs of software and their cosine similarity and save
     # software_i_indices, software_j_indices = np.triu_indices(total_software_names, k=1)
