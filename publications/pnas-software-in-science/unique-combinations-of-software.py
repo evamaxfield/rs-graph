@@ -54,11 +54,17 @@ def _load_our_dataset(
         on="researcher_id",
         how="left",
     )
-    document_author_stats = document_contributors.group_by("document_id").agg(
-        pl.count("researcher_id").alias("document_author_count"),
-        pl.mean("researcher_cited_by_count").alias("document_author_mean_citations"),
-    ).with_columns(
-        pl.col("document_author_mean_citations").log1p().alias("document_log_author_mean_citations")
+    document_author_stats = (
+        document_contributors.group_by("document_id")
+        .agg(
+            pl.count("researcher_id").alias("document_author_count"),
+            pl.mean("researcher_cited_by_count").alias("document_author_mean_citations"),
+        )
+        .with_columns(
+            pl.col("document_author_mean_citations")
+            .log1p()
+            .alias("document_log_author_mean_citations")
+        )
     )
 
     # Sort document topics by score (descending)
