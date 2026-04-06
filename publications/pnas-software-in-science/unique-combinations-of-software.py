@@ -853,7 +853,6 @@ def main(  # noqa: C901
         ols_fwci = smf.ols(
             "document_log_fwci "
             "~ document_atypicality_z_score "
-            "+ document_years_since_earliest "
             "+ num_unique_software_imported "
             "+ document_author_count "
             "+ document_log_author_mean_citations ",
