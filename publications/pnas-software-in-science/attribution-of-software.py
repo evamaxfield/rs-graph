@@ -563,8 +563,8 @@ def _match_imports_and_mentions_and_get_long_frame(
         # Add unmatched imports with is_mentioned=False
         unmatched_imports = (
             set(normalized_imported_software_names)
-            - set([match.normalized_item_one for match in matched_imports_and_mentions])
-            - set([match.normalized_item_two for match in matched_imports_and_mentions])
+            - {match.normalized_item_one for match in matched_imports_and_mentions}
+            - {match.normalized_item_two for match in matched_imports_and_mentions}
         )
         for unmatched_import in unmatched_imports:
             imports_and_mentions_matched_rows.append(
@@ -587,8 +587,8 @@ def _match_imports_and_mentions_and_get_long_frame(
         # Add unmatched mentions with is_imported=False
         unmatched_mentions = (
             set(normalized_mentioned_software_names)
-            - set([match.normalized_item_one for match in matched_imports_and_mentions])
-            - set([match.normalized_item_two for match in matched_imports_and_mentions])
+            - {match.normalized_item_one for match in matched_imports_and_mentions}
+            - {match.normalized_item_two for match in matched_imports_and_mentions}
         )
         for unmatched_mention in unmatched_mentions:
             imports_and_mentions_matched_rows.append(
@@ -652,6 +652,7 @@ def _get_descriptive_stats_and_tables(
     )
     print(f"Total unique imports: {total_unique_imports}")
     print(f"Total unique mentions: {total_unique_mentions}")
+    print(f"Total unique matched imports and mentions: {total_unique_matched}")
     print(
         f"Average unique imports per pair -- "
         f"Median: {per_pair_imports_counts.get_column('unique_imports_count').median()}; "
@@ -834,7 +835,7 @@ def _compute_probability_of_mention_given_import_over_time(
 
     # Plot the aggregate curve with confidence intervals
     # Also plot the trends in a few specific libraries
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+    _fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
     # ── Left panel: Aggregate curve (equal weight per library) ──
     agg = aggregate_by_year.sort("publication_year").to_pandas()
@@ -988,7 +989,7 @@ def _compute_probability_of_mention_given_popularity(
     n_fields = len(fields)
     n_cols = 3
     n_rows = (n_fields + n_cols - 1) // n_cols
-    fig, axes = plt.subplots(
+    _fig, axes = plt.subplots(
         n_rows, n_cols, figsize=(n_cols * 6, n_rows * 5), sharex=True, sharey=True
     )
     for field, ax in zip(fields, axes.flatten(), strict=True):
