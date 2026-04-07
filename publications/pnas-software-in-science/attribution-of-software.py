@@ -19,7 +19,7 @@ app = typer.Typer()
 
 THIS_FILE_PATH = Path(__file__).resolve()
 THIS_DIR = THIS_FILE_PATH.parent
-RESULTS_DIR = THIS_DIR / "results" / "mentions-vs-imports"
+RESULTS_DIR = THIS_DIR / "results" / "attribution-of-software"
 
 MENTION_EXCLUDE_NORMALIZED: set[str] = {
     "code",
@@ -635,10 +635,14 @@ def _get_descriptive_stats_and_tables(
         .get_column("library_name_normalized")
         .n_unique()
     )
-    per_pair_imports_counts = imports_and_mentions_long_df.group_by("document_id").agg(
+    per_pair_imports_counts = imports_and_mentions_long_df.filter(
+        pl.col("is_imported")
+    ).group_by("document_id").agg(
         unique_imports_count=pl.col("library_name_normalized").n_unique()
     )
-    per_pair_mentions_counts = imports_and_mentions_long_df.group_by("document_id").agg(
+    per_pair_mentions_counts = imports_and_mentions_long_df.filter(
+        pl.col("is_mentioned")
+    ).group_by("document_id").agg(
         unique_mentions_count=pl.col("library_name_normalized").n_unique()
     )
     per_pair_matched_counts = (
@@ -1008,6 +1012,112 @@ def _compute_probability_of_mention_given_popularity(
         bbox_inches="tight",
     )
 
+def _compute_probability_of_mention_since_year_of_first_import(
+    imports_and_mentions_long_df: pl.DataFrame,
+) -> None:
+    # For libraries that were imported at least 20 times, compute p(mention | import)
+    # and see how it varies by import popularity
+    library_import_counts = (
+        imports_and_mentions_long_df.filter(pl.col("is_imported"))
+        .group_by("library_name_normalized")
+        .agg(total_imports=pl.len())
+        .filter(pl.col("total_imports") >= 20)
+    )
+    libraries_to_investigate = library_import_counts.get_column(
+        "library_name_normalized"
+    ).to_list()
+
+    # Filter to these libraries and only imported rows
+    imports_and_mentions_long_df = imports_and_mentions_long_df.filter(
+        pl.col("library_name_normalized").is_in(libraries_to_investigate)
+        & pl.col("is_imported")
+    )
+
+    # All uses in the first year (t=0) may have higher probablity
+    # of mention than later years, so we want to look at trends in p(mention | import)
+    # as a function of time since first usage (import)
+    first_import_year = (
+        imports_and_mentions_long_df.filter(pl.col("is_imported"))
+        .group_by("library_name_normalized")
+        .agg(first_import_year=pl.col("publication_year").min())
+    )
+
+    imports_and_mentions_long_df = imports_and_mentions_long_df.join(
+        first_import_year,
+        on="library_name_normalized",
+        how="left",
+    ).with_columns(
+        years_since_first_import=pl.col("publication_year") - pl.col("first_import_year")
+    )
+    per_library_years_since_first_import = (
+        imports_and_mentions_long_df.filter(pl.col("is_imported"))
+        .group_by("library_name_normalized", "years_since_first_import")
+        .agg(
+            n_imported=pl.len(),
+            n_mentioned=pl.sum("is_mentioned"),
+        )
+        .with_columns(
+            p_mention_given_import=(pl.col("n_mentioned") / pl.col("n_imported")),
+        )
+    )
+
+    # We want to plot the mean + confidence interval
+    # of p(mention | import) as a function of years since first import
+    # (equal weight per library)
+    aggregate_by_years_since_first_import = (
+        per_library_years_since_first_import.group_by("years_since_first_import")
+        .agg(
+            mean_p=pl.mean("p_mention_given_import"),
+            std_p=pl.std("p_mention_given_import"),
+            n_libraries=pl.len(),
+        )
+        .with_columns((pl.col("std_p") / pl.col("n_libraries").sqrt()).alias("se_p"))
+        .sort("years_since_first_import")
+    )
+
+    # Plot the curve with confidence intervals
+    plt.figure(figsize=(6, 5))
+    agg = aggregate_by_years_since_first_import.to_pandas()
+    plt.plot(
+        agg["years_since_first_import"],
+        agg["mean_p"],
+        "o-",
+        color="#2c7bb6",
+        linewidth=2,
+    )
+    plt.fill_between(
+        agg["years_since_first_import"],
+        agg["mean_p"] - 1.96 * agg["se_p"],
+        agg["mean_p"] + 1.96 * agg["se_p"],
+        alpha=0.2,
+        color="#2c7bb6",
+    )
+
+    # # Mark the number of observations per year since first import
+    # for _, row in agg.iterrows():
+    #     row_details = row.to_dict()
+    #     years_since_first_import: float = row_details["years_since_first_import"]
+    #     mean_p: float = row_details["mean_p"]
+    #     plt.annotate(
+    #         f"n={int(row['n_libraries'])}",
+    #         (years_since_first_import, mean_p),
+    #         textcoords="offset points",
+    #         xytext=(0, 10),
+    #         fontsize=7,
+    #         ha="center",
+    #         color="gray",
+    #     )
+
+    plt.xlabel("Years since first import")
+    plt.ylabel("p(mention | import)")
+    plt.title("p(mention | import) vs years since first import\n(equal weight per library)")
+    plt.grid(True, ls="--", lw=0.5)
+    plt.savefig(
+        RESULTS_DIR / "p-mention-given-import-vs-years-since-first-import.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
+
 
 @app.command()
 def main(
@@ -1165,6 +1275,9 @@ def main(
 
     # Compute probability of mention given import vs popularity
     _compute_probability_of_mention_given_popularity(imports_and_mentions_long_df)
+
+    # Compute probability of mention given time since first import
+    _compute_probability_of_mention_since_year_of_first_import(imports_and_mentions_long_df)
 
 
 ###############################################################################
