@@ -1,0 +1,7 @@
+ecosystem,n,outcome_variable,model_type,atypicality_coefficient,atypicality_p_value
+cross-ecosystem,2199,document_cited_by_count,Negative Binomial with controls,0.04551740428168803,0.19496893611154964
+cross-ecosystem,2199,document_log_fwci,OLS with controls,0.03655196536644337,0.3217855027396588
+r,7656,document_cited_by_count,Negative Binomial with controls,-0.08340505453271878,9.417931330431706e-6
+r,7656,document_log_fwci,OLS with controls,-0.033904698604330846,0.09065318987555643
+py,64409,document_cited_by_count,Negative Binomial with controls,-0.06417533923171796,1.3698686232115303e-21
+py,64409,document_log_fwci,OLS with controls,-0.02660406276429346,0.00026100790678056394

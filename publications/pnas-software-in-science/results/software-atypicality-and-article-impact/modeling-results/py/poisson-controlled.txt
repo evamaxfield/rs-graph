@@ -1,0 +1,24 @@
+                             Poisson Regression Results                            
+===================================================================================
+Dep. Variable:     document_cited_by_count   No. Observations:                64409
+Model:                             Poisson   Df Residuals:                    64398
+Method:                                MLE   Df Model:                           10
+Date:                     Mon, 06 Apr 2026   Pseudo R-squ.:                  0.3273
+Time:                             20:16:58   Log-Likelihood:            -3.6172e+06
+converged:                            True   LL-Null:                   -5.3770e+06
+Covariance Type:                 nonrobust   LLR p-value:                     0.000
+==========================================================================================================================
+                                                             coef    std err          z      P>|z|      [0.025      0.975]
+--------------------------------------------------------------------------------------------------------------------------
+Intercept                                                  2.5026      0.006    416.343      0.000       2.491       2.514
+C(document_field_name_pruned)[T.Computer Science]          0.3081      0.002    136.570      0.000       0.304       0.313
+C(document_field_name_pruned)[T.Engineering]               0.2197      0.003     78.300      0.000       0.214       0.225
+C(document_field_name_pruned)[T.Medicine]                 -0.0003      0.004     -0.072      0.943      -0.007       0.007
+C(document_field_name_pruned)[T.Other]                    -0.2211      0.003    -78.506      0.000      -0.227      -0.216
+C(document_field_name_pruned)[T.Physics and Astronomy]    -0.6242      0.004   -174.565      0.000      -0.631      -0.617
+document_atypicality_z_score                              -0.0242      0.001    -31.918      0.000      -0.026      -0.023
+document_years_since_earliest                             -0.2739      0.000  -1181.060      0.000      -0.274      -0.273
+num_unique_software_imported                               0.0177      0.000    152.428      0.000       0.017       0.018
+document_author_count                                      0.0121   3.43e-05    352.541      0.000       0.012       0.012
+document_log_author_mean_citations                         0.5422      0.000   1086.927      0.000       0.541       0.543
+==========================================================================================================================

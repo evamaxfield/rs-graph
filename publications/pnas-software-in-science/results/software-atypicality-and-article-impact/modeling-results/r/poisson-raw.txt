@@ -1,0 +1,15 @@
+                             Poisson Regression Results                            
+===================================================================================
+Dep. Variable:     document_cited_by_count   No. Observations:                 7656
+Model:                             Poisson   Df Residuals:                     7654
+Method:                                MLE   Df Model:                            1
+Date:                     Mon, 06 Apr 2026   Pseudo R-squ.:                0.005922
+Time:                             20:16:56   Log-Likelihood:            -8.8422e+05
+converged:                            True   LL-Null:                   -8.8949e+05
+Covariance Type:                 nonrobust   LLR p-value:                     0.000
+================================================================================================
+                                   coef    std err          z      P>|z|      [0.025      0.975]
+------------------------------------------------------------------------------------------------
+Intercept                        4.0820      0.001   2730.490      0.000       4.079       4.085
+document_atypicality_z_score     0.1630      0.002     98.842      0.000       0.160       0.166
+================================================================================================

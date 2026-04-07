@@ -947,6 +947,7 @@ def _compute_probability_of_mention_given_popularity(
         .agg(
             total_imports=pl.len(),
             total_mentions=pl.sum("is_mentioned"),
+            ecosystem=pl.col("ecosystem").first(),
         )
         .with_columns(
             p_mention_given_import=(pl.col("total_mentions") / pl.col("total_imports")),
@@ -960,10 +961,32 @@ def _compute_probability_of_mention_given_popularity(
         library_popularity.get_column("p_mention_given_import"),
         alpha=0.7,
     )
+
+    # Label the following points in the scatter
+    py_libraries_to_label = ["numpy", "pandas", "tensorflow", "torch"]
+    r_libraries_to_label = ["data.table", "dplyr", "lme4"]
+
+    # Get the rows for these libraries to label
+    selected_libraries = library_popularity.filter(
+        pl.col("library_name_normalized").is_in(py_libraries_to_label + r_libraries_to_label)
+    ).to_pandas()
+
+    # Iter over select rows and annotate the points with the library name
+    for _, row in selected_libraries.iterrows():
+        row_details = row.to_dict()
+        plt.annotate(
+            row_details["library_name_normalized"],
+            (row_details["total_imports"], row_details["p_mention_given_import"]),
+            textcoords="offset points",
+            xytext=(0, 10),
+            fontsize=7,
+            ha="center",
+        )
+
     plt.xscale("log")
-    plt.xlabel("Total imports (log scale)")
+    plt.xlabel("Total importing projects (log scale)")
     plt.ylabel("p(mention | import)")
-    plt.title("p(mention | import) vs total imports")
+    plt.title("p(mention | import) vs total importing projects")
     plt.grid(True, which="both", ls="--", lw=0.5)
     plt.savefig(
         RESULTS_DIR / "p-mention-given-import-vs-popularity.png", dpi=300, bbox_inches="tight"
@@ -1002,7 +1025,7 @@ def _compute_probability_of_mention_given_popularity(
             alpha=0.7,
         )
         ax.set_xscale("log")
-        ax.set_xlabel("Total imports (log scale)")
+        ax.set_xlabel("Total importing projects (log scale)")
         ax.set_ylabel("p(mention | import)")
         ax.set_title(f"Field: {field}")
         ax.grid(True, which="both", ls="--", lw=0.5)

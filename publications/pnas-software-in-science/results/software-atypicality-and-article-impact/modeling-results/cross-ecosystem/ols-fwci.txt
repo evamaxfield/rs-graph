@@ -1,0 +1,28 @@
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:      document_log_fwci   R-squared:                       0.070
+Model:                            OLS   Adj. R-squared:                  0.068
+Method:                 Least Squares   F-statistic:                     41.34
+Date:                Mon, 06 Apr 2026   Prob (F-statistic):           1.87e-33
+Time:                        20:16:56   Log-Likelihood:                -3610.3
+No. Observations:                2199   AIC:                             7231.
+Df Residuals:                    2194   BIC:                             7259.
+Df Model:                           4                                         
+Covariance Type:            nonrobust                                         
+======================================================================================================
+                                         coef    std err          t      P>|t|      [0.025      0.975]
+------------------------------------------------------------------------------------------------------
+Intercept                             -0.4084      0.198     -2.062      0.039      -0.797      -0.020
+document_atypicality_z_score           0.0366      0.037      0.991      0.322      -0.036       0.109
+num_unique_software_imported           0.0093      0.004      2.606      0.009       0.002       0.016
+document_author_count                  0.0250      0.003      7.283      0.000       0.018       0.032
+document_log_author_mean_citations     0.1596      0.023      6.989      0.000       0.115       0.204
+==============================================================================
+Omnibus:                       19.945   Durbin-Watson:                   1.981
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):               21.334
+Skew:                           0.196   Prob(JB):                     2.33e-05
+Kurtosis:                       3.283   Cond. No.                         167.
+==============================================================================
+
+Notes:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.
