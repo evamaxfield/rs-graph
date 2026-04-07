@@ -2,9 +2,9 @@ import os
 from pathlib import Path
 
 import polars as pl
+import typer
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
-import typer
 
 ###############################################################################
 
@@ -28,6 +28,7 @@ def load_table(table: str) -> pl.DataFrame:
     assert isinstance(df, pl.DataFrame)
     return df
 
+
 @app.command()
 def main() -> None:
     # Make results dir if it doesn't exist
@@ -46,7 +47,9 @@ def main() -> None:
             pl.col("predictive_model_confidence"),
         )
         .join(
-            documents.select(*[pl.col(col).alias(f"document_{col}") for col in documents.columns]),
+            documents.select(
+                *[pl.col(col).alias(f"document_{col}") for col in documents.columns]
+            ),
             on="document_id",
         )
         .join(
@@ -112,7 +115,10 @@ def main() -> None:
     final_sample = pl.concat(sampled_rows).sort(
         pl.col("predictive_model_confidence"), descending=False
     )
-    final_sample.write_csv(RESULTS_DIR / "annotation-first-round-stratified-sample-article-repo-pairs.csv")
+    final_sample.write_csv(
+        RESULTS_DIR / "annotation-first-round-stratified-sample-article-repo-pairs.csv"
+    )
+
 
 if __name__ == "__main__":
     app()

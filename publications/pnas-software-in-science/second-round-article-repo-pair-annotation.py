@@ -2,9 +2,9 @@ import os
 from pathlib import Path
 
 import polars as pl
+import typer
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
-import typer
 
 ###############################################################################
 
@@ -47,7 +47,9 @@ def main() -> None:
             pl.col("predictive_model_confidence"),
         )
         .join(
-            documents.select(*[pl.col(col).alias(f"document_{col}") for col in documents.columns]),
+            documents.select(
+                *[pl.col(col).alias(f"document_{col}") for col in documents.columns]
+            ),
             on="document_id",
         )
         .join(
@@ -82,28 +84,32 @@ def main() -> None:
 
     # Take a sample of 100 pairs for manual inspection
     # Where model confidence is above 0.99
-    final_sample = merged.filter(
-        pl.col("predictive_model_confidence") >= 0.99
-    ).sample(
-        n=100,
-        seed=42,
-    ).select(
-        pl.col("document_repository_link_id"),
-        pl.col("document_id"),
-        pl.col("repository_id"),
-        (pl.lit("https://doi.org/") + pl.col("document_doi")).alias("document_url"),
-        (
-            pl.lit("https://github.com/")
-            + pl.col("repository_owner")
-            + pl.lit("/")
-            + pl.col("repository_name")
-        ).alias("repository_url"),
-        pl.col("predictive_model_confidence"),
-        pl.lit(None).alias("label"),
-    ).sort(
-        pl.col("predictive_model_confidence"), descending=False
+    final_sample = (
+        merged.filter(pl.col("predictive_model_confidence") >= 0.99)
+        .sample(
+            n=100,
+            seed=42,
+        )
+        .select(
+            pl.col("document_repository_link_id"),
+            pl.col("document_id"),
+            pl.col("repository_id"),
+            (pl.lit("https://doi.org/") + pl.col("document_doi")).alias("document_url"),
+            (
+                pl.lit("https://github.com/")
+                + pl.col("repository_owner")
+                + pl.lit("/")
+                + pl.col("repository_name")
+            ).alias("repository_url"),
+            pl.col("predictive_model_confidence"),
+            pl.lit(None).alias("label"),
+        )
+        .sort(pl.col("predictive_model_confidence"), descending=False)
     )
-    final_sample.write_csv(RESULTS_DIR / "annotation-second-round-sample-article-repo-pairs.csv")
+    final_sample.write_csv(
+        RESULTS_DIR / "annotation-second-round-sample-article-repo-pairs.csv"
+    )
+
 
 if __name__ == "__main__":
     app()

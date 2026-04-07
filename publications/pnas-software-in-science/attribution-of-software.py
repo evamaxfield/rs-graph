@@ -635,15 +635,15 @@ def _get_descriptive_stats_and_tables(
         .get_column("library_name_normalized")
         .n_unique()
     )
-    per_pair_imports_counts = imports_and_mentions_long_df.filter(
-        pl.col("is_imported")
-    ).group_by("document_id").agg(
-        unique_imports_count=pl.col("library_name_normalized").n_unique()
+    per_pair_imports_counts = (
+        imports_and_mentions_long_df.filter(pl.col("is_imported"))
+        .group_by("document_id")
+        .agg(unique_imports_count=pl.col("library_name_normalized").n_unique())
     )
-    per_pair_mentions_counts = imports_and_mentions_long_df.filter(
-        pl.col("is_mentioned")
-    ).group_by("document_id").agg(
-        unique_mentions_count=pl.col("library_name_normalized").n_unique()
+    per_pair_mentions_counts = (
+        imports_and_mentions_long_df.filter(pl.col("is_mentioned"))
+        .group_by("document_id")
+        .agg(unique_mentions_count=pl.col("library_name_normalized").n_unique())
     )
     per_pair_matched_counts = (
         imports_and_mentions_long_df.filter(pl.col("is_imported") & pl.col("is_mentioned"))
@@ -1011,6 +1011,7 @@ def _compute_probability_of_mention_given_popularity(
         dpi=300,
         bbox_inches="tight",
     )
+
 
 def _compute_probability_of_mention_since_year_of_first_import(
     imports_and_mentions_long_df: pl.DataFrame,
