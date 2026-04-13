@@ -1,0 +1,12 @@
+Collinearity Diagnostics: Attribution x Atypicality Bridge
+============================================================
+
+Pearson correlation (document_atypicality_z_score, n_imported):
+  r = 0.6826, p = 0.00e+00
+
+Variance Inflation Factors (continuous predictors in controlled model):
+  document_atypicality_z_score: 1.88
+  document_years_since_earliest: 1.07
+  n_imported: 1.92
+  document_author_count: 1.02
+  document_log_author_mean_citations: 1.06

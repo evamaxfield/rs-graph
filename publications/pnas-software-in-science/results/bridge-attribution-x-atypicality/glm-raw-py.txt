@@ -1,0 +1,17 @@
+                 Generalized Linear Model Regression Results                  
+==============================================================================
+Dep. Variable:     fraction_mentioned   No. Observations:                16285
+Model:                            GLM   Df Residuals:                    16283
+Model Family:                Binomial   Df Model:                            1
+Link Function:                  Logit   Scale:                          1.0000
+Method:                          IRLS   Log-Likelihood:                -3666.5
+Date:                Mon, 13 Apr 2026   Deviance:                       3290.3
+Time:                        13:07:48   Pearson chi2:                 3.79e+03
+No. Iterations:                     6   Pseudo R-squ. (CS):           0.004353
+Covariance Type:                  HC1                                         
+================================================================================================
+                                   coef    std err          z      P>|z|      [0.025      0.975]
+------------------------------------------------------------------------------------------------
+Intercept                       -2.4575      0.014   -178.755      0.000      -2.484      -2.431
+document_atypicality_z_score    -0.2334      0.015    -15.376      0.000      -0.263      -0.204
+================================================================================================

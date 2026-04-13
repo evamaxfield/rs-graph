@@ -2027,6 +2027,11 @@ def main(
         matching_score_threshold=matching_score_threshold,
     )
 
+    # Save long-frame parquet for downstream bridge analyses
+    imports_and_mentions_long_df.write_parquet(
+        RESULTS_DIR / "imports-and-mentions-long.parquet"
+    )
+
     # Print descriptive stats and tables about the relationship between imports and mentions
     _get_descriptive_stats_and_tables(imports_and_mentions_long_df)
 

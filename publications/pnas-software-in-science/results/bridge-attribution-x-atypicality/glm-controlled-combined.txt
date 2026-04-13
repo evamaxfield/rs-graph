@@ -1,0 +1,28 @@
+                 Generalized Linear Model Regression Results                  
+==============================================================================
+Dep. Variable:     fraction_mentioned   No. Observations:                19305
+Model:                            GLM   Df Residuals:                    19292
+Model Family:                Binomial   Df Model:                           12
+Link Function:                  Logit   Scale:                          1.0000
+Method:                          IRLS   Log-Likelihood:                -4447.2
+Date:                Mon, 13 Apr 2026   Deviance:                       3793.3
+Time:                        13:07:48   Pearson chi2:                 4.02e+03
+No. Iterations:                     6   Pseudo R-squ. (CS):            0.01710
+Covariance Type:                  HC1                                         
+==========================================================================================================================
+                                                             coef    std err          z      P>|z|      [0.025      0.975]
+--------------------------------------------------------------------------------------------------------------------------
+Intercept                                                 -0.7916      0.151     -5.232      0.000      -1.088      -0.495
+C(document_field_name_pruned)[T.Computer Science]         -0.5474      0.046    -11.847      0.000      -0.638      -0.457
+C(document_field_name_pruned)[T.Engineering]              -0.3254      0.062     -5.226      0.000      -0.447      -0.203
+C(document_field_name_pruned)[T.Medicine]                 -0.0323      0.065     -0.500      0.617      -0.159       0.094
+C(document_field_name_pruned)[T.Other]                     0.0113      0.046      0.243      0.808      -0.080       0.102
+C(document_field_name_pruned)[T.Physics and Astronomy]     0.2919      0.067      4.357      0.000       0.161       0.423
+C(ecosystem_label)[T.py]                                  -0.1564      0.064     -2.455      0.014      -0.281      -0.032
+C(ecosystem_label)[T.r]                                    0.1709      0.066      2.571      0.010       0.041       0.301
+document_atypicality_z_score                              -0.0433      0.020     -2.184      0.029      -0.082      -0.004
+document_years_since_earliest                             -0.0124      0.008     -1.554      0.120      -0.028       0.003
+n_imported                                                -0.0448      0.003    -14.618      0.000      -0.051      -0.039
+document_author_count                                     -0.0079      0.003     -3.105      0.002      -0.013      -0.003
+document_log_author_mean_citations                        -0.0708      0.010     -6.854      0.000      -0.091      -0.051
+==========================================================================================================================

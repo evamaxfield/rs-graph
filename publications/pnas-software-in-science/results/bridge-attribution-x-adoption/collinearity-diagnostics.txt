@@ -1,0 +1,13 @@
+Collinearity Diagnostics: Attribution x Adoption Bridge
+============================================================
+
+Pearson correlation (library_age_at_use, log_total_adopters):
+  r = 0.6817, p = 0.00e+00
+
+Variance Inflation Factors (continuous predictors in controlled model):
+  library_age_at_use: 2.60
+  log_total_adopters: 2.27
+  document_years_since_earliest: 1.43
+  n_imported: 1.13
+  document_author_count: 1.05
+  document_log_author_mean_citations: 1.05

@@ -1,0 +1,25 @@
+                           Logit Regression Results                           
+==============================================================================
+Dep. Variable:           is_mentioned   No. Observations:               206547
+Model:                          Logit   Df Residuals:                   206535
+Method:                           MLE   Df Model:                           11
+Date:                Mon, 13 Apr 2026   Pseudo R-squ.:                 0.03197
+Time:                        13:07:19   Log-Likelihood:                -50210.
+converged:                       True   LL-Null:                       -51869.
+Covariance Type:              cluster   LLR p-value:                     0.000
+==========================================================================================================================
+                                                             coef    std err          z      P>|z|      [0.025      0.975]
+--------------------------------------------------------------------------------------------------------------------------
+Intercept                                                 -0.9156      0.813     -1.127      0.260      -2.509       0.677
+C(document_field_name_pruned)[T.Computer Science]         -0.7387      0.317     -2.331      0.020      -1.360      -0.118
+C(document_field_name_pruned)[T.Engineering]              -0.5002      0.252     -1.982      0.047      -0.995      -0.006
+C(document_field_name_pruned)[T.Medicine]                 -0.1180      0.124     -0.951      0.342      -0.361       0.125
+C(document_field_name_pruned)[T.Other]                    -0.0948      0.078     -1.220      0.222      -0.247       0.057
+C(document_field_name_pruned)[T.Physics and Astronomy]     0.1477      0.147      1.007      0.314      -0.140       0.435
+library_age_at_use                                        -0.0035      0.069     -0.050      0.960      -0.138       0.131
+log_total_adopters                                        -0.0207      0.063     -0.328      0.743      -0.145       0.103
+document_years_since_earliest                              0.0040      0.045      0.088      0.930      -0.084       0.092
+n_imported                                                -0.0470      0.006     -7.673      0.000      -0.059      -0.035
+document_author_count                                     -0.0053      0.003     -1.940      0.052      -0.011    5.38e-05
+document_log_author_mean_citations                        -0.0583      0.028     -2.071      0.038      -0.113      -0.003
+==========================================================================================================================
