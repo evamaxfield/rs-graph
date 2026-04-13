@@ -391,6 +391,25 @@ def _build_bridge_dataframe(
         n_imported=pl.col("library_name_normalized").n_unique()
     )
 
+    # Print the software that are most common in both frames
+    # Added for debug printing to make sure that the two strings follow the same pattern
+    # as we are joining on them and they are generated from different code paths
+    # top_software_in_imported_df = (
+    #     imported_df.group_by("ecosystem_normalized_software_name")
+    #     .agg(pl.len().alias("count_in_imported_df"))
+    #     .sort("count_in_imported_df", descending=True)
+    # )
+    # print("Top software in imported dataframe:")
+    # print(top_software_in_imported_df.head(10))
+
+    # top_software_in_library_age_stats = (
+    #     library_age_stats.group_by("ecosystem_normalized_software_name")
+    #     .agg(pl.len().alias("count_in_library_age_stats"))
+    #     .sort("count_in_library_age_stats", descending=True)
+    # )
+    # print("Top software in library age stats dataframe:")
+    # print(top_software_in_library_age_stats.head(10))
+
     # Join with library age stats on (document_id, ecosystem_normalized_software_name)
     bridge_df = imported_df.join(
         library_age_stats,

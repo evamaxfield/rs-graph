@@ -4,7 +4,7 @@ Dep. Variable:           is_mentioned   No. Observations:               265446
 Model:                          Logit   Df Residuals:                   265443
 Method:                           MLE   Df Model:                            2
 Date:                Mon, 13 Apr 2026   Pseudo R-squ.:                0.004329
-Time:                        13:07:18   Log-Likelihood:                -70688.
+Time:                        15:07:39   Log-Likelihood:                -70688.
 converged:                       True   LL-Null:                       -70996.
 Covariance Type:              cluster   LLR p-value:                3.274e-134
 ======================================================================================
