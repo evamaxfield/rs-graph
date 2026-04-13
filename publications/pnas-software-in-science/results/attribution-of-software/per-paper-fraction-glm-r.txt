@@ -1,0 +1,25 @@
+                 Generalized Linear Model Regression Results                  
+==============================================================================
+Dep. Variable:     fraction_mentioned   No. Observations:                 5804
+Model:                            GLM   Df Residuals:                     5794
+Model Family:                Binomial   Df Model:                            9
+Link Function:                  Logit   Scale:                          1.0000
+Method:                          IRLS   Log-Likelihood:                -1728.2
+Date:                Sun, 12 Apr 2026   Deviance:                       1692.6
+Time:                        19:29:09   Pearson chi2:                 1.80e+03
+No. Iterations:                     5   Pseudo R-squ. (CS):           0.006257
+Covariance Type:                  HC1                                         
+==========================================================================================================================
+                                                             coef    std err          z      P>|z|      [0.025      0.975]
+--------------------------------------------------------------------------------------------------------------------------
+Intercept                                                 87.4055     24.965      3.501      0.000      38.475     136.336
+C(document_field_name_pruned)[T.Computer Science]         -0.1842      0.106     -1.736      0.083      -0.392       0.024
+C(document_field_name_pruned)[T.Engineering]              -0.1918      0.267     -0.718      0.473      -0.715       0.331
+C(document_field_name_pruned)[T.Medicine]                  0.0409      0.085      0.481      0.630      -0.126       0.208
+C(document_field_name_pruned)[T.Other]                     0.0727      0.053      1.376      0.169      -0.031       0.176
+C(document_field_name_pruned)[T.Physics and Astronomy]    -0.3690      0.321     -1.149      0.250      -0.998       0.260
+document_publication_year                                 -0.0440      0.012     -3.562      0.000      -0.068      -0.020
+document_author_count                                     -0.0048      0.003     -1.717      0.086      -0.010       0.001
+document_log_author_mean_citations                        -0.0298      0.018     -1.654      0.098      -0.065       0.006
+n_imported                                                -0.0230      0.003     -8.654      0.000      -0.028      -0.018
+==========================================================================================================================

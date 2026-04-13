@@ -5,10 +5,15 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
+import pandas as pd
 import polars as pl
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
 import typer
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
+from scipy import stats
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 from tqdm import tqdm
 
 from rs_graph.utils.software_alignment import align_software_names
@@ -56,6 +61,31 @@ def _load_our_dataset(
     repositories = load_table("repository")
     document_topics = load_table("document_topic")
     topics = load_table("topic")
+    document_contributors = load_table("document_contributor")
+    researchers = load_table("researcher")
+
+    # Create dataframe of document_id,
+    # document_author_count, and document_author_mean_citations
+    document_contributors = document_contributors.join(
+        researchers.select(
+            pl.col("id").alias("researcher_id"),
+            pl.col("cited_by_count").alias("researcher_cited_by_count"),
+        ),
+        on="researcher_id",
+        how="left",
+    )
+    document_author_stats = (
+        document_contributors.group_by("document_id")
+        .agg(
+            pl.count("researcher_id").alias("document_author_count"),
+            pl.mean("researcher_cited_by_count").alias("document_author_mean_citations"),
+        )
+        .with_columns(
+            pl.col("document_author_mean_citations")
+            .log1p()
+            .alias("document_log_author_mean_citations")
+        )
+    )
 
     # Sort document topics by score (descending)
     # Drop duplicated by document_id to get the top topic for each document
@@ -106,6 +136,11 @@ def _load_our_dataset(
         .join(
             document_topics,
             on="document_id",
+        )
+        .join(
+            document_author_stats,
+            on="document_id",
+            how="left",
         )
     )
 
@@ -1144,6 +1179,706 @@ def _compute_probability_of_mention_since_year_of_first_import(
     )
 
 
+def _analysis_age_vs_popularity_logistic_regression(
+    imports_and_mentions_long_df: pl.DataFrame,
+    pair_metadata: pl.DataFrame,
+) -> None:
+    """Logistic regression disentangling library age from popularity."""
+    # Start with imported rows only
+    imported_df = imports_and_mentions_long_df.filter(pl.col("is_imported"))
+
+    # Compute library-level total imports
+    library_total_imports = imported_df.group_by("library_name_normalized").agg(
+        total_imports=pl.len()
+    )
+
+    # Compute first import year per library
+    first_import_year = imported_df.group_by("library_name_normalized").agg(
+        first_import_year=pl.col("publication_year").min()
+    )
+
+    # Compute per-document num_unique_software_imported
+    doc_import_counts = imported_df.group_by("document_id").agg(
+        num_unique_software_imported=pl.col("library_name_normalized").n_unique()
+    )
+
+    # Build the regression dataframe
+    regression_df = (
+        imported_df.join(library_total_imports, on="library_name_normalized")
+        .join(first_import_year, on="library_name_normalized")
+        .with_columns(
+            log_total_imports=pl.col("total_imports").cast(pl.Float64).log(),
+            years_since_first_import=(pl.col("publication_year") - pl.col("first_import_year")),
+        )
+        .join(doc_import_counts, on="document_id")
+        .join(
+            pair_metadata.select(
+                "document_id",
+                "document_years_since_earliest",
+                "document_author_count",
+                "document_log_author_mean_citations",
+                "document_field_name_pruned",
+            ),
+            on="document_id",
+        )
+    )
+
+    # Convert booleans for statsmodels and drop nulls
+    model_cols = [
+        "is_mentioned",
+        "years_since_first_import",
+        "log_total_imports",
+        "ecosystem",
+        "document_years_since_earliest",
+        "num_unique_software_imported",
+        "document_author_count",
+        "document_log_author_mean_citations",
+        "document_field_name_pruned",
+        "library_name_normalized",
+    ]
+    regression_pd = (
+        regression_df.select(model_cols)
+        .with_columns(pl.col("is_mentioned").cast(pl.Int8))
+        .drop_nulls()
+        .to_pandas()
+    )
+
+    print()
+    print("Analysis 1: Age vs Popularity logistic regression")
+    print(f"N observations: {len(regression_pd)}")
+    print(f"N unique libraries: {regression_pd['library_name_normalized'].nunique()}")
+
+    # Collinearity diagnostics
+    age_pop_corr, age_pop_pval = stats.pearsonr(
+        regression_pd["years_since_first_import"],
+        regression_pd["log_total_imports"],
+    )
+    print(f"Pearson r(age, log_popularity) = {age_pop_corr:.4f}, p = {age_pop_pval:.2e}")
+
+    continuous_controls = [
+        "years_since_first_import",
+        "log_total_imports",
+        "document_years_since_earliest",
+        "num_unique_software_imported",
+        "document_author_count",
+        "document_log_author_mean_citations",
+    ]
+    vif_x = sm.add_constant(regression_pd[continuous_controls])
+    assert isinstance(vif_x, pd.DataFrame)
+    vif_results = {
+        vif_x.columns[i]: variance_inflation_factor(vif_x.values, i)
+        for i in range(vif_x.shape[1])
+    }
+
+    collinearity_lines = [
+        "Collinearity Diagnostics for Analysis 1",
+        "=" * 50,
+        "",
+        "Pearson correlation (years_since_first_import, log_total_imports):",
+        f"  r = {age_pop_corr:.4f}, p = {age_pop_pval:.2e}",
+        "",
+        "Variance Inflation Factors (continuous predictors in controlled model):",
+    ]
+    for var, vif_val in vif_results.items():
+        if var == "const":
+            continue
+        collinearity_lines.append(f"  {var}: {vif_val:.2f}")
+    (RESULTS_DIR / "age-vs-popularity-collinearity.txt").write_text(
+        "\n".join(collinearity_lines)
+    )
+    print("Collinearity diagnostics saved.")
+
+    # Raw model (key predictors only)
+    raw_model = smf.logit(
+        "is_mentioned ~ years_since_first_import + log_total_imports + C(ecosystem)",
+        data=regression_pd,
+    ).fit(
+        cov_type="cluster",
+        cov_kwds={"groups": regression_pd["library_name_normalized"]},
+        maxiter=1000,
+    )
+
+    # Controlled model (with standard controls)
+    controlled_model = smf.logit(
+        "is_mentioned ~ years_since_first_import + log_total_imports"
+        " + document_years_since_earliest"
+        " + num_unique_software_imported"
+        " + document_author_count"
+        " + document_log_author_mean_citations"
+        " + C(document_field_name_pruned)"
+        " + C(ecosystem)",
+        data=regression_pd,
+    ).fit(
+        cov_type="cluster",
+        cov_kwds={"groups": regression_pd["library_name_normalized"]},
+        maxiter=1000,
+    )
+
+    # Single-predictor models (to probe collinearity)
+    age_only_model = smf.logit(
+        "is_mentioned ~ years_since_first_import + C(ecosystem)",
+        data=regression_pd,
+    ).fit(
+        cov_type="cluster",
+        cov_kwds={"groups": regression_pd["library_name_normalized"]},
+        maxiter=1000,
+    )
+
+    popularity_only_model = smf.logit(
+        "is_mentioned ~ log_total_imports + C(ecosystem)",
+        data=regression_pd,
+    ).fit(
+        cov_type="cluster",
+        cov_kwds={"groups": regression_pd["library_name_normalized"]},
+        maxiter=1000,
+    )
+
+    # Save model summaries
+    (RESULTS_DIR / "age-vs-popularity-logit-raw.txt").write_text(raw_model.summary().as_text())
+    (RESULTS_DIR / "age-vs-popularity-logit-controlled.txt").write_text(
+        controlled_model.summary().as_text()
+    )
+    (RESULTS_DIR / "age-vs-popularity-logit-age-only.txt").write_text(
+        age_only_model.summary().as_text()
+    )
+    (RESULTS_DIR / "age-vs-popularity-logit-popularity-only.txt").write_text(
+        popularity_only_model.summary().as_text()
+    )
+
+    # Extract key coefficients for summary CSV
+    summary_rows = []
+    models_and_predictors = [
+        (raw_model, "raw", ["years_since_first_import", "log_total_imports"]),
+        (controlled_model, "controlled", ["years_since_first_import", "log_total_imports"]),
+        (age_only_model, "age_only", ["years_since_first_import"]),
+        (popularity_only_model, "popularity_only", ["log_total_imports"]),
+    ]
+    for model, model_name, predictors in models_and_predictors:
+        conf_int = model.conf_int()
+        for predictor in predictors:
+            summary_rows.append(
+                {
+                    "model_type": model_name,
+                    "n_obs": int(model.nobs),
+                    "predictor": predictor,
+                    "coefficient": model.params[predictor],
+                    "std_err": model.bse[predictor],
+                    "p_value": model.pvalues[predictor],
+                    "ci_lower": conf_int.loc[predictor, 0],
+                    "ci_upper": conf_int.loc[predictor, 1],
+                }
+            )
+    summary_df = pl.DataFrame(summary_rows)
+    summary_df.write_csv(RESULTS_DIR / "age-vs-popularity-summary-stats.csv")
+    print(summary_df)
+
+    # Coefficient plot
+    all_model_names = ["raw", "controlled", "age_only", "popularity_only"]
+    colors = {
+        "raw": "#2c7bb6",
+        "controlled": "#d7191c",
+        "age_only": "#fdae61",
+        "popularity_only": "#abdda4",
+    }
+    key_predictors = ["years_since_first_import", "log_total_imports"]
+    _fig, ax = plt.subplots(figsize=(8, 4))
+    n_models = len(all_model_names)
+    offset = 0.12
+
+    for i, predictor in enumerate(key_predictors):
+        for j, model_name in enumerate(all_model_names):
+            rows = summary_df.filter(
+                (pl.col("predictor") == predictor) & (pl.col("model_type") == model_name)
+            ).to_dicts()
+            if not rows:
+                continue
+            row = rows[0]
+            y_pos = i + (j - (n_models - 1) / 2) * offset
+            ax.errorbar(
+                row["coefficient"],
+                y_pos,
+                xerr=[
+                    [row["coefficient"] - row["ci_lower"]],
+                    [row["ci_upper"] - row["coefficient"]],
+                ],
+                fmt="o",
+                color=colors[model_name],
+                capsize=4,
+                label=model_name if i == 0 else None,
+            )
+
+    ax.axvline(x=0, color="gray", linestyle="--", linewidth=0.8)
+    ax.set_yticks(range(len(key_predictors)))
+    ax.set_yticklabels([p.replace("_", " ") for p in key_predictors])
+    ax.set_xlabel("Logit coefficient (95% CI)")
+    ax.set_title("Age vs Popularity: Logistic Regression Coefficients")
+    ax.legend()
+    plt.tight_layout()
+    plt.savefig(
+        RESULTS_DIR / "age-vs-popularity-coefficient-plot.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+
+def _analysis_per_paper_mention_fraction(
+    imports_and_mentions_long_df: pl.DataFrame,
+    pair_metadata: pl.DataFrame,
+) -> None:
+    """Per-paper mention fraction analysis with fractional logit models."""
+    imported_df = imports_and_mentions_long_df.filter(pl.col("is_imported"))
+
+    # Combined (all ecosystems pooled per paper
+    combined_paper_df = (
+        imported_df.group_by("document_id")
+        .agg(
+            n_imported=pl.len(),
+            n_mentioned=pl.col("is_mentioned").sum(),
+            dominant_ecosystem=pl.col("ecosystem").mode().first(),
+        )
+        .with_columns(
+            fraction_mentioned=(pl.col("n_mentioned") / pl.col("n_imported")),
+        )
+        .join(
+            pair_metadata.select(
+                "document_id",
+                "document_publication_year",
+                "document_author_count",
+                "document_log_author_mean_citations",
+                "document_field_name_pruned",
+                "document_years_since_earliest",
+            ),
+            on="document_id",
+        )
+        .drop_nulls()
+    )
+
+    # Per-ecosystem paper fractions
+    per_eco_paper_df = (
+        imported_df.group_by("document_id", "ecosystem")
+        .agg(
+            n_imported=pl.len(),
+            n_mentioned=pl.col("is_mentioned").sum(),
+        )
+        .with_columns(
+            fraction_mentioned=(pl.col("n_mentioned") / pl.col("n_imported")),
+        )
+        .join(
+            pair_metadata.select(
+                "document_id",
+                "document_publication_year",
+                "document_author_count",
+                "document_log_author_mean_citations",
+                "document_field_name_pruned",
+                "document_years_since_earliest",
+            ),
+            on="document_id",
+        )
+        .drop_nulls()
+    )
+
+    print()
+    print("Analysis 2: Per-paper mention fraction")
+
+    # Combined model
+    combined_pd = combined_paper_df.to_pandas()
+    print(f"Combined model N: {len(combined_pd)}")
+
+    combined_model = smf.glm(
+        "fraction_mentioned ~ C(document_field_name_pruned) + document_publication_year"
+        " + document_author_count + document_log_author_mean_citations"
+        " + n_imported + C(dominant_ecosystem)",
+        data=combined_pd,
+        family=sm.families.Binomial(),
+    ).fit(cov_type="HC1")
+    (RESULTS_DIR / "per-paper-fraction-glm-combined.txt").write_text(
+        combined_model.summary().as_text()
+    )
+
+    # Per-ecosystem models
+    summary_rows = []
+    non_field_predictors = [
+        "document_publication_year",
+        "document_author_count",
+        "document_log_author_mean_citations",
+        "n_imported",
+    ]
+
+    # Add combined model coefficients
+    for predictor in non_field_predictors:
+        conf_int = combined_model.conf_int()
+        summary_rows.append(
+            {
+                "model": "combined",
+                "n_obs": int(combined_model.nobs),
+                "predictor": predictor,
+                "coefficient": combined_model.params[predictor],
+                "std_err": combined_model.bse[predictor],
+                "p_value": combined_model.pvalues[predictor],
+                "ci_lower": conf_int.loc[predictor, 0],
+                "ci_upper": conf_int.loc[predictor, 1],
+            }
+        )
+
+    for ecosystem in ["py", "r"]:
+        eco_df = per_eco_paper_df.filter(pl.col("ecosystem") == ecosystem).to_pandas()
+        print(f"  {ecosystem} model N: {len(eco_df)}")
+
+        eco_model = smf.glm(
+            "fraction_mentioned ~ C(document_field_name_pruned) + document_publication_year"
+            " + document_author_count + document_log_author_mean_citations"
+            " + n_imported",
+            data=eco_df,
+            family=sm.families.Binomial(),
+        ).fit(cov_type="HC1")
+        (RESULTS_DIR / f"per-paper-fraction-glm-{ecosystem}.txt").write_text(
+            eco_model.summary().as_text()
+        )
+
+        conf_int = eco_model.conf_int()
+        for predictor in non_field_predictors:
+            summary_rows.append(
+                {
+                    "model": ecosystem,
+                    "n_obs": int(eco_model.nobs),
+                    "predictor": predictor,
+                    "coefficient": eco_model.params[predictor],
+                    "std_err": eco_model.bse[predictor],
+                    "p_value": eco_model.pvalues[predictor],
+                    "ci_lower": conf_int.loc[predictor, 0],
+                    "ci_upper": conf_int.loc[predictor, 1],
+                }
+            )
+
+    summary_df = pl.DataFrame(summary_rows)
+    summary_df.write_csv(RESULTS_DIR / "per-paper-fraction-summary-stats.csv")
+    print(summary_df)
+
+    # Histogram of per-paper mention fractions by ecosystem
+    _fig, ax = plt.subplots(figsize=(7, 5))
+    eco_colors = {"py": "#2c7bb6", "r": "#d7191c"}
+    for ecosystem in ["py", "r"]:
+        eco_data = combined_paper_df.filter(
+            pl.col("dominant_ecosystem") == ecosystem
+        ).get_column("fraction_mentioned")
+        eco_mean = float(eco_data.mean())  # type: ignore[arg-type]
+        ax.hist(
+            eco_data.to_list(),
+            bins=20,
+            alpha=0.5,
+            label=f"{'Python' if ecosystem == 'py' else 'R'} (mean={eco_mean:.2f})",
+            color=eco_colors[ecosystem],
+        )
+        ax.axvline(
+            eco_mean,
+            color=eco_colors[ecosystem],
+            linestyle="--",
+            linewidth=1.5,
+        )
+    ax.set_xlabel("Fraction of imports mentioned")
+    ax.set_ylabel("Number of papers")
+    ax.set_title("Per-paper mention fraction by dominant ecosystem")
+    ax.legend()
+    plt.tight_layout()
+    plt.savefig(
+        RESULTS_DIR / "per-paper-fraction-histogram.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+    # Coefficient plot (per-ecosystem models side by side)
+    _fig, ax = plt.subplots(figsize=(7, 4))
+    offset = 0.15
+
+    for i, predictor in enumerate(non_field_predictors):
+        for j, model_name in enumerate(["py", "r"]):
+            row = summary_df.filter(
+                (pl.col("predictor") == predictor) & (pl.col("model") == model_name)
+            ).to_dicts()[0]
+            y_pos = i + (j - 0.5) * offset
+            ax.errorbar(
+                row["coefficient"],
+                y_pos,
+                xerr=[
+                    [row["coefficient"] - row["ci_lower"]],
+                    [row["ci_upper"] - row["coefficient"]],
+                ],
+                fmt="o",
+                color=eco_colors[model_name],
+                capsize=4,
+                label=f"{'Python' if model_name == 'py' else 'R'}" if i == 0 else None,
+            )
+
+    ax.axvline(x=0, color="gray", linestyle="--", linewidth=0.8)
+    ax.set_yticks(range(len(non_field_predictors)))
+    ax.set_yticklabels([p.replace("_", " ") for p in non_field_predictors])
+    ax.set_xlabel("GLM coefficient (95% CI)")
+    ax.set_title(
+        "Per-paper mention fraction: Coefficients by ecosystem\n(field fixed effects included but omitted from plot)"
+    )
+    ax.legend()
+    plt.tight_layout()
+    plt.savefig(
+        RESULTS_DIR / "per-paper-fraction-coefficient-plot.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+
+def _analysis_ecosystem_differences(
+    imports_and_mentions_long_df: pl.DataFrame,
+) -> None:
+    """Ecosystem-stratified attribution analysis."""
+    imported_df = imports_and_mentions_long_df.filter(
+        pl.col("is_imported") & pl.col("ecosystem").is_in(["py", "r"])
+    )
+    eco_colors = {"py": "#2c7bb6", "r": "#d7191c"}
+    eco_labels = {"py": "Python", "r": "R"}
+    min_library_imports = 20
+
+    # 3a: p(mention|import) over time by ecosystem
+    library_import_counts = (
+        imported_df.group_by("library_name_normalized")
+        .agg(total_imports=pl.len())
+        .filter(pl.col("total_imports") >= min_library_imports)
+    )
+    libraries_to_investigate = library_import_counts.get_column(
+        "library_name_normalized"
+    ).to_list()
+
+    filtered_df = imported_df.filter(
+        pl.col("library_name_normalized").is_in(libraries_to_investigate)
+    )
+
+    # Per library-year-ecosystem aggregation
+    per_lib_year_eco = (
+        filtered_df.group_by("library_name_normalized", "publication_year", "ecosystem")
+        .agg(
+            n_imported=pl.len(),
+            n_mentioned=pl.col("is_mentioned").sum(),
+        )
+        .with_columns(
+            p_mention=(pl.col("n_mentioned") / pl.col("n_imported")),
+        )
+    )
+
+    # Aggregate across libraries per ecosystem-year
+    _fig, ax = plt.subplots(figsize=(7, 5))
+    for ecosystem in ["py", "r"]:
+        agg = (
+            per_lib_year_eco.filter(pl.col("ecosystem") == ecosystem)
+            .group_by("publication_year")
+            .agg(
+                mean_p=pl.mean("p_mention"),
+                std_p=pl.std("p_mention"),
+                n_libraries=pl.len(),
+            )
+            .with_columns(se_p=(pl.col("std_p") / pl.col("n_libraries").sqrt()))
+            .filter(pl.col("n_libraries") >= 10)
+            .sort("publication_year")
+            .to_pandas()
+        )
+        ax.plot(
+            agg["publication_year"],
+            agg["mean_p"],
+            "o-",
+            color=eco_colors[ecosystem],
+            linewidth=2,
+            label=eco_labels[ecosystem],
+        )
+        ax.fill_between(
+            agg["publication_year"],
+            agg["mean_p"] - 1.96 * agg["se_p"],
+            agg["mean_p"] + 1.96 * agg["se_p"],
+            alpha=0.15,
+            color=eco_colors[ecosystem],
+        )
+    ax.set_xlabel("Publication year")
+    ax.set_ylabel("p(mention | import)")
+    ax.set_title("p(mention | import) over time by ecosystem\n(equal weight per library)")
+    ax.legend()
+    ax.grid(True, ls="--", lw=0.5)
+    plt.tight_layout()
+    plt.savefig(
+        RESULTS_DIR / "p-mention-given-import-over-time-by-ecosystem.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+    # 3b: p(mention|import) vs years since first import by ecosystem
+    first_import_year = filtered_df.group_by("library_name_normalized").agg(
+        first_import_year=pl.col("publication_year").min()
+    )
+    filtered_with_age = filtered_df.join(
+        first_import_year, on="library_name_normalized"
+    ).with_columns(
+        years_since_first_import=pl.col("publication_year") - pl.col("first_import_year")
+    )
+
+    per_lib_age_eco = (
+        filtered_with_age.group_by(
+            "library_name_normalized", "years_since_first_import", "ecosystem"
+        )
+        .agg(
+            n_imported=pl.len(),
+            n_mentioned=pl.col("is_mentioned").sum(),
+        )
+        .with_columns(
+            p_mention=(pl.col("n_mentioned") / pl.col("n_imported")),
+        )
+    )
+
+    _fig, ax = plt.subplots(figsize=(7, 5))
+    for ecosystem in ["py", "r"]:
+        agg = (
+            per_lib_age_eco.filter(pl.col("ecosystem") == ecosystem)
+            .group_by("years_since_first_import")
+            .agg(
+                mean_p=pl.mean("p_mention"),
+                std_p=pl.std("p_mention"),
+                n_libraries=pl.len(),
+            )
+            .with_columns(se_p=(pl.col("std_p") / pl.col("n_libraries").sqrt()))
+            .filter(pl.col("n_libraries") >= 10)
+            .sort("years_since_first_import")
+            .to_pandas()
+        )
+        ax.plot(
+            agg["years_since_first_import"],
+            agg["mean_p"],
+            "o-",
+            color=eco_colors[ecosystem],
+            linewidth=2,
+            label=eco_labels[ecosystem],
+        )
+        ax.fill_between(
+            agg["years_since_first_import"],
+            agg["mean_p"] - 1.96 * agg["se_p"],
+            agg["mean_p"] + 1.96 * agg["se_p"],
+            alpha=0.15,
+            color=eco_colors[ecosystem],
+        )
+    ax.set_xlabel("Years since first import")
+    ax.set_ylabel("p(mention | import)")
+    ax.set_title("p(mention | import) vs library age by ecosystem\n(equal weight per library)")
+    ax.legend()
+    ax.grid(True, ls="--", lw=0.5)
+    plt.tight_layout()
+    plt.savefig(
+        RESULTS_DIR / "p-mention-given-import-vs-age-by-ecosystem.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+    # 3c: p(mention|import) vs popularity by ecosystem
+    library_popularity = (
+        filtered_df.group_by("library_name_normalized")
+        .agg(
+            total_imports=pl.len(),
+            total_mentions=pl.col("is_mentioned").sum(),
+            ecosystem=pl.col("ecosystem").first(),
+        )
+        .with_columns(
+            p_mention=(pl.col("total_mentions") / pl.col("total_imports")),
+        )
+    )
+
+    _fig, ax = plt.subplots(figsize=(7, 5))
+    for ecosystem in ["py", "r"]:
+        eco_data = library_popularity.filter(pl.col("ecosystem") == ecosystem).to_pandas()
+        ax.scatter(
+            eco_data["total_imports"],
+            eco_data["p_mention"],
+            alpha=0.5,
+            color=eco_colors[ecosystem],
+            label=eco_labels[ecosystem],
+            s=20,
+        )
+    ax.set_xscale("log")
+    ax.set_xlabel("Total importing projects (log scale)")
+    ax.set_ylabel("p(mention | import)")
+    ax.set_title("p(mention | import) vs popularity by ecosystem")
+    ax.legend()
+    ax.grid(True, which="both", ls="--", lw=0.5)
+    plt.tight_layout()
+    plt.savefig(
+        RESULTS_DIR / "p-mention-given-import-vs-popularity-by-ecosystem.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+    # 3d: Overall + by-field proportion test
+    # Overall chi-squared test
+    contingency = (
+        imported_df.group_by("ecosystem")
+        .agg(
+            n_imported=pl.len(),
+            n_mentioned=pl.col("is_mentioned").sum(),
+        )
+        .with_columns(
+            n_not_mentioned=(pl.col("n_imported") - pl.col("n_mentioned")),
+            p_mention=(pl.col("n_mentioned") / pl.col("n_imported")),
+        )
+        .sort("ecosystem")
+    )
+
+    # Build 2x2 table for chi-squared
+    table_2x2 = contingency.select("n_mentioned", "n_not_mentioned").to_numpy()
+    chi2, p_value, _dof, _expected = stats.chi2_contingency(table_2x2)
+
+    overall_result = contingency.with_columns(
+        pl.lit("overall").alias("field"),
+        pl.lit(chi2).alias("chi2_statistic"),
+        pl.lit(p_value).alias("chi2_p_value"),
+    )
+    overall_result.write_csv(RESULTS_DIR / "ecosystem-proportion-test.csv")
+    print("\nAnalysis 3d: Ecosystem proportion test (overall)")
+    print(f"  Chi2={chi2:.2f}, p={p_value:.4g}")
+    print(contingency)
+
+    # By-field proportion tests
+    by_field_rows = []
+    for field in imported_df.get_column("pruned_field").unique().sort():
+        field_df = imported_df.filter(pl.col("pruned_field") == field)
+        field_contingency = (
+            field_df.group_by("ecosystem")
+            .agg(
+                n_imported=pl.len(),
+                n_mentioned=pl.col("is_mentioned").sum(),
+            )
+            .with_columns(
+                n_not_mentioned=(pl.col("n_imported") - pl.col("n_mentioned")),
+                p_mention=(pl.col("n_mentioned") / pl.col("n_imported")),
+            )
+            .sort("ecosystem")
+        )
+
+        # Only run chi-squared if both ecosystems present and have data
+        if len(field_contingency) == 2:
+            field_table = field_contingency.select("n_mentioned", "n_not_mentioned").to_numpy()
+            field_chi2, field_p, _dof, _expected = stats.chi2_contingency(field_table)
+        else:
+            field_chi2, field_p = float("nan"), float("nan")
+
+        for row in field_contingency.to_dicts():
+            by_field_rows.append(
+                {
+                    "field": field,
+                    "ecosystem": row["ecosystem"],
+                    "n_imported": row["n_imported"],
+                    "n_mentioned": row["n_mentioned"],
+                    "p_mention": row["p_mention"],
+                    "chi2_statistic": field_chi2,
+                    "chi2_p_value": field_p,
+                }
+            )
+
+    by_field_df = pl.DataFrame(by_field_rows)
+    by_field_df.write_csv(RESULTS_DIR / "ecosystem-proportion-test-by-field.csv")
+    print("Analysis 3d: Ecosystem proportion test (by field)")
+    print(by_field_df)
+
+
 @app.command()
 def main(
     rare_import_threshold: int = 3,
@@ -1303,6 +2038,15 @@ def main(
 
     # Compute probability of mention given time since first import
     _compute_probability_of_mention_since_year_of_first_import(imports_and_mentions_long_df)
+
+    # Analysis 1: Age vs popularity confounding (logistic regression)
+    _analysis_age_vs_popularity_logistic_regression(imports_and_mentions_long_df, pair_metadata)
+
+    # Analysis 2: Per-paper mention fraction (fractional logit)
+    _analysis_per_paper_mention_fraction(imports_and_mentions_long_df, pair_metadata)
+
+    # Analysis 3: Ecosystem differences in attribution
+    _analysis_ecosystem_differences(imports_and_mentions_long_df)
 
 
 ###############################################################################

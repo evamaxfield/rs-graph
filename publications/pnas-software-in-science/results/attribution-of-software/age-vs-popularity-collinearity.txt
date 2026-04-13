@@ -1,0 +1,13 @@
+Collinearity Diagnostics for Analysis 1
+==================================================
+
+Pearson correlation (years_since_first_import, log_total_imports):
+  r = 0.7094, p = 0.00e+00
+
+Variance Inflation Factors (continuous predictors in controlled model):
+  years_since_first_import: 2.84
+  log_total_imports: 2.51
+  document_years_since_earliest: 1.44
+  num_unique_software_imported: 1.12
+  document_author_count: 1.04
+  document_log_author_mean_citations: 1.05
