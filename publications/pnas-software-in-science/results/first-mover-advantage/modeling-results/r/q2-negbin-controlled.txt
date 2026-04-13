@@ -1,0 +1,26 @@
+                        NegativeBinomial Regression Results                        
+===================================================================================
+Dep. Variable:     document_cited_by_count   No. Observations:                 8136
+Model:                    NegativeBinomial   Df Residuals:                     8124
+Method:                                MLE   Df Model:                           11
+Date:                     Sun, 12 Apr 2026   Pseudo R-squ.:                 0.07887
+Time:                             22:38:43   Log-Likelihood:                -36336.
+converged:                            True   LL-Null:                       -39447.
+Covariance Type:                       HC1   LLR p-value:                     0.000
+==========================================================================================================================
+                                                             coef    std err          z      P>|z|      [0.025      0.975]
+--------------------------------------------------------------------------------------------------------------------------
+Intercept                                                  2.1495      0.651      3.304      0.001       0.874       3.425
+C(document_field_name_pruned)[T.Computer Science]          0.1436      0.156      0.919      0.358      -0.163       0.450
+C(document_field_name_pruned)[T.Engineering]              -0.1152      0.132     -0.872      0.383      -0.374       0.144
+C(document_field_name_pruned)[T.Medicine]                 -0.1561      0.119     -1.310      0.190      -0.390       0.077
+C(document_field_name_pruned)[T.Other]                    -0.0915      0.066     -1.377      0.168      -0.222       0.039
+C(document_field_name_pruned)[T.Physics and Astronomy]    -0.0995      0.174     -0.574      0.566      -0.440       0.241
+software_novelty_z                                         0.4046      0.100      4.062      0.000       0.209       0.600
+document_years_since_earliest                             -0.1705      0.038     -4.481      0.000      -0.245      -0.096
+num_libraries_scored                                       0.0253      0.005      5.585      0.000       0.016       0.034
+document_author_count                                      0.0418      0.005      8.315      0.000       0.032       0.052
+document_log_author_mean_citations                         0.3432      0.025     13.703      0.000       0.294       0.392
+mean_log_library_popularity                                0.0337      0.028      1.185      0.236      -0.022       0.089
+alpha                                                      1.1768      0.037     31.644      0.000       1.104       1.250
+==========================================================================================================================

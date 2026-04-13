@@ -1,27 +1,28 @@
                             OLS Regression Results                            
 ==============================================================================
-Dep. Variable:      document_log_fwci   R-squared:                       0.057
-Model:                            OLS   Adj. R-squared:                  0.057
-Method:                 Least Squares   F-statistic:                     971.6
-Date:                Mon, 06 Apr 2026   Prob (F-statistic):               0.00
-Time:                        20:16:58   Log-Likelihood:            -1.0845e+05
-No. Observations:               64409   AIC:                         2.169e+05
-Df Residuals:                   64404   BIC:                         2.169e+05
-Df Model:                           4                                         
+Dep. Variable:      document_log_fwci   R-squared:                       0.088
+Model:                            OLS   Adj. R-squared:                  0.087
+Method:                 Least Squares   F-statistic:                     1236.
+Date:                Sun, 12 Apr 2026   Prob (F-statistic):               0.00
+Time:                        20:04:47   Log-Likelihood:            -1.0738e+05
+No. Observations:               64409   AIC:                         2.148e+05
+Df Residuals:                   64403   BIC:                         2.148e+05
+Df Model:                           5                                         
 Covariance Type:            nonrobust                                         
 ======================================================================================================
                                          coef    std err          t      P>|t|      [0.025      0.975]
 ------------------------------------------------------------------------------------------------------
-Intercept                             -0.6006      0.035    -17.035      0.000      -0.670      -0.532
-document_atypicality_z_score          -0.0266      0.007     -3.651      0.000      -0.041      -0.012
-num_unique_software_imported           0.0235      0.001     21.535      0.000       0.021       0.026
-document_author_count                  0.0258      0.001     26.295      0.000       0.024       0.028
-document_log_author_mean_citations     0.1852      0.004     44.485      0.000       0.177       0.193
+Intercept                             -2.4477      0.053    -46.423      0.000      -2.551      -2.344
+document_atypicality_z_score          -0.0196      0.007     -2.731      0.006      -0.034      -0.006
+document_years_since_earliest          0.1188      0.003     46.509      0.000       0.114       0.124
+num_unique_software_imported           0.0140      0.001     12.768      0.000       0.012       0.016
+document_author_count                  0.0218      0.001     22.490      0.000       0.020       0.024
+document_log_author_mean_citations     0.2249      0.004     53.757      0.000       0.217       0.233
 ==============================================================================
-Omnibus:                       87.139   Durbin-Watson:                   1.968
-Prob(Omnibus):                  0.000   Jarque-Bera (JB):               88.553
-Skew:                           0.081   Prob(JB):                     5.90e-20
-Kurtosis:                       3.081   Cond. No.                         105.
+Omnibus:                      257.173   Durbin-Watson:                   1.983
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):              261.378
+Skew:                           0.150   Prob(JB):                     1.75e-57
+Kurtosis:                       3.089   Cond. No.                         212.
 ==============================================================================
 
 Notes:

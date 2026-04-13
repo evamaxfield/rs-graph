@@ -1,0 +1,21 @@
+document_id,repository_id,mean_adoption_percentile,max_adoption_percentile,frac_early_adopter,num_libraries_scored,document_cited_by_count,document_fwci,document_field_name,document_publication_year,ecosystem_label
+188585,182321,100.0,100.0,1.0,1,74,7.53543952,"Biochemistry, Genetics and Molecular Biology",2020,r
+66222,63566,100.0,100.0,1.0,1,2,1.06678342,"Business, Management and Accounting",2015,r
+386206,380065,100.0,100.0,1.0,11,129,5.3418,"Biochemistry, Genetics and Molecular Biology",2011,r
+167271,164015,100.0,100.0,1.0,1,58,5.02181163,Medicine,2015,r
+269964,263704,100.0,100.0,1.0,1,29,4.96406148,Computer Science,2018,r
+186865,181041,100.0,100.0,1.0,4,37,1.43028967,Environmental Science,2012,r
+175385,171661,100.0,100.0,1.0,1,12,0.75265118,Environmental Science,2016,r
+376546,370405,100.0,100.0,1.0,1,577,15.8393,"Biochemistry, Genetics and Molecular Biology",2016,r
+176663,172812,100.0,100.0,1.0,1,13,1.75895604,"Biochemistry, Genetics and Molecular Biology",2015,r
+366465,360324,100.0,100.0,1.0,1,17,1.72167745,Environmental Science,2013,r
+209397,202977,99.9873164032456,100.0,1.0,13,334,11.0873996,"Biochemistry, Genetics and Molecular Biology",2012,r
+237433,231091,99.98444127828513,100.0,1.0,3,260,16.12712669,"Biochemistry, Genetics and Molecular Biology",2012,r
+495517,489579,99.97081344119633,100.0,1.0,4,154,7.9218,"Biochemistry, Genetics and Molecular Biology",2012,r
+174213,170599,99.96803069053709,100.0,1.0,2,19,1.20390856,Decision Sciences,2013,r
+380248,374107,99.96488270824554,100.0,1.0,14,2433,28.4462,Decision Sciences,2012,r
+466357,460392,99.9619916381604,100.0,1.0,3,31,1.9433,"Biochemistry, Genetics and Molecular Biology",2013,r
+374517,368376,99.94128009395185,99.94128009395185,1.0,1,7,1.2603,Mathematics,2012,r
+237453,231111,99.91199935798274,100.0,1.0,15,415,8.33693742,Computer Science,2012,r
+460019,454052,99.90168326214402,100.0,1.0,7,43,3.7172,"Economics, Econometrics and Finance",2012,r
+453278,447310,99.8978586923251,100.0,1.0,11,970,85.7259,Earth and Planetary Sciences,2012,r

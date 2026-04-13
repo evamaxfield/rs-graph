@@ -1,0 +1,30 @@
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:      document_log_fwci   R-squared:                       0.088
+Model:                            OLS   Adj. R-squared:                  0.087
+Method:                 Least Squares   F-statistic:                     130.1
+Date:                Sun, 12 Apr 2026   Prob (F-statistic):          1.01e-157
+Time:                        22:38:43   Log-Likelihood:                -13116.
+No. Observations:                8136   AIC:                         2.625e+04
+Df Residuals:                    8129   BIC:                         2.629e+04
+Df Model:                           6                                         
+Covariance Type:            nonrobust                                         
+======================================================================================================
+                                         coef    std err          t      P>|t|      [0.025      0.975]
+------------------------------------------------------------------------------------------------------
+Intercept                             -1.6014      0.170     -9.426      0.000      -1.934      -1.268
+frac_young_libraries_z                 0.1996      0.018     10.988      0.000       0.164       0.235
+document_years_since_earliest          0.0788      0.007     11.127      0.000       0.065       0.093
+num_libraries_scored                   0.0151      0.002      8.599      0.000       0.012       0.019
+document_author_count                  0.0269      0.002     15.512      0.000       0.024       0.030
+document_log_author_mean_citations     0.1361      0.011     12.041      0.000       0.114       0.158
+mean_log_library_popularity            0.0350      0.016      2.231      0.026       0.004       0.066
+==============================================================================
+Omnibus:                       62.077   Durbin-Watson:                   2.001
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):               68.155
+Skew:                           0.175   Prob(JB):                     1.59e-15
+Kurtosis:                       3.279   Cond. No.                         267.
+==============================================================================
+
+Notes:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.

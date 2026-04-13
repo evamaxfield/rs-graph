@@ -1,0 +1,21 @@
+document_id,repository_id,mean_library_age,min_library_age,frac_young_libraries,software_novelty,num_libraries_age_scored,document_cited_by_count,document_fwci,document_field_name,document_publication_year,ecosystem_label
+372086,365945,12.714285714285714,11,0.0,-12.714285714285714,7,2,1.7129,"Biochemistry, Genetics and Molecular Biology",2025,r
+107796,104617,13.0,13,0.0,-13.0,1,2,14.57534195,Mathematics,2025,r
+369092,362951,13.0,13,0.0,-13.0,1,2,3.9761,Medicine,2025,r
+432050,426066,13.0,12,0.0,-13.0,3,3,11.1358,Psychology,2025,r
+366889,360748,13.0,13,0.0,-13.0,1,4,8.8087,Decision Sciences,2025,r
+398517,392379,13.0,13,0.0,-13.0,2,3,5.8575,"Biochemistry, Genetics and Molecular Biology",2025,r
+16963,16222,13.0,13,0.0,-13.0,1,5,7.66450229,Mathematics,2024,r
+165092,161898,13.0,13,0.0,-13.0,1,2,2.18840032,"Biochemistry, Genetics and Molecular Biology",2024,r
+343956,337812,13.0,12,0.0,-13.0,5,4,7.7634,Agricultural and Biological Sciences,2025,r
+388928,382787,13.0,13,0.0,-13.0,1,12,9.0861,Mathematics,2024,r
+452916,446948,13.0,13,0.0,-13.0,1,4,4.861,Agricultural and Biological Sciences,2025,r
+233109,226755,13.0,13,0.0,-13.0,2,19,43.41074673,Medicine,2025,r
+140182,136865,13.0,13,0.0,-13.0,1,11,8.99708225,"Economics, Econometrics and Finance",2024,r
+165361,162162,13.0,11,0.0,-13.0,4,4,20.2101747,Environmental Science,2025,r
+259470,253187,13.0,12,0.0,-13.0,2,3,17.64461453,"Economics, Econometrics and Finance",2025,r
+114548,111259,13.0,13,0.0,-13.0,1,2,45.09294106,Social Sciences,2025,r
+162908,159766,13.0,13,0.0,-13.0,2,2,51.3750401,Medicine,2025,r
+162911,159769,13.0,13,0.0,-13.0,3,2,12.89501376,Agricultural and Biological Sciences,2025,r
+463620,457655,13.0,13,0.0,-13.0,1,7,20.6116,Health Professions,2025,r
+299113,292903,13.0,13,0.0,-13.0,1,2,14.57534195,Mathematics,2025,r

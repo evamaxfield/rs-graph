@@ -1,0 +1,9 @@
+variable,VIF
+mean_adoption_percentile_z,27.672613180823657
+max_adoption_percentile_z,17.43937405554564
+frac_early_adopter_z,2.6681144969274144
+document_years_since_earliest,151.00227230197993
+num_libraries_scored,5.673368350149428
+document_author_count,1.8918375733748418
+document_log_author_mean_citations,48.385759478003074
+mean_log_library_popularity,81.07148062554121

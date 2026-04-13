@@ -1,0 +1,21 @@
+document_id,repository_id,mean_library_age,min_library_age,frac_young_libraries,software_novelty,num_libraries_age_scored,document_cited_by_count,document_fwci,document_field_name,document_publication_year,ecosystem_label
+430367,424381,0.0,0,1.0,-0.0,1,22,3.9466,Computer Science,2016,py
+194405,187925,0.0,0,1.0,-0.0,1,29,3.01203849,Engineering,2019,py
+178140,174071,0.0,0,1.0,-0.0,1,70,3.34036774,"Biochemistry, Genetics and Molecular Biology",2017,py
+387756,381615,0.0,0,1.0,-0.0,2,36,9.1581,Computer Science,2017,py
+476914,470960,0.0,0,1.0,-0.0,2,2,0.7247,Computer Science,2014,py
+239139,232801,0.0,0,1.0,-0.0,2,7,1.52691366,"Business, Management and Accounting",2015,py
+483646,477701,0.0,0,1.0,-0.0,1,10,0.6515,Computer Science,2018,py
+114930,111648,0.0,0,1.0,-0.0,1,1998,47.6371752,Computer Science,2017,py
+235531,229183,0.0,0,1.0,-0.0,1,103,7.22892102,Computer Science,2015,py
+175759,171997,0.0,0,1.0,-0.0,1,4,0.33906488,Computer Science,2020,py
+65016,62400,0.0,0,1.0,-0.0,1,2,0.11385237,Engineering,2019,py
+404248,398155,0.0,0,1.0,-0.0,15,370,40.3524,Computer Science,2010,py
+297685,291473,0.0,0,1.0,-0.0,1,13,1.62548532,Computer Science,2018,py
+181553,176853,0.0,0,1.0,-0.0,1,83,5.37311112,"Biochemistry, Genetics and Molecular Biology",2016,py
+312509,306331,0.0,0,1.0,-0.0,1,16,2.5352,Computer Science,2017,py
+15885,15154,0.0,0,1.0,-0.0,1,11,2.58053324,Computer Science,2017,py
+346727,340583,0.0,0,1.0,-0.0,1,9,1.1646,Computer Science,2014,py
+472065,466108,0.0,0,1.0,-0.0,1,7,1.4124,Engineering,2017,py
+192072,185584,0.0,0,1.0,-0.0,3,30,6.82113061,Computer Science,2012,py
+173324,169771,0.0,0,1.0,-0.0,1,2,0.38832944,Computer Science,2019,py

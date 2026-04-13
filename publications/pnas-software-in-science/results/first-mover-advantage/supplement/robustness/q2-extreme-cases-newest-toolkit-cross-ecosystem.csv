@@ -1,0 +1,21 @@
+document_id,repository_id,mean_library_age,min_library_age,frac_young_libraries,software_novelty,num_libraries_age_scored,document_cited_by_count,document_fwci,document_field_name,document_publication_year,ecosystem_label
+376995,370854,0.5,0,1.0,-0.5,10,1349,75.5174,"Biochemistry, Genetics and Molecular Biology",2012,cross-ecosystem
+359189,353047,0.7,0,0.9,-0.7,10,170,6.6444,Environmental Science,2014,cross-ecosystem
+188194,173652,0.7142857142857143,0,0.8571428571428571,-0.7142857142857143,14,14,1.80687974,Environmental Science,2013,cross-ecosystem
+180353,175900,0.8571428571428571,0,0.8571428571428571,-0.8571428571428571,7,25,10.49029238,Computer Science,2014,cross-ecosystem
+382138,375997,0.9090909090909091,0,1.0,-0.9090909090909091,11,5716,113.4088,"Biochemistry, Genetics and Molecular Biology",2012,cross-ecosystem
+213804,207400,1.0,0,1.0,-1.0,2,36,13.43560892,Computer Science,2017,cross-ecosystem
+373269,367128,1.0714285714285714,0,0.8571428571428571,-1.0714285714285714,14,548,11.0153,"Biochemistry, Genetics and Molecular Biology",2014,cross-ecosystem
+362585,356443,1.125,0,0.75,-1.125,8,109,7.8957,"Biochemistry, Genetics and Molecular Biology",2013,cross-ecosystem
+376981,370840,1.1818181818181819,0,0.8181818181818182,-1.1818181818181819,11,341,22.0867,Medicine,2013,cross-ecosystem
+492041,486103,1.4,0,0.8,-1.4,5,79,3.2666,"Biochemistry, Genetics and Molecular Biology",2014,cross-ecosystem
+329369,323213,1.5,0,0.75,-1.5,8,23,2.3663,Physics and Astronomy,2014,cross-ecosystem
+470835,464875,1.5,0,0.75,-1.5,4,11,1.9407,Computer Science,2013,cross-ecosystem
+203207,196764,1.5,0,0.8571428571428571,-1.5,14,7,3.01952148,Social Sciences,2014,cross-ecosystem
+274212,267965,1.6470588235294117,0,0.6470588235294118,-1.6470588235294117,17,196,6.70743278,Earth and Planetary Sciences,2014,cross-ecosystem
+396363,390223,1.6666666666666667,0,0.6666666666666666,-1.6666666666666667,3,213,12.9632,Medicine,2017,cross-ecosystem
+212475,206069,1.7142857142857142,0,0.7142857142857143,-1.7142857142857142,7,46,11.10856419,Computer Science,2014,cross-ecosystem
+384100,377959,1.8,0,0.6,-1.8,10,8,0.4376,"Biochemistry, Genetics and Molecular Biology",2015,cross-ecosystem
+318515,312342,1.8333333333333333,0,0.5,-1.8333333333333333,6,3,0.37111118,Environmental Science,2013,cross-ecosystem
+345430,339286,1.8571428571428572,0,0.42857142857142855,-1.8571428571428572,7,18,1.3159,"Biochemistry, Genetics and Molecular Biology",2013,cross-ecosystem
+179820,175457,2.0,0,0.75,-2.0,4,140,11.18533337,Agricultural and Biological Sciences,2015,cross-ecosystem

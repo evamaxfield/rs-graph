@@ -1,0 +1,16 @@
+                        NegativeBinomial Regression Results                        
+===================================================================================
+Dep. Variable:     document_cited_by_count   No. Observations:                65276
+Model:                    NegativeBinomial   Df Residuals:                    65274
+Method:                                MLE   Df Model:                            1
+Date:                     Sun, 12 Apr 2026   Pseudo R-squ.:                 0.03477
+Time:                             22:38:42   Log-Likelihood:            -3.0144e+05
+converged:                            True   LL-Null:                   -3.1230e+05
+Covariance Type:                       HC1   LLR p-value:                     0.000
+======================================================================================
+                         coef    std err          z      P>|z|      [0.025      0.975]
+--------------------------------------------------------------------------------------
+Intercept              3.6710      0.013    276.739      0.000       3.645       3.697
+software_novelty_z     0.7721      0.015     51.973      0.000       0.743       0.801
+alpha                  1.5461      0.018     87.282      0.000       1.511       1.581
+======================================================================================

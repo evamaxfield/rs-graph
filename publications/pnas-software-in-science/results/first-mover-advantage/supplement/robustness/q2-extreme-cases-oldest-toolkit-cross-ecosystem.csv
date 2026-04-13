@@ -1,0 +1,21 @@
+document_id,repository_id,mean_library_age,min_library_age,frac_young_libraries,software_novelty,num_libraries_age_scored,document_cited_by_count,document_fwci,document_field_name,document_publication_year,ecosystem_label
+283568,277335,12.75,9,0.0,-12.75,4,5,5.47100081,"Biochemistry, Genetics and Molecular Biology",2024,cross-ecosystem
+189712,183213,12.75,11,0.0,-12.75,4,2,1.2775571,Computer Science,2024,cross-ecosystem
+481952,476003,12.76923076923077,6,0.0,-12.76923076923077,13,3,4.0971,Medicine,2025,cross-ecosystem
+166001,162787,12.76923076923077,9,0.0,-12.76923076923077,13,7,18.7806124,"Biochemistry, Genetics and Molecular Biology",2025,cross-ecosystem
+6198,5929,12.833333333333334,9,0.0,-12.833333333333334,6,11,6.24706228,"Biochemistry, Genetics and Molecular Biology",2024,cross-ecosystem
+348499,342356,12.846153846153847,7,0.0,-12.846153846153847,13,8,6.8125,"Biochemistry, Genetics and Molecular Biology",2025,cross-ecosystem
+159918,156776,12.875,9,0.0,-12.875,8,7,4.01648877,Environmental Science,2024,cross-ecosystem
+114248,110947,13.0,11,0.0,-13.0,4,4,1.62700624,Physics and Astronomy,2024,cross-ecosystem
+164907,161720,13.0,13,0.0,-13.0,5,3,0.63099586,Neuroscience,2023,cross-ecosystem
+199834,193375,13.0,8,0.0,-13.0,7,2,14.57534195,Mathematics,2025,cross-ecosystem
+379251,373110,13.090909090909092,9,0.0,-13.090909090909092,11,7,13.4978,Agricultural and Biological Sciences,2025,cross-ecosystem
+254904,248609,13.142857142857142,11,0.0,-13.142857142857142,7,2,17.23397464,Computer Science,2025,cross-ecosystem
+243428,237101,13.2,12,0.0,-13.2,5,3,1.44074168,"Biochemistry, Genetics and Molecular Biology",2024,cross-ecosystem
+59139,56679,13.333333333333334,11,0.0,-13.333333333333334,3,2,20.21829491,Mathematics,2025,cross-ecosystem
+370332,364191,13.5,11,0.0,-13.5,6,2,0.5001,"Biochemistry, Genetics and Molecular Biology",2024,cross-ecosystem
+386521,380380,13.6,12,0.0,-13.6,10,8,15.3076,Agricultural and Biological Sciences,2025,cross-ecosystem
+282265,276032,13.636363636363637,8,0.0,-13.636363636363637,11,2,4.35475147,Engineering,2025,cross-ecosystem
+104627,101501,13.8,11,0.0,-13.8,10,2,4.04313148,Engineering,2025,cross-ecosystem
+354794,348651,13.833333333333334,11,0.0,-13.833333333333334,6,3,3.6859,Medicine,2025,cross-ecosystem
+250373,244062,14.0,10,0.0,-14.0,5,2,10.65363628,Computer Science,2025,cross-ecosystem

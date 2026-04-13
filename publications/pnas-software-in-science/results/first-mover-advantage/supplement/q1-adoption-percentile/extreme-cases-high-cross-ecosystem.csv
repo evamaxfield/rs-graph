@@ -1,0 +1,21 @@
+document_id,repository_id,mean_adoption_percentile,max_adoption_percentile,frac_early_adopter,num_libraries_scored,document_cited_by_count,document_fwci,document_field_name,document_publication_year,ecosystem_label
+376995,370854,99.8901946364507,100.0,1.0,10,1349,75.5174,"Biochemistry, Genetics and Molecular Biology",2012,cross-ecosystem
+382138,375997,99.88686693271315,100.0,1.0,11,5716,113.4088,"Biochemistry, Genetics and Molecular Biology",2012,cross-ecosystem
+362585,356443,99.69391808270015,100.0,1.0,8,109,7.8957,"Biochemistry, Genetics and Molecular Biology",2013,cross-ecosystem
+345430,339286,99.64994820718826,100.0,1.0,7,18,1.3159,"Biochemistry, Genetics and Molecular Biology",2013,cross-ecosystem
+274212,267965,99.63635504042337,100.0,1.0,17,196,6.70743278,Earth and Planetary Sciences,2014,cross-ecosystem
+188194,173652,99.58021130611588,100.0,1.0,14,14,1.80687974,Environmental Science,2013,cross-ecosystem
+373269,367128,99.57768366949713,100.0,1.0,14,548,11.0153,"Biochemistry, Genetics and Molecular Biology",2014,cross-ecosystem
+374516,368375,99.56222656938152,99.91432408650952,1.0,5,37,2.2087,Medicine,2013,cross-ecosystem
+329369,323213,99.51120018410552,100.0,1.0,8,23,2.3663,Physics and Astronomy,2014,cross-ecosystem
+478205,472251,99.48062276111057,100.0,1.0,6,83,6.1885,Environmental Science,2014,cross-ecosystem
+81829,78856,99.4534099998875,99.7887437510079,1.0,7,3,0.66672077,Computer Science,2015,cross-ecosystem
+212475,206069,99.44701093994904,99.93615662907001,1.0,7,46,11.10856419,Computer Science,2014,cross-ecosystem
+388564,382423,99.40163836540228,100.0,1.0,11,14,0.6058,Environmental Science,2014,cross-ecosystem
+359189,353047,99.39909492016133,100.0,1.0,10,170,6.6444,Environmental Science,2014,cross-ecosystem
+376981,370840,99.39511115339111,100.0,1.0,11,341,22.0867,Medicine,2013,cross-ecosystem
+339678,333533,99.37994240307519,100.0,1.0,6,49,2.1718,Mathematics,2014,cross-ecosystem
+438423,432446,99.35127198181847,100.0,1.0,10,189,5.8287,"Biochemistry, Genetics and Molecular Biology",2014,cross-ecosystem
+318515,312342,99.31721669618533,100.0,1.0,6,3,0.37111118,Environmental Science,2013,cross-ecosystem
+366360,360219,99.30099897062419,99.81331673926572,1.0,11,26,47.7149,Social Sciences,2015,cross-ecosystem
+345937,339793,99.20998307640316,99.55078034548234,1.0,3,7,0.6452,Neuroscience,2015,cross-ecosystem

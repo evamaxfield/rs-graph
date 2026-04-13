@@ -3,8 +3,8 @@
 Dep. Variable:     document_log_cited_by_count   R-squared:                       0.002
 Model:                                     OLS   Adj. R-squared:                  0.002
 Method:                          Least Squares   F-statistic:                     135.4
-Date:                         Mon, 06 Apr 2026   Prob (F-statistic):           2.96e-31
-Time:                                 20:16:57   Log-Likelihood:            -1.1193e+05
+Date:                         Sun, 12 Apr 2026   Prob (F-statistic):           2.96e-31
+Time:                                 20:04:46   Log-Likelihood:            -1.1193e+05
 No. Observations:                        64409   AIC:                         2.239e+05
 Df Residuals:                            64407   BIC:                         2.239e+05
 Df Model:                                    1                                         

@@ -3,8 +3,8 @@
 Dep. Variable:     document_cited_by_count   No. Observations:                 7656
 Model:                             Poisson   Df Residuals:                     7645
 Method:                                MLE   Df Model:                           10
-Date:                     Mon, 06 Apr 2026   Pseudo R-squ.:                  0.4010
-Time:                             20:16:56   Log-Likelihood:            -5.3277e+05
+Date:                     Sun, 12 Apr 2026   Pseudo R-squ.:                  0.4010
+Time:                             20:04:45   Log-Likelihood:            -5.3277e+05
 converged:                            True   LL-Null:                   -8.8949e+05
 Covariance Type:                 nonrobust   LLR p-value:                     0.000
 ==========================================================================================================================
