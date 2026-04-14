@@ -3,15 +3,15 @@
 Dep. Variable:           is_mentioned   No. Observations:               273897
 Model:                          Logit   Df Residuals:                   273893
 Method:                           MLE   Df Model:                            3
-Date:                Mon, 13 Apr 2026   Pseudo R-squ.:                 0.01929
-Time:                        13:05:30   Log-Likelihood:                -73079.
+Date:                Tue, 14 Apr 2026   Pseudo R-squ.:                 0.02249
+Time:                        15:53:31   Log-Likelihood:                -72841.
 converged:                       True   LL-Null:                       -74516.
 Covariance Type:              cluster   LLR p-value:                     0.000
 ============================================================================================
                                coef    std err          z      P>|z|      [0.025      0.975]
 --------------------------------------------------------------------------------------------
-Intercept                   -2.3817      0.183    -12.983      0.000      -2.741      -2.022
-C(ecosystem)[T.r]            0.4937      0.112      4.411      0.000       0.274       0.713
-years_since_first_import    -0.1433      0.070     -2.062      0.039      -0.280      -0.007
-log_total_imports            0.0970      0.107      0.904      0.366      -0.113       0.307
+Intercept                   -2.3906      0.162    -14.742      0.000      -2.708      -2.073
+C(ecosystem)[T.r]            0.5880      0.141      4.181      0.000       0.312       0.864
+years_since_first_import    -0.1921      0.108     -1.779      0.075      -0.404       0.020
+log_cumulative_imports       0.1573      0.150      1.046      0.295      -0.137       0.452
 ============================================================================================

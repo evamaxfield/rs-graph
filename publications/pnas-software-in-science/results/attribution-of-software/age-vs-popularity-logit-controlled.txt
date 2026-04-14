@@ -3,24 +3,24 @@
 Dep. Variable:           is_mentioned   No. Observations:               273897
 Model:                          Logit   Df Residuals:                   273884
 Method:                           MLE   Df Model:                           12
-Date:                Mon, 13 Apr 2026   Pseudo R-squ.:                 0.05324
-Time:                        13:05:30   Log-Likelihood:                -70549.
+Date:                Tue, 14 Apr 2026   Pseudo R-squ.:                 0.05459
+Time:                        15:53:32   Log-Likelihood:                -70448.
 converged:                       True   LL-Null:                       -74516.
 Covariance Type:              cluster   LLR p-value:                     0.000
 ==========================================================================================================================
                                                              coef    std err          z      P>|z|      [0.025      0.975]
 --------------------------------------------------------------------------------------------------------------------------
-Intercept                                                 -2.9202      1.510     -1.934      0.053      -5.879       0.039
-C(document_field_name_pruned)[T.Computer Science]         -0.9669      0.131     -7.380      0.000      -1.224      -0.710
-C(document_field_name_pruned)[T.Engineering]              -0.6442      0.127     -5.056      0.000      -0.894      -0.394
-C(document_field_name_pruned)[T.Medicine]                 -0.2109      0.047     -4.469      0.000      -0.303      -0.118
-C(document_field_name_pruned)[T.Other]                    -0.1472      0.044     -3.368      0.001      -0.233      -0.062
-C(document_field_name_pruned)[T.Physics and Astronomy]     0.1765      0.132      1.333      0.183      -0.083       0.436
-C(ecosystem)[T.r]                                          0.4001      0.175      2.288      0.022       0.057       0.743
-years_since_first_import                                  -0.2362      0.107     -2.216      0.027      -0.445      -0.027
-log_total_imports                                          0.1647      0.137      1.199      0.231      -0.105       0.434
-document_years_since_earliest                              0.1717      0.097      1.769      0.077      -0.019       0.362
-num_unique_software_imported                              -0.0362      0.003    -11.903      0.000      -0.042      -0.030
-document_author_count                                     -0.0017      0.001     -1.244      0.213      -0.004       0.001
-document_log_author_mean_citations                        -0.0632      0.014     -4.611      0.000      -0.090      -0.036
+Intercept                                                 -1.8896      0.606     -3.116      0.002      -3.078      -0.701
+C(document_field_name_pruned)[T.Computer Science]         -0.9823      0.126     -7.802      0.000      -1.229      -0.736
+C(document_field_name_pruned)[T.Engineering]              -0.6527      0.123     -5.293      0.000      -0.894      -0.411
+C(document_field_name_pruned)[T.Medicine]                 -0.2152      0.047     -4.587      0.000      -0.307      -0.123
+C(document_field_name_pruned)[T.Other]                    -0.1457      0.044     -3.309      0.001      -0.232      -0.059
+C(document_field_name_pruned)[T.Physics and Astronomy]     0.1822      0.133      1.372      0.170      -0.078       0.443
+C(ecosystem)[T.r]                                          0.4090      0.172      2.385      0.017       0.073       0.745
+years_since_first_import                                  -0.2532      0.111     -2.278      0.023      -0.471      -0.035
+log_cumulative_imports                                     0.1896      0.144      1.319      0.187      -0.092       0.471
+document_years_since_earliest                              0.0959      0.032      2.956      0.003       0.032       0.159
+num_unique_software_imported                              -0.0358      0.003    -12.521      0.000      -0.041      -0.030
+document_author_count                                     -0.0017      0.001     -1.228      0.220      -0.004       0.001
+document_log_author_mean_citations                        -0.0626      0.014     -4.381      0.000      -0.091      -0.035
 ==========================================================================================================================

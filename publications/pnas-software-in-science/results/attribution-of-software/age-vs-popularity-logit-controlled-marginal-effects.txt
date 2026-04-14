@@ -1,0 +1,21 @@
+        Logit Marginal Effects       
+=====================================
+Dep. Variable:           is_mentioned
+Method:                          dydx
+At:                           overall
+==========================================================================================================================
+                                                            dy/dx    std err          z      P>|z|      [0.025      0.975]
+--------------------------------------------------------------------------------------------------------------------------
+C(document_field_name_pruned)[T.Computer Science]         -0.0678      0.008     -8.706      0.000      -0.083      -0.053
+C(document_field_name_pruned)[T.Engineering]              -0.0451      0.007     -6.079      0.000      -0.060      -0.031
+C(document_field_name_pruned)[T.Medicine]                 -0.0149      0.003     -4.500      0.000      -0.021      -0.008
+C(document_field_name_pruned)[T.Other]                    -0.0101      0.003     -3.276      0.001      -0.016      -0.004
+C(document_field_name_pruned)[T.Physics and Astronomy]     0.0126      0.009      1.364      0.173      -0.006       0.031
+C(ecosystem)[T.r]                                          0.0282      0.013      2.118      0.034       0.002       0.054
+years_since_first_import                                  -0.0175      0.009     -1.910      0.056      -0.035       0.000
+log_cumulative_imports                                     0.0131      0.011      1.177      0.239      -0.009       0.035
+document_years_since_earliest                              0.0066      0.003      2.454      0.014       0.001       0.012
+num_unique_software_imported                              -0.0025      0.000     -6.253      0.000      -0.003      -0.002
+document_author_count                                     -0.0001   9.33e-05     -1.232      0.218      -0.000    6.79e-05
+document_log_author_mean_citations                        -0.0043      0.001     -5.237      0.000      -0.006      -0.003
+==========================================================================================================================

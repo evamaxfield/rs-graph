@@ -819,6 +819,22 @@ def _get_descriptive_stats_and_tables(
             )
 
 
+def _compute_cumulative_imports_by_library_year(
+    imports_and_mentions_long_df: pl.DataFrame,
+) -> pl.DataFrame:
+    # Cumulative import count per library through end of each publication_year.
+    per_year = (
+        imports_and_mentions_long_df.filter(pl.col("is_imported"))
+        .group_by("library_name_normalized", "publication_year")
+        .agg(n_imports_in_year=pl.len())
+    )
+    return per_year.sort("library_name_normalized", "publication_year").with_columns(
+        cumulative_imports_at_year=pl.col("n_imports_in_year")
+        .cum_sum()
+        .over("library_name_normalized")
+    )
+
+
 def _compute_probability_of_mention_given_import_over_time(
     imports_and_mentions_long_df: pl.DataFrame,
 ) -> None:
@@ -961,8 +977,9 @@ def _compute_probability_of_mention_given_import_over_time(
 def _compute_probability_of_mention_given_popularity(
     imports_and_mentions_long_df: pl.DataFrame,
 ) -> None:
-    # For libraries that were imported at least 20 times, compute p(mention | import)
-    # and see how it varies by import popularity
+    # For libraries that were imported at least 20 times lifetime, compute
+    # p(mention | import) per library-year and plot against popularity
+    # (cumulative imports) as of that publication year.
     library_import_counts = (
         imports_and_mentions_long_df.filter(pl.col("is_imported"))
         .group_by("library_name_normalized")
@@ -973,45 +990,63 @@ def _compute_probability_of_mention_given_popularity(
         "library_name_normalized"
     ).to_list()
 
-    library_popularity = (
+    cumulative_imports_by_year = _compute_cumulative_imports_by_library_year(
+        imports_and_mentions_long_df
+    )
+
+    min_imports_per_cell = 5
+
+    per_library_year = (
         imports_and_mentions_long_df.filter(
             pl.col("library_name_normalized").is_in(libraries_to_investigate)
             & pl.col("is_imported")
         )
-        .group_by("library_name_normalized")
+        .group_by("library_name_normalized", "publication_year")
         .agg(
-            total_imports=pl.len(),
-            total_mentions=pl.sum("is_mentioned"),
+            n_imports_in_year=pl.len(),
+            n_mentions_in_year=pl.sum("is_mentioned"),
             ecosystem=pl.col("ecosystem").first(),
         )
-        .with_columns(
-            p_mention_given_import=(pl.col("total_mentions") / pl.col("total_imports")),
+        .join(
+            cumulative_imports_by_year.select(
+                "library_name_normalized", "publication_year", "cumulative_imports_at_year"
+            ),
+            on=["library_name_normalized", "publication_year"],
         )
+        .with_columns(
+            p_mention_given_import=(pl.col("n_mentions_in_year") / pl.col("n_imports_in_year")),
+        )
+        .filter(pl.col("n_imports_in_year") >= min_imports_per_cell)
     )
 
-    # Plot p(mention | import) vs total imports
+    # Plot p(mention | import) vs cumulative importing projects at publication year
     plt.figure(figsize=(6, 5))
     plt.scatter(
-        library_popularity.get_column("total_imports"),
-        library_popularity.get_column("p_mention_given_import"),
-        alpha=0.7,
+        per_library_year.get_column("cumulative_imports_at_year"),
+        per_library_year.get_column("p_mention_given_import"),
+        alpha=0.4,
+        s=14,
     )
 
-    # Label the following points in the scatter
+    # Label spotlight libraries at their most recent library-year point
     py_libraries_to_label = ["numpy", "pandas", "tensorflow", "torch"]
     r_libraries_to_label = ["data.table", "dplyr", "lme4"]
-
-    # Get the rows for these libraries to label
-    selected_libraries = library_popularity.filter(
-        pl.col("library_name_normalized").is_in(py_libraries_to_label + r_libraries_to_label)
-    ).to_pandas()
-
-    # Iter over select rows and annotate the points with the library name
-    for _, row in selected_libraries.iterrows():
+    labeled_libs = py_libraries_to_label + r_libraries_to_label
+    latest_points = (
+        per_library_year.filter(pl.col("library_name_normalized").is_in(labeled_libs))
+        .sort("publication_year")
+        .group_by("library_name_normalized")
+        .last()
+        .to_pandas()
+    )
+    for _, row in latest_points.iterrows():
         row_details = row.to_dict()
         plt.annotate(
             row_details["library_name_normalized"],
-            (row_details["total_imports"], row_details["p_mention_given_import"]),
+            (
+                row_details["cumulative_imports_at_year"],
+                row_details["p_mention_given_import"],
+            ),
             textcoords="offset points",
             xytext=(0, 10),
             fontsize=7,
@@ -1019,31 +1054,40 @@ def _compute_probability_of_mention_given_popularity(
         )
 
     plt.xscale("log")
-    plt.xlabel("Total importing projects (log scale)")
+    plt.xlabel("Cumulative importing projects through publication year (log scale)")
     plt.ylabel("p(mention | import)")
-    plt.title("p(mention | import) vs total importing projects")
+    plt.title(
+        "p(mention | import) vs cumulative importing projects\n(one point per library-year)"
+    )
     plt.grid(True, which="both", ls="--", lw=0.5)
     plt.savefig(
         RESULTS_DIR / "p-mention-given-import-vs-popularity.png", dpi=300, bbox_inches="tight"
     )
 
-    # Also plot this distribution in small multiples of pruned field
-    # One ax per field, with a scatter plot of p(mention | import) vs total imports, faceted by pruned_field
-    library_popularity_by_field = (
+    # Faceted by field: p(mention | import) per library-field-year vs library-level
+    # cumulative popularity at that publication year.
+    per_library_field_year = (
         imports_and_mentions_long_df.filter(
             pl.col("library_name_normalized").is_in(libraries_to_investigate)
             & pl.col("is_imported")
         )
-        .group_by("library_name_normalized", "pruned_field")
+        .group_by("library_name_normalized", "pruned_field", "publication_year")
         .agg(
-            total_imports=pl.len(),
-            total_mentions=pl.sum("is_mentioned"),
+            n_imports_in_year=pl.len(),
+            n_mentions_in_year=pl.sum("is_mentioned"),
+        )
+        .join(
+            cumulative_imports_by_year.select(
+                "library_name_normalized", "publication_year", "cumulative_imports_at_year"
+            ),
+            on=["library_name_normalized", "publication_year"],
         )
         .with_columns(
-            p_mention_given_import=(pl.col("total_mentions") / pl.col("total_imports")),
+            p_mention_given_import=(pl.col("n_mentions_in_year") / pl.col("n_imports_in_year")),
         )
+        .filter(pl.col("n_imports_in_year") >= min_imports_per_cell)
     )
-    fields = library_popularity_by_field.get_column("pruned_field").unique().sort()
+    fields = per_library_field_year.get_column("pruned_field").unique().sort()
     n_fields = len(fields)
     n_cols = 3
     n_rows = (n_fields + n_cols - 1) // n_cols
@@ -1051,16 +1095,15 @@ def _compute_probability_of_mention_given_popularity(
         n_rows, n_cols, figsize=(n_cols * 6, n_rows * 5), sharex=True, sharey=True
     )
     for field, ax in zip(fields, axes.flatten(), strict=True):
-        field_data = library_popularity_by_field.filter(
-            pl.col("pruned_field") == field
-        ).to_pandas()
+        field_data = per_library_field_year.filter(pl.col("pruned_field") == field).to_pandas()
         ax.scatter(
-            field_data["total_imports"],
+            field_data["cumulative_imports_at_year"],
             field_data["p_mention_given_import"],
-            alpha=0.7,
+            alpha=0.4,
+            s=14,
         )
         ax.set_xscale("log")
-        ax.set_xlabel("Total importing projects (log scale)")
+        ax.set_xlabel("Cumulative importing projects through publication year (log scale)")
         ax.set_ylabel("p(mention | import)")
         ax.set_title(f"Field: {field}")
         ax.grid(True, which="both", ls="--", lw=0.5)
@@ -1187,10 +1230,11 @@ def _analysis_age_vs_popularity_logistic_regression(
     # Start with imported rows only
     imported_df = imports_and_mentions_long_df.filter(pl.col("is_imported"))
 
-    # Compute library-level total imports
-    library_total_imports = imported_df.group_by("library_name_normalized").agg(
-        total_imports=pl.len()
-    )
+    # Cumulative imports per (library, publication_year) through end of that year.
+    # Popularity at the time of publication, not lifetime popularity.
+    cumulative_imports_by_year = _compute_cumulative_imports_by_library_year(
+        imports_and_mentions_long_df
+    ).select("library_name_normalized", "publication_year", "cumulative_imports_at_year")
 
     # Compute first import year per library
     first_import_year = imported_df.group_by("library_name_normalized").agg(
@@ -1204,10 +1248,12 @@ def _analysis_age_vs_popularity_logistic_regression(
 
     # Build the regression dataframe
     regression_df = (
-        imported_df.join(library_total_imports, on="library_name_normalized")
+        imported_df.join(
+            cumulative_imports_by_year, on=["library_name_normalized", "publication_year"]
+        )
         .join(first_import_year, on="library_name_normalized")
         .with_columns(
-            log_total_imports=pl.col("total_imports").cast(pl.Float64).log(),
+            log_cumulative_imports=pl.col("cumulative_imports_at_year").cast(pl.Float64).log(),
             years_since_first_import=(pl.col("publication_year") - pl.col("first_import_year")),
         )
         .join(doc_import_counts, on="document_id")
@@ -1227,7 +1273,7 @@ def _analysis_age_vs_popularity_logistic_regression(
     model_cols = [
         "is_mentioned",
         "years_since_first_import",
-        "log_total_imports",
+        "log_cumulative_imports",
         "ecosystem",
         "document_years_since_earliest",
         "num_unique_software_imported",
@@ -1251,13 +1297,13 @@ def _analysis_age_vs_popularity_logistic_regression(
     # Collinearity diagnostics
     age_pop_corr, age_pop_pval = stats.pearsonr(
         regression_pd["years_since_first_import"],
-        regression_pd["log_total_imports"],
+        regression_pd["log_cumulative_imports"],
     )
     print(f"Pearson r(age, log_popularity) = {age_pop_corr:.4f}, p = {age_pop_pval:.2e}")
 
     continuous_controls = [
         "years_since_first_import",
-        "log_total_imports",
+        "log_cumulative_imports",
         "document_years_since_earliest",
         "num_unique_software_imported",
         "document_author_count",
@@ -1274,7 +1320,7 @@ def _analysis_age_vs_popularity_logistic_regression(
         "Collinearity Diagnostics for Analysis 1",
         "=" * 50,
         "",
-        "Pearson correlation (years_since_first_import, log_total_imports):",
+        "Pearson correlation (years_since_first_import, log_cumulative_imports):",
         f"  r = {age_pop_corr:.4f}, p = {age_pop_pval:.2e}",
         "",
         "Variance Inflation Factors (continuous predictors in controlled model):",
@@ -1290,7 +1336,7 @@ def _analysis_age_vs_popularity_logistic_regression(
 
     # Raw model (key predictors only)
     raw_model = smf.logit(
-        "is_mentioned ~ years_since_first_import + log_total_imports + C(ecosystem)",
+        "is_mentioned ~ years_since_first_import + log_cumulative_imports + C(ecosystem)",
         data=regression_pd,
     ).fit(
         cov_type="cluster",
@@ -1300,7 +1346,7 @@ def _analysis_age_vs_popularity_logistic_regression(
 
     # Controlled model (with standard controls)
     controlled_model = smf.logit(
-        "is_mentioned ~ years_since_first_import + log_total_imports"
+        "is_mentioned ~ years_since_first_import + log_cumulative_imports"
         " + document_years_since_earliest"
         " + num_unique_software_imported"
         " + document_author_count"
@@ -1325,7 +1371,7 @@ def _analysis_age_vs_popularity_logistic_regression(
     )
 
     popularity_only_model = smf.logit(
-        "is_mentioned ~ log_total_imports + C(ecosystem)",
+        "is_mentioned ~ log_cumulative_imports + C(ecosystem)",
         data=regression_pd,
     ).fit(
         cov_type="cluster",
@@ -1335,23 +1381,39 @@ def _analysis_age_vs_popularity_logistic_regression(
 
     # Save model summaries
     (RESULTS_DIR / "age-vs-popularity-logit-raw.txt").write_text(raw_model.summary().as_text())
+    (RESULTS_DIR / "age-vs-popularity-logit-raw-marginal-effects.txt").write_text(
+        raw_model.get_margeff(at="overall").summary().as_text()
+    )
     (RESULTS_DIR / "age-vs-popularity-logit-controlled.txt").write_text(
         controlled_model.summary().as_text()
+    )
+    (RESULTS_DIR / "age-vs-popularity-logit-controlled-marginal-effects.txt").write_text(
+        controlled_model.get_margeff(at="overall").summary().as_text()
     )
     (RESULTS_DIR / "age-vs-popularity-logit-age-only.txt").write_text(
         age_only_model.summary().as_text()
     )
+    (RESULTS_DIR / "age-vs-popularity-logit-age-only-marginal-effects.txt").write_text(
+        age_only_model.get_margeff(at="overall").summary().as_text()
+    )
     (RESULTS_DIR / "age-vs-popularity-logit-popularity-only.txt").write_text(
         popularity_only_model.summary().as_text()
+    )
+    (RESULTS_DIR / "age-vs-popularity-logit-popularity-only-marginal-effects.txt").write_text(
+        popularity_only_model.get_margeff(at="overall").summary().as_text()
     )
 
     # Extract key coefficients for summary CSV
     summary_rows = []
     models_and_predictors = [
-        (raw_model, "raw", ["years_since_first_import", "log_total_imports"]),
-        (controlled_model, "controlled", ["years_since_first_import", "log_total_imports"]),
+        (raw_model, "raw", ["years_since_first_import", "log_cumulative_imports"]),
+        (
+            controlled_model,
+            "controlled",
+            ["years_since_first_import", "log_cumulative_imports"],
+        ),
         (age_only_model, "age_only", ["years_since_first_import"]),
-        (popularity_only_model, "popularity_only", ["log_total_imports"]),
+        (popularity_only_model, "popularity_only", ["log_cumulative_imports"]),
     ]
     for model, model_name, predictors in models_and_predictors:
         conf_int = model.conf_int()
@@ -1380,7 +1442,7 @@ def _analysis_age_vs_popularity_logistic_regression(
         "age_only": "#fdae61",
         "popularity_only": "#abdda4",
     }
-    key_predictors = ["years_since_first_import", "log_total_imports"]
+    key_predictors = ["years_since_first_import", "log_cumulative_imports"]
     _fig, ax = plt.subplots(figsize=(8, 4))
     n_models = len(all_model_names)
     offset = 0.12
@@ -1480,6 +1542,31 @@ def _analysis_per_paper_mention_fraction(
     print()
     print("Analysis 2: Per-paper mention fraction")
 
+    # Mean per-paper mention fraction by field (descriptive)
+    by_field_fraction = (
+        combined_paper_df.group_by("document_field_name_pruned")
+        .agg(
+            n_papers=pl.len(),
+            mean_fraction_mentioned=pl.col("fraction_mentioned").mean(),
+            median_fraction_mentioned=pl.col("fraction_mentioned").median(),
+            std_fraction_mentioned=pl.col("fraction_mentioned").std(),
+        )
+        .rename({"document_field_name_pruned": "field"})
+    )
+    overall_fraction = combined_paper_df.select(
+        pl.lit("overall").alias("field"),
+        pl.len().alias("n_papers"),
+        pl.col("fraction_mentioned").mean().alias("mean_fraction_mentioned"),
+        pl.col("fraction_mentioned").median().alias("median_fraction_mentioned"),
+        pl.col("fraction_mentioned").std().alias("std_fraction_mentioned"),
+    )
+    by_field_fraction = pl.concat([by_field_fraction, overall_fraction]).sort(
+        "mean_fraction_mentioned", descending=True
+    )
+    by_field_fraction.write_csv(RESULTS_DIR / "per-paper-fraction-by-field.csv")
+    print("Per-paper mention fraction by field:")
+    print(by_field_fraction)
+
     # Combined model
     combined_pd = combined_paper_df.to_pandas()
     print(f"Combined model N: {len(combined_pd)}")
@@ -1493,6 +1580,9 @@ def _analysis_per_paper_mention_fraction(
     ).fit(cov_type="HC1")
     (RESULTS_DIR / "per-paper-fraction-glm-combined.txt").write_text(
         combined_model.summary().as_text()
+    )
+    (RESULTS_DIR / "per-paper-fraction-glm-combined-marginal-effects.txt").write_text(
+        combined_model.get_margeff(at="overall").summary().as_text()
     )
 
     # Per-ecosystem models
@@ -1533,6 +1623,9 @@ def _analysis_per_paper_mention_fraction(
         ).fit(cov_type="HC1")
         (RESULTS_DIR / f"per-paper-fraction-glm-{ecosystem}.txt").write_text(
             eco_model.summary().as_text()
+        )
+        (RESULTS_DIR / f"per-paper-fraction-glm-{ecosystem}-marginal-effects.txt").write_text(
+            eco_model.get_margeff(at="overall").summary().as_text()
         )
 
         conf_int = eco_model.conf_int()
@@ -1770,34 +1863,47 @@ def _analysis_ecosystem_differences(
         bbox_inches="tight",
     )
 
-    # 3c: p(mention|import) vs popularity by ecosystem
-    library_popularity = (
-        filtered_df.group_by("library_name_normalized")
+    # 3c: p(mention|import) vs popularity (at publication year) by ecosystem
+    cumulative_imports_by_year = _compute_cumulative_imports_by_library_year(
+        imports_and_mentions_long_df
+    )
+    per_lib_year_popularity = (
+        filtered_df.group_by("library_name_normalized", "publication_year")
         .agg(
-            total_imports=pl.len(),
-            total_mentions=pl.col("is_mentioned").sum(),
+            n_imports_in_year=pl.len(),
+            n_mentions_in_year=pl.col("is_mentioned").sum(),
             ecosystem=pl.col("ecosystem").first(),
         )
-        .with_columns(
-            p_mention=(pl.col("total_mentions") / pl.col("total_imports")),
+        .join(
+            cumulative_imports_by_year.select(
+                "library_name_normalized", "publication_year", "cumulative_imports_at_year"
+            ),
+            on=["library_name_normalized", "publication_year"],
         )
+        .with_columns(
+            p_mention=(pl.col("n_mentions_in_year") / pl.col("n_imports_in_year")),
+        )
+        .filter(pl.col("n_imports_in_year") >= 5)
     )
 
     _fig, ax = plt.subplots(figsize=(7, 5))
     for ecosystem in ["py", "r"]:
-        eco_data = library_popularity.filter(pl.col("ecosystem") == ecosystem).to_pandas()
+        eco_data = per_lib_year_popularity.filter(pl.col("ecosystem") == ecosystem).to_pandas()
         ax.scatter(
-            eco_data["total_imports"],
+            eco_data["cumulative_imports_at_year"],
             eco_data["p_mention"],
-            alpha=0.5,
+            alpha=0.4,
             color=eco_colors[ecosystem],
             label=eco_labels[ecosystem],
-            s=20,
+            s=14,
         )
     ax.set_xscale("log")
-    ax.set_xlabel("Total importing projects (log scale)")
+    ax.set_xlabel("Cumulative importing projects through publication year (log scale)")
     ax.set_ylabel("p(mention | import)")
-    ax.set_title("p(mention | import) vs popularity by ecosystem")
+    ax.set_title(
+        "p(mention | import) vs cumulative importing projects by ecosystem\n"
+        "(one point per library-year)"
+    )
     ax.legend()
     ax.grid(True, which="both", ls="--", lw=0.5)
     plt.tight_layout()

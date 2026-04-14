@@ -5,22 +5,22 @@ Model:                            GLM   Df Residuals:                    27288
 Model Family:                Binomial   Df Model:                           10
 Link Function:                  Logit   Scale:                          1.0000
 Method:                          IRLS   Log-Likelihood:                -6625.1
-Date:                Mon, 13 Apr 2026   Deviance:                       6003.6
-Time:                        13:05:31   Pearson chi2:                 6.50e+03
+Date:                Tue, 14 Apr 2026   Deviance:                       6003.7
+Time:                        15:53:33   Pearson chi2:                 6.50e+03
 No. Iterations:                     6   Pseudo R-squ. (CS):            0.01477
 Covariance Type:                  HC1                                         
 ==========================================================================================================================
                                                              coef    std err          z      P>|z|      [0.025      0.975]
 --------------------------------------------------------------------------------------------------------------------------
-Intercept                                                 16.8753     14.279      1.182      0.237     -11.112      44.862
-C(document_field_name_pruned)[T.Computer Science]         -0.4742      0.034    -14.002      0.000      -0.541      -0.408
-C(document_field_name_pruned)[T.Engineering]              -0.2553      0.051     -4.973      0.000      -0.356      -0.155
-C(document_field_name_pruned)[T.Medicine]                  0.0203      0.051      0.401      0.688      -0.079       0.120
-C(document_field_name_pruned)[T.Other]                     0.0475      0.034      1.377      0.169      -0.020       0.115
-C(document_field_name_pruned)[T.Physics and Astronomy]     0.2762      0.057      4.825      0.000       0.164       0.388
-C(dominant_ecosystem)[T.r]                                 0.2870      0.031      9.117      0.000       0.225       0.349
-document_publication_year                                 -0.0090      0.007     -1.270      0.204      -0.023       0.005
-document_author_count                                     -0.0092      0.002     -4.100      0.000      -0.014      -0.005
-document_log_author_mean_citations                        -0.0567      0.008     -6.736      0.000      -0.073      -0.040
-n_imported                                                -0.0431      0.002    -23.152      0.000      -0.047      -0.039
+Intercept                                                 16.9340     14.279      1.186      0.236     -11.052      44.920
+C(document_field_name_pruned)[T.Computer Science]         -0.4739      0.034    -13.991      0.000      -0.540      -0.408
+C(document_field_name_pruned)[T.Engineering]              -0.2550      0.051     -4.966      0.000      -0.356      -0.154
+C(document_field_name_pruned)[T.Medicine]                  0.0210      0.051      0.414      0.679      -0.078       0.120
+C(document_field_name_pruned)[T.Other]                     0.0482      0.034      1.397      0.162      -0.019       0.116
+C(document_field_name_pruned)[T.Physics and Astronomy]     0.2765      0.057      4.828      0.000       0.164       0.389
+C(dominant_ecosystem)[T.r]                                 0.2864      0.031      9.101      0.000       0.225       0.348
+document_publication_year                                 -0.0090      0.007     -1.274      0.203      -0.023       0.005
+document_author_count                                     -0.0092      0.002     -4.099      0.000      -0.014      -0.005
+document_log_author_mean_citations                        -0.0567      0.008     -6.733      0.000      -0.073      -0.040
+n_imported                                                -0.0431      0.002    -23.153      0.000      -0.047      -0.039
 ==========================================================================================================================
