@@ -3,8 +3,8 @@
 Dep. Variable:     document_cited_by_count   No. Observations:                65276
 Model:                    NegativeBinomial   Df Residuals:                    65274
 Method:                                MLE   Df Model:                            1
-Date:                     Sun, 12 Apr 2026   Pseudo R-squ.:                 0.04577
-Time:                             22:38:31   Log-Likelihood:            -2.9801e+05
+Date:                     Tue, 14 Apr 2026   Pseudo R-squ.:                 0.04577
+Time:                             18:57:16   Log-Likelihood:            -2.9801e+05
 converged:                            True   LL-Null:                   -3.1230e+05
 Covariance Type:                       HC1   LLR p-value:                     0.000
 ==============================================================================================

@@ -1,0 +1,20 @@
+    NegativeBinomial Marginal Effects     
+==========================================
+Dep. Variable:     document_cited_by_count
+Method:                               dydx
+At:                                overall
+==========================================================================================================================
+                                                            dy/dx    std err          z      P>|z|      [0.025      0.975]
+--------------------------------------------------------------------------------------------------------------------------
+C(document_field_name_pruned)[T.Computer Science]        -18.0367      8.804     -2.049      0.040     -35.291      -0.782
+C(document_field_name_pruned)[T.Engineering]              -8.1578     15.152     -0.538      0.590     -37.856      21.540
+C(document_field_name_pruned)[T.Medicine]                -22.9594      9.197     -2.496      0.013     -40.986      -4.933
+C(document_field_name_pruned)[T.Other]                   -11.5503      6.258     -1.846      0.065     -23.817       0.716
+C(document_field_name_pruned)[T.Physics and Astronomy]   -53.7973     13.379     -4.021      0.000     -80.020     -27.575
+software_novelty_z                                        64.8129     11.816      5.485      0.000      41.653      87.972
+document_years_since_earliest                              1.1680      3.885      0.301      0.764      -6.446       8.782
+num_libraries_scored                                       0.5344      0.295      1.809      0.070      -0.045       1.113
+document_author_count                                      2.2376      0.496      4.514      0.000       1.266       3.209
+document_log_author_mean_citations                        21.4643      3.403      6.308      0.000      14.795      28.133
+mean_log_library_popularity                               17.4753      4.170      4.191      0.000       9.303      25.648
+==========================================================================================================================

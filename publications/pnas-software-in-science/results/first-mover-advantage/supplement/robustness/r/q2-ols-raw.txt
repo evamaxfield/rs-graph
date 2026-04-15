@@ -3,8 +3,8 @@
 Dep. Variable:     document_log_cited_by_count   R-squared:                       0.203
 Model:                                     OLS   Adj. R-squared:                  0.203
 Method:                          Least Squares   F-statistic:                     2073.
-Date:                         Sun, 12 Apr 2026   Prob (F-statistic):               0.00
-Time:                                 22:38:44   Log-Likelihood:                -13137.
+Date:                         Tue, 14 Apr 2026   Prob (F-statistic):               0.00
+Time:                                 18:57:29   Log-Likelihood:                -13137.
 No. Observations:                         8136   AIC:                         2.628e+04
 Df Residuals:                             8134   BIC:                         2.629e+04
 Df Model:                                    1                                         
@@ -15,7 +15,7 @@ Covariance Type:                     nonrobust
 Intercept              2.7530      0.013    204.160      0.000       2.727       2.779
 software_novelty_z     0.6140      0.013     45.529      0.000       0.588       0.640
 ==============================================================================
-Omnibus:                      364.004   Durbin-Watson:                   2.000
+Omnibus:                      364.004   Durbin-Watson:                   2.008
 Prob(Omnibus):                  0.000   Jarque-Bera (JB):              446.188
 Skew:                           0.483   Prob(JB):                     1.29e-97
 Kurtosis:                       3.619   Cond. No.                         1.00

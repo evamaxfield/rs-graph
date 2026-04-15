@@ -1,31 +1,31 @@
 ecosystem,n,outcome_variable,model_type,predictor,coefficient,p_value,question,is_primary
-cross-ecosystem,2199,document_cited_by_count,NegBin controlled (max),max_adoption_percentile_z,0.6196418079940624,5.174069607513703e-16,Q1,false
-cross-ecosystem,2199,document_cited_by_count,Negative Binomial with controls,mean_adoption_percentile_z,0.8382166648534236,1.2541130694150614e-8,Q1,false
-cross-ecosystem,2199,document_log_fwci,OLS with controls,mean_adoption_percentile_z,-0.5218234081440111,4.0573056314286945e-10,Q1,false
-py,65276,document_cited_by_count,NegBin controlled (max),max_adoption_percentile_z,0.500218641114581,2.9592103925205443e-186,Q1,false
-py,65276,document_cited_by_count,Negative Binomial with controls,mean_adoption_percentile_z,0.7056014674048888,2.4873660831613365e-137,Q1,false
-py,65276,document_log_fwci,OLS with controls,mean_adoption_percentile_z,-0.5625983840242039,0.0,Q1,false
-r,8136,document_cited_by_count,NegBin controlled (max),max_adoption_percentile_z,0.45914110853177814,9.520938768252238e-14,Q1,false
-r,8136,document_cited_by_count,Negative Binomial with controls,mean_adoption_percentile_z,0.7386879579859439,2.224566233555709e-14,Q1,false
-r,8136,document_log_fwci,OLS with controls,mean_adoption_percentile_z,-0.6007669529150166,1.0652147230228674e-40,Q1,false
-cross-ecosystem,2199,document_cited_by_count,Q2: NegBin controlled (binary: any young library),has_any_young_library,0.21904178501959973,0.022773102057997974,Q2,true
-cross-ecosystem,2199,document_cited_by_count,Q2: NegBin controlled (frac young libraries),frac_young_libraries_z,-0.07069220083428758,0.1597641668077554,Q2,true
-cross-ecosystem,2199,document_cited_by_count,Q2: NegBin controlled (min library age),min_library_age_z,-0.22619820112827058,0.000051000065469608704,Q2,false
-cross-ecosystem,2199,document_cited_by_count,Q2: NegBin controlled (software novelty),software_novelty_z,0.9577272189481153,6.634864622148936e-11,Q2,true
-cross-ecosystem,2199,document_log_fwci,Q2: OLS FWCI (binary: any young library),has_any_young_library,0.18837546925551252,0.0062760660563269555,Q2,true
-cross-ecosystem,2199,document_log_fwci,Q2: OLS FWCI (frac young libraries),frac_young_libraries_z,0.18524699547738724,2.1210759338853993e-7,Q2,true
-cross-ecosystem,2199,document_log_fwci,Q2: OLS FWCI (software novelty),software_novelty_z,0.27495455389522494,0.01774513340862547,Q2,true
-py,65276,document_cited_by_count,Q2: NegBin controlled (binary: any young library),has_any_young_library,0.1813668531698676,3.0825811378108776e-12,Q2,true
-py,65276,document_cited_by_count,Q2: NegBin controlled (frac young libraries),frac_young_libraries_z,0.06400795021566051,4.9356499754382704e-6,Q2,true
-py,65276,document_cited_by_count,Q2: NegBin controlled (min library age),min_library_age_z,-0.17008771568218217,1.2369500799017863e-38,Q2,false
-py,65276,document_cited_by_count,Q2: NegBin controlled (software novelty),software_novelty_z,0.5402152435068462,6.534209064622612e-82,Q2,true
-py,65276,document_log_fwci,Q2: OLS FWCI (binary: any young library),has_any_young_library,0.10346979894748663,1.2293411859875474e-14,Q2,true
-py,65276,document_log_fwci,Q2: OLS FWCI (frac young libraries),frac_young_libraries_z,0.11210205252019108,3.433815473497235e-75,Q2,true
-py,65276,document_log_fwci,Q2: OLS FWCI (software novelty),software_novelty_z,0.2621535779582906,1.2589781267988674e-74,Q2,true
-r,8136,document_cited_by_count,Q2: NegBin controlled (binary: any young library),has_any_young_library,0.173118184395124,0.07074023981414898,Q2,true
-r,8136,document_cited_by_count,Q2: NegBin controlled (frac young libraries),frac_young_libraries_z,-0.09653636784816147,0.01904327854388817,Q2,true
-r,8136,document_cited_by_count,Q2: NegBin controlled (min library age),min_library_age_z,-0.1439038521144651,0.0015643817483655337,Q2,false
-r,8136,document_cited_by_count,Q2: NegBin controlled (software novelty),software_novelty_z,0.4045898744484805,0.000048555769448450734,Q2,true
-r,8136,document_log_fwci,Q2: OLS FWCI (binary: any young library),has_any_young_library,0.2280873148743504,1.1454501474572622e-9,Q2,true
-r,8136,document_log_fwci,Q2: OLS FWCI (frac young libraries),frac_young_libraries_z,0.19959540892831817,6.867983811650974e-28,Q2,true
-r,8136,document_log_fwci,Q2: OLS FWCI (software novelty),software_novelty_z,0.05298817810007513,0.20078145000610245,Q2,true
+cross-ecosystem,2199,document_cited_by_count,NegBin controlled (max),max_adoption_percentile_z,0.6196418079940126,5.174069607516463e-16,Q1,false
+cross-ecosystem,2199,document_cited_by_count,Negative Binomial with controls,mean_adoption_percentile_z,0.8382166648534267,1.2541130694138322e-8,Q1,false
+cross-ecosystem,2199,document_log_fwci,OLS with controls,mean_adoption_percentile_z,-0.5218234081440112,4.0573056314286304e-10,Q1,false
+py,65276,document_cited_by_count,NegBin controlled (max),max_adoption_percentile_z,0.5002186411145819,2.959210393018869e-186,Q1,false
+py,65276,document_cited_by_count,Negative Binomial with controls,mean_adoption_percentile_z,0.7056014674048908,2.487366083544127e-137,Q1,false
+py,65276,document_log_fwci,OLS with controls,mean_adoption_percentile_z,-0.5625983840242068,0.0,Q1,false
+r,8136,document_cited_by_count,NegBin controlled (max),max_adoption_percentile_z,0.4591411085317785,9.520938768198656e-14,Q1,false
+r,8136,document_cited_by_count,Negative Binomial with controls,mean_adoption_percentile_z,0.738687957985188,2.2245662336687388e-14,Q1,false
+r,8136,document_log_fwci,OLS with controls,mean_adoption_percentile_z,-0.6007669529150145,1.0652147230230112e-40,Q1,false
+cross-ecosystem,2199,document_cited_by_count,Q2: NegBin controlled (binary: any young library),has_any_young_library,0.2190417850195951,0.02277310205800339,Q2,true
+cross-ecosystem,2199,document_cited_by_count,Q2: NegBin controlled (frac young libraries),frac_young_libraries_z,-0.07069220083428727,0.15976416680776495,Q2,true
+cross-ecosystem,2199,document_cited_by_count,Q2: NegBin controlled (min library age),min_library_age_z,-0.22619820112827171,0.00005100006546955519,Q2,false
+cross-ecosystem,2199,document_cited_by_count,Q2: NegBin controlled (software novelty),software_novelty_z,0.957727218948119,6.63486462204419e-11,Q2,true
+cross-ecosystem,2199,document_log_fwci,Q2: OLS FWCI (binary: any young library),has_any_young_library,0.18837546925551168,0.006276066056327105,Q2,true
+cross-ecosystem,2199,document_log_fwci,Q2: OLS FWCI (frac young libraries),frac_young_libraries_z,0.1852469954773868,2.121075933885449e-7,Q2,true
+cross-ecosystem,2199,document_log_fwci,Q2: OLS FWCI (software novelty),software_novelty_z,0.27495455389522405,0.01774513340862591,Q2,true
+py,65276,document_cited_by_count,Q2: NegBin controlled (binary: any young library),has_any_young_library,0.18136685316986878,3.0825811378043987e-12,Q2,true
+py,65276,document_cited_by_count,Q2: NegBin controlled (frac young libraries),frac_young_libraries_z,0.06400795021566134,4.9356499754423345e-6,Q2,true
+py,65276,document_cited_by_count,Q2: NegBin controlled (min library age),min_library_age_z,-0.17008771568217945,1.2369500799169038e-38,Q2,false
+py,65276,document_cited_by_count,Q2: NegBin controlled (software novelty),software_novelty_z,0.5402152435068428,6.534209069150268e-82,Q2,true
+py,65276,document_log_fwci,Q2: OLS FWCI (binary: any young library),has_any_young_library,0.10346979894750037,1.2293411859781301e-14,Q2,true
+py,65276,document_log_fwci,Q2: OLS FWCI (frac young libraries),frac_young_libraries_z,0.1121020525201786,3.433815473594226e-75,Q2,true
+py,65276,document_log_fwci,Q2: OLS FWCI (software novelty),software_novelty_z,0.262153577958286,1.258978126804433e-74,Q2,true
+r,8136,document_cited_by_count,Q2: NegBin controlled (binary: any young library),has_any_young_library,0.17311818439534307,0.07074023981388732,Q2,true
+r,8136,document_cited_by_count,Q2: NegBin controlled (frac young libraries),frac_young_libraries_z,-0.09653636784835996,0.019043278543617558,Q2,true
+r,8136,document_cited_by_count,Q2: NegBin controlled (min library age),min_library_age_z,-0.1439038521144851,0.0015643817483625073,Q2,false
+r,8136,document_cited_by_count,Q2: NegBin controlled (software novelty),software_novelty_z,0.40458987444841654,0.00004855576944865216,Q2,true
+r,8136,document_log_fwci,Q2: OLS FWCI (binary: any young library),has_any_young_library,0.22808731487435138,1.145450147457082e-9,Q2,true
+r,8136,document_log_fwci,Q2: OLS FWCI (frac young libraries),frac_young_libraries_z,0.19959540892831726,6.867983811652117e-28,Q2,true
+r,8136,document_log_fwci,Q2: OLS FWCI (software novelty),software_novelty_z,0.052988178100075334,0.2007814500061004,Q2,true

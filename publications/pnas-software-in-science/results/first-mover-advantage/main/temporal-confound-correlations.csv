@@ -7,7 +7,7 @@ py,mean_adoption_percentile,-0.9409960482293022
 py,mean_library_age,0.7821149779934439
 py,software_novelty,-0.7821149779934439
 py,frac_young_libraries,-0.3990345694437575
-r,mean_adoption_percentile,-0.9526413012501166
-r,mean_library_age,0.9038986141230634
-r,software_novelty,-0.9038986141230634
-r,frac_young_libraries,-0.6189782099611514
+r,mean_adoption_percentile,-0.9526413012501165
+r,mean_library_age,0.9038986141230633
+r,software_novelty,-0.9038986141230633
+r,frac_young_libraries,-0.6189782099611512

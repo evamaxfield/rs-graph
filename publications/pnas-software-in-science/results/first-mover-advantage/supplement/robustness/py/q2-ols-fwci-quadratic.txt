@@ -3,8 +3,8 @@
 Dep. Variable:      document_log_fwci   R-squared:                       0.116
 Model:                            OLS   Adj. R-squared:                  0.116
 Method:                 Least Squares   F-statistic:                     1226.
-Date:                Sun, 12 Apr 2026   Prob (F-statistic):               0.00
-Time:                        22:38:43   Log-Likelihood:            -1.0784e+05
+Date:                Tue, 14 Apr 2026   Prob (F-statistic):               0.00
+Time:                        18:57:28   Log-Likelihood:            -1.0784e+05
 No. Observations:               65276   AIC:                         2.157e+05
 Df Residuals:                   65268   BIC:                         2.158e+05
 Df Model:                           7                                         
@@ -21,7 +21,7 @@ document_author_count                  0.0225      0.001     23.652      0.000  
 document_log_author_mean_citations     0.2203      0.004     53.783      0.000       0.212       0.228
 mean_log_library_popularity            0.1765      0.008     23.221      0.000       0.162       0.191
 ==============================================================================
-Omnibus:                      191.946   Durbin-Watson:                   2.002
+Omnibus:                      191.946   Durbin-Watson:                   1.992
 Prob(Omnibus):                  0.000   Jarque-Bera (JB):              194.957
 Skew:                           0.126   Prob(JB):                     4.63e-43
 Kurtosis:                       3.090   Cond. No.                         647.

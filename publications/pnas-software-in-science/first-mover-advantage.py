@@ -1219,6 +1219,10 @@ def _run_q2_regressions(
         for filename, model in q2_controlled_models:
             with open(eco_dir / filename, "w") as f:
                 f.write(model.summary().as_text())
+            if hasattr(model, "get_margeff"):
+                margeff_path = eco_dir / filename.replace(".txt", "-marginal-effects.txt")
+                with open(margeff_path, "w") as f:
+                    f.write(model.get_margeff(at="overall").summary().as_text())
 
         # Raw/bivariate and robustness models -> supplement/robustness
         robustness_eco_dir = results_dir / "supplement" / "robustness" / ecosystem_label
@@ -1662,7 +1666,8 @@ def _run_sensitivity_analysis(
 
     sensitivity_rows: list[dict] = []
 
-    for threshold in [1, 2, 3]:
+    threshold_year_set = list(range(1, 11))
+    for threshold in threshold_year_set:
         print(f"\n[Sensitivity] Threshold: {threshold} years")
 
         # Compute age stats for this threshold
@@ -1797,7 +1802,7 @@ def _plot_sensitivity_threshold(
         ax.axhline(y=0, color="gray", linestyle="--", linewidth=0.8)
         ax.set_xlabel("Young library threshold (years)")
         ax.set_title(eco)
-        ax.set_xticks([1, 2, 3])
+        ax.set_xticks(list(range(1, 11)))
         if ax == axes[0]:
             ax.set_ylabel("OLS FWCI coefficient (95% CI)")
             ax.legend(fontsize=8)
@@ -1864,7 +1869,7 @@ def _print_results_summary(
     # Threshold sensitivity
     print("\nThreshold sensitivity (OLS FWCI, frac_young_z):")
     frac_sens = sensitivity_df.filter(pl.col("measure") == "frac_young_libraries_z")
-    for threshold in [1, 2, 3]:
+    for threshold in list(range(1, 11)):
         t_rows = frac_sens.filter(pl.col("threshold_years") == threshold)
         parts = []
         for eco in sorted(t_rows.get_column("ecosystem").to_list()):

@@ -1,21 +1,21 @@
 document_id,repository_id,mean_library_age,min_library_age,frac_young_libraries,software_novelty,num_libraries_age_scored,document_cited_by_count,document_fwci,document_field_name,document_publication_year,ecosystem_label
 392874,386733,0.0,0,1.0,-0.0,1,17,0.7443,"Biochemistry, Genetics and Molecular Biology",2017,r
 165040,161846,0.0,0,1.0,-0.0,1,77,3.53963961,Medicine,2015,r
-207404,200977,0.0,0,1.0,-0.0,1,54,4.22489707,Medicine,2016,r
 174213,170599,0.0,0,1.0,-0.0,2,19,1.20390856,Decision Sciences,2013,r
+207404,200977,0.0,0,1.0,-0.0,1,54,4.22489707,Medicine,2016,r
 237433,231091,0.0,0,1.0,-0.0,3,260,16.12712669,"Biochemistry, Genetics and Molecular Biology",2012,r
+188585,182321,0.0,0,1.0,-0.0,1,74,7.53543952,"Biochemistry, Genetics and Molecular Biology",2020,r
 338926,332781,0.0,0,1.0,-0.0,1,22,2.1675,"Biochemistry, Genetics and Molecular Biology",2016,r
 336065,329917,0.0,0,1.0,-0.0,1,23,1.9855,Environmental Science,2016,r
-188585,182321,0.0,0,1.0,-0.0,1,74,7.53543952,"Biochemistry, Genetics and Molecular Biology",2020,r
-453278,447310,0.0,0,1.0,-0.0,11,970,85.7259,Earth and Planetary Sciences,2012,r
-343571,337427,0.0,0,1.0,-0.0,3,1913,18.3791,"Biochemistry, Genetics and Molecular Biology",2015,r
 384074,377933,0.0,0,1.0,-0.0,1,8,5.7013,"Economics, Econometrics and Finance",2017,r
+343571,337427,0.0,0,1.0,-0.0,3,1913,18.3791,"Biochemistry, Genetics and Molecular Biology",2015,r
+453278,447310,0.0,0,1.0,-0.0,11,970,85.7259,Earth and Planetary Sciences,2012,r
 396373,390233,0.0,0,1.0,-0.0,1,34,4.3187,"Biochemistry, Genetics and Molecular Biology",2015,r
-66222,63566,0.0,0,1.0,-0.0,1,2,1.06678342,"Business, Management and Accounting",2015,r
-386206,380065,0.0,0,1.0,-0.0,11,129,5.3418,"Biochemistry, Genetics and Molecular Biology",2011,r
 477826,471872,0.0,0,1.0,-0.0,6,315,10.1651,"Biochemistry, Genetics and Molecular Biology",2013,r
-167271,164015,0.0,0,1.0,-0.0,1,58,5.02181163,Medicine,2015,r
+386206,380065,0.0,0,1.0,-0.0,11,129,5.3418,"Biochemistry, Genetics and Molecular Biology",2011,r
+66222,63566,0.0,0,1.0,-0.0,1,2,1.06678342,"Business, Management and Accounting",2015,r
 344125,337981,0.0,0,1.0,-0.0,2,81,6.1356,"Biochemistry, Genetics and Molecular Biology",2013,r
+167271,164015,0.0,0,1.0,-0.0,1,58,5.02181163,Medicine,2015,r
 186865,181041,0.0,0,1.0,-0.0,4,37,1.43028967,Environmental Science,2012,r
-269964,263704,0.0,0,1.0,-0.0,1,29,4.96406148,Computer Science,2018,r
 365526,359385,0.0,0,1.0,-0.0,1,14,1.2908,Environmental Science,2017,r
+269964,263704,0.0,0,1.0,-0.0,1,29,4.96406148,Computer Science,2018,r

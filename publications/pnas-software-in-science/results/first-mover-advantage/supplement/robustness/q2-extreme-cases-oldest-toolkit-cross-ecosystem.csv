@@ -1,6 +1,6 @@
 document_id,repository_id,mean_library_age,min_library_age,frac_young_libraries,software_novelty,num_libraries_age_scored,document_cited_by_count,document_fwci,document_field_name,document_publication_year,ecosystem_label
-283568,277335,12.75,9,0.0,-12.75,4,5,5.47100081,"Biochemistry, Genetics and Molecular Biology",2024,cross-ecosystem
 189712,183213,12.75,11,0.0,-12.75,4,2,1.2775571,Computer Science,2024,cross-ecosystem
+283568,277335,12.75,9,0.0,-12.75,4,5,5.47100081,"Biochemistry, Genetics and Molecular Biology",2024,cross-ecosystem
 481952,476003,12.76923076923077,6,0.0,-12.76923076923077,13,3,4.0971,Medicine,2025,cross-ecosystem
 166001,162787,12.76923076923077,9,0.0,-12.76923076923077,13,7,18.7806124,"Biochemistry, Genetics and Molecular Biology",2025,cross-ecosystem
 6198,5929,12.833333333333334,9,0.0,-12.833333333333334,6,11,6.24706228,"Biochemistry, Genetics and Molecular Biology",2024,cross-ecosystem

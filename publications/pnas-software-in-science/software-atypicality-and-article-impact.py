@@ -928,6 +928,10 @@ def main(  # noqa: C901
         ]:
             with open(eco_dir / filename, "w") as f:
                 f.write(model.summary().as_text())
+            if hasattr(model, "get_margeff"):
+                margeff_path = eco_dir / filename.replace(".txt", "-marginal-effects.txt")
+                with open(margeff_path, "w") as f:
+                    f.write(model.get_margeff(at="overall").summary().as_text())
 
         # Add summary stats for the negative binomial model with controls to our summary stats list
         predictor = "document_atypicality_z_score"
