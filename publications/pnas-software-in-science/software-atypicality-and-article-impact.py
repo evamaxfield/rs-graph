@@ -485,23 +485,32 @@ def _compute_document_atypicality_for_ecosystem(
     return results_df
 
 
-def _plot_coefficient_forest(summary_df: pl.DataFrame) -> None:
+def _plot_coefficient_forest(
+    summary_df: pl.DataFrame,
+    model_types: tuple[str, str],
+    output_filename: str,
+    title: str,
+) -> None:
     """Forest plot of atypicality coefficients across ecosystems, faceted by outcome."""
     outcomes = [
         (
             "document_cited_by_count",
+            model_types[0],
             "NegBin coefficient for atypicality z-score (95% CI)",
         ),
         (
             "document_log_fwci",
+            model_types[1],
             "OLS coefficient for atypicality z-score (95% CI)",
         ),
     ]
     ecosystems = sorted(summary_df.get_column("ecosystem").unique().to_list())
 
     fig, axes = plt.subplots(1, 2, figsize=(12, max(3, len(ecosystems) * 1.0)), sharey=True)
-    for ax, (outcome, xlabel) in zip(axes, outcomes, strict=True):
-        sub = summary_df.filter(pl.col("outcome_variable") == outcome)
+    for ax, (outcome, model_type, xlabel) in zip(axes, outcomes, strict=True):
+        sub = summary_df.filter(
+            (pl.col("outcome_variable") == outcome) & (pl.col("model_type") == model_type)
+        )
         for i, eco in enumerate(ecosystems):
             rows = sub.filter(pl.col("ecosystem") == eco).to_dicts()
             if not rows:
@@ -522,11 +531,11 @@ def _plot_coefficient_forest(summary_df: pl.DataFrame) -> None:
         ax.set_yticklabels([e.title() if "-" in e else e.upper() for e in ecosystems])
         ax.set_xlabel(xlabel)
         ax.set_title(outcome)
-    fig.suptitle("Atypicality coefficient across ecosystems and outcomes")
+    fig.suptitle(title)
     plt.tight_layout()
-    plt.savefig(RESULTS_DIR / "coefficient-forest-plot.png", dpi=300, bbox_inches="tight")
+    plt.savefig(RESULTS_DIR / output_filename, dpi=300, bbox_inches="tight")
     plt.close()
-    print("Coefficient forest plot saved.")
+    print(f"Coefficient forest plot saved to {output_filename}.")
 
 
 @app.command()
@@ -914,6 +923,12 @@ def main(  # noqa: C901
             data=ecosystem_df,
         ).fit()
 
+        # OLS with log FWCI as outcome (raw / uncontrolled)
+        ols_fwci_raw = smf.ols(
+            "document_log_fwci ~ document_atypicality_z_score",
+            data=ecosystem_df,
+        ).fit()
+
         # Store each model to its own CSV in a per-ecosystem subdirectory
         eco_dir = RESULTS_DIR / "modeling-results" / ecosystem_label
         eco_dir.mkdir(exist_ok=True, parents=True)
@@ -925,6 +940,7 @@ def main(  # noqa: C901
             ("poisson-raw.txt", poisson_model_raw),
             ("poisson-controlled.txt", poisson_model_controlled),
             ("ols-fwci.txt", ols_fwci),
+            ("ols-fwci-raw.txt", ols_fwci_raw),
         ]:
             with open(eco_dir / filename, "w") as f:
                 f.write(model.summary().as_text())
@@ -966,12 +982,55 @@ def main(  # noqa: C901
             }
         )
 
+        # Raw (uncontrolled) Negative Binomial for document_cited_by_count
+        negbin_raw_ci = negative_binomial_model_raw.conf_int()
+        summary_stats_rows.append(
+            {
+                "ecosystem": ecosystem_label,
+                "n": len(ecosystem_df),
+                "outcome_variable": "document_cited_by_count",
+                "model_type": "Negative Binomial",
+                "atypicality_coefficient": negative_binomial_model_raw.params[predictor],
+                "atypicality_p_value": negative_binomial_model_raw.pvalues[predictor],
+                "std_err": negative_binomial_model_raw.bse[predictor],
+                "ci_lower": negbin_raw_ci.loc[predictor, 0],
+                "ci_upper": negbin_raw_ci.loc[predictor, 1],
+            }
+        )
+
+        # Raw (uncontrolled) OLS for document_log_fwci
+        ols_fwci_raw_ci = ols_fwci_raw.conf_int()
+        summary_stats_rows.append(
+            {
+                "ecosystem": ecosystem_label,
+                "n": len(ecosystem_df),
+                "outcome_variable": "document_log_fwci",
+                "model_type": "OLS",
+                "atypicality_coefficient": ols_fwci_raw.params[predictor],
+                "atypicality_p_value": ols_fwci_raw.pvalues[predictor],
+                "std_err": ols_fwci_raw.bse[predictor],
+                "ci_lower": ols_fwci_raw_ci.loc[predictor, 0],
+                "ci_upper": ols_fwci_raw_ci.loc[predictor, 1],
+            }
+        )
+
     # Create a summary stats dataframe and save to CSV
     summary_stats_df = pl.DataFrame(summary_stats_rows)
     summary_stats_df.write_csv(RESULTS_DIR / "modeling-summary-stats.csv")
 
     # Forest plot of atypicality coefficient across ecosystems and outcomes
-    _plot_coefficient_forest(summary_stats_df)
+    _plot_coefficient_forest(
+        summary_stats_df,
+        model_types=("Negative Binomial with controls", "OLS with controls"),
+        output_filename="coefficient-forest-plot.png",
+        title="Atypicality coefficient across ecosystems and outcomes (with controls)",
+    )
+    _plot_coefficient_forest(
+        summary_stats_df,
+        model_types=("Negative Binomial", "OLS"),
+        output_filename="coefficient-forest-plot-raw.png",
+        title="Atypicality coefficient across ecosystems and outcomes (raw / uncontrolled)",
+    )
 
     # Create dataframes of high-atypicality papers in each ecosystem
     for ecosystem_label in results_df.get_column("ecosystem_label").unique():

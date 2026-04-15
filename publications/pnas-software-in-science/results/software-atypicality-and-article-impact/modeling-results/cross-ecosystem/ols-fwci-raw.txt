@@ -1,0 +1,25 @@
+                            OLS Regression Results                            
+==============================================================================
+Dep. Variable:      document_log_fwci   R-squared:                       0.010
+Model:                            OLS   Adj. R-squared:                  0.009
+Method:                 Least Squares   F-statistic:                     21.64
+Date:                Tue, 14 Apr 2026   Prob (F-statistic):           3.48e-06
+Time:                        23:02:13   Log-Likelihood:                -3679.4
+No. Observations:                2199   AIC:                             7363.
+Df Residuals:                    2197   BIC:                             7374.
+Df Model:                           1                                         
+Covariance Type:            nonrobust                                         
+================================================================================================
+                                   coef    std err          t      P>|t|      [0.025      0.975]
+------------------------------------------------------------------------------------------------
+Intercept                        1.2496      0.028     45.422      0.000       1.196       1.304
+document_atypicality_z_score     0.1280      0.028      4.652      0.000       0.074       0.182
+==============================================================================
+Omnibus:                       18.781   Durbin-Watson:                   1.949
+Prob(Omnibus):                  0.000   Jarque-Bera (JB):               19.024
+Skew:                           0.220   Prob(JB):                     7.40e-05
+Kurtosis:                       3.117   Cond. No.                         1.00
+==============================================================================
+
+Notes:
+[1] Standard Errors assume that the covariance matrix of the errors is correctly specified.

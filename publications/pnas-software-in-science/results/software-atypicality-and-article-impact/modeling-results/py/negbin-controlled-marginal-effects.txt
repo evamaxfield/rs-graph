@@ -1,0 +1,19 @@
+    NegativeBinomial Marginal Effects     
+==========================================
+Dep. Variable:     document_cited_by_count
+Method:                               dydx
+At:                                overall
+==========================================================================================================================
+                                                            dy/dx    std err          z      P>|z|      [0.025      0.975]
+--------------------------------------------------------------------------------------------------------------------------
+C(document_field_name_pruned)[T.Computer Science]        172.5716     82.958      2.080      0.038       9.977     335.166
+C(document_field_name_pruned)[T.Engineering]             131.7714     64.881      2.031      0.042       4.608     258.935
+C(document_field_name_pruned)[T.Medicine]                 34.2038     24.728      1.383      0.167     -14.262      82.670
+C(document_field_name_pruned)[T.Other]                   -29.1594     18.533     -1.573      0.116     -65.483       7.164
+C(document_field_name_pruned)[T.Physics and Astronomy]  -157.3156     72.104     -2.182      0.029    -298.637     -15.994
+document_atypicality_z_score                             -39.8897     19.147     -2.083      0.037     -77.417      -2.363
+document_years_since_earliest                           -215.7278     99.909     -2.159      0.031    -411.546     -19.910
+num_unique_software_imported                              14.4692      6.718      2.154      0.031       1.302      27.637
+document_author_count                                     22.1812     11.106      1.997      0.046       0.414      43.948
+document_log_author_mean_citations                       219.9820    101.118      2.176      0.030      21.795     418.169
+==========================================================================================================================

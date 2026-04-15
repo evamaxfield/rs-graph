@@ -1,0 +1,19 @@
+         Poisson Marginal Effects         
+==========================================
+Dep. Variable:     document_cited_by_count
+Method:                               dydx
+At:                                overall
+==========================================================================================================================
+                                                            dy/dx    std err          z      P>|z|      [0.025      0.975]
+--------------------------------------------------------------------------------------------------------------------------
+C(document_field_name_pruned)[T.Computer Science]         16.1778      0.119    136.195      0.000      15.945      16.411
+C(document_field_name_pruned)[T.Engineering]              11.5375      0.147     78.229      0.000      11.248      11.827
+C(document_field_name_pruned)[T.Medicine]                 -0.0138      0.191     -0.072      0.943      -0.389       0.361
+C(document_field_name_pruned)[T.Other]                   -11.6080      0.148    -78.435      0.000     -11.898     -11.318
+C(document_field_name_pruned)[T.Physics and Astronomy]   -32.7774      0.189   -173.784      0.000     -33.147     -32.408
+document_atypicality_z_score                              -1.2705      0.040    -31.914      0.000      -1.349      -1.193
+document_years_since_earliest                            -14.3820      0.014   -993.779      0.000     -14.410     -14.354
+num_unique_software_imported                               0.9309      0.006    151.907      0.000       0.919       0.943
+document_author_count                                      0.6345      0.002    346.237      0.000       0.631       0.638
+document_log_author_mean_citations                        28.4716      0.030    935.720      0.000      28.412      28.531
+==========================================================================================================================
