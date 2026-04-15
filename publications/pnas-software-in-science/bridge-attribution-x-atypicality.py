@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -231,6 +232,8 @@ def _build_bridge_dataframe(
     ).unique(subset="document_id")
     print(f"Papers with atypicality scores: {len(atypicality_selected)}")
 
+    print()
+
     # Inner join: papers with both mention data and atypicality scores
     bridge_df = paper_mention_df.join(
         atypicality_selected,
@@ -369,7 +372,9 @@ def _run_fractional_logit_regressions(bridge_df: pl.DataFrame) -> None:
     # Define ecosystem groups
     ecosystem_groups = {"combined": regression_pd}
     for eco in sorted(regression_pd["ecosystem_label"].unique()):
-        ecosystem_groups[eco] = regression_pd[regression_pd["ecosystem_label"] == eco]
+        ecosystem_groups[eco] = cast(
+            pd.DataFrame, regression_pd[regression_pd["ecosystem_label"] == eco]
+        )
 
     all_summary_rows = []
 
@@ -576,7 +581,9 @@ def _plot_mention_fraction_by_tercile(bridge_df: pl.DataFrame) -> None:
         )
 
         data_for_box = [
-            eco_pd[eco_pd["atypicality_tercile"] == label]["fraction_mentioned"].values
+            cast(pd.DataFrame, eco_pd[eco_pd["atypicality_tercile"] == label])[
+                "fraction_mentioned"
+            ].to_numpy()
             for label in tercile_labels
         ]
         bp = ax.boxplot(

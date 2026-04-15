@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -563,16 +564,20 @@ def _plot_young_vs_old_mention_rate(bridge_df: pl.DataFrame) -> None:
     """Plot grouped bar chart comparing mention rate for young vs old libraries."""
     ecosystems = sorted(bridge_df.get_column("ecosystem").unique().to_list())
 
-    young_rates = []
-    old_rates = []
-    young_counts = []
-    old_counts = []
+    young_rates: list[float] = []
+    old_rates: list[float] = []
+    young_counts: list[int] = []
+    old_counts: list[int] = []
     for eco in ecosystems:
         eco_df = bridge_df.filter(pl.col("ecosystem") == eco)
         young = eco_df.filter(pl.col("is_young_library"))
         old = eco_df.filter(~pl.col("is_young_library"))
-        young_rates.append(young.get_column("is_mentioned").mean() if len(young) > 0 else 0)
-        old_rates.append(old.get_column("is_mentioned").mean() if len(old) > 0 else 0)
+        young_rates.append(
+            cast(float, young.get_column("is_mentioned").mean()) if len(young) > 0 else 0.0
+        )
+        old_rates.append(
+            cast(float, old.get_column("is_mentioned").mean()) if len(old) > 0 else 0.0
+        )
         young_counts.append(len(young))
         old_counts.append(len(old))
 
@@ -705,7 +710,9 @@ def _run_logistic_regressions(bridge_df: pl.DataFrame) -> None:
     # Define ecosystem groups: combined + per-ecosystem
     ecosystem_groups = {"combined": regression_pd}
     for eco in sorted(regression_pd["ecosystem"].unique()):
-        ecosystem_groups[eco] = regression_pd[regression_pd["ecosystem"] == eco]
+        ecosystem_groups[eco] = cast(
+            pd.DataFrame, regression_pd[regression_pd["ecosystem"] == eco]
+        )
 
     all_summary_rows = []
 

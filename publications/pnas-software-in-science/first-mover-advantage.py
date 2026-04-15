@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -1544,9 +1545,9 @@ def _plot_q2_binary_quintile_analysis(
 ) -> None:
     """Plot: Bar chart comparing outcomes between has_young_lib=0 vs 1."""
     results_pd = results_df.to_pandas()
-    results_pd["has_young_library_label"] = results_pd["has_any_young_library"].map(
-        {0: "No young library", 1: "Has young library"}
-    )
+    results_pd["has_young_library_label"] = cast(
+        pd.Series, results_pd["has_any_young_library"]
+    ).map({0: "No young library", 1: "Has young library"})
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     for ax, outcome, label in zip(
@@ -1778,7 +1779,9 @@ def _plot_sensitivity_threshold(
     for ax, eco in zip(axes, ecosystems, strict=False):
         eco_data = sens_pd[sens_pd["ecosystem"] == eco]
         for measure, (label, marker, color) in measure_styles.items():
-            m_data = eco_data[eco_data["measure"] == measure].sort_values("threshold_years")
+            m_data = cast(pd.DataFrame, eco_data[eco_data["measure"] == measure]).sort_values(
+                "threshold_years"
+            )
             ax.errorbar(
                 m_data["threshold_years"],
                 m_data["coefficient"],

@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
 import seaborn as sns
@@ -484,6 +485,50 @@ def _compute_document_atypicality_for_ecosystem(
     return results_df
 
 
+def _plot_coefficient_forest(summary_df: pl.DataFrame) -> None:
+    """Forest plot of atypicality coefficients across ecosystems, faceted by outcome."""
+    outcomes = [
+        (
+            "document_cited_by_count",
+            "NegBin coefficient for atypicality z-score (95% CI)",
+        ),
+        (
+            "document_log_fwci",
+            "OLS coefficient for atypicality z-score (95% CI)",
+        ),
+    ]
+    ecosystems = sorted(summary_df.get_column("ecosystem").unique().to_list())
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, max(3, len(ecosystems) * 1.0)), sharey=True)
+    for ax, (outcome, xlabel) in zip(axes, outcomes, strict=True):
+        sub = summary_df.filter(pl.col("outcome_variable") == outcome)
+        for i, eco in enumerate(ecosystems):
+            rows = sub.filter(pl.col("ecosystem") == eco).to_dicts()
+            if not rows:
+                continue
+            r = rows[0]
+            ax.errorbar(
+                r["atypicality_coefficient"],
+                i,
+                xerr=[
+                    [r["atypicality_coefficient"] - r["ci_lower"]],
+                    [r["ci_upper"] - r["atypicality_coefficient"]],
+                ],
+                fmt="o",
+                capsize=4,
+            )
+        ax.axvline(0, color="gray", linestyle="--", linewidth=0.8)
+        ax.set_yticks(range(len(ecosystems)))
+        ax.set_yticklabels([e.title() if "-" in e else e.upper() for e in ecosystems])
+        ax.set_xlabel(xlabel)
+        ax.set_title(outcome)
+    fig.suptitle("Atypicality coefficient across ecosystems and outcomes")
+    plt.tight_layout()
+    plt.savefig(RESULTS_DIR / "coefficient-forest-plot.png", dpi=300, bbox_inches="tight")
+    plt.close()
+    print("Coefficient forest plot saved.")
+
+
 @app.command()
 def main(  # noqa: C901
     remove_extremely_rare_imports: bool = True,
@@ -885,36 +930,44 @@ def main(  # noqa: C901
                 f.write(model.summary().as_text())
 
         # Add summary stats for the negative binomial model with controls to our summary stats list
+        predictor = "document_atypicality_z_score"
+        negbin_ci = negative_binomial_model_controlled.conf_int()
         summary_stats_rows.append(
             {
                 "ecosystem": ecosystem_label,
                 "n": len(ecosystem_df),
                 "outcome_variable": "document_cited_by_count",
                 "model_type": "Negative Binomial with controls",
-                "atypicality_coefficient": negative_binomial_model_controlled.params[
-                    "document_atypicality_z_score"
-                ],
-                "atypicality_p_value": negative_binomial_model_controlled.pvalues[
-                    "document_atypicality_z_score"
-                ],
+                "atypicality_coefficient": negative_binomial_model_controlled.params[predictor],
+                "atypicality_p_value": negative_binomial_model_controlled.pvalues[predictor],
+                "std_err": negative_binomial_model_controlled.bse[predictor],
+                "ci_lower": negbin_ci.loc[predictor, 0],
+                "ci_upper": negbin_ci.loc[predictor, 1],
             }
         )
 
         # Add summary stats for the OLS model with log FWCI as outcome to our summary stats list
+        ols_ci = ols_fwci.conf_int()
         summary_stats_rows.append(
             {
                 "ecosystem": ecosystem_label,
                 "n": len(ecosystem_df),
                 "outcome_variable": "document_log_fwci",
                 "model_type": "OLS with controls",
-                "atypicality_coefficient": ols_fwci.params["document_atypicality_z_score"],
-                "atypicality_p_value": ols_fwci.pvalues["document_atypicality_z_score"],
+                "atypicality_coefficient": ols_fwci.params[predictor],
+                "atypicality_p_value": ols_fwci.pvalues[predictor],
+                "std_err": ols_fwci.bse[predictor],
+                "ci_lower": ols_ci.loc[predictor, 0],
+                "ci_upper": ols_ci.loc[predictor, 1],
             }
         )
 
     # Create a summary stats dataframe and save to CSV
     summary_stats_df = pl.DataFrame(summary_stats_rows)
     summary_stats_df.write_csv(RESULTS_DIR / "modeling-summary-stats.csv")
+
+    # Forest plot of atypicality coefficient across ecosystems and outcomes
+    _plot_coefficient_forest(summary_stats_df)
 
     # Create dataframes of high-atypicality papers in each ecosystem
     for ecosystem_label in results_df.get_column("ecosystem_label").unique():
