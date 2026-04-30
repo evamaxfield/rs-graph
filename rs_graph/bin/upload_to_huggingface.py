@@ -46,6 +46,7 @@ BATCH_SIZE: int = 2**20  # 1,048,576 rows per batch
 def upload_to_huggingface(
     use_prod: bool = False,
     redact: bool = True,
+    org: str = "evamxb",
 ) -> None:
     """
     Read all tables from the rs-graph-v2 SQLite database and upload
@@ -56,9 +57,9 @@ def upload_to_huggingface(
     """
     # Decide repo id based on redact flag
     if redact:
-        repo_id = "evamxb/rs-graph-v2-redacted"
+        repo_id = f"{org}/rs-graph-v2-redacted"
     else:
-        repo_id = "evamxb/rs-graph-v2-full"
+        repo_id = f"{org}/rs-graph-v2-full"
 
     # Load environment variables from .env file, if it exists
     load_dotenv()
