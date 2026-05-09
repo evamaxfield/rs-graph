@@ -2157,7 +2157,7 @@ def _run_rq2_analyses(
 def analyze(
     top_n: int = typer.Option(9, help="Number of top categories (rest grouped as 'Other')."),
     n_shortest_path_iterations: int = typer.Option(
-        5000, help="Random shortest path iterations for network analysis."
+        400, help="Random shortest path iterations for network analysis."
     ),
     sample_size: int | None = typer.Option(
         None, help="Sample this many pairs for faster analysis."
@@ -2170,7 +2170,7 @@ def analyze(
     """Run the full RQ2 analysis pipeline.
 
     Each pair-based analysis is run twice — once on **all** pairs and once on
-    a **high-confidence** subset (doc-repo confidence null or >= 0.995).
+    a **high-confidence** subset (doc-repo confidence null or >= 0.9994).
     Results are written to ``all/`` and ``high-conf/`` subdirectories.
     """
     setup_logger(debug=debug)
@@ -2188,10 +2188,10 @@ def analyze(
 
     log.info("Loading pairs (all)...")
     # pairs_all = load_rq2_pairs(sample_size=sample_size)
-    log.info("Loading pairs (high-conf, >= 0.995)...")
+    log.info("Loading pairs (high-conf, >= 0.9994)...")
     pairs_high_conf = load_rq2_pairs(
         sample_size=sample_size,
-        doc_repo_confidence_threshold=0.995,
+        doc_repo_confidence_threshold=0.9994,
     )
 
     # for label, pairs in [("all", pairs_all), ("high-conf", pairs_high_conf)]:

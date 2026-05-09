@@ -890,7 +890,7 @@ def plot_iteration_expansion(results_dir: Path) -> None:
     """Plot growth by mining iteration for pairs and author-developer pairs.
 
     Tracks both **all** pairs and **high-confidence** subsets:
-    - Article-repo high-conf: ``predictive_model_confidence`` is null or >= 0.995
+    - Article-repo high-conf: ``predictive_model_confidence`` is null or >= 0.9994
     - Author-developer high-conf: ``predictive_model_confidence`` is null or >= 0.97
     """
     links = _read_table("document_repository_link")
@@ -906,7 +906,7 @@ def plot_iteration_expansion(results_dir: Path) -> None:
     )
 
     _is_high_conf_doc_repo = pl.col("predictive_model_confidence").is_null() | (
-        pl.col("predictive_model_confidence") >= 0.995
+        pl.col("predictive_model_confidence") >= 0.9994
     )
 
     shared_links = links.filter(pl.col("dataset_source_name") != "snowball-sampling-discovery")
@@ -1134,7 +1134,7 @@ def plot_iteration_expansion(results_dir: Path) -> None:
     ax0_twin.set_ylabel("Cumulative Article-Repository Pairs")
     axes[0].set_title(
         "Article-Repository Pair Expansion\n"
-        "(Bars = new pairs; lines = cumulative; high-conf = null or >= 0.995)",
+        "(Bars = new pairs; lines = cumulative; high-conf = null or >= 0.9994)",
         fontsize=12,
     )
     h0a, l0a = axes[0].get_legend_handles_labels()
@@ -3292,7 +3292,7 @@ def _run_pair_analyses(
 def analyze(
     top_n: int = typer.Option(9, help="Number of top categories (rest grouped as 'Other')."),
     n_shortest_path_iterations: int = typer.Option(
-        5000, help="Random shortest path iterations for network analysis."
+        400, help="Random shortest path iterations for network analysis."
     ),
     sample_size: int | None = typer.Option(
         None, help="Sample this many pairs for faster analysis."
@@ -3305,7 +3305,7 @@ def analyze(
     """Run the full RQ1 analysis pipeline.
 
     Each pair-based analysis is run twice — once on **all** pairs and once on
-    a **high-confidence** subset (doc-repo confidence null or >= 0.995).
+    a **high-confidence** subset (doc-repo confidence null or >= 0.9994).
     Results are written to ``all/`` and ``high-conf/`` subdirectories.
     The iteration-expansion analysis (which reads directly from the DB)
     tracks both subsets in a single output.
@@ -3327,10 +3327,10 @@ def analyze(
     # -- Step 1: Load pairs (all + high-conf) --------------------------------
     log.info("Loading pairs (all)...")
     # pairs_all = load_pairs(sample_size=sample_size)
-    log.info("Loading pairs (high-conf, >= 0.995)...")
+    log.info("Loading pairs (high-conf, >= 0.9994)...")
     pairs_high_conf = load_pairs(
         sample_size=sample_size,
-        doc_repo_confidence_threshold=0.995,
+        doc_repo_confidence_threshold=0.9994,
     )
 
     # -- Step 2: Iteration expansion (combined output) -----------------------

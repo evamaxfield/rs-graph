@@ -12,7 +12,7 @@ app = typer.Typer()
 THIS_FILE_PATH = Path(__file__).resolve()
 THIS_DIR = THIS_FILE_PATH.parent
 
-ANNOTATION_CSV_PATH = THIS_DIR / "mentions-imports-deps-annotation.csv"
+ANNOTATION_OUTPUT_PATH = THIS_DIR / "mentions-imports-deps-annotation.xlsx"
 
 RANDOM_SEED = 42
 SAMPLE_SIZE = 100
@@ -536,13 +536,145 @@ def main() -> None:
         )
     )
 
-    complete_cases_count = len(
-        pair_metadata.filter(
-            pl.col("has_imports") & pl.col("has_dependencies") & pl.col("has_software_mentions")
-        )
+    complete_cases = pair_metadata.filter(
+        pl.col("has_imports") & pl.col("has_dependencies") & pl.col("has_software_mentions")
     )
     print(f"Total pairs: {len(pair_metadata)}")
-    print(f"Complete cases: {complete_cases_count}")
+    print(f"Complete cases: {len(complete_cases)}")
+
+    # -------------------------------------------------------------------------
+    # Aggregate software names for complete-case pairs only
+    # Collect unique names into lists; strings and set diffs are derived below.
+    # -------------------------------------------------------------------------
+    complete_link_ids = complete_cases.get_column("document_repository_link_id").to_list()
+
+    mentions_agg = (
+        document_software_mentions.filter(
+            pl.col("document_repository_link_id").is_in(complete_link_ids)
+        )
+        .group_by("document_id")
+        .agg(
+            pl.col("software_name").unique().alias("_mentioned_raw"),
+            pl.col("software_name_normalized").unique().alias("_mentioned_norm"),
+            pl.col("software_name_normalized").n_unique().alias("mentioned_count"),
+        )
+    )
+    imports_agg = (
+        repository_imports.filter(
+            pl.col("document_repository_link_id").is_in(complete_link_ids)
+        )
+        .group_by("repository_id")
+        .agg(
+            pl.col("software_name").unique().alias("_imported_raw"),
+            pl.col("software_name_normalized").unique().alias("_imported_norm"),
+            pl.col("software_name_normalized").n_unique().alias("imported_count"),
+        )
+    )
+    dependencies_agg = (
+        repository_dependencies.filter(
+            pl.col("document_repository_link_id").is_in(complete_link_ids)
+        )
+        .group_by("repository_id")
+        .agg(
+            pl.col("software_name").unique().alias("_dependencies_raw"),
+            pl.col("software_name_normalized").unique().alias("_dependencies_norm"),
+            pl.col("software_name_normalized").n_unique().alias("dependencies_count"),
+        )
+    )
+
+    complete_cases = (
+        complete_cases.join(mentions_agg, on="document_id", how="left")
+        .join(imports_agg, on="repository_id", how="left")
+        .join(dependencies_agg, on="repository_id", how="left")
+        .with_columns(
+            ("https://doi.org/" + pl.col("document_doi")).alias("document_doi_url"),
+            (
+                "https://github.com/"
+                + pl.col("repository_owner")
+                + "/"
+                + pl.col("repository_name")
+            ).alias("repository_url"),
+            # Sorted semicolon-joined display strings
+            pl.col("_mentioned_raw").list.sort().list.join(";").alias("mentioned_software_raw"),
+            pl.col("_mentioned_norm").list.sort().list.join(";").alias("mentioned_software_normalized"),
+            pl.col("_imported_raw").list.sort().list.join(";").alias("imported_software_raw"),
+            pl.col("_imported_norm").list.sort().list.join(";").alias("imported_software_normalized"),
+            pl.col("_dependencies_raw").list.sort().list.join(";").alias("dependencies_software_raw"),
+            pl.col("_dependencies_norm").list.sort().list.join(";").alias("dependencies_software_normalized"),
+            # Set differences of normalized names (items in A not present in B)
+            pl.struct(["_mentioned_norm", "_imported_norm"]).map_elements(
+                lambda x: ";".join(sorted(set(x["_mentioned_norm"] or []) - set(x["_imported_norm"] or []))),
+                return_dtype=pl.String,
+            ).alias("mentions_not_in_imports_normalized"),
+            pl.struct(["_imported_norm", "_mentioned_norm"]).map_elements(
+                lambda x: ";".join(sorted(set(x["_imported_norm"] or []) - set(x["_mentioned_norm"] or []))),
+                return_dtype=pl.String,
+            ).alias("imports_not_in_mentions_normalized"),
+            pl.struct(["_mentioned_norm", "_dependencies_norm"]).map_elements(
+                lambda x: ";".join(sorted(set(x["_mentioned_norm"] or []) - set(x["_dependencies_norm"] or []))),
+                return_dtype=pl.String,
+            ).alias("mentions_not_in_dependencies_normalized"),
+            pl.struct(["_dependencies_norm", "_mentioned_norm"]).map_elements(
+                lambda x: ";".join(sorted(set(x["_dependencies_norm"] or []) - set(x["_mentioned_norm"] or []))),
+                return_dtype=pl.String,
+            ).alias("dependencies_not_in_mentions_normalized"),
+            pl.struct(["_imported_norm", "_dependencies_norm"]).map_elements(
+                lambda x: ";".join(sorted(set(x["_imported_norm"] or []) - set(x["_dependencies_norm"] or []))),
+                return_dtype=pl.String,
+            ).alias("imports_not_in_dependencies_normalized"),
+            pl.struct(["_dependencies_norm", "_imported_norm"]).map_elements(
+                lambda x: ";".join(sorted(set(x["_dependencies_norm"] or []) - set(x["_imported_norm"] or []))),
+                return_dtype=pl.String,
+            ).alias("dependencies_not_in_imports_normalized"),
+        )
+    )
+
+    # -------------------------------------------------------------------------
+    # Sample and write annotation CSV
+    # -------------------------------------------------------------------------
+    sample = complete_cases.sample(n=SAMPLE_SIZE, seed=RANDOM_SEED, shuffle=True)
+
+    sample = sample.with_columns(
+        pl.lit(None).cast(pl.String).alias("mentions_imports_differences_notes"),
+        pl.lit(None).cast(pl.String).alias("mentions_dependencies_differences_notes"),
+        pl.lit(None).cast(pl.String).alias("imports_dependencies_differences_notes"),
+        pl.lit(None).cast(pl.String).alias("notes"),
+    ).select(
+        [
+            pl.col("document_id"),
+            pl.col("document_doi"),
+            pl.col("document_doi_url"),
+            pl.col("document_title"),
+            pl.col("document_field_name"),
+            pl.col("document_domain_name"),
+            pl.col("repository_id"),
+            pl.col("repository_url"),
+            pl.col("repository_primary_language"),
+            pl.col("mentioned_count"),
+            pl.col("imported_count"),
+            pl.col("dependencies_count"),
+            pl.col("mentioned_software_raw"),
+            pl.col("mentioned_software_normalized"),
+            pl.col("imported_software_raw"),
+            pl.col("imported_software_normalized"),
+            pl.col("dependencies_software_raw"),
+            pl.col("dependencies_software_normalized"),
+            pl.col("mentions_not_in_imports_normalized"),
+            pl.col("imports_not_in_mentions_normalized"),
+            pl.col("mentions_not_in_dependencies_normalized"),
+            pl.col("dependencies_not_in_mentions_normalized"),
+            pl.col("imports_not_in_dependencies_normalized"),
+            pl.col("dependencies_not_in_imports_normalized"),
+            pl.col("mentions_imports_differences_notes"),
+            pl.col("mentions_dependencies_differences_notes"),
+            pl.col("imports_dependencies_differences_notes"),
+            pl.col("notes"),
+        ]
+    )
+
+    print(f"Writing {len(sample)} rows to {ANNOTATION_OUTPUT_PATH}")
+    sample.write_excel(ANNOTATION_OUTPUT_PATH)
+    print("Done.")
 
 
 ###############################################################################
