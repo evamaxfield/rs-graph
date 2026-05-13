@@ -378,6 +378,7 @@ def _build_network_graph(
         zip(
             dataset_sources.get_column("id").to_list(),
             dataset_sources.get_column("name").to_list(),
+            strict=False,
         )
     )
 
@@ -385,24 +386,19 @@ def _build_network_graph(
     graph: rx.PyGraph = rx.PyGraph()
     node_idx_map: dict[tuple[str, int], int] = {}
 
-    def get_or_add_node(node_type: str, node_id: int, label: str) -> int:
-        key = (node_type, node_id)
-        if key not in node_idx_map:
-            idx = graph.add_node({"type": node_type, "id": node_id, "label": label})
-            node_idx_map[key] = idx
-        return node_idx_map[key]
-
-    # Add ego researcher
+    # Add ego researcher and developer
     ego_res_row = researchers.filter(pl.col("id") == ego_researcher_id).row(0, named=True)
-    get_or_add_node("researcher", ego_researcher_id, ego_res_row["name"].split()[-1])
+    _get_or_add_graph_node(
+        graph, node_idx_map, "researcher", ego_researcher_id, ego_res_row["name"].split()[-1]
+    )
 
-    # Add ego developer account
     ego_dev_row = developer_accounts.filter(pl.col("id") == ego_dev_account_id).row(
         0, named=True
     )
-    get_or_add_node("developer", ego_dev_account_id, ego_dev_row["username"])
+    _get_or_add_graph_node(
+        graph, node_idx_map, "developer", ego_dev_account_id, ego_dev_row["username"]
+    )
 
-    # Add researcher-developer identity edge
     graph.add_edge(
         node_idx_map[("researcher", ego_researcher_id)],
         node_idx_map[("developer", ego_dev_account_id)],
@@ -410,55 +406,93 @@ def _build_network_graph(
     )
 
     for pair_row in ego_pairs.iter_rows(named=True):
-        doc_id = pair_row["document_id"]
-        repo_id = pair_row["repository_id"]
-        source_id = pair_row["dataset_source_id"]
-        source_name = source_name_lut.get(source_id, "")
-        is_mined = "snowball" in source_name.lower()
-
-        doc_label = pair_row["document_title"][:20] + "…"
-        repo_label = pair_row["repository_name"][:20]
-
-        doc_idx = get_or_add_node("article", doc_id, doc_label)
-        repo_idx = get_or_add_node("repository", repo_id, repo_label)
-
-        # Article-repo edge
-        graph.add_edge(doc_idx, repo_idx, {"type": "mined" if is_mined else "seed"})
-
-        # Ego researcher–article edge
-        res_idx = node_idx_map[("researcher", ego_researcher_id)]
-        if not graph.has_edge(res_idx, doc_idx):
-            graph.add_edge(res_idx, doc_idx, {"type": "authored_by"})
-
-        # Additional authors (up to 3 others)
-        other_authors = document_contributors.filter(
-            (pl.col("document_id") == doc_id) & (pl.col("researcher_id") != ego_researcher_id)
-        ).head(3)
-        for author_row in other_authors.iter_rows(named=True):
-            rid = author_row["researcher_id"]
-            res_info = researchers.filter(pl.col("id") == rid)
-            if len(res_info) == 0:
-                continue
-            name = res_info.row(0, named=True)["name"].split()[-1]
-            r_idx = get_or_add_node("researcher", rid, name)
-            if not graph.has_edge(r_idx, doc_idx):
-                graph.add_edge(r_idx, doc_idx, {"type": "authored_by"})
-
-        # Repo contributors (up to 3)
-        repo_contribs = repository_contributors.filter(pl.col("repository_id") == repo_id).head(
-            3
+        _add_pair_to_graph(
+            pair_row,
+            graph,
+            node_idx_map,
+            ego_researcher_id,
+            document_contributors,
+            researchers,
+            repository_contributors,
+            developer_accounts,
+            source_name_lut,
         )
-        for contrib_row in repo_contribs.iter_rows(named=True):
-            dev_id = contrib_row["developer_account_id"]
-            dev_info = developer_accounts.filter(pl.col("id") == dev_id)
-            if len(dev_info) == 0:
-                continue
-            uname = dev_info.row(0, named=True)["username"]
-            d_idx = get_or_add_node("developer", dev_id, uname)
-            if not graph.has_edge(repo_idx, d_idx):
-                graph.add_edge(repo_idx, d_idx, {"type": "contributed_to"})
 
     return graph
+
+
+def _get_or_add_graph_node(
+    graph: rx.PyGraph,
+    node_idx_map: dict[tuple[str, int], int],
+    node_type: str,
+    node_id: int,
+    label: str,
+) -> int:
+    key = (node_type, node_id)
+    if key not in node_idx_map:
+        idx = graph.add_node({"type": node_type, "id": node_id, "label": label})
+        node_idx_map[key] = idx
+    return node_idx_map[key]
+
+
+def _add_pair_to_graph(
+    pair_row: dict,
+    graph: rx.PyGraph,
+    node_idx_map: dict[tuple[str, int], int],
+    ego_researcher_id: int,
+    document_contributors: pl.DataFrame,
+    researchers: pl.DataFrame,
+    repository_contributors: pl.DataFrame,
+    developer_accounts: pl.DataFrame,
+    source_name_lut: dict[int, str],
+) -> None:
+    doc_id = pair_row["document_id"]
+    repo_id = pair_row["repository_id"]
+    source_name = source_name_lut.get(pair_row["dataset_source_id"], "")
+    is_mined = "snowball" in source_name.lower()
+
+    doc_idx = _get_or_add_graph_node(
+        graph, node_idx_map, "article", doc_id, pair_row["document_title"][:20] + "..."
+    )
+    repo_idx = _get_or_add_graph_node(
+        graph, node_idx_map, "repository", repo_id, pair_row["repository_name"][:20]
+    )
+
+    graph.add_edge(doc_idx, repo_idx, {"type": "mined" if is_mined else "seed"})
+
+    res_idx = node_idx_map[("researcher", ego_researcher_id)]
+    if not graph.has_edge(res_idx, doc_idx):
+        graph.add_edge(res_idx, doc_idx, {"type": "authored_by"})
+
+    for author_row in (
+        document_contributors.filter(
+            (pl.col("document_id") == doc_id) & (pl.col("researcher_id") != ego_researcher_id)
+        )
+        .head(3)
+        .iter_rows(named=True)
+    ):
+        rid = author_row["researcher_id"]
+        res_info = researchers.filter(pl.col("id") == rid)
+        if len(res_info) == 0:
+            continue
+        name = res_info.row(0, named=True)["name"].split()[-1]
+        r_idx = _get_or_add_graph_node(graph, node_idx_map, "researcher", rid, name)
+        if not graph.has_edge(r_idx, doc_idx):
+            graph.add_edge(r_idx, doc_idx, {"type": "authored_by"})
+
+    for contrib_row in (
+        repository_contributors.filter(pl.col("repository_id") == repo_id)
+        .head(3)
+        .iter_rows(named=True)
+    ):
+        dev_id = contrib_row["developer_account_id"]
+        dev_info = developer_accounts.filter(pl.col("id") == dev_id)
+        if len(dev_info) == 0:
+            continue
+        uname = dev_info.row(0, named=True)["username"]
+        d_idx = _get_or_add_graph_node(graph, node_idx_map, "developer", dev_id, uname)
+        if not graph.has_edge(repo_idx, d_idx):
+            graph.add_edge(repo_idx, d_idx, {"type": "contributed_to"})
 
 
 def _draw_network(ax: mpl.axes.Axes, graph: rx.PyGraph, colors: list[str]) -> None:
@@ -517,7 +551,7 @@ def _draw_network(ax: mpl.axes.Axes, graph: rx.PyGraph, colors: list[str]) -> No
                 edgecolors="white",
                 linewidths=0.5,
             )
-            for x, y, lbl in zip(xs, ys, labels):
+            for x, y, lbl in zip(xs, ys, labels, strict=False):
                 ax.annotate(
                     lbl,
                     (x, y),
@@ -663,7 +697,7 @@ def _draw_descriptive_overview(
     cov_df = pd.DataFrame(coverage_data)
     bar_colors = [colors_8[0], colors_8[1], colors_8[2], colors_8[3]]
     bars = ax_b4.bar(cov_df["view"], cov_df["proportion"], color=bar_colors)
-    for bar, n_val in zip(bars, cov_df["n"]):
+    for bar, n_val in zip(bars, cov_df["n"], strict=False):
         ax_b4.text(
             bar.get_x() + bar.get_width() / 2,
             bar.get_height() + 0.01,
@@ -773,6 +807,305 @@ def _find_best_three_views_pair(
     return best_row, best_imports, best_deps, best_mentions
 
 
+def _draw_mentions_panel(
+    ax: mpl.axes.Axes,
+    title_text: str,
+    doi: str,
+    best_mentions: pl.DataFrame,
+    color: str,
+    max_items: int = 8,
+) -> None:
+    ax.set_facecolor(PANEL_BG_LIGHT)
+    ax.set_axis_off()
+    ax.set_title("f", fontweight="bold", loc="left", fontsize=10)
+
+    y = 0.97
+    ax.text(
+        0.05,
+        y,
+        "Mentions",
+        transform=ax.transAxes,
+        fontsize=9,
+        fontweight="bold",
+        color=TEXT_DARK,
+        va="top",
+    )
+    y -= 0.06
+    ax.text(
+        0.05,
+        y,
+        "software named in article text",
+        transform=ax.transAxes,
+        fontsize=7,
+        color="#666666",
+        va="top",
+        style="italic",
+    )
+    y -= 0.05
+    ax.text(
+        0.05,
+        y,
+        f"\U0001f4c4 {title_text}",
+        transform=ax.transAxes,
+        fontsize=6.5,
+        color=TEXT_DARK,
+        va="top",
+        wrap=True,
+    )
+    y -= 0.05
+    ax.text(
+        0.05, y, f"doi:{doi}", transform=ax.transAxes, fontsize=6, color="#666666", va="top"
+    )
+    y -= 0.06
+
+    mentions_sorted = best_mentions.sort(
+        [pl.col("mention_context").is_not_null()], descending=[True]
+    )
+    total = len(mentions_sorted)
+
+    for row in mentions_sorted.head(max_items).iter_rows(named=True):
+        context = row.get("mention_context") or ""
+        name = row["software_name"]
+        if len(context) > 120:
+            context = context[:120] + "..."
+        display_text = f'"{context}"' if context else f"[{name}]"
+
+        ax.text(
+            0.05,
+            y,
+            f"- {display_text}",
+            transform=ax.transAxes,
+            fontsize=6.5,
+            color=TEXT_DARK,
+            va="top",
+            wrap=True,
+        )
+        y -= 0.10
+        ax.text(
+            0.08,
+            y,
+            f"-- {name}",
+            transform=ax.transAxes,
+            fontsize=6.5,
+            color=color,
+            va="top",
+            fontweight="bold",
+        )
+        y -= 0.07
+
+        if y < 0.05:
+            break
+
+    if total > max_items:
+        ax.text(
+            0.05,
+            max(y, 0.03),
+            f"(+{total - max_items} more)",
+            transform=ax.transAxes,
+            fontsize=6,
+            color="#999999",
+            va="top",
+            style="italic",
+        )
+
+
+def _draw_imports_panel(
+    ax: mpl.axes.Axes,
+    repo_url: str,
+    best_imports: pl.DataFrame,
+    color: str,
+    max_items: int = 8,
+) -> None:
+    ax.set_facecolor(PANEL_BG_DARK)
+    ax.set_axis_off()
+    ax.set_title("g", fontweight="bold", loc="left", fontsize=10, color="white")
+
+    y = 0.97
+    ax.text(
+        0.05,
+        y,
+        "Imports",
+        transform=ax.transAxes,
+        fontsize=9,
+        fontweight="bold",
+        color="white",
+        va="top",
+    )
+    y -= 0.06
+    ax.text(
+        0.05,
+        y,
+        "libraries called directly in code",
+        transform=ax.transAxes,
+        fontsize=7,
+        color=TEXT_LIGHT,
+        va="top",
+        style="italic",
+    )
+    y -= 0.05
+    ax.text(
+        0.05,
+        y,
+        f"⌨  {repo_url}",
+        transform=ax.transAxes,
+        fontsize=6.5,
+        color=TEXT_LIGHT,
+        va="top",
+    )
+    y -= 0.08
+
+    total = len(best_imports)
+
+    for row in best_imports.head(max_items).iter_rows(named=True):
+        name = row["software_name"]
+        ecosystem = row.get("ecosystem", "")
+        if ecosystem == "r":
+            prefix, suffix = "library(", ")"
+        else:
+            prefix, suffix = "import ", ""
+
+        offset = len(prefix) * 0.018
+        ax.text(
+            0.05,
+            y,
+            prefix,
+            transform=ax.transAxes,
+            fontsize=7.5,
+            color=TEXT_LIGHT,
+            va="top",
+            fontfamily="monospace",
+        )
+        ax.text(
+            0.05 + offset,
+            y,
+            name,
+            transform=ax.transAxes,
+            fontsize=7.5,
+            color=color,
+            va="top",
+            fontfamily="monospace",
+            fontweight="bold",
+        )
+        if suffix:
+            ax.text(
+                0.05 + offset + len(name) * 0.018,
+                y,
+                suffix,
+                transform=ax.transAxes,
+                fontsize=7.5,
+                color=TEXT_LIGHT,
+                va="top",
+                fontfamily="monospace",
+            )
+        y -= 0.07
+        if y < 0.05:
+            break
+
+    if total > max_items:
+        ax.text(
+            0.05,
+            max(y, 0.03),
+            f"(+{total - max_items} more)",
+            transform=ax.transAxes,
+            fontsize=6,
+            color="#888888",
+            va="top",
+            style="italic",
+        )
+
+
+def _draw_deps_panel(
+    ax: mpl.axes.Axes,
+    best_deps: pl.DataFrame,
+    color: str,
+    max_items: int = 8,
+) -> None:
+    ax.set_facecolor(PANEL_BG_MID)
+    ax.set_axis_off()
+    ax.set_title("h", fontweight="bold", loc="left", fontsize=10, color="white")
+
+    y = 0.97
+    ax.text(
+        0.05,
+        y,
+        "Dependencies",
+        transform=ax.transAxes,
+        fontsize=9,
+        fontweight="bold",
+        color="white",
+        va="top",
+    )
+    y -= 0.06
+    ax.text(
+        0.05,
+        y,
+        "packages declared in manifests",
+        transform=ax.transAxes,
+        fontsize=7,
+        color=TEXT_LIGHT,
+        va="top",
+        style="italic",
+    )
+    y -= 0.05
+
+    manifest_files = best_deps.get_column("manifest_paths").drop_nulls().to_list()
+    if manifest_files:
+        first_manifest = manifest_files[0].split(";")[0].strip()
+        ax.text(
+            0.05,
+            y,
+            f"\U0001f4cb {first_manifest}",
+            transform=ax.transAxes,
+            fontsize=6.5,
+            color=TEXT_LIGHT,
+            va="top",
+        )
+    y -= 0.08
+
+    total = len(best_deps)
+
+    for row in best_deps.head(max_items).iter_rows(named=True):
+        name = row["software_name"]
+        version = row.get("version_spec") or ""
+        ax.text(
+            0.05,
+            y,
+            name,
+            transform=ax.transAxes,
+            fontsize=7.5,
+            color=color,
+            va="top",
+            fontfamily="monospace",
+            fontweight="bold",
+        )
+        if version:
+            ax.text(
+                0.05 + len(name) * 0.018,
+                y,
+                f"  {version}",
+                transform=ax.transAxes,
+                fontsize=7.5,
+                color=TEXT_LIGHT,
+                va="top",
+                fontfamily="monospace",
+            )
+        y -= 0.07
+        if y < 0.05:
+            break
+
+    if total > max_items:
+        ax.text(
+            0.05,
+            max(y, 0.03),
+            f"(+{total - max_items} more)",
+            transform=ax.transAxes,
+            fontsize=6,
+            color="#888888",
+            va="top",
+            style="italic",
+        )
+
+
 def _draw_three_views(
     ax_c1: mpl.axes.Axes,
     ax_c2: mpl.axes.Axes,
@@ -783,312 +1116,15 @@ def _draw_three_views(
     best_mentions: pl.DataFrame,
     colors: list[str],
 ) -> None:
-    max_items = 8
-
     title_text = best_row["document_title"]
     if len(title_text) > 70:
-        title_text = title_text[:70] + "…"
+        title_text = title_text[:70] + "..."
     repo_url = f"github.com/{best_row['repository_owner']}/{best_row['repository_name']}"
     doi = best_row["document_doi"]
 
-    # --- C1: Mentions ---
-    ax_c1.set_facecolor(PANEL_BG_LIGHT)
-    ax_c1.set_axis_off()
-    ax_c1.set_title("f", fontweight="bold", loc="left", fontsize=10)
-
-    y = 0.97
-    ax_c1.text(
-        0.05,
-        y,
-        "Mentions",
-        transform=ax_c1.transAxes,
-        fontsize=9,
-        fontweight="bold",
-        color=TEXT_DARK,
-        va="top",
-    )
-    y -= 0.06
-    ax_c1.text(
-        0.05,
-        y,
-        "software named in article text",
-        transform=ax_c1.transAxes,
-        fontsize=7,
-        color="#666666",
-        va="top",
-        style="italic",
-    )
-    y -= 0.05
-    ax_c1.text(
-        0.05,
-        y,
-        f"📄 {title_text}",
-        transform=ax_c1.transAxes,
-        fontsize=6.5,
-        color=TEXT_DARK,
-        va="top",
-        wrap=True,
-    )
-    y -= 0.05
-    ax_c1.text(
-        0.05,
-        y,
-        f"doi:{doi}",
-        transform=ax_c1.transAxes,
-        fontsize=6,
-        color="#666666",
-        va="top",
-    )
-    y -= 0.06
-
-    # Sort mentions: prefer those with context
-    mentions_sorted = best_mentions.sort(
-        [pl.col("mention_context").is_not_null()], descending=[True]
-    )
-    total_mentions = len(mentions_sorted)
-    shown = mentions_sorted.head(max_items)
-
-    for row in shown.iter_rows(named=True):
-        context = row.get("mention_context") or ""
-        name = row["software_name"]
-        if len(context) > 120:
-            context = context[:120] + "…"
-        if context:
-            display_text = f'"{context}"'
-        else:
-            display_text = f"[{name}]"
-
-        # Draw text, highlighting the software name
-        ax_c1.text(
-            0.05,
-            y,
-            f"• {display_text}",
-            transform=ax_c1.transAxes,
-            fontsize=6.5,
-            color=TEXT_DARK,
-            va="top",
-            wrap=True,
-        )
-        y -= 0.10
-
-        ax_c1.text(
-            0.08,
-            y,
-            f"— {name}",
-            transform=ax_c1.transAxes,
-            fontsize=6.5,
-            color=colors[0],
-            va="top",
-            fontweight="bold",
-        )
-        y -= 0.07
-
-        if y < 0.05:
-            break
-
-    if total_mentions > max_items:
-        ax_c1.text(
-            0.05,
-            max(y, 0.03),
-            f"(+{total_mentions - max_items} more)",
-            transform=ax_c1.transAxes,
-            fontsize=6,
-            color="#999999",
-            va="top",
-            style="italic",
-        )
-
-    # --- C2: Imports ---
-    ax_c2.set_facecolor(PANEL_BG_DARK)
-    ax_c2.set_axis_off()
-    ax_c2.set_title("g", fontweight="bold", loc="left", fontsize=10, color="white")
-
-    y = 0.97
-    ax_c2.text(
-        0.05,
-        y,
-        "Imports",
-        transform=ax_c2.transAxes,
-        fontsize=9,
-        fontweight="bold",
-        color="white",
-        va="top",
-    )
-    y -= 0.06
-    ax_c2.text(
-        0.05,
-        y,
-        "libraries called directly in code",
-        transform=ax_c2.transAxes,
-        fontsize=7,
-        color=TEXT_LIGHT,
-        va="top",
-        style="italic",
-    )
-    y -= 0.05
-    ax_c2.text(
-        0.05,
-        y,
-        f"⌨  {repo_url}",
-        transform=ax_c2.transAxes,
-        fontsize=6.5,
-        color=TEXT_LIGHT,
-        va="top",
-    )
-    y -= 0.08
-
-    total_imports = len(best_imports)
-    shown_imports = best_imports.head(max_items)
-
-    for row in shown_imports.iter_rows(named=True):
-        name = row["software_name"]
-        ecosystem = row.get("ecosystem", "")
-        if ecosystem == "r":
-            stmt_prefix = "library("
-            stmt_suffix = ")"
-        else:
-            stmt_prefix = "import "
-            stmt_suffix = ""
-
-        ax_c2.text(
-            0.05,
-            y,
-            stmt_prefix,
-            transform=ax_c2.transAxes,
-            fontsize=7.5,
-            color=TEXT_LIGHT,
-            va="top",
-            fontfamily="monospace",
-        )
-        # Calculate approximate x offset for the name
-        offset = len(stmt_prefix) * 0.018
-        ax_c2.text(
-            0.05 + offset,
-            y,
-            name,
-            transform=ax_c2.transAxes,
-            fontsize=7.5,
-            color=colors[1],
-            va="top",
-            fontfamily="monospace",
-            fontweight="bold",
-        )
-        if stmt_suffix:
-            ax_c2.text(
-                0.05 + offset + len(name) * 0.018,
-                y,
-                stmt_suffix,
-                transform=ax_c2.transAxes,
-                fontsize=7.5,
-                color=TEXT_LIGHT,
-                va="top",
-                fontfamily="monospace",
-            )
-        y -= 0.07
-        if y < 0.05:
-            break
-
-    if total_imports > max_items:
-        ax_c2.text(
-            0.05,
-            max(y, 0.03),
-            f"(+{total_imports - max_items} more)",
-            transform=ax_c2.transAxes,
-            fontsize=6,
-            color="#888888",
-            va="top",
-            style="italic",
-        )
-
-    # --- C3: Dependencies ---
-    ax_c3.set_facecolor(PANEL_BG_MID)
-    ax_c3.set_axis_off()
-    ax_c3.set_title("h", fontweight="bold", loc="left", fontsize=10, color="white")
-
-    y = 0.97
-    ax_c3.text(
-        0.05,
-        y,
-        "Dependencies",
-        transform=ax_c3.transAxes,
-        fontsize=9,
-        fontweight="bold",
-        color="white",
-        va="top",
-    )
-    y -= 0.06
-    ax_c3.text(
-        0.05,
-        y,
-        "packages declared in manifests",
-        transform=ax_c3.transAxes,
-        fontsize=7,
-        color=TEXT_LIGHT,
-        va="top",
-        style="italic",
-    )
-    y -= 0.05
-
-    # Show first manifest file name
-    manifest_files = best_deps.get_column("manifest_paths").drop_nulls().to_list()
-    if manifest_files:
-        first_manifest = manifest_files[0].split(";")[0].strip()
-        ax_c3.text(
-            0.05,
-            y,
-            f"📋 {first_manifest}",
-            transform=ax_c3.transAxes,
-            fontsize=6.5,
-            color=TEXT_LIGHT,
-            va="top",
-        )
-    y -= 0.08
-
-    total_deps = len(best_deps)
-    shown_deps = best_deps.head(max_items)
-
-    for row in shown_deps.iter_rows(named=True):
-        name = row["software_name"]
-        version = row.get("version_spec") or ""
-        offset = len(name) * 0.018
-
-        ax_c3.text(
-            0.05,
-            y,
-            name,
-            transform=ax_c3.transAxes,
-            fontsize=7.5,
-            color=colors[2],
-            va="top",
-            fontfamily="monospace",
-            fontweight="bold",
-        )
-        if version:
-            ax_c3.text(
-                0.05 + offset,
-                y,
-                f"  {version}",
-                transform=ax_c3.transAxes,
-                fontsize=7.5,
-                color=TEXT_LIGHT,
-                va="top",
-                fontfamily="monospace",
-            )
-        y -= 0.07
-        if y < 0.05:
-            break
-
-    if total_deps > max_items:
-        ax_c3.text(
-            0.05,
-            max(y, 0.03),
-            f"(+{total_deps - max_items} more)",
-            transform=ax_c3.transAxes,
-            fontsize=6,
-            color="#888888",
-            va="top",
-            style="italic",
-        )
+    _draw_mentions_panel(ax_c1, title_text, doi, best_mentions, colors[0])
+    _draw_imports_panel(ax_c2, repo_url, best_imports, colors[1])
+    _draw_deps_panel(ax_c3, best_deps, colors[2])
 
 
 ###############################################################################
