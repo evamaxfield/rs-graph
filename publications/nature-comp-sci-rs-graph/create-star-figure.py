@@ -334,6 +334,18 @@ def _build_network_graph(
         pl.col("predictive_model_confidence") > RDAL_CONFIDENCE_THRESHOLD
     )
 
+    # Classify each dataset_source_id as seed vs mined
+    mined_source_ids = set(
+        dataset_sources.filter(pl.col("name").str.to_lowercase().str.contains("snowball"))
+        .get_column("id")
+        .to_list()
+    )
+    seed_source_ids = set(
+        dataset_sources.filter(~pl.col("name").str.to_lowercase().str.contains("snowball"))
+        .get_column("id")
+        .to_list()
+    )
+
     # Find the researcher with the most articles in pair_metadata who has a high-conf match
     researcher_article_counts = (
         document_contributors.join(
@@ -347,8 +359,33 @@ def _build_network_graph(
     researcher_article_counts = researcher_article_counts.filter(
         pl.col("researcher_id").is_in(linked_researcher_ids)
     )
+
+    # Prefer researchers who appear in BOTH seed and mined pairs
+    researcher_doc_ids = document_contributors.join(
+        pair_metadata.select(pl.col("document_id"), pl.col("dataset_source_id")),
+        on="document_id",
+        how="inner",
+    )
+    has_seed = (
+        researcher_doc_ids.filter(pl.col("dataset_source_id").is_in(seed_source_ids))
+        .get_column("researcher_id")
+        .unique()
+        .to_list()
+    )
+    has_mined = (
+        researcher_doc_ids.filter(pl.col("dataset_source_id").is_in(mined_source_ids))
+        .get_column("researcher_id")
+        .unique()
+        .to_list()
+    )
+    both_types_ids = set(has_seed) & set(has_mined)
+    candidates_both = researcher_article_counts.filter(
+        pl.col("researcher_id").is_in(both_types_ids)
+    )
+    candidates = candidates_both if len(candidates_both) > 0 else researcher_article_counts
+
     ego_researcher_id = (
-        researcher_article_counts.sort("article_count", descending=True)
+        candidates.sort("article_count", descending=True)
         .head(1)
         .get_column("researcher_id")
         .item()
@@ -499,10 +536,34 @@ def _draw_network(ax: mpl.axes.Axes, graph: rx.PyGraph, colors: list[str]) -> No
     positions = rx.graph_spring_layout(graph, seed=RANDOM_SEED)  # type: ignore[call-arg]
 
     node_type_cfg = {
-        "article": {"color": colors[0], "marker": "o", "size": 120, "zorder": 3},
-        "repository": {"color": colors[1], "marker": "s", "size": 120, "zorder": 3},
-        "researcher": {"color": colors[2], "marker": "D", "size": 100, "zorder": 3},
-        "developer": {"color": colors[3], "marker": "^", "size": 100, "zorder": 3},
+        "article": {
+            "color": colors[0],
+            "marker": "o",
+            "size": 120,
+            "zorder": 3,
+            "hollow": False,
+        },
+        "repository": {
+            "color": colors[1],
+            "marker": "s",
+            "size": 120,
+            "zorder": 3,
+            "hollow": False,
+        },
+        "researcher": {
+            "color": colors[2],
+            "marker": "D",
+            "size": 100,
+            "zorder": 3,
+            "hollow": True,
+        },
+        "developer": {
+            "color": colors[3],
+            "marker": "^",
+            "size": 100,
+            "zorder": 3,
+            "hollow": True,
+        },
     }
     edge_type_cfg = {
         "authored_by": {"color": "#aaaaaa", "lw": 0.8, "ls": "-", "zorder": 1},
@@ -541,16 +602,29 @@ def _draw_network(ax: mpl.axes.Axes, graph: rx.PyGraph, colors: list[str]) -> No
                 ys.append(y)
                 labels.append(nd["label"])
         if xs:
-            ax.scatter(
-                xs,
-                ys,
-                c=cfg["color"],
-                marker=str(cfg["marker"]),
-                s=cfg["size"],
-                zorder=cfg["zorder"],
-                edgecolors="white",
-                linewidths=0.5,
-            )
+            node_color = str(cfg["color"])
+            if cfg["hollow"]:
+                ax.scatter(
+                    xs,
+                    ys,
+                    facecolors="none",
+                    edgecolors=node_color,
+                    marker=str(cfg["marker"]),
+                    s=cfg["size"],
+                    zorder=cfg["zorder"],
+                    linewidths=1.5,
+                )
+            else:
+                ax.scatter(
+                    xs,
+                    ys,
+                    c=node_color,
+                    marker=str(cfg["marker"]),
+                    s=cfg["size"],
+                    zorder=cfg["zorder"],
+                    edgecolors=node_color,
+                    linewidths=1.5,
+                )
             for x, y, lbl in zip(xs, ys, labels, strict=False):
                 ax.annotate(
                     lbl,
@@ -558,16 +632,16 @@ def _draw_network(ax: mpl.axes.Axes, graph: rx.PyGraph, colors: list[str]) -> No
                     fontsize=5,
                     ha="center",
                     va="bottom",
-                    xytext=(0, 4),
+                    xytext=(0, 8),
                     textcoords="offset points",
                 )
 
     # Legend
     legend_handles = [
-        mpatches.Patch(color=colors[0], label="Article"),
-        mpatches.Patch(color=colors[1], label="Repository"),
-        mpatches.Patch(color=colors[2], label="Researcher"),
-        mpatches.Patch(color=colors[3], label="Developer"),
+        mpatches.Patch(facecolor=colors[0], edgecolor=colors[0], label="Article"),
+        mpatches.Patch(facecolor=colors[1], edgecolor=colors[1], label="Repository"),
+        mpatches.Patch(facecolor="none", edgecolor=colors[2], label="Researcher"),
+        mpatches.Patch(facecolor="none", edgecolor=colors[3], label="Developer"),
         mpl.lines.Line2D([], [], color=colors[4], lw=1.5, label="Seed link"),
         mpl.lines.Line2D([], [], color=colors[5], lw=1.5, ls="--", label="Mined link"),
         mpl.lines.Line2D([], [], color=colors[6], lw=2.5, label="Matched identity"),
@@ -612,7 +686,7 @@ def _draw_descriptive_overview(
         color=colors_8[0],
         ax=ax_b1,
     )
-    ax_b1.set_xlabel("Publication year")
+    ax_b1.set_xlabel("Publication Year")
     ax_b1.set_ylabel("Pairs")
     ax_b1.set_title("b", fontweight="bold", loc="left", fontsize=10)
     tick_years = sorted(year_counts["document_publication_year"].unique())
@@ -636,7 +710,9 @@ def _draw_descriptive_overview(
         data=field_counts,
         y="document_field_name_pruned",
         x="count",
+        hue="document_field_name_pruned",
         palette=palette_b2,
+        legend=False,
         ax=ax_b2,
         orient="h",
     )
@@ -660,11 +736,17 @@ def _draw_descriptive_overview(
         .sort("count", descending=True)
         .to_pandas()
     )
+    source_names_ordered = source_counts["source_name"].tolist()
+    palette_d = {
+        name: colors_8[i % len(colors_8)] for i, name in enumerate(source_names_ordered)
+    }
     sns.barplot(
         data=source_counts,
         y="source_name",
         x="count",
-        color=colors_8[1],
+        hue="source_name",
+        palette=palette_d,
+        legend=False,
         ax=ax_b3,
         orient="h",
     )
@@ -706,6 +788,7 @@ def _draw_descriptive_overview(
             va="bottom",
             fontsize=6,
         )
+    ax_b4.set_xlabel("Software Usage View")
     ax_b4.set_ylabel("Proportion of pairs")
     ax_b4.set_ylim(0, 1.0)
     ax_b4.set_title("e", fontweight="bold", loc="left", fontsize=10)
@@ -732,9 +815,9 @@ def _find_best_three_views_pair(
         "document_repository_link_id"
     ).agg(pl.len().alias("mentions_count"))
 
-    imports_p97 = imports_per_pair.get_column("imports_count").quantile(0.97)
-    deps_p97 = deps_per_pair.get_column("deps_count").quantile(0.97)
-    mentions_p97 = mentions_per_pair.get_column("mentions_count").quantile(0.97)
+    imports_p97 = imports_per_pair.get_column("imports_count").quantile(0.85)
+    deps_p97 = deps_per_pair.get_column("deps_count").quantile(0.85)
+    mentions_p97 = mentions_per_pair.get_column("mentions_count").quantile(0.85)
 
     extreme_ids = (
         set(
@@ -783,12 +866,21 @@ def _find_best_three_views_pair(
     )
     pool = pool.join(has_context, on="document_repository_link_id", how="left").fill_null(0)
 
+    # Bonus for pairs with many unique software names across mentions
+    unique_mention_names = software.document_software_mentions.group_by(
+        "document_repository_link_id"
+    ).agg(pl.col("software_name").n_unique().alias("unique_mention_names"))
+    pool = pool.join(
+        unique_mention_names, on="document_repository_link_id", how="left"
+    ).fill_null(0)
+
     pool = pool.with_columns(
         (
             pl.col("mentions_count") * 2
             + pl.col("imports_count")
             + pl.col("deps_count")
             + pl.col("context_bonus")
+            + pl.col("unique_mention_names")
         ).alias("score")
     )
 
@@ -798,13 +890,60 @@ def _find_best_three_views_pair(
 
     best_imports = software.repository_imports.filter(
         pl.col("document_repository_link_id") == link_id
-    )
+    ).unique(subset=["software_name"], keep="first")
     best_deps = software.repository_dependencies.filter(
         pl.col("document_repository_link_id") == link_id
-    )
-    best_mentions = software.document_software_mentions.filter(pl.col("document_id") == doc_id)
+    ).unique(subset=["software_name"], keep="first")
+    best_mentions = software.document_software_mentions.filter(
+        pl.col("document_id") == doc_id
+    ).unique(subset=["software_name"], keep="first")
 
     return best_row, best_imports, best_deps, best_mentions
+
+
+def _render_highlighted_line(
+    ax: mpl.axes.Axes,
+    x_start: float,
+    y: float,
+    context: str,
+    name: str,
+    base_color: str,
+    text_color: str,
+    fontsize: float,
+) -> None:
+    lower_ctx = context.lower()
+    lower_name = name.lower()
+    idx = lower_ctx.find(lower_name)
+    char_w = fontsize * 0.0074
+    x = x_start
+    if idx == -1:
+        ax.text(
+            x, y, context, transform=ax.transAxes, fontsize=fontsize, color=text_color, va="top"
+        )
+        return
+    before = context[:idx]
+    match = context[idx : idx + len(name)]
+    after = context[idx + len(name) :]
+    if before:
+        ax.text(
+            x, y, before, transform=ax.transAxes, fontsize=fontsize, color=text_color, va="top"
+        )
+        x += len(before) * char_w
+    ax.text(
+        x,
+        y,
+        match,
+        transform=ax.transAxes,
+        fontsize=fontsize,
+        color=base_color,
+        va="top",
+        fontweight="bold",
+    )
+    x += len(match) * char_w
+    if after:
+        ax.text(
+            x, y, after, transform=ax.transAxes, fontsize=fontsize, color=text_color, va="top"
+        )
 
 
 def _draw_mentions_panel(
@@ -845,7 +984,7 @@ def _draw_mentions_panel(
     ax.text(
         0.05,
         y,
-        f"\U0001f4c4 {title_text}",
+        title_text,
         transform=ax.transAxes,
         fontsize=6.5,
         color=TEXT_DARK,
@@ -858,43 +997,47 @@ def _draw_mentions_panel(
     )
     y -= 0.06
 
-    mentions_sorted = best_mentions.sort(
-        [pl.col("mention_context").is_not_null()], descending=[True]
+    # Prioritize rows where the software name appears in the context
+    mentions_with_context = best_mentions.filter(
+        pl.col("mention_context").is_not_null()
+        & pl.col("mention_context")
+        .str.to_lowercase()
+        .str.contains(pl.col("software_name_normalized").str.to_lowercase())
     )
+    mentions_fallback = best_mentions.filter(
+        ~(
+            pl.col("mention_context").is_not_null()
+            & pl.col("mention_context")
+            .str.to_lowercase()
+            .str.contains(pl.col("software_name_normalized").str.to_lowercase())
+        )
+    )
+    mentions_sorted = pl.concat([mentions_with_context, mentions_fallback])
     total = len(mentions_sorted)
+    shown = 0
 
-    for row in mentions_sorted.head(max_items).iter_rows(named=True):
+    for row in mentions_sorted.iter_rows(named=True):
+        if shown >= max_items or y < 0.05:
+            break
         context = row.get("mention_context") or ""
         name = row["software_name"]
-        if len(context) > 120:
-            context = context[:120] + "..."
-        display_text = f'"{context}"' if context else f"[{name}]"
+        if not context:
+            continue
+        lower_ctx = context.lower()
+        lower_name = name.lower()
+        name_idx = lower_ctx.find(lower_name)
+        if name_idx == -1:
+            continue
+        # Extract a window of ~90 chars around the match
+        win_start = max(0, name_idx - 42)
+        win_end = min(len(context), name_idx + len(name) + 42)
+        prefix = "..." if win_start > 0 else '"'
+        suffix = "..." if win_end < len(context) else '"'
+        context = prefix + context[win_start:win_end] + suffix
 
-        ax.text(
-            0.05,
-            y,
-            f"- {display_text}",
-            transform=ax.transAxes,
-            fontsize=6.5,
-            color=TEXT_DARK,
-            va="top",
-            wrap=True,
-        )
-        y -= 0.10
-        ax.text(
-            0.08,
-            y,
-            f"-- {name}",
-            transform=ax.transAxes,
-            fontsize=6.5,
-            color=color,
-            va="top",
-            fontweight="bold",
-        )
-        y -= 0.07
-
-        if y < 0.05:
-            break
+        _render_highlighted_line(ax, 0.05, y, context, name, color, TEXT_DARK, 6.5)
+        y -= 0.09
+        shown += 1
 
     if total > max_items:
         ax.text(
@@ -946,7 +1089,7 @@ def _draw_imports_panel(
     ax.text(
         0.05,
         y,
-        f"⌨  {repo_url}",
+        repo_url,
         transform=ax.transAxes,
         fontsize=6.5,
         color=TEXT_LIGHT,
@@ -1054,7 +1197,7 @@ def _draw_deps_panel(
         ax.text(
             0.05,
             y,
-            f"\U0001f4cb {first_manifest}",
+            first_manifest,
             transform=ax.transAxes,
             fontsize=6.5,
             color=TEXT_LIGHT,
@@ -1115,6 +1258,7 @@ def _draw_three_views(
     best_deps: pl.DataFrame,
     best_mentions: pl.DataFrame,
     colors: list[str],
+    max_items: int = 8,
 ) -> None:
     title_text = best_row["document_title"]
     if len(title_text) > 70:
@@ -1122,9 +1266,9 @@ def _draw_three_views(
     repo_url = f"github.com/{best_row['repository_owner']}/{best_row['repository_name']}"
     doi = best_row["document_doi"]
 
-    _draw_mentions_panel(ax_c1, title_text, doi, best_mentions, colors[0])
-    _draw_imports_panel(ax_c2, repo_url, best_imports, colors[1])
-    _draw_deps_panel(ax_c3, best_deps, colors[2])
+    _draw_mentions_panel(ax_c1, title_text, doi, best_mentions, colors[0], max_items=max_items)
+    _draw_imports_panel(ax_c2, repo_url, best_imports, colors[1], max_items=max_items)
+    _draw_deps_panel(ax_c3, best_deps, colors[2], max_items=max_items)
 
 
 ###############################################################################
@@ -1149,7 +1293,7 @@ def _build_figure(
             3,
             width_ratios=[1, 2, 1],
             hspace=0.05,
-            wspace=0.3,
+            wspace=0.35,
             left=0.05,
             right=0.97,
             top=0.95,
@@ -1157,7 +1301,7 @@ def _build_figure(
         )
         ax_a = fig.add_subplot(outer_gs[0])
 
-        b_gs = outer_gs[1].subgridspec(2, 2, hspace=0.45, wspace=0.4)
+        b_gs = outer_gs[1].subgridspec(2, 2, hspace=0.45, wspace=0.6)
         ax_b1 = fig.add_subplot(b_gs[0, 0])
         ax_b2 = fig.add_subplot(b_gs[0, 1])
         ax_b3 = fig.add_subplot(b_gs[1, 0])
@@ -1167,13 +1311,14 @@ def _build_figure(
         ax_c1 = fig.add_subplot(c_gs[0])
         ax_c2 = fig.add_subplot(c_gs[1])
         ax_c3 = fig.add_subplot(c_gs[2])
+        three_views_max_items = 8
 
     else:  # vertical
-        fig = plt.figure(figsize=(12, 20))
+        fig = plt.figure(figsize=(12, 22))
         outer_gs = fig.add_gridspec(
             3,
             1,
-            height_ratios=[1.5, 1, 1],
+            height_ratios=[1.5, 1.3, 1],
             hspace=0.35,
             left=0.08,
             right=0.97,
@@ -1183,16 +1328,17 @@ def _build_figure(
         a_row_gs = outer_gs[0].subgridspec(1, 1)
         ax_a = fig.add_subplot(a_row_gs[0])
 
-        b_gs = outer_gs[1].subgridspec(1, 4, wspace=0.45)
-        ax_b1 = fig.add_subplot(b_gs[0])
-        ax_b2 = fig.add_subplot(b_gs[1])
-        ax_b3 = fig.add_subplot(b_gs[2])
-        ax_b4 = fig.add_subplot(b_gs[3])
+        b_gs = outer_gs[1].subgridspec(2, 2, hspace=0.55, wspace=0.5)
+        ax_b1 = fig.add_subplot(b_gs[0, 0])
+        ax_b2 = fig.add_subplot(b_gs[0, 1])
+        ax_b3 = fig.add_subplot(b_gs[1, 0])
+        ax_b4 = fig.add_subplot(b_gs[1, 1])
 
         c_gs = outer_gs[2].subgridspec(1, 3, wspace=0.1)
         ax_c1 = fig.add_subplot(c_gs[0])
         ax_c2 = fig.add_subplot(c_gs[1])
         ax_c3 = fig.add_subplot(c_gs[2])
+        three_views_max_items = 6
 
     _draw_network(ax_a, network_graph, colors_8)
     _draw_descriptive_overview(
@@ -1218,6 +1364,7 @@ def _build_figure(
             best_deps,
             best_mentions,
             colors_8,
+            max_items=three_views_max_items,
         )
     else:
         for ax in [ax_c1, ax_c2, ax_c3]:
