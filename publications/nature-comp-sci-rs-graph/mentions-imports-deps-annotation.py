@@ -596,36 +596,72 @@ def main() -> None:
             ).alias("repository_url"),
             # Sorted semicolon-joined display strings
             pl.col("_mentioned_raw").list.sort().list.join(";").alias("mentioned_software_raw"),
-            pl.col("_mentioned_norm").list.sort().list.join(";").alias("mentioned_software_normalized"),
+            pl.col("_mentioned_norm")
+            .list.sort()
+            .list.join(";")
+            .alias("mentioned_software_normalized"),
             pl.col("_imported_raw").list.sort().list.join(";").alias("imported_software_raw"),
-            pl.col("_imported_norm").list.sort().list.join(";").alias("imported_software_normalized"),
-            pl.col("_dependencies_raw").list.sort().list.join(";").alias("dependencies_software_raw"),
-            pl.col("_dependencies_norm").list.sort().list.join(";").alias("dependencies_software_normalized"),
+            pl.col("_imported_norm")
+            .list.sort()
+            .list.join(";")
+            .alias("imported_software_normalized"),
+            pl.col("_dependencies_raw")
+            .list.sort()
+            .list.join(";")
+            .alias("dependencies_software_raw"),
+            pl.col("_dependencies_norm")
+            .list.sort()
+            .list.join(";")
+            .alias("dependencies_software_normalized"),
             # Set differences of normalized names (items in A not present in B)
-            pl.struct(["_mentioned_norm", "_imported_norm"]).map_elements(
-                lambda x: ";".join(sorted(set(x["_mentioned_norm"] or []) - set(x["_imported_norm"] or []))),
+            pl.struct(["_mentioned_norm", "_imported_norm"])
+            .map_elements(
+                lambda x: ";".join(
+                    sorted(set(x["_mentioned_norm"] or []) - set(x["_imported_norm"] or []))
+                ),
                 return_dtype=pl.String,
-            ).alias("mentions_not_in_imports_normalized"),
-            pl.struct(["_imported_norm", "_mentioned_norm"]).map_elements(
-                lambda x: ";".join(sorted(set(x["_imported_norm"] or []) - set(x["_mentioned_norm"] or []))),
+            )
+            .alias("mentions_not_in_imports_normalized"),
+            pl.struct(["_imported_norm", "_mentioned_norm"])
+            .map_elements(
+                lambda x: ";".join(
+                    sorted(set(x["_imported_norm"] or []) - set(x["_mentioned_norm"] or []))
+                ),
                 return_dtype=pl.String,
-            ).alias("imports_not_in_mentions_normalized"),
-            pl.struct(["_mentioned_norm", "_dependencies_norm"]).map_elements(
-                lambda x: ";".join(sorted(set(x["_mentioned_norm"] or []) - set(x["_dependencies_norm"] or []))),
+            )
+            .alias("imports_not_in_mentions_normalized"),
+            pl.struct(["_mentioned_norm", "_dependencies_norm"])
+            .map_elements(
+                lambda x: ";".join(
+                    sorted(set(x["_mentioned_norm"] or []) - set(x["_dependencies_norm"] or []))
+                ),
                 return_dtype=pl.String,
-            ).alias("mentions_not_in_dependencies_normalized"),
-            pl.struct(["_dependencies_norm", "_mentioned_norm"]).map_elements(
-                lambda x: ";".join(sorted(set(x["_dependencies_norm"] or []) - set(x["_mentioned_norm"] or []))),
+            )
+            .alias("mentions_not_in_dependencies_normalized"),
+            pl.struct(["_dependencies_norm", "_mentioned_norm"])
+            .map_elements(
+                lambda x: ";".join(
+                    sorted(set(x["_dependencies_norm"] or []) - set(x["_mentioned_norm"] or []))
+                ),
                 return_dtype=pl.String,
-            ).alias("dependencies_not_in_mentions_normalized"),
-            pl.struct(["_imported_norm", "_dependencies_norm"]).map_elements(
-                lambda x: ";".join(sorted(set(x["_imported_norm"] or []) - set(x["_dependencies_norm"] or []))),
+            )
+            .alias("dependencies_not_in_mentions_normalized"),
+            pl.struct(["_imported_norm", "_dependencies_norm"])
+            .map_elements(
+                lambda x: ";".join(
+                    sorted(set(x["_imported_norm"] or []) - set(x["_dependencies_norm"] or []))
+                ),
                 return_dtype=pl.String,
-            ).alias("imports_not_in_dependencies_normalized"),
-            pl.struct(["_dependencies_norm", "_imported_norm"]).map_elements(
-                lambda x: ";".join(sorted(set(x["_dependencies_norm"] or []) - set(x["_imported_norm"] or []))),
+            )
+            .alias("imports_not_in_dependencies_normalized"),
+            pl.struct(["_dependencies_norm", "_imported_norm"])
+            .map_elements(
+                lambda x: ";".join(
+                    sorted(set(x["_dependencies_norm"] or []) - set(x["_imported_norm"] or []))
+                ),
                 return_dtype=pl.String,
-            ).alias("dependencies_not_in_imports_normalized"),
+            )
+            .alias("dependencies_not_in_imports_normalized"),
         )
     )
 

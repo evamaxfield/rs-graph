@@ -90,8 +90,14 @@ def main() -> None:
         "one-way linkage (only one linked)",
         len(
             matches.filter(
-                ((pl.col("this-repo-linked-in-paper") == "yes") & (pl.col("this-paper-linked-in-repo") == "no"))
-                | ((pl.col("this-repo-linked-in-paper") == "no") & (pl.col("this-paper-linked-in-repo") == "yes"))
+                (
+                    (pl.col("this-repo-linked-in-paper") == "yes")
+                    & (pl.col("this-paper-linked-in-repo") == "no")
+                )
+                | (
+                    (pl.col("this-repo-linked-in-paper") == "no")
+                    & (pl.col("this-paper-linked-in-repo") == "yes")
+                )
             )
         ),
         n_matches,
