@@ -5,6 +5,7 @@ import traceback
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 from prefect import task
 from sqlalchemy.engine import Engine
@@ -537,6 +538,99 @@ def store_dev_researcher_em_links_task(
         pair.store_author_developer_links_time_seconds = end_time - start_time
 
     return pair
+
+
+_EXTENDED_CONFIDENCE_THRESHOLD = 0.9994
+
+
+def check_article_link_quality_in_db(
+    article_doi: str,
+    article_title: str,
+    use_prod: bool = False,
+) -> Literal["not_in_db", "has_good_link", "has_only_poor_links"]:
+    engine = get_engine(use_prod=use_prod)
+    article_doi = normalize_doi(article_doi)
+
+    with Session(engine) as session:
+        document_stmt = select(db_models.Document).where(db_models.Document.doi == article_doi)
+        document_model = session.exec(document_stmt).first()
+
+        if document_model is None:
+            alternate_stmt = select(db_models.DocumentAlternateDOI).where(
+                db_models.DocumentAlternateDOI.doi == article_doi
+            )
+            alternate_model = session.exec(alternate_stmt).first()
+
+            if alternate_model is not None:
+                doc_stmt = select(db_models.Document).where(
+                    db_models.Document.id == alternate_model.document_id
+                )
+                document_model = session.exec(doc_stmt).first()
+            elif article_title is not None:
+                title_stmt = select(db_models.Document).where(
+                    db_models.Document.title == article_title.strip()
+                )
+                document_model = session.exec(title_stmt).first()
+
+        if document_model is None:
+            return "not_in_db"
+
+        links_stmt = select(db_models.DocumentRepositoryLink).where(
+            db_models.DocumentRepositoryLink.document_id == document_model.id
+        )
+        links = list(session.exec(links_stmt).all())
+
+        for link in links:
+            if (
+                link.predictive_model_confidence is None
+                or link.predictive_model_confidence >= _EXTENDED_CONFIDENCE_THRESHOLD
+            ):
+                return "has_good_link"
+
+        return "has_only_poor_links"
+
+
+def check_repository_link_quality_in_db(
+    code_host: str,
+    repo_owner: str,
+    repo_name: str,
+    use_prod: bool = False,
+) -> Literal["not_in_db", "has_good_link", "has_only_poor_links"]:
+    engine = get_engine(use_prod=use_prod)
+    code_host = code_host.lower().strip()
+    repo_owner = repo_owner.lower().strip()
+    repo_name = repo_name.lower().strip()
+
+    with Session(engine) as session:
+        code_host_stmt = select(db_models.CodeHost).where(db_models.CodeHost.name == code_host)
+        code_host_model = session.exec(code_host_stmt).first()
+
+        if code_host_model is None:
+            return "not_in_db"
+
+        repository_stmt = select(db_models.Repository).where(
+            db_models.Repository.code_host_id == code_host_model.id,
+            db_models.Repository.owner == repo_owner,
+            db_models.Repository.name == repo_name,
+        )
+        repository_model = session.exec(repository_stmt).first()
+
+        if repository_model is None:
+            return "not_in_db"
+
+        links_stmt = select(db_models.DocumentRepositoryLink).where(
+            db_models.DocumentRepositoryLink.repository_id == repository_model.id
+        )
+        links = list(session.exec(links_stmt).all())
+
+        for link in links:
+            if (
+                link.predictive_model_confidence is None
+                or link.predictive_model_confidence >= _EXTENDED_CONFIDENCE_THRESHOLD
+            ):
+                return "has_good_link"
+
+        return "has_only_poor_links"
 
 
 def check_pair_exists(

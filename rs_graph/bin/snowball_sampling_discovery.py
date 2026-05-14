@@ -27,6 +27,7 @@ from rs_graph.bin.pipeline_utils import (
     _wrap_func_with_coiled_prefect_task,
 )
 from rs_graph.data import DATA_FILES_DIR
+from rs_graph.db import models as db_models
 from rs_graph.db import utils as db_utils
 from rs_graph.enrichment import article, entity_matching, github
 from rs_graph.utils.dt_and_td import parse_timedelta
@@ -145,12 +146,14 @@ def _flatten_and_check_articles_in_db(
     ],
     use_prod: bool,
     ignorable_doi_spans: list[str],
+    extended_processing: bool,
 ) -> list[types.AuthorArticleDetails | types.FilteredResult | types.ErrorResult]:
     possible_count = 0
     to_process_count = 0
     no_doi_count = 0
     ignorable_doi_count = 0
     already_in_db_count = 0
+    extended_in_db_count = 0
     flattened_results: list[
         types.AuthorArticleDetails | types.FilteredResult | types.ErrorResult
     ] = []
@@ -185,13 +188,25 @@ def _flatten_and_check_articles_in_db(
                         flattened_results.append(filtered_result)
 
                     else:
-                        # Check if article is already in DB
-                        exists_in_db = db_utils.check_article_in_db(
+                        link_quality = db_utils.check_article_link_quality_in_db(
                             article_doi=item.open_alex_results_models.document_model.doi,
                             article_title=item.open_alex_results_models.document_model.title,
                             use_prod=use_prod,
                         )
-                        if exists_in_db:
+                        if link_quality == "has_good_link":
+                            already_in_db_count += 1
+                            filtered_result = types.FilteredResult(
+                                source=item.researcher_open_alex_id,
+                                identifier=item.open_alex_results_models.document_model.doi,
+                                reason="Already in database",
+                            )
+                            flattened_results.append(filtered_result)
+                        elif link_quality == "has_only_poor_links" and extended_processing:
+                            extended_in_db_count += 1
+                            to_process_count += 1
+                            item.is_extended = True
+                            flattened_results.append(item)
+                        elif link_quality == "has_only_poor_links" and not extended_processing:
                             already_in_db_count += 1
                             filtered_result = types.FilteredResult(
                                 source=item.researcher_open_alex_id,
@@ -208,6 +223,7 @@ def _flatten_and_check_articles_in_db(
         f"Filtered {total_filtered} of {possible_count} author-articles: "
         f"{no_doi_count} no DOI, {ignorable_doi_count} ignorable DOI, "
         f"{already_in_db_count} already in DB. "
+        f"{extended_in_db_count} extended (in DB with only poor links). "
         f"{to_process_count} to process."
     )
 
@@ -220,9 +236,11 @@ def _flatten_and_check_repositories_in_db(
     ],
     use_prod: bool,
     ignore_forks: bool,
+    extended_processing: bool,
 ) -> list[types.DeveloperRepositoryDetails | types.FilteredResult | types.ErrorResult]:
     possible_count = 0
     to_process_count = 0
+    extended_in_db_count = 0
     flattened_results: list[
         types.DeveloperRepositoryDetails | types.FilteredResult | types.ErrorResult
     ] = []
@@ -235,14 +253,30 @@ def _flatten_and_check_repositories_in_db(
                     flattened_results.append(item)
                 else:
                     possible_count += 1
-                    # Check if repository is already in DB
-                    exists_in_db = db_utils.check_repository_in_db(
+                    link_quality = db_utils.check_repository_link_quality_in_db(
                         code_host=item.github_result_models.code_host_model.name,
                         repo_owner=item.github_result_models.repository_model.owner,
                         repo_name=item.github_result_models.repository_model.name,
                         use_prod=use_prod,
                     )
-                    if exists_in_db:
+                    if link_quality == "has_good_link":
+                        filtered_result = types.FilteredResult(
+                            source=item.developer_account_username,
+                            identifier=(
+                                f"{item.github_result_models.repository_model.owner}/"
+                                f"{item.github_result_models.repository_model.name}"
+                            ),
+                            reason="Already in database",
+                        )
+                        flattened_results.append(filtered_result)
+
+                    elif link_quality == "has_only_poor_links" and extended_processing:
+                        extended_in_db_count += 1
+                        to_process_count += 1
+                        item.is_extended = True
+                        flattened_results.append(item)
+
+                    elif link_quality == "has_only_poor_links" and not extended_processing:
                         filtered_result = types.FilteredResult(
                             source=item.developer_account_username,
                             identifier=(
@@ -268,9 +302,11 @@ def _flatten_and_check_repositories_in_db(
                         to_process_count += 1
                         flattened_results.append(item)
 
+    already_in_db_count = possible_count - to_process_count - extended_in_db_count
     print(
-        f"Filtered out {possible_count - to_process_count} "
-        f"developer-repositories already in DB."
+        f"Filtered out {already_in_db_count} developer-repositories already in DB. "
+        f"{extended_in_db_count} extended (in DB with only poor links). "
+        f"{to_process_count} to process."
     )
 
     return flattened_results
@@ -729,9 +765,23 @@ def _process_matched_repository(
 def _prep_updated_article_repository_details_for_storage_type(
     matched_pair: types.MatchedAuthorArticleAndDeveloperRepositoryPair,
     iteration: int,
+    extended_processing: bool,
 ) -> types.ExpandedRepositoryDocumentPair:
+    is_extended = extended_processing and (
+        matched_pair.author_article.is_extended or matched_pair.developer_repository.is_extended
+    )
+    source = (
+        "snowball-sampling-discovery-extended"
+        if is_extended
+        else f"snowball-sampling-discovery-v{rs_graph_version}"
+    )
+    open_alex_results = matched_pair.author_article.open_alex_results_models
+    if is_extended:
+        open_alex_results.dataset_source_model = db_models.DatasetSource(
+            name="snowball-sampling-discovery-extended"
+        )
     return types.ExpandedRepositoryDocumentPair(
-        source=f"snowball-sampling-discovery-v{rs_graph_version}",
+        source=source,
         paper_doi=matched_pair.article_doi,
         paper_extra_data={
             "model_name": matched_pair.matched_details.model_name,
@@ -743,7 +793,7 @@ def _prep_updated_article_repository_details_for_storage_type(
             owner=matched_pair.developer_repository.github_result_models.repository_model.owner,
             name=matched_pair.developer_repository.github_result_models.repository_model.name,
         ),
-        open_alex_results=matched_pair.author_article.open_alex_results_models,
+        open_alex_results=open_alex_results,
         github_results=matched_pair.developer_repository.github_result_models,
         snowball_sampling_discovery_source_author_developer_link_id=(
             matched_pair.author_developer_link_id
@@ -774,6 +824,7 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
     cycled_github_tokens: GitHubTokensCycler,
     open_alex_tokens: list[str],
     semantic_scholar_api_key: str | None,
+    extended_processing: bool = False,
 ) -> dict[int, int] | None:
     # Workers is the number of github tokens
     n_github_tokens = len(cycled_github_tokens)
@@ -792,7 +843,7 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
             # TODO
             # Hardcoded to 10 workers because I know it can handle that
             # But should actually utilize the number of tokens available
-            n_workers=10,
+            n_workers=7,
             use_coiled=use_coiled,
             coiled_region=coiled_region,
         ),
@@ -891,6 +942,7 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
         all_author_articles_and_errors=[aa.result() for aa in author_articles],
         use_prod=use_prod,
         ignorable_doi_spans=ignorable_doi_spans,
+        extended_processing=extended_processing,
     )
 
     print("Filtering out repositories already in the database...")
@@ -898,6 +950,7 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
         all_developer_repositories_and_errors=[dr.result() for dr in developer_repositories],
         use_prod=use_prod,
         ignore_forks=ignore_forks,
+        extended_processing=extended_processing,
     )
 
     # Combine back together to possible article-repository pairs
@@ -1027,6 +1080,7 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
             _prep_updated_article_repository_details_for_storage_type(
                 matched_pair=merged_pair,
                 iteration=iteration,
+                extended_processing=extended_processing,
             )
         )
 
@@ -1143,6 +1197,7 @@ def snowball_sampling_discovery(
     coiled_region: str = "us-west-2",
     github_tokens_file: str = DEFAULT_GITHUB_TOKENS_FILE,
     open_alex_tokens_file: str = DEFAULT_OPEN_ALEX_TOKENS_FILE,
+    extended_processing: bool = False,
 ) -> None:
     """
     Discover new article-repository pairs via snowball sampling.
@@ -1204,6 +1259,7 @@ def snowball_sampling_discovery(
     print(f"Coiled Region: {coiled_region}")
     print(f"GitHub Token Count: {n_github_tokens}")
     print(f"Open Alex Token Count: {n_open_alex_tokens}")
+    print(f"Extended Processing: {extended_processing}")
     print("-" * 80)
 
     # Read the parquet file to get the link IDs
@@ -1287,6 +1343,7 @@ def snowball_sampling_discovery(
                 cycled_github_tokens=cycled_github_tokens,
                 open_alex_tokens=open_alex_tokens,
                 semantic_scholar_api_key=semantic_scholar_api_key,
+                extended_processing=extended_processing,
             )
 
         except Exception as e:

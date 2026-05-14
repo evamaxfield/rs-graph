@@ -171,6 +171,7 @@ class AuthorArticleDetails(DataClassJsonMixin):
     researcher_open_alex_id: str
     pyalex_work: dict
     open_alex_results_models: OpenAlexResultModels
+    is_extended: bool = False
 
 
 @dataclass
@@ -178,6 +179,7 @@ class DeveloperRepositoryDetails(DataClassJsonMixin):
     author_developer_link_id: int
     developer_account_username: str
     github_result_models: GitHubResultModels
+    is_extended: bool = False
 
 
 @dataclass
