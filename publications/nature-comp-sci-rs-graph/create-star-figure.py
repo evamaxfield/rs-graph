@@ -952,31 +952,35 @@ def _render_highlighted_line(
     text_color: str,
     fontsize: float,
 ) -> None:
+    context = context.replace("\n", " ").replace("\r", " ")
     lower_ctx = context.lower()
     lower_name = name.lower()
     idx = lower_ctx.find(lower_name)
-    char_w = 0.011  # axes-fraction width per character at typical panel width
-    x = x_start
+    char_w = 0.016  # axes-fraction width per character at typical panel width
+    max_before = 8
     if idx == -1:
         ax.text(
-            x, y, context, transform=ax.transAxes, fontsize=fontsize, color=text_color, va="top"
+            x_start, y, context, transform=ax.transAxes, fontsize=fontsize, color=text_color, va="top"
         )
         return
     before = context[:idx]
     match = context[idx : idx + len(name)]
     after = context[idx + len(name) :]
     # Cap before/after so the name stays near the left edge and the line fits the panel
-    max_before = 15
     if len(before) > max_before:
-        before = "..." + before[-max_before:]
+        before = "..." + before[-(max_before - 3):]
     max_after = 50
     if len(after) > max_after:
         after = after[:max_after] + "..."
+    name_gap = char_w * 1.5  # consistent gap on each side of the highlighted name
+    x = x_start
     if before:
         ax.text(
-            x, y, before, transform=ax.transAxes, fontsize=fontsize, color=text_color, va="top"
+            x, y, before, transform=ax.transAxes, fontsize=fontsize, color=text_color, va="top",
+            fontfamily="monospace",
         )
         x += len(before) * char_w
+    x += name_gap
     ax.text(
         x,
         y,
@@ -986,11 +990,13 @@ def _render_highlighted_line(
         color=base_color,
         va="top",
         fontweight="bold",
+        fontfamily="monospace",
     )
-    x += (len(match) * char_w) + 0.04  # small gap after highlighted name
+    x += len(match) * char_w + name_gap
     if after:
         ax.text(
-            x, y, after, transform=ax.transAxes, fontsize=fontsize, color=text_color, va="top"
+            x, y, after, transform=ax.transAxes, fontsize=fontsize, color=text_color, va="top",
+            fontfamily="monospace",
         )
 
 
