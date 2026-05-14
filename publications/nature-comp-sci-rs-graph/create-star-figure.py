@@ -801,7 +801,7 @@ def _draw_descriptive_overview(
             fontsize=6,
         )
     ax_b4.set_xlabel("Software Usage View")
-    ax_b4.set_ylabel("Proportion of pairs")
+    ax_b4.set_ylabel("Proportion of Pairs")
     ax_b4.set_ylim(0, 1.0)
     ax_b4.set_title("e", fontweight="bold", loc="left", fontsize=10)
     ax_b4.tick_params(axis="x", labelsize=7)
@@ -964,7 +964,7 @@ def _render_highlighted_line(
         va="top",
         fontweight="bold",
     )
-    x += (len(match) + 0.8) * char_w  # small gap after highlighted name
+    x += (len(match) * char_w) + 0.04  # small gap after highlighted name
     if after:
         ax.text(
             x, y, after, transform=ax.transAxes, fontsize=fontsize, color=text_color, va="top"
@@ -1006,17 +1006,17 @@ def _draw_mentions_panel(
         style="italic",
     )
     y -= 0.05
-    title_display = (title_text[:60] + "...") if len(title_text) > 60 else title_text
-    ax.text(
-        0.05,
-        y,
-        title_display,
-        transform=ax.transAxes,
-        fontsize=6.5,
-        color=TEXT_DARK,
-        va="top",
-    )
-    y -= 0.05
+    # title_display = (title_text[:60] + "...") if len(title_text) > 60 else title_text
+    # ax.text(
+    #     0.05,
+    #     y,
+    #     title_display,
+    #     transform=ax.transAxes,
+    #     fontsize=6.5,
+    #     color=TEXT_DARK,
+    #     va="top",
+    # )
+    # y -= 0.05
     ax.text(
         0.05, y, f"doi:{doi}", transform=ax.transAxes, fontsize=6, color="#666666", va="top"
     )
@@ -1086,7 +1086,7 @@ def _draw_imports_panel(
 ) -> None:
     ax.set_facecolor(PANEL_BG_DARK)
     ax.set_axis_off()
-    ax.set_title("g", fontweight="bold", loc="left", fontsize=10, color="white")
+    ax.set_title("g", fontweight="bold", loc="left", fontsize=10)
 
     y = 0.97
     ax.text(
@@ -1096,7 +1096,7 @@ def _draw_imports_panel(
         transform=ax.transAxes,
         fontsize=9,
         fontweight="bold",
-        color="white",
+        color=TEXT_DARK,
         va="top",
     )
     y -= 0.06
@@ -1168,6 +1168,21 @@ def _draw_imports_panel(
                 va="top",
                 fontfamily="monospace",
             )
+        file_paths_raw = row.get("file_paths") or ""
+        if file_paths_raw:
+            first_path = file_paths_raw.split(";")[0].strip()
+            filename = Path(first_path).name
+            ax.text(
+                0.4,
+                y,
+                filename,
+                transform=ax.transAxes,
+                fontsize=5.5,
+                color="#888888",
+                va="top",
+                style="italic",
+                fontfamily="monospace",
+            )
         return y - 0.07
 
     for section_df, section_label, is_r in (
@@ -1216,7 +1231,7 @@ def _draw_deps_panel(
 ) -> None:
     ax.set_facecolor(PANEL_BG_MID)
     ax.set_axis_off()
-    ax.set_title("h", fontweight="bold", loc="left", fontsize=10, color="white")
+    ax.set_title("h", fontweight="bold", loc="left", fontsize=10)
 
     y = 0.97
     ax.text(
@@ -1226,7 +1241,7 @@ def _draw_deps_panel(
         transform=ax.transAxes,
         fontsize=9,
         fontweight="bold",
-        color="white",
+        color=TEXT_DARK,
         va="top",
     )
     y -= 0.06
@@ -1275,6 +1290,7 @@ def _draw_deps_panel(
             fontweight="bold",
         )
         if version:
+            print(version)
             ax.text(
                 0.05 + len(name) * 0.018,
                 y,
