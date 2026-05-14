@@ -886,6 +886,28 @@ def _find_best_three_views_pair(
         unique_mention_names, on="document_repository_link_id", how="left"
     ).fill_null(0)
 
+    # Bonus for pairs with versioned PyPI/CRAN dependencies
+    versioned_deps = (
+        software.repository_dependencies.filter(
+            pl.col("ecosystem").str.to_lowercase().is_in(["pypi", "cran"])
+            & pl.col("version_spec").is_not_null()
+            & (pl.col("version_spec") != "")
+        )
+        .group_by("document_repository_link_id")
+        .agg(pl.len().alias("versioned_deps_count"))
+    )
+    pool = pool.join(versioned_deps, on="document_repository_link_id", how="left").fill_null(0)
+
+    # Require at least 4 unique software mentions
+    mentions_filtered = pool.filter(pl.col("unique_mention_names") >= 4)
+    if len(mentions_filtered) > 0:
+        pool = mentions_filtered
+
+    # Prefer pool entries that have at least one versioned dep
+    versioned_pool = pool.filter(pl.col("versioned_deps_count") > 0)
+    if len(versioned_pool) > 0:
+        pool = versioned_pool
+
     pool = pool.with_columns(
         (
             pl.col("mentions_count") * 2
@@ -893,6 +915,7 @@ def _find_best_three_views_pair(
             + pl.col("deps_count")
             + pl.col("context_bonus")
             + pl.col("unique_mention_names")
+            + pl.col("versioned_deps_count") * 3
         ).alias("score")
     )
 
@@ -1173,9 +1196,9 @@ def _draw_imports_panel(
             first_path = file_paths_raw.split(";")[0].strip()
             filename = Path(first_path).name
             ax.text(
-                0.4,
+                0.05 + offset + len(name) * 0.018,
                 y,
-                filename,
+                f"  {filename}",
                 transform=ax.transAxes,
                 fontsize=5.5,
                 color="#888888",
@@ -1290,7 +1313,6 @@ def _draw_deps_panel(
             fontweight="bold",
         )
         if version:
-            print(version)
             ax.text(
                 0.05 + len(name) * 0.018,
                 y,
