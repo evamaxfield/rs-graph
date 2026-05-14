@@ -399,13 +399,25 @@ def _build_network_graph(
     )
     ego_dev_account_id = ego_dev_link.get_column("developer_account_id").item()
 
-    # Get ego researcher's articles (up to 8) via pair_metadata
-    ego_article_doc_ids = (
-        document_contributors.filter(pl.col("researcher_id") == ego_researcher_id)
-        .join(pair_metadata.select(pl.col("document_id")), on="document_id", how="inner")
-        .get_column("document_id")
-        .to_list()[:8]
+    # Get ego researcher's articles, ensuring both seed and mined types are represented
+    ego_all_docs = document_contributors.filter(
+        pl.col("researcher_id") == ego_researcher_id
+    ).join(
+        pair_metadata.select(pl.col("document_id"), pl.col("dataset_source_id")),
+        on="document_id",
+        how="inner",
     )
+    seed_doc_ids = (
+        ego_all_docs.filter(pl.col("dataset_source_id").is_in(seed_source_ids))
+        .get_column("document_id")
+        .to_list()[:4]
+    )
+    mined_doc_ids = (
+        ego_all_docs.filter(pl.col("dataset_source_id").is_in(mined_source_ids))
+        .get_column("document_id")
+        .to_list()[:4]
+    )
+    ego_article_doc_ids = seed_doc_ids + mined_doc_ids
 
     # Get linked repos for those articles
     ego_pairs = pair_metadata.filter(pl.col("document_id").is_in(ego_article_doc_ids))
@@ -891,9 +903,15 @@ def _find_best_three_views_pair(
     best_imports = software.repository_imports.filter(
         pl.col("document_repository_link_id") == link_id
     ).unique(subset=["software_name"], keep="first")
-    best_deps = software.repository_dependencies.filter(
-        pl.col("document_repository_link_id") == link_id
-    ).unique(subset=["software_name"], keep="first")
+    all_deps = (
+        software.repository_dependencies.filter(
+            pl.col("document_repository_link_id") == link_id
+        )
+        .sort("version_spec", nulls_last=True)
+        .unique(subset=["software_name"], keep="first")
+    )
+    py_r_deps = all_deps.filter(pl.col("ecosystem").str.to_lowercase().is_in(["pypi", "cran"]))
+    best_deps = py_r_deps if len(py_r_deps) > 0 else all_deps
     best_mentions = software.document_software_mentions.filter(
         pl.col("document_id") == doc_id
     ).unique(subset=["software_name"], keep="first")
@@ -914,7 +932,7 @@ def _render_highlighted_line(
     lower_ctx = context.lower()
     lower_name = name.lower()
     idx = lower_ctx.find(lower_name)
-    char_w = fontsize * 0.0074
+    char_w = 0.011  # axes-fraction width per character at typical panel width
     x = x_start
     if idx == -1:
         ax.text(
@@ -924,6 +942,13 @@ def _render_highlighted_line(
     before = context[:idx]
     match = context[idx : idx + len(name)]
     after = context[idx + len(name) :]
+    # Cap before/after so the name stays near the left edge and the line fits the panel
+    max_before = 15
+    if len(before) > max_before:
+        before = "..." + before[-max_before:]
+    max_after = 50
+    if len(after) > max_after:
+        after = after[:max_after] + "..."
     if before:
         ax.text(
             x, y, before, transform=ax.transAxes, fontsize=fontsize, color=text_color, va="top"
@@ -939,7 +964,7 @@ def _render_highlighted_line(
         va="top",
         fontweight="bold",
     )
-    x += len(match) * char_w
+    x += (len(match) + 0.8) * char_w  # small gap after highlighted name
     if after:
         ax.text(
             x, y, after, transform=ax.transAxes, fontsize=fontsize, color=text_color, va="top"
@@ -981,15 +1006,15 @@ def _draw_mentions_panel(
         style="italic",
     )
     y -= 0.05
+    title_display = (title_text[:60] + "...") if len(title_text) > 60 else title_text
     ax.text(
         0.05,
         y,
-        title_text,
+        title_display,
         transform=ax.transAxes,
         fontsize=6.5,
         color=TEXT_DARK,
         va="top",
-        wrap=True,
     )
     y -= 0.05
     ax.text(
@@ -1035,7 +1060,7 @@ def _draw_mentions_panel(
         suffix = "..." if win_end < len(context) else '"'
         context = prefix + context[win_start:win_end] + suffix
 
-        _render_highlighted_line(ax, 0.05, y, context, name, color, TEXT_DARK, 6.5)
+        _render_highlighted_line(ax, 0.02, y, context, name, color, TEXT_DARK, 6.5)
         y -= 0.09
         shown += 1
 
@@ -1097,16 +1122,19 @@ def _draw_imports_panel(
     )
     y -= 0.08
 
+    py_imports = best_imports.filter(pl.col("ecosystem") == "py")
+    r_imports = best_imports.filter(pl.col("ecosystem") == "r")
     total = len(best_imports)
+    shown = 0
 
-    for row in best_imports.head(max_items).iter_rows(named=True):
+    def _render_import_row(
+        row: dict, ax: mpl.axes.Axes, y: float, color: str, is_r: bool
+    ) -> float:
         name = row["software_name"]
-        ecosystem = row.get("ecosystem", "")
-        if ecosystem == "r":
+        if is_r:
             prefix, suffix = "library(", ")"
         else:
             prefix, suffix = "import ", ""
-
         offset = len(prefix) * 0.018
         ax.text(
             0.05,
@@ -1140,9 +1168,31 @@ def _draw_imports_panel(
                 va="top",
                 fontfamily="monospace",
             )
+        return y - 0.07
+
+    for section_df, section_label, is_r in (
+        (py_imports, "# Python", False),
+        (r_imports, "# R", True),
+    ):
+        if len(section_df) == 0 or shown >= max_items or y < 0.05:
+            continue
+        ax.text(
+            0.05,
+            y,
+            section_label,
+            transform=ax.transAxes,
+            fontsize=6.5,
+            color="#888888",
+            va="top",
+            style="italic",
+            fontfamily="monospace",
+        )
         y -= 0.07
-        if y < 0.05:
-            break
+        for row in section_df.iter_rows(named=True):
+            if shown >= max_items or y < 0.05:
+                break
+            y = _render_import_row(row, ax, y, color, is_r)
+            shown += 1
 
     if total > max_items:
         ax.text(
@@ -1159,6 +1209,7 @@ def _draw_imports_panel(
 
 def _draw_deps_panel(
     ax: mpl.axes.Axes,
+    repo_url: str,
     best_deps: pl.DataFrame,
     color: str,
     max_items: int = 8,
@@ -1190,24 +1241,26 @@ def _draw_deps_panel(
         style="italic",
     )
     y -= 0.05
-
-    manifest_files = best_deps.get_column("manifest_paths").drop_nulls().to_list()
-    if manifest_files:
-        first_manifest = manifest_files[0].split(";")[0].strip()
-        ax.text(
-            0.05,
-            y,
-            first_manifest,
-            transform=ax.transAxes,
-            fontsize=6.5,
-            color=TEXT_LIGHT,
-            va="top",
-        )
+    ax.text(
+        0.05,
+        y,
+        repo_url,
+        transform=ax.transAxes,
+        fontsize=6.5,
+        color=TEXT_LIGHT,
+        va="top",
+    )
     y -= 0.08
 
+    pypi_deps = best_deps.filter(pl.col("ecosystem").str.to_lowercase() == "pypi")
+    cran_deps = best_deps.filter(pl.col("ecosystem").str.to_lowercase() == "cran")
+    other_deps = best_deps.filter(
+        ~pl.col("ecosystem").str.to_lowercase().is_in(["pypi", "cran"])
+    )
     total = len(best_deps)
+    shown = 0
 
-    for row in best_deps.head(max_items).iter_rows(named=True):
+    def _render_dep_row(row: dict, ax: mpl.axes.Axes, y: float, color: str) -> float:
         name = row["software_name"]
         version = row.get("version_spec") or ""
         ax.text(
@@ -1232,9 +1285,32 @@ def _draw_deps_panel(
                 va="top",
                 fontfamily="monospace",
             )
+        return y - 0.07
+
+    for section_df, section_label in (
+        (pypi_deps, "# Python / PyPI"),
+        (cran_deps, "# R / CRAN"),
+        (other_deps, "# Other"),
+    ):
+        if len(section_df) == 0 or shown >= max_items or y < 0.05:
+            continue
+        ax.text(
+            0.05,
+            y,
+            section_label,
+            transform=ax.transAxes,
+            fontsize=6.5,
+            color="#888888",
+            va="top",
+            style="italic",
+            fontfamily="monospace",
+        )
         y -= 0.07
-        if y < 0.05:
-            break
+        for row in section_df.iter_rows(named=True):
+            if shown >= max_items or y < 0.05:
+                break
+            y = _render_dep_row(row, ax, y, color)
+            shown += 1
 
     if total > max_items:
         ax.text(
@@ -1268,7 +1344,7 @@ def _draw_three_views(
 
     _draw_mentions_panel(ax_c1, title_text, doi, best_mentions, colors[0], max_items=max_items)
     _draw_imports_panel(ax_c2, repo_url, best_imports, colors[1], max_items=max_items)
-    _draw_deps_panel(ax_c3, best_deps, colors[2], max_items=max_items)
+    _draw_deps_panel(ax_c3, repo_url, best_deps, colors[2], max_items=max_items)
 
 
 ###############################################################################
