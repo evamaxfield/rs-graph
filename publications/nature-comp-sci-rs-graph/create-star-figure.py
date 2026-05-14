@@ -702,9 +702,9 @@ def _draw_descriptive_overview(
     ax_b1.set_ylabel("Pairs")
     ax_b1.set_title("b", fontweight="bold", loc="left", fontsize=10)
     tick_years = sorted(year_counts["document_publication_year"].unique())
-    tick_positions = [i for i, y in enumerate(tick_years) if y % 2 == 0]
-    tick_labels = [tick_years[i] for i in tick_positions]
-    ax_b1.set_xticks(tick_positions)
+    tick_indices = [i for i, yr in enumerate(tick_years) if yr % 2 == 0]
+    tick_labels = [yr for yr in tick_years if yr % 2 == 0]
+    ax_b1.set_xticks(tick_indices)
     ax_b1.set_xticklabels(tick_labels, rotation=45, ha="right", fontsize=7)
 
     # B2: Pairs by field (top 10 + Other)
@@ -770,28 +770,17 @@ def _draw_descriptive_overview(
     # B4: Coverage of three views
     pm = software.pair_metadata
     total = len(pm)
-    coverage_data = {
-        "view": ["Mentions", "Imports", "Dependencies", "All Three"],
-        "proportion": [
-            pm["has_software_mentions"].sum() / total,
-            pm["has_imports"].sum() / total,
-            pm["has_dependencies"].sum() / total,
-            (pm["has_imports"] & pm["has_dependencies"] & pm["has_software_mentions"]).sum()
-            / total,
-        ],
-        "n": [
-            pm["has_software_mentions"].sum(),
-            pm["has_imports"].sum(),
-            pm["has_dependencies"].sum(),
-            (pm["has_imports"] & pm["has_dependencies"] & pm["has_software_mentions"]).sum(),
-        ],
-    }
-    import pandas as pd
-
-    cov_df = pd.DataFrame(coverage_data)
+    cov_views = ["Mentions", "Imports", "Dependencies", "All Three"]
+    cov_ns = [
+        pm["has_software_mentions"].sum(),
+        pm["has_imports"].sum(),
+        pm["has_dependencies"].sum(),
+        (pm["has_imports"] & pm["has_dependencies"] & pm["has_software_mentions"]).sum(),
+    ]
+    cov_proportions = [n / total for n in cov_ns]
     bar_colors = [colors_8[0], colors_8[1], colors_8[2], colors_8[3]]
-    bars = ax_b4.bar(cov_df["view"], cov_df["proportion"], color=bar_colors)
-    for bar, n_val in zip(bars, cov_df["n"], strict=False):
+    bars = ax_b4.bar(cov_views, cov_proportions, color=bar_colors)
+    for bar, n_val in zip(bars, cov_ns, strict=False):
         ax_b4.text(
             bar.get_x() + bar.get_width() / 2,
             bar.get_height() + 0.01,
@@ -816,7 +805,7 @@ def _find_best_three_views_pair(
 ) -> tuple[dict, pl.DataFrame, pl.DataFrame, pl.DataFrame] | None:
     pm = software.pair_metadata
 
-    # Filter out extreme outliers (>97th percentile for any view count)
+    # Filter out extreme outliers (>85th percentile for any view count)
     imports_per_pair = software.repository_imports.group_by("document_repository_link_id").agg(
         pl.len().alias("imports_count")
     )
@@ -827,23 +816,23 @@ def _find_best_three_views_pair(
         "document_repository_link_id"
     ).agg(pl.len().alias("mentions_count"))
 
-    imports_p97 = imports_per_pair.get_column("imports_count").quantile(0.85)
-    deps_p97 = deps_per_pair.get_column("deps_count").quantile(0.85)
-    mentions_p97 = mentions_per_pair.get_column("mentions_count").quantile(0.85)
+    imports_p85 = imports_per_pair.get_column("imports_count").quantile(0.85)
+    deps_p85 = deps_per_pair.get_column("deps_count").quantile(0.85)
+    mentions_p85 = mentions_per_pair.get_column("mentions_count").quantile(0.85)
 
     extreme_ids = (
         set(
-            imports_per_pair.filter(pl.col("imports_count") > imports_p97)
+            imports_per_pair.filter(pl.col("imports_count") > imports_p85)
             .get_column("document_repository_link_id")
             .to_list()
         )
         | set(
-            deps_per_pair.filter(pl.col("deps_count") > deps_p97)
+            deps_per_pair.filter(pl.col("deps_count") > deps_p85)
             .get_column("document_repository_link_id")
             .to_list()
         )
         | set(
-            mentions_per_pair.filter(pl.col("mentions_count") > mentions_p97)
+            mentions_per_pair.filter(pl.col("mentions_count") > mentions_p85)
             .get_column("document_repository_link_id")
             .to_list()
         )
@@ -960,7 +949,13 @@ def _render_highlighted_line(
     max_before = 8
     if idx == -1:
         ax.text(
-            x_start, y, context, transform=ax.transAxes, fontsize=fontsize, color=text_color, va="top"
+            x_start,
+            y,
+            context,
+            transform=ax.transAxes,
+            fontsize=fontsize,
+            color=text_color,
+            va="top",
         )
         return
     before = context[:idx]
@@ -968,7 +963,7 @@ def _render_highlighted_line(
     after = context[idx + len(name) :]
     # Cap before/after so the name stays near the left edge and the line fits the panel
     if len(before) > max_before:
-        before = "..." + before[-(max_before - 3):]
+        before = "..." + before[-(max_before - 3) :]
     max_after = 50
     if len(after) > max_after:
         after = after[:max_after] + "..."
@@ -976,7 +971,13 @@ def _render_highlighted_line(
     x = x_start
     if before:
         ax.text(
-            x, y, before, transform=ax.transAxes, fontsize=fontsize, color=text_color, va="top",
+            x,
+            y,
+            before,
+            transform=ax.transAxes,
+            fontsize=fontsize,
+            color=text_color,
+            va="top",
             fontfamily="monospace",
         )
         x += len(before) * char_w
@@ -995,7 +996,13 @@ def _render_highlighted_line(
     x += len(match) * char_w + name_gap
     if after:
         ax.text(
-            x, y, after, transform=ax.transAxes, fontsize=fontsize, color=text_color, va="top",
+            x,
+            y,
+            after,
+            transform=ax.transAxes,
+            fontsize=fontsize,
+            color=text_color,
+            va="top",
             fontfamily="monospace",
         )
 
@@ -1082,22 +1089,22 @@ def _draw_mentions_panel(
         name_idx = lower_ctx.find(lower_name)
         if name_idx == -1:
             continue
-        # Extract a window of ~90 chars around the match
+        # Extract a window around the match: more context before, less after
         win_start = max(0, name_idx - 42)
-        win_end = min(len(context), name_idx + len(name) + 42)
+        win_end = min(len(context), name_idx + len(name) + 30)
         prefix = "..." if win_start > 0 else '"'
         suffix = "..." if win_end < len(context) else '"'
         context = prefix + context[win_start:win_end] + suffix
 
-        _render_highlighted_line(ax, 0.02, y, context, name, color, TEXT_DARK, 6.5)
+        _render_highlighted_line(ax, 0.05, y, context, name, color, TEXT_DARK, 6.5)
         y -= 0.09
         shown += 1
 
-    if total > max_items:
+    if total > shown:
         ax.text(
             0.05,
             max(y, 0.03),
-            f"(+{total - max_items} more)",
+            f"(+{total - shown} more)",
             transform=ax.transAxes,
             fontsize=6,
             color="#999999",
@@ -1113,7 +1120,7 @@ def _draw_imports_panel(
     color: str,
     max_items: int = 8,
 ) -> None:
-    ax.set_facecolor(PANEL_BG_DARK)
+    ax.set_facecolor(PANEL_BG_LIGHT)
     ax.set_axis_off()
     ax.set_title("g", fontweight="bold", loc="left", fontsize=10)
 
@@ -1135,7 +1142,7 @@ def _draw_imports_panel(
         "libraries called directly in code",
         transform=ax.transAxes,
         fontsize=7,
-        color=TEXT_LIGHT,
+        color="#666666",
         va="top",
         style="italic",
     )
@@ -1146,7 +1153,7 @@ def _draw_imports_panel(
         repo_url,
         transform=ax.transAxes,
         fontsize=6.5,
-        color=TEXT_LIGHT,
+        color="#666666",
         va="top",
     )
     y -= 0.08
@@ -1171,7 +1178,7 @@ def _draw_imports_panel(
             prefix,
             transform=ax.transAxes,
             fontsize=7.5,
-            color=TEXT_LIGHT,
+            color=TEXT_DARK,
             va="top",
             fontfamily="monospace",
         )
@@ -1193,7 +1200,7 @@ def _draw_imports_panel(
                 suffix,
                 transform=ax.transAxes,
                 fontsize=7.5,
-                color=TEXT_LIGHT,
+                color=TEXT_DARK,
                 va="top",
                 fontfamily="monospace",
             )
@@ -1238,11 +1245,11 @@ def _draw_imports_panel(
             y = _render_import_row(row, ax, y, color, is_r)
             shown += 1
 
-    if total > max_items:
+    if total > shown:
         ax.text(
             0.05,
             max(y, 0.03),
-            f"(+{total - max_items} more)",
+            f"(+{total - shown} more)",
             transform=ax.transAxes,
             fontsize=6,
             color="#888888",
@@ -1258,7 +1265,7 @@ def _draw_deps_panel(
     color: str,
     max_items: int = 8,
 ) -> None:
-    ax.set_facecolor(PANEL_BG_MID)
+    ax.set_facecolor(PANEL_BG_LIGHT)
     ax.set_axis_off()
     ax.set_title("h", fontweight="bold", loc="left", fontsize=10)
 
@@ -1280,7 +1287,7 @@ def _draw_deps_panel(
         "packages declared in manifests",
         transform=ax.transAxes,
         fontsize=7,
-        color=TEXT_LIGHT,
+        color="#666666",
         va="top",
         style="italic",
     )
@@ -1291,7 +1298,7 @@ def _draw_deps_panel(
         repo_url,
         transform=ax.transAxes,
         fontsize=6.5,
-        color=TEXT_LIGHT,
+        color="#666666",
         va="top",
     )
     y -= 0.08
@@ -1325,7 +1332,7 @@ def _draw_deps_panel(
                 f"  {version}",
                 transform=ax.transAxes,
                 fontsize=7.5,
-                color=TEXT_LIGHT,
+                color="#666666",
                 va="top",
                 fontfamily="monospace",
             )
@@ -1356,11 +1363,11 @@ def _draw_deps_panel(
             y = _render_dep_row(row, ax, y, color)
             shown += 1
 
-    if total > max_items:
+    if total > shown:
         ax.text(
             0.05,
             max(y, 0.03),
-            f"(+{total - max_items} more)",
+            f"(+{total - shown} more)",
             transform=ax.transAxes,
             fontsize=6,
             color="#888888",
