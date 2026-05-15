@@ -37,6 +37,15 @@ PANEL_BG_MID = "#2a2a3e"
 TEXT_LIGHT = "#cccccc"
 TEXT_DARK = "#1a1a2e"
 
+SOURCE_DISPLAY_NAMES: dict[str, str] = {
+    "pwc": "Papers with Code",
+    "snowball-sampling-discovery": "Mined",
+    "softcite_2025": "SoftCite 2025",
+    "plos": "PLOS",
+    "joss": "JOSS",
+    "softwarex": "SoftwareX",
+}
+
 MENTION_EXCLUDE_NORMALIZED: set[str] = {
     "code",
     "latex",
@@ -410,12 +419,12 @@ def _build_network_graph(
     seed_doc_ids = (
         ego_all_docs.filter(pl.col("dataset_source_id").is_in(seed_source_ids))
         .get_column("document_id")
-        .to_list()[:4]
+        .to_list()[:2]
     )
     mined_doc_ids = (
         ego_all_docs.filter(pl.col("dataset_source_id").is_in(mined_source_ids))
         .get_column("document_id")
-        .to_list()[:4]
+        .to_list()[:2]
     )
     ego_article_doc_ids = seed_doc_ids + mined_doc_ids
 
@@ -544,7 +553,13 @@ def _add_pair_to_graph(
             graph.add_edge(repo_idx, d_idx, {"type": "contributed_to"})
 
 
-def _draw_network(ax: mpl.axes.Axes, graph: rx.PyGraph, colors: list[str]) -> None:
+def _draw_network(
+    ax: mpl.axes.Axes,
+    graph: rx.PyGraph,
+    colors: list[str],
+    seed_color: str,
+    mined_color: str,
+) -> None:
     positions = rx.graph_spring_layout(graph, seed=RANDOM_SEED)  # type: ignore[call-arg]
 
     node_type_cfg = {
@@ -579,8 +594,8 @@ def _draw_network(ax: mpl.axes.Axes, graph: rx.PyGraph, colors: list[str]) -> No
     }
     edge_type_cfg = {
         "authored_by": {"color": "#aaaaaa", "lw": 0.8, "ls": "-", "zorder": 1},
-        "seed": {"color": colors[4], "lw": 1.5, "ls": "-", "zorder": 2},
-        "mined": {"color": colors[5], "lw": 1.5, "ls": "--", "zorder": 2},
+        "seed": {"color": seed_color, "lw": 1.5, "ls": "-", "zorder": 2},
+        "mined": {"color": mined_color, "lw": 1.5, "ls": "--", "zorder": 2},
         "contributed_to": {"color": "#aaaaaa", "lw": 0.8, "ls": "-", "zorder": 1},
         "identity": {"color": colors[6], "lw": 2.5, "ls": "-", "zorder": 4},
     }
@@ -654,8 +669,8 @@ def _draw_network(ax: mpl.axes.Axes, graph: rx.PyGraph, colors: list[str]) -> No
         mpatches.Patch(facecolor=colors[1], edgecolor=colors[1], label="Repository"),
         mpatches.Patch(facecolor="none", edgecolor=colors[2], label="Researcher"),
         mpatches.Patch(facecolor="none", edgecolor=colors[3], label="Developer"),
-        mpl.lines.Line2D([], [], color=colors[4], lw=1.5, label="Seed link"),
-        mpl.lines.Line2D([], [], color=colors[5], lw=1.5, ls="--", label="Mined link"),
+        mpl.lines.Line2D([], [], color=seed_color, lw=1.5, label="Seed link"),
+        mpl.lines.Line2D([], [], color=mined_color, lw=1.5, ls="--", label="Mined link"),
         mpl.lines.Line2D([], [], color=colors[6], lw=2.5, label="Matched identity"),
     ]
     ax.legend(
@@ -682,7 +697,12 @@ def _draw_descriptive_overview(
     dataset_sources: pl.DataFrame,
     software: SoftwareUsageTables,
     colors_8: list[str],
-    colors_11: list[str],
+    seed_color: str,
+    mined_color: str,
+    mention_color: str,
+    import_color: str,
+    dep_color: str,
+    all_three_color: str,
 ) -> None:
     # B1: Pairs per year
     year_counts = (
@@ -714,16 +734,11 @@ def _draw_descriptive_overview(
         .sort("count", descending=True)
         .to_pandas()
     )
-    palette_b2 = {
-        row["document_field_name_pruned"]: colors_11[i]
-        for i, (_, row) in enumerate(field_counts.iterrows())
-    }
     sns.barplot(
         data=field_counts,
         y="document_field_name_pruned",
         x="count",
-        hue="document_field_name_pruned",
-        palette=palette_b2,
+        color=colors_8[0],
         legend=False,
         ax=ax_b2,
         orient="h",
@@ -748,9 +763,13 @@ def _draw_descriptive_overview(
         .sort("count", descending=True)
         .to_pandas()
     )
+    source_counts["source_name"] = source_counts["source_name"].map(
+        lambda x: SOURCE_DISPLAY_NAMES.get(x, x)
+    )
     source_names_ordered = source_counts["source_name"].tolist()
     palette_d = {
-        name: colors_8[i % len(colors_8)] for i, name in enumerate(source_names_ordered)
+        name: mined_color if name == "Mined" else seed_color
+        for name in source_names_ordered
     }
     sns.barplot(
         data=source_counts,
@@ -778,7 +797,7 @@ def _draw_descriptive_overview(
         (pm["has_imports"] & pm["has_dependencies"] & pm["has_software_mentions"]).sum(),
     ]
     cov_proportions = [n / total for n in cov_ns]
-    bar_colors = [colors_8[0], colors_8[1], colors_8[2], colors_8[3]]
+    bar_colors = [mention_color, import_color, dep_color, all_three_color]
     bars = ax_b4.bar(cov_views, cov_proportions, color=bar_colors)
     for bar, n_val in zip(bars, cov_ns, strict=False):
         ax_b4.text(
@@ -1467,7 +1486,14 @@ def _build_figure(
         ax_c3 = fig.add_subplot(c_gs[2])
         three_views_max_items = 6
 
-    _draw_network(ax_a, network_graph, colors_8)
+    seed_color = colors_11[7]
+    mined_color = colors_11[9]
+    mention_color = colors_11[4]
+    import_color = colors_11[3]
+    dep_color = colors_11[6]
+    all_three_color = colors_11[10]
+
+    _draw_network(ax_a, network_graph, colors_8, seed_color, mined_color)
     _draw_descriptive_overview(
         ax_b1,
         ax_b2,
@@ -1477,7 +1503,12 @@ def _build_figure(
         dataset_sources,
         software,
         colors_8,
-        colors_11,
+        seed_color,
+        mined_color,
+        mention_color,
+        import_color,
+        dep_color,
+        all_three_color,
     )
 
     if three_views_result is not None:
@@ -1490,7 +1521,7 @@ def _build_figure(
             best_imports,
             best_deps,
             best_mentions,
-            colors_8,
+            [mention_color, import_color, dep_color],
             max_items=three_views_max_items,
         )
     else:
