@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import typer
 import polars as pl
-
-from data_utils import load_base_dataset, DATA_DIR
+import typer
+from data_utils import DATA_DIR, load_base_dataset
 
 ################################################################################
 
@@ -18,6 +15,7 @@ TRAINING_ANNOTATION_FILENAME_PATH = DATA_DIR / "link-directionality-training-ann
 app = typer.Typer()
 
 ################################################################################
+
 
 @app.command()
 def create_annotation_set() -> None:
@@ -67,8 +65,16 @@ def create_annotation_set() -> None:
 
     # Combine subsets to single dataframes
     # Shuffle the rows of both
-    agreement_df = pl.concat(agreement_subsets).select(*select_statements).sample(fraction=1.0, seed=3, shuffle=True)
-    independent_df = pl.concat(independent_subsets).select(*select_statements).sample(fraction=1.0, seed=4, shuffle=True)
+    agreement_df = (
+        pl.concat(agreement_subsets)
+        .select(*select_statements)
+        .sample(fraction=1.0, seed=3, shuffle=True)
+    )
+    independent_df = (
+        pl.concat(independent_subsets)
+        .select(*select_statements)
+        .sample(fraction=1.0, seed=4, shuffle=True)
+    )
 
     # Save training set to be annotated by all annotators for agreement analysis
     agreement_df.write_csv(TRAINING_ANNOTATION_FILENAME_PATH)
@@ -80,11 +86,14 @@ def create_annotation_set() -> None:
         start_idx = i * num_rows_per_annotator
         end_idx = (i + 1) * num_rows_per_annotator
         annotator_subset = independent_df[start_idx:end_idx]
-        print(f"Annotator {annotator} assigned {len(annotator_subset)} rows for independent annotation.")
+        print(
+            f"Annotator {annotator} assigned {len(annotator_subset)} rows for independent annotation."
+        )
 
         # Save output CSV for this annotator
         output_path = DATA_DIR / FULL_TO_ANNOTATE_FILENAME_TEMPLATE.format(annotator=annotator)
         annotator_subset.write_csv(output_path)
+
 
 if __name__ == "__main__":
     app()
