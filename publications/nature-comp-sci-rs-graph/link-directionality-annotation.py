@@ -22,6 +22,9 @@ def create_annotation_set() -> None:
     # Load dataset with top 5 fields (5 + Other)
     df = load_base_dataset(top_n_fields=5)
 
+    # Filter to only rows with a predictive model confidence that isn't null
+    df = df.filter(pl.col("predictive_model_confidence").is_not_null())
+
     # Iter top fields
     top_fields = df.get_column("document_field_name_pruned").unique().to_list()
 
@@ -47,6 +50,7 @@ def create_annotation_set() -> None:
         pl.col("document_repository_link_id"),
         pl.col("document_id"),
         pl.col("repository_id"),
+        pl.col("predictive_model_confidence"),
         pl.col("document_field_name_pruned"),
         (pl.lit("https://doi.org/") + pl.col("document_doi")).alias("document_url"),
         (
