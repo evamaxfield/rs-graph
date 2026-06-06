@@ -201,6 +201,7 @@ def match_articles_and_repositories(
             ],
             model_choice="optimized",
             loaded_binary_article_repo_em_model=_get_article_repo_model(),
+            skip_pairs_with_missing_or_short_readme=False,
         )
 
         # Results LUT

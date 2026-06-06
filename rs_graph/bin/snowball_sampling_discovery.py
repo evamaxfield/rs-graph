@@ -1198,6 +1198,7 @@ def snowball_sampling_discovery(
     github_tokens_file: str = DEFAULT_GITHUB_TOKENS_FILE,
     open_alex_tokens_file: str = DEFAULT_OPEN_ALEX_TOKENS_FILE,
     extended_processing: bool = False,
+    shuffle_researcher_developer_links: bool = False,
 ) -> None:
     """
     Discover new article-repository pairs via snowball sampling.
@@ -1268,6 +1269,11 @@ def snowball_sampling_discovery(
         f"{researcher_developer_account_links_parquet_file}"
     )
     link_ids_df = pl.read_parquet(researcher_developer_account_links_parquet_file)
+
+    # Shuffle if desired
+    if shuffle_researcher_developer_links:
+        link_ids_df = link_ids_df.sample(fraction=1.0, shuffle=True)
+
     link_ids: list[int] = link_ids_df["researcher_developer_account_link_id"].to_list()
     iteration: int = link_ids_df["iteration"][0]
     print(f"Found {len(link_ids)} researcher-developer-account link IDs in parquet file.")
