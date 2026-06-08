@@ -24,7 +24,7 @@ def _get_small_cpu_api_cluster(
     n_workers: int,
     use_coiled: bool,
     coiled_region: str,
-    keepalive: str = "15m",
+    keepalive: str = "5m",
     host_setup_script: str | None = None,
 ) -> dict:
     return {
@@ -44,12 +44,13 @@ def _get_small_cpu_api_cluster(
 def _get_basic_gpu_cluster_config(
     use_coiled: bool,
     coiled_region: str,
-    keepalive: str = "15m",
+    keepalive: str = "2m",
 ) -> dict:
     return {
         "keepalive": keepalive,
+        "idle_timeout": "30 minutes",
         "vm_type": "g4dn.xlarge",
-        "n_workers": [2, 12],
+        "n_workers": [0, 1],
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
         "region": coiled_region,
