@@ -164,7 +164,7 @@ class Document(StrippedSQLModel, table=True):
 
     # Data
     open_alex_id: str
-    title: str
+    title: str = Field(index=True)
     publication_date: date = Field(index=True)
     cited_by_count: int = Field(index=True)
     fwci: float | None = Field(index=True, nullable=True)
