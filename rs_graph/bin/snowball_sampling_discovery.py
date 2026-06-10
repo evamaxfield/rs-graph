@@ -840,9 +840,6 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
         _get_author_articles_for_researcher,
         coiled_func_name="open_alex_cluster",
         coiled_kwargs=_get_small_cpu_api_cluster(
-            # TODO
-            # Hardcoded to 10 workers because I know it can handle that
-            # But should actually utilize the number of tokens available
             n_workers=7,
             use_coiled=use_coiled,
             coiled_region=coiled_region,
