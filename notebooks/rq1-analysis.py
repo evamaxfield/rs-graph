@@ -810,6 +810,27 @@ def plot_features_by_field(
         ax.tick_params(axis="y", labelsize=10)
         ax.set_title(FEATURE_NAME_TO_VIZ_NAME_LUT.get(feature_name, feature_name), fontsize=16)
 
+        # Store group df to CSV for later analysis
+        group_df.select(
+            "document_id",
+            "repository_id",
+            field_col,
+            "value",
+        ).group_by(field_col).agg(
+            # Describe distribution
+            # count, mean, std, min, 25%, 50%, 75%, max
+            pl.len().alias("pair_count"),
+            pl.col("value").mean().alias("mean_value"),
+            pl.col("value").std().alias("std_value"),
+            pl.col("value").min().alias("min_value"),
+            pl.col("value").quantile(0.25).alias("25%"),
+            pl.col("value").quantile(0.5).alias("50%"),
+            pl.col("value").quantile(0.75).alias("75%"),
+            pl.col("value").max().alias("max_value"),
+        ).sort("50%").write_csv(
+            results_dir / f"feature_by_field_{feature_name}_boxplot_data.csv"
+        )
+
     fig.savefig(results_dir / "features_by_field_boxplots.png", bbox_inches="tight", dpi=300)
     plt.close(fig)
 
@@ -1675,6 +1696,7 @@ def plot_date_relationships(pairs: pl.DataFrame, results_dir: Path) -> None:
         "document_publication_date",
         "repository_creation_datetime",
         "repository_last_pushed_datetime",
+        "document_type",
     ).filter(
         pl.col("document_publication_date").dt.year() < 2025,
         pl.col("document_publication_date").dt.year() > 2010,
@@ -1753,6 +1775,7 @@ def plot_date_relationships(pairs: pl.DataFrame, results_dir: Path) -> None:
             ).alias("days_from_publication_to_last_push"),
         )
         .select(
+            "document_type",
             "days_from_repo_creation_to_publication",
             "days_from_publication_to_last_push",
         )
@@ -1761,7 +1784,7 @@ def plot_date_relationships(pairs: pl.DataFrame, results_dir: Path) -> None:
                 "days_from_repo_creation_to_publication",
                 "days_from_publication_to_last_push",
             ],
-            index=[],
+            index=["document_type"],
             variable_name="date_difference_type",
             value_name="days_difference",
         )
@@ -1770,17 +1793,44 @@ def plot_date_relationships(pairs: pl.DataFrame, results_dir: Path) -> None:
     if date_days_df.height == 0:
         return
 
+    overall_stats = (
+        date_days_df.group_by("date_difference_type")
+        .agg(
+            pl.col("days_difference").median().alias("median_days"),
+            pl.col("days_difference").mean().alias("mean_days"),
+            pl.col("days_difference").std().alias("std_days"),
+            pl.len().alias("n"),
+        )
+        .sort("date_difference_type")
+    )
+    overall_stats.write_csv(results_dir / "date_difference_summary_stats.csv")
+
+    doc_type_stats = (
+        date_days_df.filter(pl.col("document_type").is_in(["article", "preprint"]))
+        .group_by(["document_type", "date_difference_type"])
+        .agg(
+            pl.col("days_difference").median().alias("median_days"),
+            pl.col("days_difference").mean().alias("mean_days"),
+            pl.col("days_difference").std().alias("std_days"),
+            pl.len().alias("n"),
+        )
+        .sort(["date_difference_type", "document_type"])
+    )
+    doc_type_stats.write_csv(results_dir / "date_difference_summary_stats_by_document_type.csv")
+
+    doc_type_plot_df = date_days_df.filter(
+        pl.col("document_type").is_in(["article", "preprint"]),
+        pl.col("days_difference") > date_days_df["days_difference"].quantile(0.01),
+        pl.col("days_difference") < date_days_df["days_difference"].quantile(0.99),
+    )
     g = sns.displot(
-        data=date_days_df.filter(
-            pl.col("days_difference") > date_days_df["days_difference"].quantile(0.01),
-            pl.col("days_difference") < date_days_df["days_difference"].quantile(0.99),
-        ),
+        data=doc_type_plot_df,
         x="days_difference",
-        hue="date_difference_type",
+        hue="document_type",
         col="date_difference_type",
         bins=20,
         stat="proportion",
-        legend=False,
+        common_norm=False,
     )
     g.set_titles("{col_name}")
     g.figure.savefig(

@@ -85,6 +85,7 @@ def load_base_dataset(
             "repository_id",
             "dataset_source_id",
             "predictive_model_confidence",
+            pl.col("iteration").alias("link_processing_iteration"),
         )
         .join(
             documents.select(*[pl.col(c).alias(f"document_{c}") for c in documents.columns]),

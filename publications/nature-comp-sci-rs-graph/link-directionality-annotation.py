@@ -2,15 +2,29 @@
 
 from __future__ import annotations
 
+import numpy as np
 import polars as pl
 import typer
 from data_utils import DATA_DIR, load_base_dataset
+from statsmodels.stats.inter_rater import aggregate_raters, cohens_kappa, fleiss_kappa
 
 ################################################################################
 
 ANNOTATORS = ["eva", "sarah", "anna"]
+ANNOTATION_COLUMNS = [
+    "label",
+    "this-repo-linked-in-paper",
+    "this-article-linked-in-repo",
+    "diff-repo-linked-in-paper",
+    "diff-article-linked-in-repo",
+]
 FULL_TO_ANNOTATE_FILENAME_TEMPLATE = "link-directionality-to-annotate-{annotator}.csv"
 TRAINING_ANNOTATION_FILENAME_PATH = DATA_DIR / "link-directionality-training-annotation-set.csv"
+TRAINING_ANNOTATION_FILENAME_TEMPLATE = "link-directionality-training-annotated-{annotator}.csv"
+TRAINING_ANNOTATION_FILENAMES = [
+    DATA_DIR / TRAINING_ANNOTATION_FILENAME_TEMPLATE.format(annotator=annotator)
+    for annotator in ANNOTATORS
+]
 
 app = typer.Typer()
 
@@ -97,6 +111,104 @@ def create_annotation_set() -> None:
         # Save output CSV for this annotator
         output_path = DATA_DIR / FULL_TO_ANNOTATE_FILENAME_TEMPLATE.format(annotator=annotator)
         annotator_subset.write_csv(output_path)
+
+
+@app.command()
+def compare_annotation_sets() -> None:
+    # Load all three annotated CSVs and inner-join on the shared row identifier.
+    # Sarah's file has one extra row vs. Eva/Anna; inner join keeps only shared rows.
+    dfs = {
+        annotator: pl.read_csv(
+            DATA_DIR / TRAINING_ANNOTATION_FILENAME_TEMPLATE.format(annotator=annotator)
+        )
+        for annotator in ANNOTATORS
+    }
+
+    base = dfs["eva"].select(
+        ["document_repository_link_id", "document_url", "repository_url"] + ANNOTATION_COLUMNS
+    ).rename({col: f"{col}_eva" for col in ANNOTATION_COLUMNS})
+
+    for annotator in ["sarah", "anna"]:
+        other = dfs[annotator].select(
+            ["document_repository_link_id"] + ANNOTATION_COLUMNS
+        ).rename({col: f"{col}_{annotator}" for col in ANNOTATION_COLUMNS})
+        base = base.join(other, on="document_repository_link_id", how="inner")
+
+    doc_urls = base["document_url"].to_list()
+    repo_urls = base["repository_url"].to_list()
+
+    for col in ANNOTATION_COLUMNS:
+        typer.echo(f"\n{'=' * 60}")
+        typer.echo(f"Column: {col}")
+        typer.echo("=" * 60)
+
+        # Normalize empty strings to None for consistent handling.
+        annotator_vals: dict[str, list[str | None]] = {}
+        for annotator in ANNOTATORS:
+            raw = base[f"{col}_{annotator}"].to_list()
+            annotator_vals[annotator] = [
+                str(v).strip() if (v is not None and str(v).strip()) else None for v in raw
+            ]
+
+        # --- Pairwise Cohen's kappa ---
+        typer.echo("\n--- Inter-Rater Agreement ---")
+        typer.echo("Pairwise Cohen's Kappa:")
+        pairs = [("eva", "sarah"), ("eva", "anna"), ("sarah", "anna")]
+        for name_a, name_b in pairs:
+            va = annotator_vals[name_a]
+            vb = annotator_vals[name_b]
+            valid = [(a, b) for a, b in zip(va, vb) if a is not None and b is not None]
+            if len(valid) < 2:
+                typer.echo(f"  {name_a} vs {name_b}: N/A")
+                continue
+            a_arr = np.array([v[0] for v in valid])
+            b_arr = np.array([v[1] for v in valid])
+            categories = sorted(set(a_arr) | set(b_arr))
+            cat_idx = {c: i for i, c in enumerate(categories)}
+            table = np.zeros((len(categories), len(categories)), dtype=int)
+            for a, b in zip(a_arr, b_arr):
+                table[cat_idx[a], cat_idx[b]] += 1
+            kappa = cohens_kappa(table).kappa
+            kappa_str = f"{kappa:.3f}" if not np.isnan(kappa) else "N/A (trivially perfect)"
+            typer.echo(f"  {name_a} vs {name_b}: {kappa_str}  (N={len(valid)})")
+
+        # --- Three-way Fleiss' kappa ---
+        shared_idxs = [
+            i for i in range(len(doc_urls))
+            if all(annotator_vals[ann][i] is not None for ann in ANNOTATORS)
+        ]
+        if len(shared_idxs) >= 2:
+            # aggregate_raters expects an (N_subjects x N_raters) array of category indices.
+            categories = sorted(
+                {annotator_vals[ann][i] for ann in ANNOTATORS for i in shared_idxs}
+            )
+            cat_idx = {c: j for j, c in enumerate(categories)}
+            ratings_matrix = np.array(
+                [
+                    [cat_idx[annotator_vals[ann][i]] for ann in ANNOTATORS]  # type: ignore[index]
+                    for i in shared_idxs
+                ]
+            )
+            table, _ = aggregate_raters(ratings_matrix)
+            fk = fleiss_kappa(table)
+            fk_str = f"{fk:.3f}" if not np.isnan(fk) else "N/A (trivially perfect)"
+            typer.echo(f"Three-way Fleiss' Kappa: {fk_str}  (N={len(shared_idxs)})")
+        else:
+            typer.echo("Three-way Fleiss' Kappa: N/A (insufficient shared non-null rows)")
+
+        # --- Disagreements ---
+        disagreements = [
+            i for i in range(len(doc_urls))
+            if len({annotator_vals[ann][i] for ann in ANNOTATORS}) > 1
+        ]
+        typer.echo(f"\n--- Disagreements ({len(disagreements)} rows) ---")
+        for i in disagreements:
+            typer.echo(f"- document doi: {doc_urls[i]}")
+            typer.echo(f"- repository url: {repo_urls[i]}")
+            for ann in ANNOTATORS:
+                v = annotator_vals[ann][i]
+                typer.echo(f"\t- {ann}: {v if v is not None else '(empty)'}")
+            typer.echo("")
 
 
 if __name__ == "__main__":

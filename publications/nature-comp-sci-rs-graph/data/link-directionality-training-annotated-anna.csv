@@ -1,0 +1,25 @@
+document_repository_link_id,document_id,repository_id,predictive_model_confidence,document_field_name_pruned,document_url,repository_url,label,this-repo-linked-in-paper,this-article-linked-in-repo,diff-repo-linked-in-paper,diff-article-linked-in-repo,notes
+341885,334852,328701,0.999755919,Physics and Astronomy,https://doi.org/10.1051/0004-6361/201935335,https://github.com/antoinemarchal/rohsa,match,yes,yes,no,no,
+213203,206448,200019,0.9997544885,Computer Science,https://doi.org/10.18653/v1/2023.acl-long.32,https://github.com/alestolfo/causal-math,match,yes,no,no,no,
+456122,448909,442938,0.9996739626,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1186/s13040-017-0158-0,https://github.com/mckaylab/tspmap,match,no,no,no,no,says repo name but not a direct link
+364289,357248,351105,0.9995089769,Engineering,https://doi.org/10.5194/egusphere-egu24-1962,https://github.com/karenamckinnon/forcesmip,match,yes,no,no,no,
+231254,224446,218070,0.9997449517,Other,https://doi.org/10.1371/journal.pcbi.1004896,https://github.com/qbilius/conv-exp,match,no,yes,no,no,
+215473,208716,202289,0.9997332692,Engineering,https://doi.org/10.48550/arxiv.2406.07337,https://github.com/amazon-science/adaptive-feature-transfer,match,yes,yes,no,no,
+216663,209896,203479,0.9997460246,Physics and Astronomy,https://doi.org/10.48550/arxiv.2201.07801,https://github.com/djones1040/raisin_datarelease,match,no,yes,no,no,
+341895,334862,328711,0.9997697473,Physics and Astronomy,https://doi.org/10.1007/978-3-032-05573-6_12,https://github.com/sanpinnawala/brainphys,match,yes,yes,no,no,
+411762,404670,398578,0.9997424483,Medicine,https://doi.org/10.1016/j.nicl.2017.02.007,https://github.com/muschellij2/ichseg,match,yes,yes,no,no,
+411669,404577,398485,0.9997470975,Medicine,https://doi.org/10.1148/radiol.212526,https://github.com/kbressem/spa,match,yes,yes,no,no,
+362284,355243,349100,0.999687314,Computer Science,https://doi.org/10.32614/cran.package.fidelius,https://github.com/mattwarkentin/fidelius,,,,,,weird
+449960,442749,436776,0.9997550845,Other,https://doi.org/10.48550/arxiv.2211.16552,https://github.com/lingxiaozhou/bayesian-inference-for-aggregated-hawkes-processes,match,no,no,no,no,
+416477,409341,403293,0.9996963739,Other,https://doi.org/10.1021/acsnano.5c15488,https://github.com/andysanker/scatterlab-2026-tspdf-target-scattering,match,yes,yes,no,no,
+361465,354424,348281,0.9997068048,Computer Science,https://doi.org/10.32614/cran.package.usefun,https://github.com/bblodfon/usefun,,,,,,weird
+428547,421362,415363,0.9996749163,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1117/12.2289127,https://github.com/tritemio/48-spot-smfret-pax-analysis,match,yes,yes,yes,no,
+251562,244704,238378,0.9996646643,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.48550/arxiv.2006.11457,https://github.com/mbuzdalov/one-plus-lambda-on-onemax,match,yes,yes,no,yes,
+409869,402788,396685,0.9997480512,Engineering,https://doi.org/10.1109/access.2022.3157977,https://github.com/houman-hm/multi-convex-mpc-target-tarcker,match,no,yes,no,no,
+447422,440214,434238,0.9997285008,Medicine,https://doi.org/10.1038/s41538-025-00398-8,https://github.com/alrichardbollans/coffeemetabolomics,match,yes,yes,no,no,
+378179,371136,364995,0.9995910525,Physics and Astronomy,https://doi.org/10.1109/jcdl52503.2021.00082,https://github.com/jakubsw/3dscili,match,yes,no,no,no,
+417535,410390,404351,0.999748528,Other,https://doi.org/10.1186/s40854-025-00880-y,https://github.com/apwbs/blink,match,yes,yes,no,yes,
+229804,223000,216620,0.9997147918,Medicine,https://doi.org/10.1002/mp.12967,https://github.com/timodeist/classifier_selection_code,match,yes,yes,no,no,
+416830,409692,403646,0.9997350574,Computer Science,https://doi.org/10.3390/info17030262,https://github.com/mostafa-ehd/stain-standardization,match,yes,no,no,no,
+364899,357858,351715,0.9997654557,Engineering,https://doi.org/10.1038/s44284-024-00192-9,https://github.com/caimeng2/smartcityus,match,yes,yes,no,no,
+429714,422527,416530,0.9996805191,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1098/rspb.2022.1844,https://github.com/seidels/tidetree,match,yes,yes,no,no,

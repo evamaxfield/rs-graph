@@ -768,8 +768,7 @@ def _draw_descriptive_overview(
     )
     source_names_ordered = source_counts["source_name"].tolist()
     palette_d = {
-        name: mined_color if name == "Mined" else seed_color
-        for name in source_names_ordered
+        name: mined_color if name == "Mined" else seed_color for name in source_names_ordered
     }
     sns.barplot(
         data=source_counts,
