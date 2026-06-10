@@ -4,10 +4,12 @@ import time
 import traceback
 from dataclasses import dataclass
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
 from prefect import task
+from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlmodel import (
     Session,
@@ -29,17 +31,39 @@ from .constants import V2_DATABASE_PATHS
 ###############################################################################
 
 
+def _apply_sqlite_pragmas(dbapi_connection: object, _connection_record: object) -> None:
+    # Pragmas applied to every new SQLite connection. These benefit both reads and
+    # writes: the DB is a very large (tens of GB) file, so we memory-map it and give
+    # it a large page cache to keep repeated point lookups (and dirty write pages) in
+    # memory rather than re-reading from disk. busy_timeout makes a blocked writer
+    # wait rather than immediately erroring with "database is locked" now that one
+    # shared, pooled engine interleaves checks (reads) and stores (writes).
+    cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
+    cursor.execute("PRAGMA mmap_size = 30000000000")  # 30 GB
+    cursor.execute("PRAGMA cache_size = -1048576")  # ~1 GB page cache (negative = KiB)
+    cursor.execute("PRAGMA temp_store = MEMORY")
+    cursor.execute("PRAGMA busy_timeout = 30000")  # 30s
+    cursor.close()
+
+
+@lru_cache(maxsize=2)
 def get_engine(use_prod: bool = False) -> Engine:
     db_path = Path(__file__).parent.parent / "data" / "files"
 
     if use_prod:
         db_path = db_path / V2_DATABASE_PATHS.prod.name
-
-        return create_engine(f"sqlite:///{db_path}")
     else:
         db_path = db_path / V2_DATABASE_PATHS.dev.name
 
-        return create_engine(f"sqlite:///{db_path}")
+    # check_same_thread=False so the single cached engine's pooled connections
+    # can be safely reused across Prefect worker threads (SQLAlchemy serializes
+    # access via the connection pool).
+    engine = create_engine(
+        f"sqlite:///{db_path}",
+        connect_args={"check_same_thread": False},
+    )
+    event.listen(engine, "connect", _apply_sqlite_pragmas)
+    return engine
 
 
 def get_unique_first_model(model: SQLModel, session: Session) -> SQLModel | None:

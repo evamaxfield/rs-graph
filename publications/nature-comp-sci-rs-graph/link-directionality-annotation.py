@@ -124,14 +124,21 @@ def compare_annotation_sets() -> None:
         for annotator in ANNOTATORS
     }
 
-    base = dfs["eva"].select(
-        ["document_repository_link_id", "document_url", "repository_url"] + ANNOTATION_COLUMNS
-    ).rename({col: f"{col}_eva" for col in ANNOTATION_COLUMNS})
+    base = (
+        dfs["eva"]
+        .select(
+            ["document_repository_link_id", "document_url", "repository_url"]
+            + ANNOTATION_COLUMNS
+        )
+        .rename({col: f"{col}_eva" for col in ANNOTATION_COLUMNS})
+    )
 
     for annotator in ["sarah", "anna"]:
-        other = dfs[annotator].select(
-            ["document_repository_link_id"] + ANNOTATION_COLUMNS
-        ).rename({col: f"{col}_{annotator}" for col in ANNOTATION_COLUMNS})
+        other = (
+            dfs[annotator]
+            .select(["document_repository_link_id"] + ANNOTATION_COLUMNS)
+            .rename({col: f"{col}_{annotator}" for col in ANNOTATION_COLUMNS})
+        )
         base = base.join(other, on="document_repository_link_id", how="inner")
 
     doc_urls = base["document_url"].to_list()
@@ -174,7 +181,8 @@ def compare_annotation_sets() -> None:
 
         # --- Three-way Fleiss' kappa ---
         shared_idxs = [
-            i for i in range(len(doc_urls))
+            i
+            for i in range(len(doc_urls))
             if all(annotator_vals[ann][i] is not None for ann in ANNOTATORS)
         ]
         if len(shared_idxs) >= 2:
@@ -198,7 +206,8 @@ def compare_annotation_sets() -> None:
 
         # --- Disagreements ---
         disagreements = [
-            i for i in range(len(doc_urls))
+            i
+            for i in range(len(doc_urls))
             if len({annotator_vals[ann][i] for ann in ANNOTATORS}) > 1
         ]
         typer.echo(f"\n--- Disagreements ({len(disagreements)} rows) ---")

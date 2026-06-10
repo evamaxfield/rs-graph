@@ -50,7 +50,7 @@ def _get_basic_gpu_cluster_config(
         "keepalive": keepalive,
         "idle_timeout": "30 minutes",
         "vm_type": "g4dn.xlarge",
-        "n_workers": [1, 2],
+        "n_workers": [3, 4],
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
         "region": coiled_region,
