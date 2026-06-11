@@ -280,24 +280,78 @@ def convert_from_inverted_index_abstract(abstract: dict) -> str:
     return " ".join(abstract_as_list_of_str)
 
 
-@cached(  # type: ignore[misc]
-    cache=LRUCache(maxsize=2**12),
-    key=lambda open_alex_token, author_id: hashkey(author_id),
-)
+# Shared cache so single + batched author lookups reuse results across articles,
+# keyed by the full OpenAlex author id/URL as it appears in a work's authorships.
+_OPEN_ALEX_AUTHOR_CACHE: LRUCache = LRUCache(maxsize=2**12)
+
+# OpenAlex allows OR-ing up to 50 values in a single `openalex_id` filter.
+_OPEN_ALEX_OR_FILTER_BATCH_SIZE = 50
+
+
+def _short_open_alex_id(open_alex_id: str) -> str:
+    """Reduce a full OpenAlex id URL (https://openalex.org/A123) to its short form (A123)."""
+    return open_alex_id.rstrip("/").split("/")[-1]
+
+
+def get_open_alex_authors_from_ids(
+    open_alex_token: str,
+    author_ids: list[str],
+) -> dict[str, pyalex.Author]:
+    """Fetch many authors by id, batching uncached ids into OR-filter queries.
+
+    Returns a mapping of requested author id -> author. This replaces one API call
+    per author with one call per (up to 50) authors, which matters for papers with
+    very large author lists. Ids that do not resolve (e.g. merged/deleted authors)
+    are simply omitted from the result.
+    """
+    # Dedupe while preserving order
+    unique_ids = list(dict.fromkeys(author_ids))
+
+    # Serve what we can from the shared cache; collect the rest
+    results: dict[str, pyalex.Author] = {}
+    missing: list[str] = []
+    for author_id in unique_ids:
+        if author_id in _OPEN_ALEX_AUTHOR_CACHE:
+            results[author_id] = _OPEN_ALEX_AUTHOR_CACHE[author_id]
+        else:
+            missing.append(author_id)
+
+    if missing:
+        _setup_open_alex(open_alex_token=open_alex_token)
+
+        for batch_start in range(0, len(missing), _OPEN_ALEX_OR_FILTER_BATCH_SIZE):
+            batch = missing[batch_start : batch_start + _OPEN_ALEX_OR_FILTER_BATCH_SIZE]
+
+            # Map short id -> caller's id form so we can reassemble the result keys
+            short_to_original = {_short_open_alex_id(a): a for a in batch}
+
+            # One request per batch (instead of one per author)
+            _increment_call_count_and_check()
+            fetched_authors = (
+                pyalex.Authors()
+                .filter(openalex_id="|".join(short_to_original.keys()))
+                .get(per_page=_OPEN_ALEX_OR_FILTER_BATCH_SIZE)
+            )
+
+            for author in fetched_authors:
+                original_id = short_to_original.get(
+                    _short_open_alex_id(author["id"]), author["id"]
+                )
+                _OPEN_ALEX_AUTHOR_CACHE[original_id] = author
+                results[original_id] = author
+
+    return results
+
+
 def get_open_alex_author_from_id(
     open_alex_token: str,
     author_id: str,
 ) -> pyalex.Author:
-    """Get author from an ID."""
-    # Create OpenAlex API
-    _setup_open_alex(open_alex_token=open_alex_token)
-
-    # Create authors api
-    open_alex_authors = pyalex.Authors()
-
-    # Increment call count and then actually request
-    _increment_call_count_and_check()
-    return open_alex_authors[author_id]  # type: ignore[return-value]
+    """Get a single author from an ID (uses the shared batched/cached lookup)."""
+    return get_open_alex_authors_from_ids(
+        open_alex_token=open_alex_token,
+        author_ids=[author_id],
+    )[author_id]
 
 
 def process_article(  # noqa: C901
@@ -535,12 +589,26 @@ def process_article(  # noqa: C901
         # For each author, create the Researcher
         if fetch_author_details:
             all_researcher_details = []
+
+            # Batch-fetch all author details up front (one request per ~50 authors
+            # instead of one per author -- critical for large author lists).
+            author_ids = [
+                author_details["author"]["id"]
+                for author_details in work["authorships"]
+                if author_details["author"]["id"] is not None
+            ]
+            authors_by_id = get_open_alex_authors_from_ids(
+                open_alex_token=open_alex_token,
+                author_ids=author_ids,
+            )
+
             for author_details in work["authorships"]:
-                # Fetch extra author details
-                open_alex_author = get_open_alex_author_from_id(
-                    open_alex_token=open_alex_token,
-                    author_id=author_details["author"]["id"],
-                )
+                # Look up the pre-fetched author; skip ids that were null or did
+                # not resolve (e.g. merged/deleted authors).
+                open_alex_author = authors_by_id.get(author_details["author"]["id"])
+                if open_alex_author is None:
+                    continue
+
                 # Cast to dict for type checker
                 author: dict[str, Any] = open_alex_author  # type: ignore[assignment]
 
