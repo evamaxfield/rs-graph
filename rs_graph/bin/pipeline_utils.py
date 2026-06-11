@@ -50,7 +50,10 @@ def _get_basic_gpu_cluster_config(
         "keepalive": keepalive,
         "idle_timeout": "30 minutes",
         "vm_type": "g4dn.xlarge",
-        "n_workers": [3, 4],
+        # Fixed (non-adaptive) fleet: keep GPUs always-on rather than autoscaling.
+        # Repeated spin-up/down costs money and adds scale-up lag at the start of
+        # each matching phase; a steady fleet avoids both.
+        "n_workers": [6, 6],
         "spot_policy": "spot_with_fallback",
         "local": not use_coiled,
         "region": coiled_region,

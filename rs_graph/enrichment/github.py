@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import socket
 import time
 import traceback
 from dataclasses import dataclass
@@ -23,6 +24,24 @@ from ..db import models as db_models
 
 ###############################################################################
 
+# ghapi issues requests through urllib (via fastcore), which uses no socket
+# timeout by default -- a stalled GitHub connection therefore blocks forever and
+# can hang an entire enrichment task (and the flow waiting on its result). urllib
+# falls back to socket.getdefaulttimeout() when no explicit timeout is given, so
+# we set a generous process-wide default here. It is a per-read idle timeout, so
+# slow-but-streaming responses (e.g. large git trees) are unaffected; only true
+# stalls (no bytes for this long) are cut off and surfaced as a timeout error.
+GITHUB_SOCKET_TIMEOUT_SECONDS = 60
+
+# Throttle between GitHub API calls within a single task. These sleeps guard
+# against GitHub's *secondary* rate limits (<=100 concurrent, <=900 points/min
+# where a GET costs 1 point). With tokens cycled across the task map, a single
+# token sees only a few requests/second even at this small value -- ~10x under
+# the 900/min ceiling -- so this is intentionally low. The *binding* limit is the
+# primary 5,000 requests/hour per GitHub user, which is managed by the number of
+# (distinct-account) tokens, not by this sleep.
+GITHUB_API_SLEEP_SECONDS = 0.1
+
 
 @dataclass
 class RepoContributorInfoSimple(DataClassJsonMixin):
@@ -41,6 +60,10 @@ class RepoContributorInfo(DataClassJsonMixin):
 
 def _setup_gh_api(github_api_key: str | None = None) -> GhApi:
     """Create a GitHub API object."""
+    # Bound every subsequent (blocking, urllib-backed) GitHub request so a
+    # stalled connection raises a timeout instead of hanging the task forever.
+    socket.setdefaulttimeout(GITHUB_SOCKET_TIMEOUT_SECONDS)
+
     # Setup API
     if github_api_key:
         api = GhApi(token=github_api_key)
@@ -72,7 +95,7 @@ def _get_user_info_from_login(
     user_info = api.users.get_by_username(username=login)  # type: ignore[attr-defined]
 
     # Sleep to avoid API limits
-    time.sleep(0.75)
+    time.sleep(GITHUB_API_SLEEP_SECONDS)
 
     # Store info
     return RepoContributorInfoSimple(
@@ -104,7 +127,7 @@ def get_repo_contributors(
     )
 
     # Sleep to avoid API limits
-    time.sleep(0.75)
+    time.sleep(GITHUB_API_SLEEP_SECONDS)
 
     # Get user infos
     _get_user_partial = partial(
@@ -163,7 +186,7 @@ def process_github_repo(  # noqa: C901
             )
 
             # Sleep to avoid API limits
-            time.sleep(0.75)
+            time.sleep(GITHUB_API_SLEEP_SECONDS)
 
             if existing_repo_data:
                 # Update existing repo data with new info
@@ -183,7 +206,7 @@ def process_github_repo(  # noqa: C901
             )
 
             # Sleep to avoid API limits
-            time.sleep(0.75)
+            time.sleep(GITHUB_API_SLEEP_SECONDS)
 
             # For each language, create a repository language
             repo_language_models = []
@@ -215,7 +238,7 @@ def process_github_repo(  # noqa: C901
 
             finally:
                 # Sleep to avoid API limits
-                time.sleep(0.75)
+                time.sleep(GITHUB_API_SLEEP_SECONDS)
 
                 # Create model
                 repo_readme_model = db_models.RepositoryReadme(
@@ -290,7 +313,7 @@ def process_github_repo(  # noqa: C901
 
             finally:
                 # Sleep to avoid API limits
-                time.sleep(0.75)
+                time.sleep(GITHUB_API_SLEEP_SECONDS)
         else:
             processed_at_sha = None
             commits_count = None
@@ -361,7 +384,7 @@ def process_github_repo(  # noqa: C901
 
             finally:
                 # Sleep to avoid API limits
-                time.sleep(0.75)
+                time.sleep(GITHUB_API_SLEEP_SECONDS)
         else:
             repo_file_models = None
 
@@ -521,7 +544,7 @@ def get_github_repos_for_developer(
 
         developer_repos = []
         for page in repo_pager:
-            time.sleep(0.75)  # Sleep to avoid API limits
+            time.sleep(GITHUB_API_SLEEP_SECONDS)  # Sleep to avoid API limits
             developer_repos.extend(page)
 
         # Get the GitHub response object

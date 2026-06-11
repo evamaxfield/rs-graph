@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import socket
 import time
 import traceback
 from dataclasses import dataclass
@@ -63,9 +64,23 @@ def _require_field(data: dict, field: str, context: str) -> Any:
 
 OPEN_ALEX_API_CALL_COUNT = 0
 
+# pyalex (0.20) exposes no request-timeout config and uses requests with no
+# timeout, so a stalled OpenAlex connection blocks the worker thread forever
+# (its retries only fire on HTTP error codes, never on a read that never
+# returns). With a handful of worker threads, a few stalled sockets can starve
+# the whole cluster -- exactly the symptom of 0 completed article tasks. requests
+# falls back to socket.getdefaulttimeout() when given no explicit timeout, so we
+# set a generous process-wide default. It is a per-read idle timeout, so slow
+# paginated responses are unaffected; only true stalls are cut off.
+OPEN_ALEX_SOCKET_TIMEOUT_SECONDS = 60
+
 
 def _setup_open_alex(open_alex_token: str) -> None:
     """Set up the OpenAlex API."""
+    # Bound every subsequent (blocking, requests-backed) OpenAlex request so a
+    # stalled connection raises a timeout instead of hanging the task forever.
+    socket.setdefaulttimeout(OPEN_ALEX_SOCKET_TIMEOUT_SECONDS)
+
     # Add token for polite pool
     pyalex.config.api_key = open_alex_token
 
@@ -85,6 +100,7 @@ def _increment_call_count_and_check() -> None:
         try:
             response = requests.get(
                 f"https://api.openalex.org/rate-limit?api_key={pyalex.config.api_key}",
+                timeout=30,
             )
             response.raise_for_status()
 
