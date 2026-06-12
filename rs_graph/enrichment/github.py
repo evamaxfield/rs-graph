@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import socket
+import threading
 import time
 import traceback
 from dataclasses import dataclass
@@ -83,6 +84,7 @@ def _setup_gh_api(github_api_key: str | None = None) -> GhApi:
 @cached(  # type: ignore[misc]
     cache=LRUCache(maxsize=2**12),
     key=lambda login, **kwargs: hashkey(login),  # Only cache by login
+    lock=threading.Lock(),  # LRUCache is not thread-safe; workers run multiple threads
 )
 def _get_user_info_from_login(
     login: str,

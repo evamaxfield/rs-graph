@@ -185,6 +185,7 @@ def _increment_call_count_and_check() -> None:
 @cached(  # type: ignore[misc]
     cache=LRUCache(maxsize=2**12),
     key=lambda doi, semantic_scholar_api_key: hashkey(normalize_doi(doi)),
+    lock=threading.Lock(),  # LRUCache is not thread-safe; workers run multiple threads
 )
 def get_updated_doi_from_semantic_scholar(
     doi: str,
@@ -234,6 +235,7 @@ def get_updated_doi_from_semantic_scholar(
 @cached(  # type: ignore[misc]
     cache=LRUCache(maxsize=2**12),
     key=lambda open_alex_token, doi: hashkey(doi.lower()),
+    lock=threading.Lock(),  # LRUCache is not thread-safe; workers run multiple threads
 )
 def get_open_alex_work_from_doi(
     open_alex_token: str,
@@ -343,11 +345,13 @@ def get_open_alex_authors_from_ids(
 
             with _OPEN_ALEX_AUTHOR_CACHE_LOCK:
                 for author in fetched_authors:
+                    # Cast to dict for type checker (pyalex.Author is an untyped dict subclass)
+                    author_data: dict[str, Any] = author  # type: ignore[assignment]
                     original_id = short_to_original.get(
-                        _short_open_alex_id(author["id"]), author["id"]
+                        _short_open_alex_id(author_data["id"]), author_data["id"]
                     )
                     _OPEN_ALEX_AUTHOR_CACHE[original_id] = author
-                    results[original_id] = author
+                    results[original_id] = author  # type: ignore[assignment]
 
     return results
 
