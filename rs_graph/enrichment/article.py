@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import socket
+import threading
 import time
 import traceback
 from dataclasses import dataclass
@@ -282,7 +283,11 @@ def convert_from_inverted_index_abstract(abstract: dict) -> str:
 
 # Shared cache so single + batched author lookups reuse results across articles,
 # keyed by the full OpenAlex author id/URL as it appears in a work's authorships.
+# cachetools.LRUCache is NOT thread-safe and the coiled workers run multiple
+# threads, so all access is guarded by a lock (a bare `in` then `[]` races with
+# eviction on another thread and raises KeyError).
 _OPEN_ALEX_AUTHOR_CACHE: LRUCache = LRUCache(maxsize=2**12)
+_OPEN_ALEX_AUTHOR_CACHE_LOCK = threading.Lock()
 
 # OpenAlex allows OR-ing up to 50 values in a single `openalex_id` filter.
 _OPEN_ALEX_OR_FILTER_BATCH_SIZE = 50
@@ -307,14 +312,17 @@ def get_open_alex_authors_from_ids(
     # Dedupe while preserving order
     unique_ids = list(dict.fromkeys(author_ids))
 
-    # Serve what we can from the shared cache; collect the rest
+    # Serve what we can from the shared cache; collect the rest. Hold the lock so
+    # the lookup is atomic w.r.t. concurrent eviction on other worker threads.
     results: dict[str, pyalex.Author] = {}
     missing: list[str] = []
-    for author_id in unique_ids:
-        if author_id in _OPEN_ALEX_AUTHOR_CACHE:
-            results[author_id] = _OPEN_ALEX_AUTHOR_CACHE[author_id]
-        else:
-            missing.append(author_id)
+    with _OPEN_ALEX_AUTHOR_CACHE_LOCK:
+        for author_id in unique_ids:
+            cached_author = _OPEN_ALEX_AUTHOR_CACHE.get(author_id)
+            if cached_author is not None:
+                results[author_id] = cached_author
+            else:
+                missing.append(author_id)
 
     if missing:
         _setup_open_alex(open_alex_token=open_alex_token)
@@ -333,12 +341,13 @@ def get_open_alex_authors_from_ids(
                 .get(per_page=_OPEN_ALEX_OR_FILTER_BATCH_SIZE)
             )
 
-            for author in fetched_authors:
-                original_id = short_to_original.get(
-                    _short_open_alex_id(author["id"]), author["id"]
-                )
-                _OPEN_ALEX_AUTHOR_CACHE[original_id] = author
-                results[original_id] = author
+            with _OPEN_ALEX_AUTHOR_CACHE_LOCK:
+                for author in fetched_authors:
+                    original_id = short_to_original.get(
+                        _short_open_alex_id(author["id"]), author["id"]
+                    )
+                    _OPEN_ALEX_AUTHOR_CACHE[original_id] = author
+                    results[original_id] = author
 
     return results
 
