@@ -34,10 +34,12 @@ def generate_snowball_sampling_input(
             "Stored in the output parquet and later in DocumentRepositoryLink.iteration."
         ),
     ),
+    database_path: str = typer.Argument(
+        help="Path to the SQLite database file to use.",
+    ),
     researcher_developer_links_filter_confidence_threshold: float = 0.97,
     researcher_developer_links_duration_since_last_process_filter: str | None = "2 years",
     top_unique: bool = True,
-    use_prod: bool = False,
     overwrite: bool = False,
 ) -> None:
     """
@@ -50,7 +52,7 @@ def generate_snowball_sampling_input(
             f"Output file already exists: {output_path}. Use --overwrite to replace it."
         )
 
-    engine = get_engine(use_prod=use_prod)
+    engine = get_engine(database_path)
 
     with Session(engine) as session:
         # 3-way join: Link -> Researcher -> DeveloperAccount

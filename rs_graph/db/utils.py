@@ -26,7 +26,6 @@ from .. import types
 from ..utils.dt_and_td import parse_timedelta
 from ..utils.identifier_normalization import normalize_doi
 from . import models as db_models
-from .constants import V2_DATABASE_PATHS
 
 ###############################################################################
 
@@ -46,14 +45,11 @@ def _apply_sqlite_pragmas(dbapi_connection: object, _connection_record: object) 
     cursor.close()
 
 
-@lru_cache(maxsize=2)
-def get_engine(use_prod: bool = False) -> Engine:
-    db_path = Path(__file__).parent.parent / "data" / "files"
-
-    if use_prod:
-        db_path = db_path / V2_DATABASE_PATHS.prod.name
-    else:
-        db_path = db_path / V2_DATABASE_PATHS.dev.name
+@lru_cache(maxsize=4)
+def get_engine(database_path: str) -> Engine:
+    # Resolve to an absolute path so cache keys are stable regardless of
+    # whatever relative form a caller passes in.
+    db_path = Path(database_path).resolve()
 
     # check_same_thread=False so the single cached engine's pooled connections
     # can be safely reused across Prefect worker threads (SQLAlchemy serializes
@@ -113,10 +109,10 @@ def _get_or_add_and_flush[ModelT: SQLModel](
 
 def store_full_details(  # noqa: C901
     pair: types.ExpandedRepositoryDocumentPair,
-    use_prod: bool = False,
+    database_path: str,
 ) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
     # Get the engine
-    engine = get_engine(use_prod=use_prod)
+    engine = get_engine(database_path=database_path)
 
     # Create a session
     with Session(engine) as session:
@@ -458,7 +454,7 @@ def store_full_details(  # noqa: C901
 )
 def store_full_details_task(
     pair: types.ExpandedRepositoryDocumentPair | types.ErrorResult,
-    use_prod: bool = False,
+    database_path: str,
 ) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
     if isinstance(pair, types.ErrorResult):
         return pair
@@ -467,7 +463,7 @@ def store_full_details_task(
     start_time = time.time()
 
     # Store the full details
-    result = store_full_details(pair=pair, use_prod=use_prod)
+    result = store_full_details(pair=pair, database_path=database_path)
 
     # Get end time and calculate processing time
     end_time = time.time()
@@ -488,10 +484,10 @@ def store_full_details_task(
 
 def store_dev_researcher_em_links(
     pair: types.StoredRepositoryDocumentPair,
-    use_prod: bool = False,
+    database_path: str,
 ) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
     # Get the engine
-    engine = get_engine(use_prod=use_prod)
+    engine = get_engine(database_path=database_path)
 
     # Create a session
     with Session(engine) as session:
@@ -540,7 +536,7 @@ def store_dev_researcher_em_links(
 )
 def store_dev_researcher_em_links_task(
     pair: types.StoredRepositoryDocumentPair | types.ErrorResult,
-    use_prod: bool = False,
+    database_path: str,
 ) -> types.StoredRepositoryDocumentPair | types.ErrorResult:
     if isinstance(pair, types.ErrorResult):
         return pair
@@ -551,7 +547,7 @@ def store_dev_researcher_em_links_task(
     # Store the developer-researcher links
     pair = store_dev_researcher_em_links(
         pair=pair,
-        use_prod=use_prod,
+        database_path=database_path,
     )
 
     # Get end time
@@ -570,9 +566,9 @@ _EXTENDED_CONFIDENCE_THRESHOLD = 0.9994
 def check_article_link_quality_in_db(
     article_doi: str,
     article_title: str,
-    use_prod: bool = False,
+    database_path: str,
 ) -> Literal["not_in_db", "has_good_link", "has_only_poor_links"]:
-    engine = get_engine(use_prod=use_prod)
+    engine = get_engine(database_path=database_path)
     article_doi = normalize_doi(article_doi)
 
     with Session(engine) as session:
@@ -618,9 +614,9 @@ def check_repository_link_quality_in_db(
     code_host: str,
     repo_owner: str,
     repo_name: str,
-    use_prod: bool = False,
+    database_path: str,
 ) -> Literal["not_in_db", "has_good_link", "has_only_poor_links"]:
-    engine = get_engine(use_prod=use_prod)
+    engine = get_engine(database_path=database_path)
     code_host = code_host.lower().strip()
     repo_owner = repo_owner.lower().strip()
     repo_name = repo_name.lower().strip()
@@ -659,10 +655,10 @@ def check_repository_link_quality_in_db(
 
 def check_pair_exists(
     pair: types.ExpandedRepositoryDocumentPair,
-    use_prod: bool = False,
+    database_path: str,
 ) -> bool:
     # Get the engine
-    engine = get_engine(use_prod=use_prod)
+    engine = get_engine(database_path=database_path)
 
     # Check we have already processed to repo parts
     assert pair.repo_parts is not None
@@ -740,7 +736,7 @@ def check_pair_exists(
 
 def filter_stored_pairs(
     pairs: list[types.ExpandedRepositoryDocumentPair],
-    use_prod: bool = False,
+    database_path: str,
 ) -> list[types.ExpandedRepositoryDocumentPair]:
     # For each pair, check if it exists in the database
     unprocessed_pairs = [
@@ -749,7 +745,7 @@ def filter_stored_pairs(
             pairs,
             desc="Filtering already stored pairs",
         )
-        if not check_pair_exists(pair=pair, use_prod=use_prod)
+        if not check_pair_exists(pair=pair, database_path=database_path)
     ]
 
     # Log remaining pairs and filtered out pairs
@@ -768,7 +764,7 @@ class HydratedAuthorDeveloperLink:
 
 
 def get_hydrated_author_developer_links(
-    use_prod: bool = False,
+    database_path: str,
     filter_datetime_difference: str | None = None,
     filter_confidence_threshold: float = 0.97,
     n: int | None = None,
@@ -778,8 +774,8 @@ def get_hydrated_author_developer_links(
 
     Parameters
     ----------
-    use_prod: bool
-        Whether to use production database
+    database_path: str
+        Path to the SQLite database file to use.
     filter_datetime_difference: str | None
         Optional time string (e.g. "365 days") to filter
         links that haven't been processed in this timeframe
@@ -789,7 +785,7 @@ def get_hydrated_author_developer_links(
         Optional limit on the number of links to return
     """
     # Get the engine
-    engine = get_engine(use_prod=use_prod)
+    engine = get_engine(database_path=database_path)
 
     # Create a session
     with Session(engine) as session:
@@ -850,7 +846,7 @@ def get_hydrated_author_developer_links(
 
 def get_hydrated_author_developer_links_by_ids(
     link_ids: list[int],
-    use_prod: bool = False,
+    database_path: str,
 ) -> list[HydratedAuthorDeveloperLink]:
     """
     Get researcher-developer account links for specific link IDs.
@@ -859,8 +855,8 @@ def get_hydrated_author_developer_links_by_ids(
     ----------
     link_ids: list[int]
         The IDs of ResearcherDeveloperAccountLink records to look up.
-    use_prod: bool
-        Whether to use production database.
+    database_path: str
+        Path to the SQLite database file to use.
 
     Returns
     -------
@@ -873,7 +869,7 @@ def get_hydrated_author_developer_links_by_ids(
         If any of the requested link IDs are not found in the database.
     """
     # Get the engine
-    engine = get_engine(use_prod=use_prod)
+    engine = get_engine(database_path=database_path)
 
     # Create a session
     with Session(engine) as session:
@@ -919,10 +915,10 @@ def get_hydrated_author_developer_links_by_ids(
 def check_article_in_db(
     article_doi: str,
     article_title: str,
-    use_prod: bool = False,
+    database_path: str,
 ) -> bool:
     # Get the engine
-    engine = get_engine(use_prod=use_prod)
+    engine = get_engine(database_path=database_path)
 
     # Normalize DOI variants (e.g., https://doi.org/...) and lowercase
     article_doi = normalize_doi(article_doi)
@@ -963,10 +959,10 @@ def check_repository_in_db(
     code_host: str,
     repo_owner: str,
     repo_name: str,
-    use_prod: bool = False,
+    database_path: str,
 ) -> bool:
     # Get the engine
-    engine = get_engine(use_prod=use_prod)
+    engine = get_engine(database_path=database_path)
 
     # Lowercase and strip all inputs
     code_host = code_host.lower().strip()
@@ -998,10 +994,10 @@ def check_repository_in_db(
 
 def update_researcher_developer_account_link_with_new_process_dt(
     link_id: int,
-    use_prod: bool = False,
+    database_path: str,
 ) -> db_models.ResearcherDeveloperAccountLink | types.ErrorResult:
     # Get the engine
-    engine = get_engine(use_prod=use_prod)
+    engine = get_engine(database_path=database_path)
 
     # Create a session
     with Session(engine) as session:

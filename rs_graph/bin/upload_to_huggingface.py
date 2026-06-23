@@ -44,7 +44,9 @@ BATCH_SIZE: int = 2**20  # 1,048,576 rows per batch
 
 @app.command()
 def upload_to_huggingface(
-    use_prod: bool = False,
+    database_path: str = typer.Argument(
+        help="Path to the SQLite database file to use.",
+    ),
     redact: bool = True,
     org: str = "evamxb",
 ) -> None:
@@ -81,7 +83,7 @@ def upload_to_huggingface(
     # Remake
     output_dir.mkdir()
 
-    engine = get_engine(use_prod=use_prod)
+    engine = get_engine(database_path)
     table_names = sa_inspect(engine).get_table_names()
     to_process_table_names = [
         table_name

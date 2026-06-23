@@ -166,11 +166,11 @@ class UnprocessedRepository:
 
 
 def _query_unprocessed_repositories(
-    use_prod: bool,
+    database_path: str,
     language_filter: list[str],
 ) -> tuple[list[UnprocessedRepository], Counter[str]]:
     """Return unprocessed repos and a count of already-processed repos by language."""
-    engine = db_utils.get_engine(use_prod=use_prod)
+    engine = db_utils.get_engine(database_path=database_path)
     with Session(engine) as session:
         # Collect repo IDs that already have imports or dependencies
         imported_ids = set(
@@ -385,9 +385,9 @@ def _extract_repo_imports_and_deps(
     )
 
 
-def _store_repo_result(result: RepoExtractionResult, use_prod: bool) -> None:
+def _store_repo_result(result: RepoExtractionResult, database_path: str) -> None:
     """Store extraction results to RepositoryImport and RepositoryDependency tables."""
-    engine = db_utils.get_engine(use_prod=use_prod)
+    engine = db_utils.get_engine(database_path=database_path)
     with Session(engine) as session:
         for record in result.imports:
             db_utils._get_or_add_and_flush(
@@ -438,7 +438,9 @@ def _lookup_document_id_by_doi(doi: str, session: Session) -> int | None:
 @app.command()
 def ingest_softcite_mentions(
     data_dir: str,
-    use_prod: bool = False,
+    database_path: str = typer.Argument(
+        help="Path to the SQLite database file to use.",
+    ),
     batch_size: int = 200,
     reprocess_all: bool = False,
 ) -> None:
@@ -482,7 +484,7 @@ def ingest_softcite_mentions(
 
     # Optionally skip DOIs that already have mentions in the DB
     if not reprocess_all:
-        engine = db_utils.get_engine(use_prod=use_prod)
+        engine = db_utils.get_engine(database_path=database_path)
         with Session(engine) as session:
             processed_doc_ids = set(
                 session.exec(
@@ -510,7 +512,7 @@ def ingest_softcite_mentions(
         return
 
     # Process in batches of unique DOIs — document_id is looked up once per DOI
-    engine = db_utils.get_engine(use_prod=use_prod)
+    engine = db_utils.get_engine(database_path=database_path)
     matched_count = 0
     skipped_count = 0
     doi_batches = [
@@ -612,7 +614,7 @@ def _filter_cached_errors(
 
 @flow(log_prints=True)
 def _used_software_extraction_flow(
-    use_prod: bool,
+    database_path: str,
     language_filter: list[str],
     use_coiled: bool,
     coiled_region: str,
@@ -628,7 +630,7 @@ def _used_software_extraction_flow(
     # Print dataset and coiled status
     print("-" * 80)
     print("Pipeline Options:")
-    print(f"Use Prod Database: {use_prod}")
+    print(f"Database Path: {database_path}")
     print(f"Language Filter: {language_filter}")
     print(f"Use Coiled: {use_coiled}")
     print(f"Coiled Region: {coiled_region}")
@@ -642,7 +644,7 @@ def _used_software_extraction_flow(
     # Get list of repos to process
     print("Retrieving list of repositories to process...")
     repos, processed_by_language = _query_unprocessed_repositories(
-        use_prod=use_prod,
+        database_path=database_path,
         language_filter=language_filter,
     )
     repos = repos[:limit] if limit is not None else repos
@@ -717,7 +719,7 @@ def _used_software_extraction_flow(
         print("Storing results for batch")
         for result in batch_success_results:
             try:
-                _store_repo_result(result=result, use_prod=use_prod)
+                _store_repo_result(result=result, database_path=database_path)
             except UnicodeEncodeError:
                 print(f"Skipping repo {result.owner}/{result.name} due to UnicodeEncodeError")
 
@@ -765,11 +767,11 @@ def _print_extraction_result(result: RepoExtractionResult) -> None:
             print(f"    manifests: {dep.manifest_paths}")
 
 
-def _dry_run_single_repo(repo_spec: str, use_prod: bool) -> None:
+def _dry_run_single_repo(repo_spec: str, database_path: str) -> None:
     """Dry-run extraction for a single repo (owner/name). Prints results, saves nothing."""
     owner, name = repo_spec.split("/", 1)
 
-    engine = db_utils.get_engine(use_prod=use_prod)
+    engine = db_utils.get_engine(database_path=database_path)
     with Session(engine) as session:
         stmt = select(db_models.Repository).where(
             col(db_models.Repository.owner) == owner.lower(),
@@ -805,7 +807,9 @@ def _dry_run_single_repo(repo_spec: str, use_prod: bool) -> None:
 
 @app.command()
 def used_software_extraction(
-    use_prod: bool = False,
+    database_path: str = typer.Argument(
+        help="Path to the SQLite database file to use.",
+    ),
     use_coiled: bool = False,
     coiled_region: str = "us-west-2",
     coiled_workers: int = 48,
@@ -826,11 +830,11 @@ def used_software_extraction(
     Use --dry-run-repo owner/name to extract a single repo without saving results.
     """
     if dry_run_repo:
-        _dry_run_single_repo(dry_run_repo, use_prod=use_prod)
+        _dry_run_single_repo(dry_run_repo, database_path=database_path)
         return
 
     _used_software_extraction_flow(
-        use_prod=use_prod,
+        database_path=database_path,
         language_filter=language_filter
         if language_filter is not None
         else DEFAULT_LANGUAGE_FILTER,

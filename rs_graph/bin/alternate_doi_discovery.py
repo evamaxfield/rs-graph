@@ -317,7 +317,7 @@ def discover_alternate_dois_batch(
 
 
 def get_documents_without_alternates(
-    use_prod: bool = False,
+    database_path: str,
     limit: int | None = None,
 ) -> list[DocumentDOIInfo]:
     """
@@ -325,7 +325,7 @@ def get_documents_without_alternates(
 
     Returns documents where there's no entry in document_alternate_doi table.
     """
-    engine = get_engine(use_prod=use_prod)
+    engine = get_engine(database_path=database_path)
 
     with Session(engine) as session:
         # Get document IDs that already have alternates
@@ -361,10 +361,10 @@ def get_documents_without_alternates(
 
 def store_alternate_dois_batch(
     results: list[AlternateDOIResult | ErrorResult],
-    use_prod: bool = False,
+    database_path: str,
 ) -> list[AlternateDOIResult | ErrorResult]:
     """Store discovered alternate DOIs in the database for a batch of results."""
-    engine = get_engine(use_prod=use_prod)
+    engine = get_engine(database_path=database_path)
 
     stored_results: list[AlternateDOIResult | ErrorResult] = []
     try:
@@ -451,7 +451,7 @@ def _process_batches(
     doc_infos: list[DocumentDOIInfo],
     open_alex_token: str,
     semantic_scholar_api_key: str | None,
-    use_prod: bool,
+    database_path: str,
     batch_size: int,
 ) -> tuple[list[AlternateDOIResult | ErrorResult], ProcessingTimes, int, int]:
     """Process documents in batches and return results with statistics."""
@@ -476,7 +476,7 @@ def _process_batches(
         # Batch store results
         batch_results = store_alternate_dois_batch(
             results=batch_results,
-            use_prod=use_prod,
+            database_path=database_path,
         )
 
         all_results.extend(batch_results)
@@ -505,7 +505,7 @@ def _process_batches(
 
 
 def _run_alternate_doi_discovery(
-    use_prod: bool,
+    database_path: str,
     open_alex_tokens_file: str,
     semantic_scholar_api_key: str | None,
     batch_size: int,
@@ -522,7 +522,7 @@ def _run_alternate_doi_discovery(
 
     # Get documents to process
     print("\nFetching documents without alternate DOIs...")
-    doc_infos = get_documents_without_alternates(use_prod=use_prod, limit=limit)
+    doc_infos = get_documents_without_alternates(database_path=database_path, limit=limit)
     print(f"Found {len(doc_infos)} documents to process")
 
     if not doc_infos:
@@ -537,7 +537,7 @@ def _run_alternate_doi_discovery(
         doc_infos=doc_infos,
         open_alex_token=open_alex_token,
         semantic_scholar_api_key=semantic_scholar_api_key,
-        use_prod=use_prod,
+        database_path=database_path,
         batch_size=batch_size,
     )
 
@@ -563,7 +563,9 @@ def _run_alternate_doi_discovery(
 
 @app.command()
 def alternate_doi_discovery(
-    use_prod: bool = False,
+    database_path: str = typer.Argument(
+        help="Path to the SQLite database file to use.",
+    ),
     open_alex_tokens_file: str = DEFAULT_OPEN_ALEX_TOKENS_FILE,
     batch_size: int = 500,
     limit: int | None = None,
@@ -585,7 +587,7 @@ def alternate_doi_discovery(
     semantic_scholar_api_key = os.environ.get("SEMANTIC_SCHOLAR_API_KEY")
 
     _run_alternate_doi_discovery(
-        use_prod=use_prod,
+        database_path=database_path,
         open_alex_tokens_file=open_alex_tokens_file,
         semantic_scholar_api_key=semantic_scholar_api_key,
         batch_size=batch_size,

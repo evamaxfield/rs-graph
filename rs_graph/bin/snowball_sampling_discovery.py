@@ -144,7 +144,7 @@ def _flatten_and_check_articles_in_db(
     all_author_articles_and_errors: list[
         list[types.AuthorArticleDetails | types.ErrorResult] | types.ErrorResult
     ],
-    use_prod: bool,
+    database_path: str,
     ignorable_doi_spans: list[str],
     extended_processing: bool,
 ) -> list[types.AuthorArticleDetails | types.FilteredResult | types.ErrorResult]:
@@ -191,7 +191,7 @@ def _flatten_and_check_articles_in_db(
                         link_quality = db_utils.check_article_link_quality_in_db(
                             article_doi=item.open_alex_results_models.document_model.doi,
                             article_title=item.open_alex_results_models.document_model.title,
-                            use_prod=use_prod,
+                            database_path=database_path,
                         )
                         if link_quality == "has_good_link":
                             already_in_db_count += 1
@@ -234,7 +234,7 @@ def _flatten_and_check_repositories_in_db(
     all_developer_repositories_and_errors: list[
         list[types.DeveloperRepositoryDetails | types.ErrorResult] | types.ErrorResult
     ],
-    use_prod: bool,
+    database_path: str,
     ignore_forks: bool,
     extended_processing: bool,
 ) -> list[types.DeveloperRepositoryDetails | types.FilteredResult | types.ErrorResult]:
@@ -257,7 +257,7 @@ def _flatten_and_check_repositories_in_db(
                         code_host=item.github_result_models.code_host_model.name,
                         repo_owner=item.github_result_models.repository_model.owner,
                         repo_name=item.github_result_models.repository_model.name,
-                        use_prod=use_prod,
+                        database_path=database_path,
                     )
                     if link_quality == "has_good_link":
                         filtered_result = types.FilteredResult(
@@ -818,7 +818,7 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
     article_repository_matching_batch_size: int,
     ignore_forks: bool,
     ignorable_doi_spans: list[str],
-    use_prod: bool,
+    database_path: str,
     use_coiled: bool,
     coiled_region: str,
     cycled_github_tokens: GitHubTokensCycler,
@@ -937,7 +937,7 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
     print("Filtering out articles already in the database...")
     flattened_author_articles = _flatten_and_check_articles_in_db(
         all_author_articles_and_errors=[aa.result() for aa in author_articles],
-        use_prod=use_prod,
+        database_path=database_path,
         ignorable_doi_spans=ignorable_doi_spans,
         extended_processing=extended_processing,
     )
@@ -945,7 +945,7 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
     print("Filtering out repositories already in the database...")
     flattened_developer_repositories = _flatten_and_check_repositories_in_db(
         all_developer_repositories_and_errors=[dr.result() for dr in developer_repositories],
-        use_prod=use_prod,
+        database_path=database_path,
         ignore_forks=ignore_forks,
         extended_processing=extended_processing,
     )
@@ -1107,7 +1107,7 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
         else:
             stored_pair = db_utils.store_full_details(
                 pair=rfs,
-                use_prod=use_prod,
+                database_path=database_path,
             )
             if isinstance(stored_pair, types.ErrorResult):
                 print(
@@ -1138,7 +1138,7 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
         else:
             stored_dev_researcher = db_utils.store_dev_researcher_em_links(
                 pair=drf,
-                use_prod=use_prod,
+                database_path=database_path,
             )
             stored_dev_researchers.append(stored_dev_researcher)
             time.sleep(0.05)
@@ -1148,7 +1148,7 @@ def _snowball_sampling_discovery_flow(  # noqa: C901
     for adl in author_developer_links:
         db_utils.update_researcher_developer_account_link_with_new_process_dt(
             link_id=adl.author_developer_link_id,
-            use_prod=use_prod,
+            database_path=database_path,
         )
         time.sleep(0.05)
 
@@ -1183,13 +1183,15 @@ def snowball_sampling_discovery(
             "to process."
         ),
     ),
+    database_path: str = typer.Argument(
+        help="Path to the SQLite database file to use.",
+    ),
     article_repository_allowed_datetime_difference_positive: str = "556 days",
     article_repository_allowed_datetime_difference_negative: str = "73 days",
     author_developer_links_batch_size: int = 24,
     article_repository_matching_batch_size: int = 32,
     ignore_forks: bool = True,
     ignorable_doi_spans: list[str] = ignorable_doi_spans_default,
-    use_prod: bool = False,
     use_coiled: bool = False,
     coiled_region: str = "us-west-2",
     github_tokens_file: str = DEFAULT_GITHUB_TOKENS_FILE,
@@ -1252,7 +1254,7 @@ def snowball_sampling_discovery(
         f"{article_respository_allowed_datetime_difference_negative_td.days} to "
         f"{article_respository_allowed_datetime_difference_positive_td.days}"
     )
-    print(f"Use Prod Database: {use_prod}")
+    print(f"Database Path: {database_path}")
     print(f"Use Coiled: {use_coiled}")
     print(f"Coiled Region: {coiled_region}")
     print(f"GitHub Token Count: {n_github_tokens}")
@@ -1280,7 +1282,7 @@ def snowball_sampling_discovery(
     print("Hydrating researcher-developer-account links from the database...")
     hydrated_author_developer_links = db_utils.get_hydrated_author_developer_links_by_ids(
         link_ids=link_ids,
-        use_prod=use_prod,
+        database_path=database_path,
     )
 
     # Check for already-processed links from a prior run of this iteration
@@ -1340,7 +1342,7 @@ def snowball_sampling_discovery(
                 article_repository_matching_batch_size=article_repository_matching_batch_size,
                 ignore_forks=ignore_forks,
                 ignorable_doi_spans=ignorable_doi_spans,
-                use_prod=use_prod,
+                database_path=database_path,
                 use_coiled=use_coiled,
                 coiled_region=coiled_region,
                 cycled_github_tokens=cycled_github_tokens,

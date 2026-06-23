@@ -90,7 +90,6 @@ pipeline = [
   "cachetools>=5,<7",
   "coiled>=1,<2",
   "dataclasses-json>=0.6,<0.7",
-  "gcsfs>=2023.10.0",
   "ghapi>=1,<2",
   "gh-tokens-loader>=0.1,<0.2",
   "numpy>=1,<3",

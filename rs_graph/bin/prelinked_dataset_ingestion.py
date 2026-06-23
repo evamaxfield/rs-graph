@@ -18,8 +18,6 @@ from prefect import flow, unmapped
 from tqdm import tqdm
 
 from rs_graph import types
-from rs_graph.bin.data import download as download_rs_graph_data_files
-from rs_graph.bin.data import upload as upload_rs_graph_data_files
 from rs_graph.bin.pipeline_utils import (
     DEFAULT_ELSEVIER_API_KEYS_FILE,
     DEFAULT_ERRORS_CACHE_FILE,
@@ -149,7 +147,7 @@ def _append_errors_to_cache(
 )
 def _prelinked_dataset_ingestion_flow(
     source: str,
-    use_prod: bool,
+    database_path: str,
     github_tokens_file: str,
     open_alex_tokens: list[str],
     semantic_scholar_api_key: str,
@@ -177,7 +175,7 @@ def _prelinked_dataset_ingestion_flow(
     print("-" * 80)
     print("Pipeline Options:")
     print(f"Source: {source}")
-    print(f"Use Prod Database: {use_prod}")
+    print(f"Database Path: {database_path}")
     print(f"Use Coiled: {use_coiled}")
     print(f"Coiled Region: {coiled_region}")
     print(f"Batch Size: {batch_size}")
@@ -204,7 +202,7 @@ def _prelinked_dataset_ingestion_flow(
     # Filter out already processed pairs
     stored_filtered_results = db_utils.filter_stored_pairs(
         code_filtered_results.successful_results,
-        use_prod=use_prod,
+        database_path=database_path,
     )
 
     # Filter out prior errored pairs if enabled
@@ -275,7 +273,7 @@ def _prelinked_dataset_ingestion_flow(
             # Store everything
             stored_futures = db_utils.store_full_details_task.map(
                 pair=github_futures,
-                use_prod=unmapped(use_prod),
+                database_path=unmapped(database_path),
             )
 
             # Match devs and researchers
@@ -293,7 +291,7 @@ def _prelinked_dataset_ingestion_flow(
             # Store the dev-researcher links
             stored_dev_researcher_futures = db_utils.store_dev_researcher_em_links_task.map(
                 pair=dev_researcher_futures,
-                use_prod=unmapped(use_prod),
+                database_path=unmapped(database_path),
             )
 
             # Store this batch's errored results
@@ -428,7 +426,9 @@ def _store_batch_results(
 @app.command()
 def prelinked_dataset_ingestion(
     source: str,
-    use_prod: bool = False,
+    database_path: str = typer.Argument(
+        help="Path to the SQLite database file to use.",
+    ),
     use_coiled: bool = False,
     coiled_region: str = "us-west-2",
     github_tokens_file: str = DEFAULT_GITHUB_TOKENS_FILE,
@@ -452,11 +452,6 @@ def prelinked_dataset_ingestion(
     # Create "results" dir
     current_datetime_dir.mkdir(exist_ok=True, parents=True)
     errored_store_path = current_datetime_dir / f"process-results-{source}-errored.parquet"
-
-    # Download latest if prod
-    if use_prod:
-        print("Downloading latest data files...")
-        download_rs_graph_data_files(force=True)
 
     # Keep track of duration
     start_dt = datetime.now()
@@ -483,7 +478,7 @@ def prelinked_dataset_ingestion(
     # Start the flow
     _prelinked_dataset_ingestion_flow(
         source=source,
-        use_prod=use_prod,
+        database_path=database_path,
         github_tokens_file=github_tokens_file,
         open_alex_tokens=open_alex_tokens,
         semantic_scholar_api_key=semantic_scholar_api_key,
@@ -499,10 +494,6 @@ def prelinked_dataset_ingestion(
     # End duration
     end_dt = datetime.now()
     end_dt = end_dt.replace(microsecond=0)
-
-    # Upload latest if prod
-    if use_prod:
-        upload_rs_graph_data_files()
 
     # Sum errors
     errored_df = pd.concat(
