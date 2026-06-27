@@ -3,8 +3,8 @@
 Dep. Variable:      document_log_fwci   R-squared:                       0.074
 Model:                            OLS   Adj. R-squared:                  0.072
 Method:                 Least Squares   F-statistic:                     34.85
-Date:                Tue, 14 Apr 2026   Prob (F-statistic):           2.15e-34
-Time:                        23:02:13   Log-Likelihood:                -3606.1
+Date:                Fri, 26 Jun 2026   Prob (F-statistic):           2.15e-34
+Time:                        23:10:20   Log-Likelihood:                -3606.1
 No. Observations:                2199   AIC:                             7224.
 Df Residuals:                    2193   BIC:                             7258.
 Df Model:                           5                                         

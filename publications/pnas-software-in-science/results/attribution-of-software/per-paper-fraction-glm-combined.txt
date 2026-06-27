@@ -4,23 +4,23 @@ Dep. Variable:     fraction_mentioned   No. Observations:                27299
 Model:                            GLM   Df Residuals:                    27288
 Model Family:                Binomial   Df Model:                           10
 Link Function:                  Logit   Scale:                          1.0000
-Method:                          IRLS   Log-Likelihood:                -6625.1
-Date:                Tue, 14 Apr 2026   Deviance:                       6003.7
-Time:                        15:53:33   Pearson chi2:                 6.50e+03
-No. Iterations:                     6   Pseudo R-squ. (CS):            0.01477
+Method:                          IRLS   Log-Likelihood:                -6625.2
+Date:                Fri, 26 Jun 2026   Deviance:                       6003.8
+Time:                        22:58:30   Pearson chi2:                 6.50e+03
+No. Iterations:                     6   Pseudo R-squ. (CS):            0.01476
 Covariance Type:                  HC1                                         
 ==========================================================================================================================
                                                              coef    std err          z      P>|z|      [0.025      0.975]
 --------------------------------------------------------------------------------------------------------------------------
-Intercept                                                 16.9340     14.279      1.186      0.236     -11.052      44.920
-C(document_field_name_pruned)[T.Computer Science]         -0.4739      0.034    -13.991      0.000      -0.540      -0.408
-C(document_field_name_pruned)[T.Engineering]              -0.2550      0.051     -4.966      0.000      -0.356      -0.154
-C(document_field_name_pruned)[T.Medicine]                  0.0210      0.051      0.414      0.679      -0.078       0.120
-C(document_field_name_pruned)[T.Other]                     0.0482      0.034      1.397      0.162      -0.019       0.116
-C(document_field_name_pruned)[T.Physics and Astronomy]     0.2765      0.057      4.828      0.000       0.164       0.389
-C(dominant_ecosystem)[T.r]                                 0.2864      0.031      9.101      0.000       0.225       0.348
-document_publication_year                                 -0.0090      0.007     -1.274      0.203      -0.023       0.005
-document_author_count                                     -0.0092      0.002     -4.099      0.000      -0.014      -0.005
-document_log_author_mean_citations                        -0.0567      0.008     -6.733      0.000      -0.073      -0.040
-n_imported                                                -0.0431      0.002    -23.153      0.000      -0.047      -0.039
+Intercept                                                 16.8667     14.281      1.181      0.238     -11.124      44.857
+C(document_field_name_pruned)[T.Computer Science]         -0.4742      0.034    -14.001      0.000      -0.541      -0.408
+C(document_field_name_pruned)[T.Engineering]              -0.2552      0.051     -4.970      0.000      -0.356      -0.155
+C(document_field_name_pruned)[T.Medicine]                  0.0216      0.051      0.427      0.670      -0.078       0.121
+C(document_field_name_pruned)[T.Other]                     0.0483      0.034      1.401      0.161      -0.019       0.116
+C(document_field_name_pruned)[T.Physics and Astronomy]     0.2762      0.057      4.824      0.000       0.164       0.388
+C(dominant_ecosystem)[T.r]                                 0.2858      0.031      9.082      0.000       0.224       0.347
+document_publication_year                                 -0.0090      0.007     -1.269      0.204      -0.023       0.005
+document_author_count                                     -0.0092      0.002     -4.109      0.000      -0.014      -0.005
+document_log_author_mean_citations                        -0.0565      0.008     -6.712      0.000      -0.073      -0.040
+n_imported                                                -0.0431      0.002    -23.146      0.000      -0.047      -0.039
 ==========================================================================================================================

@@ -1222,6 +1222,92 @@ def _compute_probability_of_mention_since_year_of_first_import(
     )
 
 
+def _plot_individual_library_trajectories_since_year_of_first_import(
+    imports_and_mentions_long_df: pl.DataFrame,
+) -> None:
+    # Mirror the "individual library trajectories" panel of the two-panel figure,
+    # but place years-since-first-import on the x-axis (matching the aggregate age plot
+    # in p-mention-given-import-vs-years-since-first-import.png) instead of publication year.
+    library_import_counts = (
+        imports_and_mentions_long_df.filter(pl.col("is_imported"))
+        .group_by("library_name_normalized")
+        .agg(total_imports=pl.len())
+        .filter(pl.col("total_imports") >= 20)
+    )
+    libraries_to_investigate = library_import_counts.get_column(
+        "library_name_normalized"
+    ).to_list()
+
+    imported_df = imports_and_mentions_long_df.filter(
+        pl.col("library_name_normalized").is_in(libraries_to_investigate)
+        & pl.col("is_imported")
+    )
+
+    # Year of first import per library, then years since first import per row
+    first_import_year = imported_df.group_by("library_name_normalized").agg(
+        first_import_year=pl.col("publication_year").min()
+    )
+    per_library_years_since_first_import = (
+        imported_df.join(first_import_year, on="library_name_normalized", how="left")
+        .with_columns(
+            years_since_first_import=pl.col("publication_year") - pl.col("first_import_year")
+        )
+        .group_by("library_name_normalized", "years_since_first_import")
+        .agg(
+            n_imported=pl.len(),
+            n_mentioned=pl.sum("is_mentioned"),
+        )
+        .with_columns(
+            p_mention_given_import=(pl.col("n_mentioned") / pl.col("n_imported")),
+        )
+    )
+
+    # Spotlight libraries for this plot: Python giants only
+    # (torch and all R libraries are intentionally excluded here)
+    spotlight_libraries = [
+        "numpy",
+        "pandas",
+        "matplotlib",
+        "tensorflow",
+    ]
+
+    colors = plt.cm.tab10(np.linspace(0, 1, len(spotlight_libraries)))  # type: ignore
+
+    plt.figure(figsize=(6, 5))
+    for lib, color in zip(spotlight_libraries, colors, strict=True):
+        lib_data = (
+            per_library_years_since_first_import.filter(
+                (pl.col("library_name_normalized") == lib) & (pl.col("n_imported") >= 5)
+            )
+            .sort("years_since_first_import")
+            .to_pandas()
+        )
+        if len(lib_data) > 0:
+            plt.plot(
+                lib_data["years_since_first_import"],
+                lib_data["p_mention_given_import"],
+                "o-",
+                label=lib,
+                color=color,
+                linewidth=1.5,
+                markersize=4,
+            )
+
+    plt.xlabel("Years since first import")
+    plt.ylabel("p(mention | import)")
+    plt.title("Individual library trajectories\n(by years since first import)")
+    plt.ylim(bottom=0)
+    plt.gca().xaxis.set_major_locator(mticker.MaxNLocator(integer=True))
+    plt.legend(fontsize=8, loc="upper right", ncol=2)
+    plt.grid(True, ls="--", lw=0.5)
+    plt.tight_layout()
+    plt.savefig(
+        RESULTS_DIR / "p-mention-given-import-trajectories-vs-years-since-first-import.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+
 def _analysis_age_vs_popularity_logistic_regression(
     imports_and_mentions_long_df: pl.DataFrame,
     pair_metadata: pl.DataFrame,
@@ -2149,6 +2235,11 @@ def main(
 
     # Compute probability of mention given time since first import
     _compute_probability_of_mention_since_year_of_first_import(imports_and_mentions_long_df)
+
+    # Plot individual spotlight-library trajectories on a years-since-first-import x-axis
+    _plot_individual_library_trajectories_since_year_of_first_import(
+        imports_and_mentions_long_df
+    )
 
     # Analysis 1: Age vs popularity confounding (logistic regression)
     _analysis_age_vs_popularity_logistic_regression(imports_and_mentions_long_df, pair_metadata)

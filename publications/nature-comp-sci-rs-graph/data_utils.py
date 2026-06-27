@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import polars as pl
-from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
 
 ###############################################################################
@@ -13,21 +12,19 @@ from dotenv import load_dotenv
 DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-HF_DATASET = "sci-soft-collections/rs-graph-v2-full"
-
 ###############################################################################
 
 
-def load_table(table: str) -> pl.DataFrame:
-    """Load a single table from the HuggingFace dataset as a Polars DataFrame."""
-    ds = load_dataset(HF_DATASET, table, split="train")
-    assert isinstance(ds, Dataset)
-    df = pl.from_arrow(ds.data.table)
-    assert isinstance(df, pl.DataFrame)
-    return df
+def load_table(table: str, sqlite_database_path: Path) -> pl.DataFrame:
+    """Load a single table from the SQLite database as a Polars DataFrame."""
+    return pl.read_database_uri(
+        f"SELECT * FROM {table}",
+        f"sqlite:///{sqlite_database_path}",
+    )
 
 
 def load_base_dataset(
+    sqlite_database_path: Path | str,
     one_to_one_only: bool = False,
     min_year: int = 2008,
     confidence_threshold: float = 0.9994,
@@ -36,14 +33,16 @@ def load_base_dataset(
     # Load environment variables from .env file (if it exists)
     load_dotenv()
 
-    documents = load_table("document")
-    article_repo_links = load_table("document_repository_link")
-    repositories = load_table("repository")
-    document_topics = load_table("document_topic")
-    topics = load_table("topic")
-    document_contributors = load_table("document_contributor")
-    researchers = load_table("researcher")
-    dataset_sources = load_table("dataset_source")
+    sqlite_database_path = Path(sqlite_database_path)
+
+    documents = load_table("document", sqlite_database_path)
+    article_repo_links = load_table("document_repository_link", sqlite_database_path)
+    repositories = load_table("repository", sqlite_database_path)
+    document_topics = load_table("document_topic", sqlite_database_path)
+    topics = load_table("topic", sqlite_database_path)
+    document_contributors = load_table("document_contributor", sqlite_database_path)
+    researchers = load_table("researcher", sqlite_database_path)
+    dataset_sources = load_table("dataset_source", sqlite_database_path)
 
     # Per-document author statistics (count, mean citations).
     document_author_stats = (
@@ -104,7 +103,7 @@ def load_base_dataset(
     # Parse publication date and extract year.
     merged = merged.with_columns(
         pl.col("document_publication_date")
-        .str.to_date("%Y-%m-%d")
+        .cast(pl.Date)
         .alias("document_publication_date_parsed"),
     ).with_columns(
         pl.col("document_publication_date_parsed").dt.year().alias("document_publication_year"),

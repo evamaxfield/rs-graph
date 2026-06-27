@@ -491,23 +491,34 @@ def _plot_coefficient_forest(
     output_filename: str,
     title: str,
 ) -> None:
-    """Forest plot of atypicality coefficients across ecosystems, faceted by outcome."""
+    """Forest plot of atypicality coefficients across ecosystems, stacked by outcome."""
+    # (outcome_variable, model_type, panel_title, xlabel)
     outcomes = [
         (
             "document_cited_by_count",
             model_types[0],
-            "NegBin coefficient for atypicality z-score (95% CI)",
+            "Total citations (Negative Binomial)",
+            "Atypicality coefficient (95% CI)",
         ),
         (
             "document_log_fwci",
             model_types[1],
-            "OLS coefficient for atypicality z-score (95% CI)",
+            "Field-weighted citation impact (OLS)",
+            "Atypicality coefficient (95% CI)",
         ),
     ]
-    ecosystems = sorted(summary_df.get_column("ecosystem").unique().to_list())
+    ecosystems = sorted(
+        e
+        for e in summary_df.get_column("ecosystem").unique().to_list()
+        if e != "cross-ecosystem"
+    )
+    ecosystem_display = {"py": "Python", "r": "R"}
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, max(3, len(ecosystems) * 1.0)), sharey=True)
-    for ax, (outcome, model_type, xlabel) in zip(axes, outcomes, strict=True):
+    # Stack the two outcome panels vertically (one on top of the other).
+    fig, axes = plt.subplots(
+        2, 1, figsize=(8, max(6, len(ecosystems) * 2.2)), sharex=False
+    )
+    for ax, (outcome, model_type, panel_title, xlabel) in zip(axes, outcomes, strict=True):
         sub = summary_df.filter(
             (pl.col("outcome_variable") == outcome) & (pl.col("model_type") == model_type)
         )
@@ -524,14 +535,18 @@ def _plot_coefficient_forest(
                     [r["ci_upper"] - r["atypicality_coefficient"]],
                 ],
                 fmt="o",
-                capsize=4,
+                markersize=9,
+                capsize=5,
+                linewidth=2,
             )
         ax.axvline(0, color="gray", linestyle="--", linewidth=0.8)
         ax.set_yticks(range(len(ecosystems)))
-        ax.set_yticklabels([e.title() if "-" in e else e.upper() for e in ecosystems])
+        ax.set_yticklabels([ecosystem_display.get(e, e) for e in ecosystems])
+        ax.set_ylim(-0.6, len(ecosystems) - 0.4)
         ax.set_xlabel(xlabel)
-        ax.set_title(outcome)
-    fig.suptitle(title)
+        ax.set_title(panel_title, fontsize=12, fontweight="bold")
+        ax.grid(axis="x", linestyle="--", linewidth=0.5, alpha=0.5)
+    fig.suptitle(title, fontsize=14, fontweight="bold")
     plt.tight_layout()
     plt.savefig(RESULTS_DIR / output_filename, dpi=300, bbox_inches="tight")
     plt.close()
@@ -1023,13 +1038,13 @@ def main(  # noqa: C901
         summary_stats_df,
         model_types=("Negative Binomial with controls", "OLS with controls"),
         output_filename="coefficient-forest-plot.png",
-        title="Atypicality coefficient across ecosystems and outcomes (with controls)",
+        title="Software atypicality vs. article impact\n(negative = more atypical papers have lower impact)",
     )
     _plot_coefficient_forest(
         summary_stats_df,
         model_types=("Negative Binomial", "OLS"),
         output_filename="coefficient-forest-plot-raw.png",
-        title="Atypicality coefficient across ecosystems and outcomes (raw / uncontrolled)",
+        title="Software atypicality vs. article impact (raw / uncontrolled)\n(negative = more atypical papers have lower impact)",
     )
 
     # Create dataframes of high-atypicality papers in each ecosystem

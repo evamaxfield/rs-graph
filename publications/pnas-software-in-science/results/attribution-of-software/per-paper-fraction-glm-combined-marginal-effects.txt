@@ -6,14 +6,14 @@ At:                           overall
 ==========================================================================================================================
                                                             dy/dx    std err          z      P>|z|      [0.025      0.975]
 --------------------------------------------------------------------------------------------------------------------------
-C(document_field_name_pruned)[T.Computer Science]         -0.0393      0.003    -13.877      0.000      -0.045      -0.034
-C(document_field_name_pruned)[T.Engineering]              -0.0211      0.004     -4.962      0.000      -0.029      -0.013
-C(document_field_name_pruned)[T.Medicine]                  0.0017      0.004      0.414      0.679      -0.006       0.010
-C(document_field_name_pruned)[T.Other]                     0.0040      0.003      1.397      0.162      -0.002       0.010
-C(document_field_name_pruned)[T.Physics and Astronomy]     0.0229      0.005      4.820      0.000       0.014       0.032
-C(dominant_ecosystem)[T.r]                                 0.0237      0.003      9.038      0.000       0.019       0.029
-document_publication_year                                 -0.0007      0.001     -1.274      0.203      -0.002       0.000
-document_author_count                                     -0.0008      0.000     -4.094      0.000      -0.001      -0.000
-document_log_author_mean_citations                        -0.0047      0.001     -6.713      0.000      -0.006      -0.003
-n_imported                                                -0.0036      0.000    -21.110      0.000      -0.004      -0.003
+C(document_field_name_pruned)[T.Computer Science]         -0.0393      0.003    -13.887      0.000      -0.045      -0.034
+C(document_field_name_pruned)[T.Engineering]              -0.0212      0.004     -4.966      0.000      -0.030      -0.013
+C(document_field_name_pruned)[T.Medicine]                  0.0018      0.004      0.427      0.670      -0.006       0.010
+C(document_field_name_pruned)[T.Other]                     0.0040      0.003      1.401      0.161      -0.002       0.010
+C(document_field_name_pruned)[T.Physics and Astronomy]     0.0229      0.005      4.815      0.000       0.014       0.032
+C(dominant_ecosystem)[T.r]                                 0.0237      0.003      9.020      0.000       0.019       0.029
+document_publication_year                                 -0.0007      0.001     -1.269      0.205      -0.002       0.000
+document_author_count                                     -0.0008      0.000     -4.105      0.000      -0.001      -0.000
+document_log_author_mean_citations                        -0.0047      0.001     -6.692      0.000      -0.006      -0.003
+n_imported                                                -0.0036      0.000    -21.105      0.000      -0.004      -0.003
 ==========================================================================================================================

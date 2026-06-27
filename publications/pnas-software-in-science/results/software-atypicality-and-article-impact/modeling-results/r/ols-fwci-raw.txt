@@ -3,8 +3,8 @@
 Dep. Variable:      document_log_fwci   R-squared:                       0.004
 Model:                            OLS   Adj. R-squared:                  0.004
 Method:                 Least Squares   F-statistic:                     32.10
-Date:                Tue, 14 Apr 2026   Prob (F-statistic):           1.51e-08
-Time:                        23:02:13   Log-Likelihood:                -12691.
+Date:                Fri, 26 Jun 2026   Prob (F-statistic):           1.51e-08
+Time:                        23:10:20   Log-Likelihood:                -12691.
 No. Observations:                7656   AIC:                         2.539e+04
 Df Residuals:                    7654   BIC:                         2.540e+04
 Df Model:                           1                                         
@@ -15,7 +15,7 @@ Covariance Type:            nonrobust
 Intercept                        1.0893      0.015     75.068      0.000       1.061       1.118
 document_atypicality_z_score     0.0822      0.015      5.666      0.000       0.054       0.111
 ==============================================================================
-Omnibus:                       88.066   Durbin-Watson:                   1.907
+Omnibus:                       88.066   Durbin-Watson:                   1.915
 Prob(Omnibus):                  0.000   Jarque-Bera (JB):               97.807
 Skew:                           0.223   Prob(JB):                     5.77e-22
 Kurtosis:                       3.329   Cond. No.                         1.00

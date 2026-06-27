@@ -9,165 +9,12 @@ import matplotlib.pyplot as plt
 import polars as pl
 import seaborn as sns
 import typer
-from datasets import Dataset, load_dataset
 
-###############################################################################
-
-HF_DATASET = "sci-soft-collections/rs-graph-v2-full"
+from data_utils import load_base_dataset, load_table
 
 ###############################################################################
 
 # Utilities
-
-
-def load_table(table: str) -> pl.DataFrame:
-    """Load a single table from the HuggingFace dataset as a Polars DataFrame."""
-    ds = load_dataset(HF_DATASET, table, split="train")
-    assert isinstance(ds, Dataset)
-    df = pl.from_arrow(ds.data.table)
-    assert isinstance(df, pl.DataFrame)
-    return df
-
-
-def load_base_dataset(
-    one_to_one_only: bool = False,
-    min_year: int = 2008,
-    confidence_threshold: float = 0.9994,
-    top_n_fields: int = 10,
-) -> pl.DataFrame:
-    documents = load_table("document")
-    article_repo_links = load_table("document_repository_link")
-    repositories = load_table("repository")
-    document_topics = load_table("document_topic")
-    topics = load_table("topic")
-    document_contributors = load_table("document_contributor")
-    researchers = load_table("researcher")
-    dataset_sources = load_table("dataset_source")
-
-    # Per-document author statistics (count, mean citations).
-    document_author_stats = (
-        document_contributors.join(
-            researchers.select(
-                pl.col("id").alias("researcher_id"),
-                pl.col("cited_by_count").alias("researcher_cited_by_count"),
-            ),
-            on="researcher_id",
-            how="left",
-        )
-        .group_by("document_id")
-        .agg(
-            pl.len().alias("document_author_count"),
-            pl.mean("researcher_cited_by_count").alias("document_author_mean_citations"),
-        )
-    )
-
-    # Top topic per document (highest score) → field name + domain name.
-    document_top_topics = (
-        document_topics.sort("score", descending=True)
-        .unique(subset="document_id", keep="first")
-        .join(
-            topics.select(
-                pl.col("id").alias("topic_id"),
-                pl.col("field_name").alias("document_field_name"),
-                pl.col("domain_name").alias("document_domain_name"),
-            ),
-            on="topic_id",
-        )
-        .select("document_id", "document_field_name", "document_domain_name")
-    )
-
-    # Build the merged base dataframe.
-    merged = (
-        article_repo_links.select(
-            pl.col("id").alias("document_repository_link_id"),
-            "document_id",
-            "repository_id",
-            "dataset_source_id",
-            "predictive_model_confidence",
-        )
-        .join(
-            documents.select(*[pl.col(c).alias(f"document_{c}") for c in documents.columns]),
-            on="document_id",
-        )
-        .join(
-            repositories.select(
-                *[pl.col(c).alias(f"repository_{c}") for c in repositories.columns]
-            ),
-            on="repository_id",
-        )
-        .join(document_top_topics, on="document_id")
-        .join(document_author_stats, on="document_id", how="left")
-    )
-
-    # Parse publication date and extract year.
-    merged = merged.with_columns(
-        pl.col("document_publication_date")
-        .str.to_date("%Y-%m-%d")
-        .alias("document_publication_date_parsed"),
-    ).with_columns(
-        pl.col("document_publication_date_parsed").dt.year().alias("document_publication_year"),
-    )
-
-    # Filter: published after GitHub's founding (2008).
-    merged = merged.filter(pl.col("document_publication_year") >= min_year)
-
-    # Filter: high-confidence or author-provided pairs (confidence > threshold or null).
-    merged = merged.filter(
-        (pl.col("predictive_model_confidence") > confidence_threshold)
-        | pl.col("predictive_model_confidence").is_null()
-    )
-
-    # Optional: restrict to strict 1:1 pairs (each document and repository appears once).
-    if one_to_one_only:
-        merged = merged.unique(subset="document_id", keep="none").unique(
-            subset="repository_id", keep="none"
-        )
-
-    # Prune field names: top N kept as-is, everything else → "Other".
-    top_field_names = (
-        merged.get_column("document_field_name")
-        .value_counts(sort=True)
-        .head(top_n_fields)
-        .get_column("document_field_name")
-        .to_list()
-    )
-    merged = merged.with_columns(
-        pl.when(pl.col("document_field_name").is_in(top_field_names))
-        .then(pl.col("document_field_name"))
-        .otherwise(pl.lit("Other"))
-        .alias("document_field_name_pruned")
-    )
-
-    # Add dataset source name from dataset_sources table.
-    merged = merged.join(
-        dataset_sources.select(
-            pl.col("id").alias("dataset_source_id"),
-            pl.col("name").alias("dataset_source_name"),
-        ),
-        on="dataset_source_id",
-        how="left",
-    )
-
-    # Convert dataset source name to canonical from shorthand
-    # pwc -> "Papers with Code"
-    merged = merged.with_columns(
-        pl.when(pl.col("dataset_source_name") == "pwc")
-        .then(pl.lit("Papers with Code"))
-        .when(pl.col("dataset_source_name") == "plos")
-        .then(pl.lit("PLOS"))
-        .when(pl.col("dataset_source_name") == "joss")
-        .then(pl.lit("JOSS"))
-        .when(pl.col("dataset_source_name") == "softwarex")
-        .then(pl.lit("SoftwareX"))
-        .when(pl.col("dataset_source_name") == "softcite_2025")
-        .then(pl.lit("SoftCite 2025"))
-        .when(pl.col("dataset_source_name") == "snowball-sampling-discovery")
-        .then(pl.lit("Mined"))
-        .otherwise(pl.col("dataset_source_name"))
-        .alias("dataset_source_name_canonical")
-    )
-
-    return merged
 
 
 def save_figure(fig: plt.Figure, stem: str, output_dir: Path) -> None:
@@ -204,6 +51,7 @@ app = typer.Typer()
 
 @app.command()
 def dataset_coverage_proportions(
+    sqlite_database_path: Path,
     one_to_one_only: bool = False,
     min_year: int = 2008,
     confidence_threshold: float = 0.9994,
@@ -215,6 +63,7 @@ def dataset_coverage_proportions(
 
     # Load the dataset
     merged = load_base_dataset(
+        sqlite_database_path,
         one_to_one_only=one_to_one_only,
         min_year=min_year,
         confidence_threshold=confidence_threshold,
@@ -244,73 +93,73 @@ def dataset_coverage_proportions(
     # "Ours - Without Papers with Code"
 
     # Get total counts for the three subsets overall
-    # total_pwc_count = len(merged.filter(pl.col("dataset_source_name_canonical") == "Papers with Code"))
-    # total_ours_all_count = len(merged)
-    # total_ours_no_pwc_count = len(merged.filter(pl.col("dataset_source_name_canonical") != "Papers with Code"))
+    total_pwc_count = len(merged.filter(pl.col("dataset_source_name_canonical") == "Papers with Code"))
+    total_ours_all_count = len(merged)
+    total_ours_no_pwc_count = len(merged.filter(pl.col("dataset_source_name_canonical") != "Papers with Code"))
 
-    # # Iter over the top 10 fields + "Other" and compute the proportion of pairs
-    # # in each dataset source "category"
-    # field_stats = []
-    # for field in merged.get_column("document_field_name_pruned").unique().to_list():
-    #     field_df = merged.filter(pl.col("document_field_name_pruned") == field)
-    #     pwc_count = len(field_df.filter(pl.col("dataset_source_name_canonical") == "Papers with Code"))
-    #     ours_all_count = len(field_df)
-    #     ours_no_pwc_count = len(
-    #         field_df.filter(pl.col("dataset_source_name_canonical") != "Papers with Code")
-    #     )
-    #     field_stats.append(
-    #         {
-    #             "field": field,
-    #             "pwc_count": pwc_count,
-    #             "pwc_proportion": pwc_count / total_pwc_count,
-    #             "ours_all_count": ours_all_count,
-    #             "ours_all_proportion": ours_all_count / total_ours_all_count,
-    #             "ours_no_pwc_count": ours_no_pwc_count,
-    #             "ours_no_pwc_proportion": ours_no_pwc_count / total_ours_no_pwc_count,
-    #         }
-    #     )
+    # Iter over the top 10 fields + "Other" and compute the proportion of pairs
+    # in each dataset source "category"
+    field_stats = []
+    for field in merged.get_column("document_field_name_pruned").unique().to_list():
+        field_df = merged.filter(pl.col("document_field_name_pruned") == field)
+        pwc_count = len(field_df.filter(pl.col("dataset_source_name_canonical") == "Papers with Code"))
+        ours_all_count = len(field_df)
+        ours_no_pwc_count = len(
+            field_df.filter(pl.col("dataset_source_name_canonical") != "Papers with Code")
+        )
+        field_stats.append(
+            {
+                "field": field,
+                "pwc_count": pwc_count,
+                "pwc_proportion": pwc_count / total_pwc_count,
+                "ours_all_count": ours_all_count,
+                "ours_all_proportion": ours_all_count / total_ours_all_count,
+                "ours_no_pwc_count": ours_no_pwc_count,
+                "ours_no_pwc_proportion": ours_no_pwc_count / total_ours_no_pwc_count,
+            }
+        )
 
-    # # Convert to frame and unpivot to long format for plotting
-    # field_stats_df = pl.DataFrame(field_stats).select(
-    #     "field",
-    #     "pwc_proportion",
-    #     "ours_all_proportion",
-    #     # "ours_no_pwc_proportion",
-    # ).unpivot(
-    #     on=[
-    #         "pwc_proportion",
-    #         "ours_all_proportion",
-    #         # "ours_no_pwc_proportion",
-    #     ],
-    #     index="field",
-    #     variable_name="dataset_source_category",
-    #     value_name="proportion",
-    # )
+    # Convert to frame and unpivot to long format for plotting
+    field_stats_df = pl.DataFrame(field_stats).select(
+        "field",
+        "pwc_proportion",
+        "ours_all_proportion",
+        # "ours_no_pwc_proportion",
+    ).unpivot(
+        on=[
+            "pwc_proportion",
+            "ours_all_proportion",
+            # "ours_no_pwc_proportion",
+        ],
+        index="field",
+        variable_name="dataset_source_category",
+        value_name="proportion",
+    )
 
-    # # Sort by proportion descending for better visualization
-    # field_stats_df = field_stats_df.sort("proportion", descending=True)
+    # Sort by proportion descending for better visualization
+    field_stats_df = field_stats_df.sort("proportion", descending=True)
 
-    # # Rename dataset source categories for better legend labels
-    # field_stats_df = field_stats_df.with_columns(
-    #     pl.when(pl.col("dataset_source_category") == "pwc_proportion")
-    #     .then(pl.lit("Papers with Code"))
-    #     .when(pl.col("dataset_source_category") == "ours_all_proportion")
-    #     .then(pl.lit("Ours - All Sources"))
-    #     # .when(pl.col("dataset_source_category") == "ours_no_pwc_proportion")
-    #     # .then(pl.lit("Ours - Without Papers with Code"))
-    #     .otherwise(pl.col("dataset_source_category"))
-    #     .alias("dataset_source_category")
-    # )
+    # Rename dataset source categories for better legend labels
+    field_stats_df = field_stats_df.with_columns(
+        pl.when(pl.col("dataset_source_category") == "pwc_proportion")
+        .then(pl.lit("Papers with Code"))
+        .when(pl.col("dataset_source_category") == "ours_all_proportion")
+        .then(pl.lit("Ours - All Sources"))
+        # .when(pl.col("dataset_source_category") == "ours_no_pwc_proportion")
+        # .then(pl.lit("Ours - Without Papers with Code"))
+        .otherwise(pl.col("dataset_source_category"))
+        .alias("dataset_source_category")
+    )
 
-    # # Make plot
-    # sns.barplot(
-    #     data=field_stats_df,
-    #     x="field",
-    #     y="proportion",
-    #     hue="dataset_source_category",
-    #     ax=axes[1, 0],
-    #     legend=False,
-    # )
+    # Make plot
+    sns.barplot(
+        data=field_stats_df,
+        x="field",
+        y="proportion",
+        hue="dataset_source_category",
+        ax=axes[1, 0],
+        legend=False,
+    )
 
     # Get order by getting count of pairs in each field
     field_display_order = (
@@ -354,13 +203,13 @@ def dataset_coverage_proportions(
     print("n repositories", merged.n_unique("repository_id"))
 
     # Load the document_contributors table
-    authors_df = load_table("document_contributor").filter(
+    authors_df = load_table("document_contributor", sqlite_database_path).filter(
         pl.col("document_id").is_in(merged.get_column("document_id").to_list())
     )
     print("n authors", authors_df.n_unique("researcher_id"))
 
     # Load the repository_contributors table
-    repo_contributors_df = load_table("repository_contributor").filter(
+    repo_contributors_df = load_table("repository_contributor", sqlite_database_path).filter(
         pl.col("repository_id").is_in(merged.get_column("repository_id").to_list())
     )
     print("n repo contributors", repo_contributors_df.n_unique("developer_account_id"))
@@ -371,11 +220,13 @@ def dataset_coverage_proportions(
     # Get the number of authorship edges
     print("n authorship edges", authors_df.height)
     print("n repository contribution edges", repo_contributors_df.height)
-    print("total edges", merged.height)
+    print("n article-repository edges", merged.height)
 
     # Load the researcher_developer_account_link table to get the
     # number of edges
-    researcher_developer_links_df = load_table("researcher_developer_account_link").filter(
+    researcher_developer_links_df = load_table(
+        "researcher_developer_account_link", sqlite_database_path
+    ).filter(
         pl.col("researcher_id").is_in(authors_df.get_column("researcher_id").to_list())
         | pl.col("developer_account_id").is_in(
             repo_contributors_df.get_column("developer_account_id").to_list()
