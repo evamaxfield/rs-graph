@@ -275,7 +275,7 @@ def process_github_repo(  # noqa: C901
             # header response for the page count after rel="last"
             # https://stackoverflow.com/a/70610670
             try:
-                params: dict[str, str | None | int] = {
+                params: dict[str, str | int | None] = {
                     "sha": default_branch,
                     "per_page": 1,
                     "page": 1,
@@ -547,6 +547,8 @@ def get_github_repos_for_developer(
         developer_repos = []
         for page in repo_pager:
             time.sleep(GITHUB_API_SLEEP_SECONDS)  # Sleep to avoid API limits
+            if page is None:
+                continue
             developer_repos.extend(page)
 
         # Get the GitHub response object

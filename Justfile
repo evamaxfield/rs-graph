@@ -35,7 +35,7 @@ install:
 lint:
 	-ruff check . --fix
 	-ruff format .
-	-zuban check
+	-pyrefly check
 
 ###############################################################################
 # Release and versioning

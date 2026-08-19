@@ -127,8 +127,12 @@ def compare_annotation_sets() -> None:
     base = (
         dfs["eva"]
         .select(
-            ["document_repository_link_id", "document_url", "repository_url"]
-            + ANNOTATION_COLUMNS
+            [
+                "document_repository_link_id",
+                "document_url",
+                "repository_url",
+                *ANNOTATION_COLUMNS,
+            ]
         )
         .rename({col: f"{col}_eva" for col in ANNOTATION_COLUMNS})
     )
@@ -136,7 +140,7 @@ def compare_annotation_sets() -> None:
     for annotator in ["sarah", "anna"]:
         other = (
             dfs[annotator]
-            .select(["document_repository_link_id"] + ANNOTATION_COLUMNS)
+            .select(["document_repository_link_id", *ANNOTATION_COLUMNS])
             .rename({col: f"{col}_{annotator}" for col in ANNOTATION_COLUMNS})
         )
         base = base.join(other, on="document_repository_link_id", how="inner")
@@ -164,7 +168,9 @@ def compare_annotation_sets() -> None:
         for name_a, name_b in pairs:
             va = annotator_vals[name_a]
             vb = annotator_vals[name_b]
-            valid = [(a, b) for a, b in zip(va, vb) if a is not None and b is not None]
+            valid = [
+                (a, b) for a, b in zip(va, vb, strict=False) if a is not None and b is not None
+            ]
             if len(valid) < 2:
                 typer.echo(f"  {name_a} vs {name_b}: N/A")
                 continue
@@ -173,7 +179,7 @@ def compare_annotation_sets() -> None:
             categories = sorted(set(a_arr) | set(b_arr))
             cat_idx = {c: i for i, c in enumerate(categories)}
             table = np.zeros((len(categories), len(categories)), dtype=int)
-            for a, b in zip(a_arr, b_arr):
+            for a, b in zip(a_arr, b_arr, strict=False):
                 table[cat_idx[a], cat_idx[b]] += 1
             kappa = cohens_kappa(table).kappa
             kappa_str = f"{kappa:.3f}" if not np.isnan(kappa) else "N/A (trivially perfect)"

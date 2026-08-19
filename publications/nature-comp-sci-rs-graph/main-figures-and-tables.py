@@ -454,7 +454,9 @@ def dependency_manifest_adoption(
 
     ax.set_xlabel("Publication Year")
     ax.set_ylabel("% of Article-Repository Pairs")
-    ax.legend(title="Dependency Type", bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
+    ax.legend(
+        title="Dependency Type", bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0
+    )
 
     save_figure(fig, "dependency-manifest-adoption", output_dir)
 
@@ -486,7 +488,9 @@ def article_fwci_distribution(
 
     fwci_median = df.get_column("document_fwci").median()
 
-    ax.axvline(1.0, color="black", linestyle="--", linewidth=1.5, label="FWCI = 1.0 (world avg.)")
+    ax.axvline(
+        1.0, color="black", linestyle="--", linewidth=1.5, label="FWCI = 1.0 (world avg.)"
+    )
     ax.axvline(
         fwci_median,
         color="red",

@@ -46,8 +46,6 @@ def _safe_get(data: dict | None, *keys: str, default: Any = None) -> Any:
 class MissingRequiredFieldError(ValueError):
     """Raised when a required field is missing from API response."""
 
-    pass
-
 
 def _require_field(data: dict, field: str, context: str) -> Any:
     """Get a required field from a dictionary, raising a descriptive error if missing."""
@@ -597,7 +595,7 @@ def process_article(  # noqa: C901
                 )
 
             # Cast to dict for type checker (pyalex.Work is an untyped dict subclass)
-            work = open_alex_work  # type: ignore[assignment]
+            work: dict[str, Any] = open_alex_work  # type: ignore[assignment]
 
         # For each author, create the Researcher
         if fetch_author_details:
@@ -705,15 +703,15 @@ def process_article(  # noqa: C901
         # Combine existing and new
         if existing_open_alex_results is None:
             return types.OpenAlexResultModels(
-                dataset_source_model=dataset_source,
-                primary_document_source_model=primary_document_source,
-                primary_location_model=primary_location,
-                best_oa_document_source_model=best_oa_document_source,
-                best_oa_location_model=best_oa_location,
+                dataset_source_model=dataset_source,  # type: ignore
+                primary_document_source_model=primary_document_source,  # type: ignore
+                primary_location_model=primary_location,  # type: ignore
+                best_oa_document_source_model=best_oa_document_source,  # type: ignore
+                best_oa_location_model=best_oa_location,  # type: ignore
                 document_model=document,
-                document_abstract_model=abstract_model,
-                document_alternate_dois=alternate_dois,
-                topic_details=all_topic_details,
+                document_abstract_model=abstract_model,  # type: ignore
+                document_alternate_dois=alternate_dois,  # type: ignore
+                topic_details=all_topic_details,  # type: ignore
                 researcher_details=all_researcher_details,
                 funding_instance_details=all_funding_instance_details,
             )

@@ -116,6 +116,9 @@ def get_dataset(
         # Be nice to APIs
         time.sleep(0.85)
 
+        if page is None:
+            continue
+
         # Get repo name, created at, and description
         software_x_repo_details = [
             {

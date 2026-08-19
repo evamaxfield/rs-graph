@@ -35,7 +35,7 @@ dependencies = [
 [project.optional-dependencies]
 lint = [
   "ruff>=0.12.12",
-  "zuban>=0.6.1",
+  "pyrefly>=1.2.0",
   "pyarrow-stubs>=20",
 ]
 dev = [
@@ -145,6 +145,7 @@ exclude = ["*docs/*", "*tests/*"]
 [tool.ruff]
 line-length = 96
 target-version = "py312"
+extend-exclude = ["notebooks/**"]
 lint.extend-select = [
     "E",      # style errors
     "F",      # flakes
@@ -173,11 +174,18 @@ lint.extend-ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"**/notebooks/*" = ["E501", "B018"]
 "**/publications/*" = ["E501", "B018"]
 "**/tests/*.py" = ["D"]
 "**/migrations/*.py" = ["D"]
 
-[tool.zuban]
-exclude = [".github", ".pre-commit-config.yaml", "pyproject.toml", "migrations/", "notebooks/*.ipynb"]
-exclude_gitignore = true
+[tool.pyrefly]
+project-excludes = ["migrations/**", "notebooks/**", "publications/**"]
+ignore-missing-imports = ["easyDataverse"]
+
+# `__tablename__` on every SQLModel subclass is flagged as an inconsistent override of
+# `StrippedSQLModel.__tablename__` because SQLModel's metaclass exposes it as a descriptor
+# while subclasses assign a plain str. This is a known SQLModel/pyrefly typing mismatch, not
+# a real bug in rs_graph/db/models.py, so the rule is disabled repo-wide rather than papered
+# over per-class.
+[tool.pyrefly.errors]
+bad-override = false
