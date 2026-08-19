@@ -515,9 +515,7 @@ def _plot_coefficient_forest(
     ecosystem_display = {"py": "Python", "r": "R"}
 
     # Stack the two outcome panels vertically (one on top of the other).
-    fig, axes = plt.subplots(
-        2, 1, figsize=(8, max(6, len(ecosystems) * 2.2)), sharex=False
-    )
+    fig, axes = plt.subplots(2, 1, figsize=(8, max(6, len(ecosystems) * 2.2)), sharex=False)
     for ax, (outcome, model_type, panel_title, xlabel) in zip(axes, outcomes, strict=True):
         sub = summary_df.filter(
             (pl.col("outcome_variable") == outcome) & (pl.col("model_type") == model_type)

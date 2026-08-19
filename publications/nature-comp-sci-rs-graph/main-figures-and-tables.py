@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 import polars as pl
 import seaborn as sns
 import typer
-
 from data_utils import load_base_dataset, load_table
 
 ###############################################################################
@@ -43,6 +42,75 @@ def save_table(df: pl.DataFrame, stem: str, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     df.write_csv(output_dir / f"{stem}.csv")
 
+
+###############################################################################
+
+# Dependency classification sets for Plot 2
+_TESTING_PKGS: set[str] = {
+    "pytest",
+    "pytest-cov",
+    "coverage",
+    "nose",
+    "nose2",
+    "unittest2",
+    "tox",
+    "nox",
+    "hypothesis",
+    "testthat",
+    "covr",
+    "tinytest",
+    "jest",
+    "mocha",
+    "jasmine",
+    "vitest",
+}
+_LINTING_PKGS: set[str] = {
+    "flake8",
+    "pylint",
+    "ruff",
+    "black",
+    "isort",
+    "autopep8",
+    "pycodestyle",
+    "bandit",
+    "pylama",
+    "pep8",
+    "pre-commit",
+    "lintr",
+    "styler",
+    "eslint",
+    "prettier",
+    "jshint",
+    "rubocop",
+    "hadolint",
+}
+_DOCS_PKGS: set[str] = {
+    "sphinx",
+    "mkdocs",
+    "pdoc",
+    "pdoc3",
+    "docutils",
+    "nbsphinx",
+    "sphinx-rtd-theme",
+    "myst-parser",
+    "pkgdown",
+    "roxygen2",
+    "jsdoc",
+    "typedoc",
+    "readthedocs",
+    "pydoc",
+    "sphinx-autodoc-typehints",
+}
+_TYPE_CHECKING_PKGS: set[str] = {
+    "mypy",
+    "pyright",
+    "pytype",
+    "pyre-check",
+    "typeguard",
+    "beartype",
+    "types-requests",
+    "types-setuptools",
+}
 
 ###############################################################################
 
@@ -93,16 +161,22 @@ def dataset_coverage_proportions(
     # "Ours - Without Papers with Code"
 
     # Get total counts for the three subsets overall
-    total_pwc_count = len(merged.filter(pl.col("dataset_source_name_canonical") == "Papers with Code"))
+    total_pwc_count = len(
+        merged.filter(pl.col("dataset_source_name_canonical") == "Papers with Code")
+    )
     total_ours_all_count = len(merged)
-    total_ours_no_pwc_count = len(merged.filter(pl.col("dataset_source_name_canonical") != "Papers with Code"))
+    total_ours_no_pwc_count = len(
+        merged.filter(pl.col("dataset_source_name_canonical") != "Papers with Code")
+    )
 
     # Iter over the top 10 fields + "Other" and compute the proportion of pairs
     # in each dataset source "category"
     field_stats = []
     for field in merged.get_column("document_field_name_pruned").unique().to_list():
         field_df = merged.filter(pl.col("document_field_name_pruned") == field)
-        pwc_count = len(field_df.filter(pl.col("dataset_source_name_canonical") == "Papers with Code"))
+        pwc_count = len(
+            field_df.filter(pl.col("dataset_source_name_canonical") == "Papers with Code")
+        )
         ours_all_count = len(field_df)
         ours_no_pwc_count = len(
             field_df.filter(pl.col("dataset_source_name_canonical") != "Papers with Code")
@@ -120,20 +194,24 @@ def dataset_coverage_proportions(
         )
 
     # Convert to frame and unpivot to long format for plotting
-    field_stats_df = pl.DataFrame(field_stats).select(
-        "field",
-        "pwc_proportion",
-        "ours_all_proportion",
-        # "ours_no_pwc_proportion",
-    ).unpivot(
-        on=[
+    field_stats_df = (
+        pl.DataFrame(field_stats)
+        .select(
+            "field",
             "pwc_proportion",
             "ours_all_proportion",
             # "ours_no_pwc_proportion",
-        ],
-        index="field",
-        variable_name="dataset_source_category",
-        value_name="proportion",
+        )
+        .unpivot(
+            on=[
+                "pwc_proportion",
+                "ours_all_proportion",
+                # "ours_no_pwc_proportion",
+            ],
+            index="field",
+            variable_name="dataset_source_category",
+            value_name="proportion",
+        )
     )
 
     # Sort by proportion descending for better visualization
@@ -239,6 +317,189 @@ def dataset_coverage_proportions(
 
     # Save the figure
     save_figure(fig, "dataset_coverage_proportions", output_dir)
+
+
+###############################################################################
+
+
+@app.command()
+def development_duration_distribution(
+    sqlite_database_path: Path,
+    output_dir: Path = Path("outputs"),
+) -> None:
+    evaplot.set_style("evaplot_rc")
+    colors = evaplot.set_cat_palette(n=11)
+
+    df = load_base_dataset(sqlite_database_path)
+
+    df = (
+        df.with_columns(
+            pl.col("repository_creation_datetime").cast(pl.Datetime("us")),
+            pl.col("repository_last_pushed_datetime").cast(pl.Datetime("us")),
+            pl.col("document_publication_date_parsed")
+            .cast(pl.Datetime("us"))
+            .alias("pub_datetime"),
+        )
+        .with_columns(
+            (pl.col("pub_datetime") - pl.col("repository_creation_datetime"))
+            .dt.total_days()
+            .alias("days_before_pub"),
+            (pl.col("repository_last_pushed_datetime") - pl.col("pub_datetime"))
+            .dt.total_days()
+            .alias("days_after_pub"),
+        )
+        .filter(
+            pl.col("days_before_pub").is_not_null() & pl.col("days_after_pub").is_not_null()
+        )
+    )
+
+    before_label = "Before Publication\n(neg.: created after pub.)"
+    after_label = "After Publication\n(neg.: last commit before pub.)"
+
+    box_df = pl.concat(
+        [
+            df.select(
+                pl.lit(before_label).alias("period"),
+                (pl.col("days_before_pub") / 365.25).alias("duration_years"),
+            ),
+            df.select(
+                pl.lit(after_label).alias("period"),
+                (pl.col("days_after_pub") / 365.25).alias("duration_years"),
+            ),
+        ]
+    )
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+
+    sns.boxplot(
+        data=box_df,
+        x="period",
+        y="duration_years",
+        ax=ax,
+        palette=colors,
+        order=[before_label, after_label],
+        showfliers=False,
+    )
+
+    ax.tick_params(axis="x", labelsize=8)
+    ax.set_xlabel("")
+    ax.set_ylabel("Duration (Years)")
+
+    save_figure(fig, "development-duration-distribution", output_dir)
+
+
+@app.command()
+def dependency_manifest_adoption(
+    sqlite_database_path: Path,
+    output_dir: Path = Path("outputs"),
+) -> None:
+    evaplot.set_style("evaplot_rc")
+    evaplot.set_cat_palette(n=5)
+
+    base_df = load_base_dataset(sqlite_database_path)
+    year_repo = base_df.select("repository_id", "document_publication_year").filter(
+        (pl.col("document_publication_year") > 2014)
+        & (pl.col("document_publication_year") <= 2025)
+    )
+
+    total_per_year = year_repo.group_by("document_publication_year").agg(
+        pl.len().alias("total")
+    )
+
+    deps = load_table("repository_dependency", sqlite_database_path)
+
+    categories: dict[str, pl.DataFrame] = {
+        "Any Manifest": deps,
+        "Testing": deps.filter(pl.col("software_name_normalized").is_in(list(_TESTING_PKGS))),
+        "Linting": deps.filter(pl.col("software_name_normalized").is_in(list(_LINTING_PKGS))),
+        "Documentation": deps.filter(
+            pl.col("software_name_normalized").is_in(list(_DOCS_PKGS))
+        ),
+        "Type Checking": deps.filter(
+            pl.col("software_name_normalized").is_in(list(_TYPE_CHECKING_PKGS))
+        ),
+    }
+
+    all_frames: list[pl.DataFrame] = []
+    for cat, cat_deps in categories.items():
+        cat_repos = cat_deps.select("repository_id").unique()
+        frame = (
+            year_repo.join(cat_repos, on="repository_id", how="semi")
+            .group_by("document_publication_year")
+            .agg(pl.len().alias("count"))
+            .join(total_per_year, on="document_publication_year")
+            .with_columns(
+                (pl.col("count") / pl.col("total") * 100).alias("pct_repos"),
+                pl.lit(cat).alias("category"),
+            )
+            .select("document_publication_year", "category", "pct_repos")
+        )
+        all_frames.append(frame)
+
+    adoption_df = pl.concat(all_frames).sort("document_publication_year")
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    sns.lineplot(
+        data=adoption_df,
+        x="document_publication_year",
+        y="pct_repos",
+        hue="category",
+        ax=ax,
+    )
+
+    all_years = sorted(adoption_df["document_publication_year"].unique().to_list())
+    ax.set_xticks(all_years)
+    ax.set_xticklabels([str(y) for y in all_years])
+
+    ax.set_xlabel("Publication Year")
+    ax.set_ylabel("% of Article-Repository Pairs")
+    ax.legend(title="Dependency Type", bbox_to_anchor=(1.02, 1), loc="upper left", borderaxespad=0)
+
+    save_figure(fig, "dependency-manifest-adoption", output_dir)
+
+
+@app.command()
+def article_fwci_distribution(
+    sqlite_database_path: Path,
+    output_dir: Path = Path("outputs"),
+) -> None:
+    evaplot.set_style("evaplot_rc")
+    colors = evaplot.set_cat_palette(n=11)
+
+    df = load_base_dataset(sqlite_database_path)
+    # Filter nulls and zeros; log scale requires positive values
+    df = df.filter(pl.col("document_fwci").is_not_null() & (pl.col("document_fwci") > 0))
+
+    fwci_99 = df.get_column("document_fwci").quantile(0.99)
+    df = df.filter(pl.col("document_fwci") <= fwci_99)
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+
+    sns.histplot(
+        data=df,
+        x="document_fwci",
+        ax=ax,
+        color=colors[2],
+        log_scale=True,
+    )
+
+    fwci_median = df.get_column("document_fwci").median()
+
+    ax.axvline(1.0, color="black", linestyle="--", linewidth=1.5, label="FWCI = 1.0 (world avg.)")
+    ax.axvline(
+        fwci_median,
+        color="red",
+        linestyle="-.",
+        linewidth=1.5,
+        label=f"Our Median: {fwci_median:.2f}",
+    )
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.38), ncols=2)
+
+    ax.set_xlabel("Field-Weighted Citation Impact (FWCI, log scale)")
+    ax.set_ylabel("Count")
+
+    save_figure(fig, "article-fwci-distribution", output_dir)
 
 
 ###############################################################################
