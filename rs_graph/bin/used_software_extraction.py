@@ -468,19 +468,65 @@ def _store_repo_result(result: RepoExtractionResult, database_path: str) -> None
 ###############################################################################
 
 
-def _lookup_document_id_by_doi(doi: str, session: Session) -> int | None:
-    """Look up a document ID by normalized DOI, checking Document and DocumentAlternateDOI."""
-    doc = session.exec(select(db_models.Document).where(db_models.Document.doi == doi)).first()
-    if doc is not None:
-        return doc.id
+def _bulk_lookup_document_ids_by_doi(dois: list[str], session: Session) -> dict[str, int]:
+    """Bulk look up document IDs for a batch of DOIs (Document, then DocumentAlternateDOI)."""
+    doc_id_by_doi: dict[str, int] = {
+        doi: doc_id
+        for doi, doc_id in session.exec(
+            select(db_models.Document.doi, db_models.Document.id).where(
+                col(db_models.Document.doi).in_(dois)
+            )
+        ).all()
+        if doc_id is not None
+    }
 
-    alt = session.exec(
-        select(db_models.DocumentAlternateDOI).where(db_models.DocumentAlternateDOI.doi == doi)
-    ).first()
-    if alt is not None:
-        return alt.document_id
+    remaining = [doi for doi in dois if doi not in doc_id_by_doi]
+    if remaining:
+        doc_id_by_doi.update(
+            session.exec(
+                select(
+                    db_models.DocumentAlternateDOI.doi,
+                    db_models.DocumentAlternateDOI.document_id,
+                ).where(col(db_models.DocumentAlternateDOI.doi).in_(remaining))
+            ).all()
+        )
 
-    return None
+    return doc_id_by_doi
+
+
+def _bulk_get_or_add_mentions(
+    candidates: list[db_models.DocumentSoftwareMention],
+    session: Session,
+) -> None:
+    """Add only mention candidates not already stored (document_id, name, mention_id)."""
+    if not candidates:
+        return
+
+    # Dedup within the batch itself, keyed on the model's actual unique constraint
+    deduped: dict[tuple[int, str, str], db_models.DocumentSoftwareMention] = {}
+    for candidate in candidates:
+        assert candidate.document_id is not None
+        key = (candidate.document_id, candidate.software_name, candidate.softcite_mention_id)
+        deduped.setdefault(key, candidate)
+
+    document_ids = {key[0] for key in deduped}
+    mention_ids = {key[2] for key in deduped}
+    existing_keys = set(
+        session.exec(
+            select(
+                col(db_models.DocumentSoftwareMention.document_id),
+                col(db_models.DocumentSoftwareMention.software_name),
+                col(db_models.DocumentSoftwareMention.softcite_mention_id),
+            ).where(
+                col(db_models.DocumentSoftwareMention.document_id).in_(document_ids),
+                col(db_models.DocumentSoftwareMention.softcite_mention_id).in_(mention_ids),
+            )
+        ).all()
+    )
+
+    session.add_all(
+        [candidate for key, candidate in deduped.items() if key not in existing_keys]
+    )
 
 
 @app.command()
@@ -559,7 +605,10 @@ def ingest_softcite_mentions(
         print("No new rows to process. Exiting.")
         return
 
-    # Process in batches of unique DOIs — document_id is looked up once per DOI
+    # Partition once so each DOI's rows are an O(1) dict lookup inside the batch loop
+    mentions_by_doi = df.partition_by("doi_normalized", as_dict=True)
+
+    # Process in batches of unique DOIs, with bulk document-id lookups per batch
     engine = db_utils.get_engine(database_path=database_path)
     matched_count = 0
     skipped_count = 0
@@ -568,9 +617,11 @@ def ingest_softcite_mentions(
     ]
     for doi_batch in tqdm(doi_batches, desc="Ingesting batches", total=len(doi_batches)):
         with Session(engine) as session:
+            document_ids_by_doi = _bulk_lookup_document_ids_by_doi(doi_batch, session)
+
+            candidates: list[db_models.DocumentSoftwareMention] = []
             for doi in doi_batch:
-                # Try DOI lookup
-                document_id = _lookup_document_id_by_doi(doi, session)
+                document_id = document_ids_by_doi.get(doi)
 
                 # Handle fast exit
                 if document_id is not None:
@@ -579,23 +630,23 @@ def ingest_softcite_mentions(
                     skipped_count += 1
                     continue
 
-                # Process all mentions
-                for row in df.filter(pl.col("doi_normalized") == doi).iter_rows(named=True):
+                # Collect all mentions for this DOI
+                for row in mentions_by_doi[(doi,)].iter_rows(named=True):
                     software_raw: str = row["software_raw"]
                     mention_id: str = row["software_mention_id"]
                     mention_context: str = row["context_full_text"]
 
-                    db_utils._get_or_add_and_flush(
+                    candidates.append(
                         db_models.DocumentSoftwareMention(
                             document_id=document_id,
                             software_name=software_raw,
                             software_name_normalized=normalize_name(software_raw),
                             softcite_mention_id=mention_id,
                             mention_context=mention_context,
-                        ),
-                        session,
+                        )
                     )
 
+            _bulk_get_or_add_mentions(candidates, session)
             session.commit()
 
     print(f"Done. Matched: {matched_count} | Skipped (no DB match): {skipped_count}")
