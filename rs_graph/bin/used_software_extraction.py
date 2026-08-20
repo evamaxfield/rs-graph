@@ -137,7 +137,7 @@ class _TqdmProgress(RemoteProgress):
             else:
                 self._tqdm.update(cur - self._tqdm.n)
             if message:
-                self._tqdm.set_postfix_str(str(message))
+                self._tqdm.set_postfix_str(message)
         except Exception:
             pass
 
@@ -222,6 +222,7 @@ def _clone_repo(repo_path: Path, repo_full_name: str) -> None | types.ErrorResul
                 f"https://github.com/{repo_full_name}.git",
                 str(repo_path),
                 progress=progress,  # type: ignore[arg-type]
+                multi_options=["--depth=1", "--single-branch"],
             )
         return None
     except GitCommandError as e:
@@ -300,6 +301,7 @@ def _get_dependencies(
             capture_output=True,
             text=True,
             check=False,
+            timeout=90,
         )
         if dep_proc.returncode == 0 and dep_proc.stdout.strip():
             raw_deps: list[dict] = json.loads(dep_proc.stdout) or []
@@ -341,6 +343,14 @@ def _get_dependencies(
             raise RuntimeError(
                 f"git-pkgs failed with code {dep_proc.returncode}: {dep_proc.stderr}"
             )
+    except subprocess.TimeoutExpired:
+        return types.ErrorResult(
+            source="used-software-extraction",
+            step="get_dependencies",
+            identifier=repo_full_name,
+            error="git-pkgs timed out after 90 seconds",
+            traceback=traceback.format_exc(),
+        )
     except Exception as e:
         return types.ErrorResult(
             source="used-software-extraction",
@@ -385,36 +395,74 @@ def _extract_repo_imports_and_deps(
     )
 
 
+def _bulk_get_or_add(
+    model_cls: type[db_models.RepositoryImport] | type[db_models.RepositoryDependency],
+    repository_id: int,
+    candidates: list[db_models.RepositoryImport] | list[db_models.RepositoryDependency],
+    session: Session,
+) -> None:
+    """Add only the candidates whose (repository_id, software_name) isn't already stored."""
+    if not candidates:
+        return
+
+    # Dedup within the batch itself, keeping first occurrence per software_name
+    deduped: dict[str, db_models.RepositoryImport | db_models.RepositoryDependency] = {}
+    for candidate in candidates:
+        deduped.setdefault(candidate.software_name, candidate)
+
+    # Single bulk lookup for names already stored for this repository
+    existing_names = set(
+        session.exec(
+            select(col(model_cls.software_name)).where(
+                col(model_cls.repository_id) == repository_id,
+                col(model_cls.software_name).in_(list(deduped)),
+            )
+        ).all()
+    )
+
+    session.add_all(
+        [candidate for name, candidate in deduped.items() if name not in existing_names]
+    )
+
+
 def _store_repo_result(result: RepoExtractionResult, database_path: str) -> None:
     """Store extraction results to RepositoryImport and RepositoryDependency tables."""
     engine = db_utils.get_engine(database_path=database_path)
     with Session(engine) as session:
-        for record in result.imports:
-            db_utils._get_or_add_and_flush(
-                db_models.RepositoryImport(
-                    repository_id=result.repository_id,
-                    software_name=record.software_name,
-                    software_name_normalized=normalize_name(record.software_name),
-                    file_paths=record.file_paths,
-                ),
-                session,
+        import_candidates = [
+            db_models.RepositoryImport(
+                repository_id=result.repository_id,
+                software_name=record.software_name,
+                software_name_normalized=normalize_name(record.software_name),
+                file_paths=record.file_paths,
             )
-            time.sleep(0.02)
-        for record in result.dependencies:
-            db_utils._get_or_add_and_flush(
-                db_models.RepositoryDependency(
-                    repository_id=result.repository_id,
-                    software_name=record.software_name,
-                    software_name_normalized=normalize_name(record.software_name),
-                    version_spec=record.version_spec,
-                    ecosystem=record.ecosystem,
-                    dependency_type=record.dependency_type,
-                    manifest_paths=record.manifest_paths,
-                ),
-                session,
+            for record in result.imports
+        ]
+        dependency_candidates = [
+            db_models.RepositoryDependency(
+                repository_id=result.repository_id,
+                software_name=record.software_name,
+                software_name_normalized=normalize_name(record.software_name),
+                version_spec=record.version_spec,
+                ecosystem=record.ecosystem,
+                dependency_type=record.dependency_type,
+                manifest_paths=record.manifest_paths,
             )
-            time.sleep(0.02)
+            for record in result.dependencies
+        ]
+
+        _bulk_get_or_add(
+            db_models.RepositoryImport, result.repository_id, import_candidates, session
+        )
+        _bulk_get_or_add(
+            db_models.RepositoryDependency,
+            result.repository_id,
+            dependency_candidates,
+            session,
+        )
         session.commit()
+        # Give the (very large) SQLite file a moment to settle after each repo's write
+        time.sleep(0.02)
 
 
 ###############################################################################

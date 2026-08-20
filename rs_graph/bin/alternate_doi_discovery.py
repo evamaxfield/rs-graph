@@ -351,7 +351,7 @@ def get_documents_without_alternates(
 
         # Filter out documents that already have alternates processed
         doc_infos = [
-            DocumentDOIInfo(document_id=int(doc_id), doi=str(doi))
+            DocumentDOIInfo(document_id=doc_id, doi=doi)
             for doc_id, doi in results
             if doc_id is not None and doc_id not in existing_doc_ids
         ]
