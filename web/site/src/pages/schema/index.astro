@@ -143,7 +143,9 @@ import { families } from '../../lib/schemaData';
     el.textContent = '';
     el.append(
       document.createTextNode(original.slice(0, start)),
-      Object.assign(document.createElement('mark'), { textContent: original.slice(start, end) }),
+      Object.assign(document.createElement('mark'), {
+        textContent: original.slice(start, end),
+      }),
       document.createTextNode(original.slice(end)),
     );
   }

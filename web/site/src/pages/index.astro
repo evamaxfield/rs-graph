@@ -148,8 +148,7 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
       </p>
       <p class="body-sm hero__access-note">
         51.7% of linked repos carry a detected license (MIT 25.7% &middot; Apache-2.0 7.8%
-        &middot; GPLv3 6.9%): <a href={withBase('/#license-breakdown')}
-          >full breakdown &darr;</a
+        &middot; GPLv3 6.9%): <a href={withBase('/#license-breakdown')}>full breakdown &darr;</a
         >
       </p>
     </div>
@@ -184,9 +183,9 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
         "Using this dataset responsibly" section below for the full rationale.
       </p>
       <p class="body-sm">
-        Domain and field above are the two broadest levels of OpenAlex's 4-level topic hierarchy:
-        domain (broadest, 4 values) &gt; field (26 values, e.g. Genetics) &gt; subfield &gt;
-        topic (most granular). See the <a href={withBase('/schema#documents')}
+        Domain and field above are the two broadest levels of OpenAlex's 4-level topic
+        hierarchy: domain (broadest, 4 values) &gt; field (26 values, e.g. Genetics) &gt;
+        subfield &gt; topic (most granular). See the <a href={withBase('/schema#documents')}
           >Topic table on the Schema page</a
         > for all four levels.
       </p>
@@ -249,8 +248,8 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
             <article class="question">
               <h3 class="title-sm">1. How has dependency-manifest adoption grown over time?</h3>
               <p class="body-sm note">
-                Filtered using the recommended high-precision threshold. See "Using this
-                dataset responsibly" below.
+                Filtered using the recommended high-precision threshold. See "Using this dataset
+                responsibly" below.
               </p>
               <p class="body-md" id="q1-narrative">
                 <span id="q1-narrative-domain">All domains: </span>Adoption climbs from
@@ -291,12 +290,13 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
               <p class="body-sm note">
                 A direct follow-up to <a href="https://doi.org/10.1162/QSS.a.465"
                   >Code Contribution and Credit in Science</a
-                >: "does this replicate on v2?" Filtered using the recommended high-precision threshold.
+                >: "does this replicate on v2?" Filtered using the recommended high-precision
+                threshold.
               </p>
               <p class="body-md">
                 A "non-author contributor" here means someone who committed code to the linked
-                repository but is not listed as an author on the paper itself: code work that the
-                publication-credit system (authorship) doesn't recognize at all.
+                repository but is not listed as an author on the paper itself: code work that
+                the publication-credit system (authorship) doesn't recognize at all.
               </p>
               <div class="card-grid">
                 <div class="stat-tile">
@@ -332,8 +332,8 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
           <div data-tab-panel="q3" hidden>
             <article class="question">
               <h3 class="title-sm">
-                3. What libraries does this science actually run on, and does the paper text
-                say so?
+                3. What libraries does this science actually run on, and does the paper text say
+                so?
               </h3>
               <p class="body-md">
                 Three parallel rankings, all restricted to high-precision article-repository
@@ -389,12 +389,13 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
 
               <h4 class="body-md">Look up any library across all three views</h4>
               <p class="body-sm">
-                Union of the top {q3CrossView.top_n_per_view} libraries by count in each view
-                ({q3CrossView.rows.length} distinct names total). A dash means the library fell
-                outside that view's top {q3CrossView.top_n_per_view}, not that it was measured
-                and found at zero. Rows with a large rank spread across views (highlighted) are
-                the torch/pytorch-style pattern: a library imported under one name and discussed
-                in papers under another.
+                Union of the top {q3CrossView.top_n_per_view} libraries by count in each view ({
+                  q3CrossView.rows.length
+                } distinct names total). A dash means the library fell outside that view's top {
+                  q3CrossView.top_n_per_view
+                }, not that it was measured and found at zero. Rows with a large rank spread
+                across views (highlighted) are the torch/pytorch-style pattern: a library
+                imported under one name and discussed in papers under another.
               </p>
               <LibraryTable
                 id="chart-q3-cross-view"
@@ -528,7 +529,8 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
                 {bonusMaxDomain.pct}%, while{' '}
                 {bonusMinDomain.domain_name} trails at {bonusMinDomain.pct}%. The 5-library
                 canonical set is a judgment call (it excludes e.g. <code>xgboost</code> and
-                <code>transformers</code>), documented in the query below rather than picked ad hoc.
+                <code>transformers</code>), documented in the query below rather than picked ad
+                hoc.
               </p>
               <details>
                 <summary class="body-sm">View the query</summary>
@@ -572,9 +574,9 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
       <div class="accordion__body">
         <h3 class="title-sm">Confidence-threshold methodology</h3>
         <p class="body-sm">
-          <code>predictive_model_confidence</code> shows up in two different tables with two
-          different recommended thresholds -- don't conflate them. A separate publication-year
-          floor (2008) applies sitewide; see below.
+          <code>predictive_model_confidence</code> shows up in two different tables with two different
+          recommended thresholds -- don't conflate them. A separate publication-year floor (2008)
+          applies sitewide; see below.
         </p>
         <p class="body-sm">
           <code>document_repository_link.predictive_model_confidence</code> -- <code>NULL</code> means
@@ -637,8 +639,8 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
           >
           (excludes PII-bearing tables, sufficient for everything except Q2 above) and
           <code>evamxb/rs-graph-v2-full</code> (every table, needed for Q2 and author&harr;developer
-          identity work). <strong>Both are private today.</strong> To get access, open an issue
-          or email the maintainer for an <code>HF_TOKEN</code>; see the
+          identity work). <strong>Both are private today.</strong> To get access, open an issue or
+          email the maintainer for an <code>HF_TOKEN</code>; see the
           <a href="https://github.com/evamaxfield/rs-graph#rs-graph-v2">repo README</a> for the request
           path. There is no dataset revision/version number pinned anywhere yet -- note the date you
           pulled the data if reproducing a specific number matters.
@@ -672,8 +674,8 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
           <br /><em>(used rs-graph-v1, via Harvard Dataverse)</em>
         </p>
         <p class="body-sm">
-          Also in progress, with analysis/figure scripts only so far:
-          nature-comp-sci-rs-graph, pnas-software-in-science.
+          Also in progress, with analysis/figure scripts only so far: nature-comp-sci-rs-graph,
+          pnas-software-in-science.
         </p>
       </div>
     </details>

@@ -151,7 +151,9 @@ def run() -> dict:
                     int(row["import_rank"]) if row["import_rank"] is not None else None
                 ),
                 "dependency_count": (
-                    int(row["dependency_count"]) if row["dependency_count"] is not None else None
+                    int(row["dependency_count"])
+                    if row["dependency_count"] is not None
+                    else None
                 ),
                 "dependency_rank": (
                     int(row["dependency_rank"]) if row["dependency_rank"] is not None else None

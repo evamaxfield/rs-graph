@@ -17,7 +17,12 @@ interface Props {
 const { id, rows, topNPerView } = Astro.props;
 ---
 
-<div class="lib-table-wrap" id={id} data-payload={JSON.stringify(rows)} data-top-n={topNPerView}>
+<div
+  class="lib-table-wrap"
+  id={id}
+  data-payload={JSON.stringify(rows)}
+  data-top-n={topNPerView}
+>
   <input
     type="text"
     class="schema-search lib-table-search"
@@ -25,7 +30,9 @@ const { id, rows, topNPerView } = Astro.props;
     aria-label="Search libraries"
     data-lib-table-search
   />
-  <p class="body-sm lib-table-empty" data-lib-table-empty hidden>No libraries match your search.</p>
+  <p class="body-sm lib-table-empty" data-lib-table-empty hidden>
+    No libraries match your search.
+  </p>
   <div class="lib-table-scroll">
     <table class="lib-table">
       <thead>
@@ -53,8 +60,7 @@ const { id, rows, topNPerView } = Astro.props;
     mention_rank: number | null;
   }
 
-  const SORT_KEYS = ['import_count', 'dependency_count', 'mention_count'] as const;
-  type SortKey = 'name' | (typeof SORT_KEYS)[number];
+  type SortKey = 'name' | 'import_count' | 'dependency_count' | 'mention_count';
 
   // A rank spread of 200+ between the best and worst view a library appears in
   // is the torch/pytorch-style pattern -- named very differently depending on
