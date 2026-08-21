@@ -1,0 +1,238 @@
+---
+interface LibraryRow {
+  name: string;
+  import_count: number | null;
+  import_rank: number | null;
+  dependency_count: number | null;
+  dependency_rank: number | null;
+  dependency_top_ecosystem: string | null;
+  mention_count: number | null;
+  mention_rank: number | null;
+}
+interface Props {
+  id: string;
+  rows: LibraryRow[];
+  topNPerView: number;
+}
+const { id, rows, topNPerView } = Astro.props;
+---
+
+<div class="lib-table-wrap" id={id} data-payload={JSON.stringify(rows)} data-top-n={topNPerView}>
+  <input
+    type="text"
+    class="schema-search lib-table-search"
+    placeholder="Search for a library (e.g. torch, pytorch, pandas)"
+    aria-label="Search libraries"
+    data-lib-table-search
+  />
+  <p class="body-sm lib-table-empty" data-lib-table-empty hidden>No libraries match your search.</p>
+  <div class="lib-table-scroll">
+    <table class="lib-table">
+      <thead>
+        <tr>
+          <th data-sort-key="name" scope="col">Library</th>
+          <th data-sort-key="import_count" scope="col">Imports</th>
+          <th data-sort-key="dependency_count" scope="col">Dependencies</th>
+          <th data-sort-key="mention_count" scope="col">Mentions</th>
+        </tr>
+      </thead>
+      <tbody data-lib-table-body></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  interface LibraryRow {
+    name: string;
+    import_count: number | null;
+    import_rank: number | null;
+    dependency_count: number | null;
+    dependency_rank: number | null;
+    dependency_top_ecosystem: string | null;
+    mention_count: number | null;
+    mention_rank: number | null;
+  }
+
+  const SORT_KEYS = ['import_count', 'dependency_count', 'mention_count'] as const;
+  type SortKey = 'name' | (typeof SORT_KEYS)[number];
+
+  // A rank spread of 200+ between the best and worst view a library appears in
+  // is the torch/pytorch-style pattern -- named very differently depending on
+  // whether code imports it or a paper talks about it. Highlight those rows.
+  const RANK_SPREAD_HIGHLIGHT_THRESHOLD = 150;
+
+  function rankSpread(row: LibraryRow): number | null {
+    const ranks = [row.import_rank, row.dependency_rank, row.mention_rank].filter(
+      (r): r is number => r !== null,
+    );
+    if (ranks.length < 2) return null;
+    return Math.max(...ranks) - Math.min(...ranks);
+  }
+
+  function cell(count: number | null, rank: number | null, topN: number): string {
+    if (count === null) {
+      return `<td class="lib-table-dash" title="Outside the top ${topN} by this view">&mdash;</td>`;
+    }
+    return `<td>${count.toLocaleString()} <span class="lib-table-rank">(#${rank})</span></td>`;
+  }
+
+  function renderRows(
+    tbody: HTMLElement,
+    rows: LibraryRow[],
+    sortKey: SortKey,
+    descending: boolean,
+    topN: number,
+  ) {
+    const sorted = [...rows].sort((a, b) => {
+      let av: number | string;
+      let bv: number | string;
+      if (sortKey === 'name') {
+        av = a.name;
+        bv = b.name;
+      } else {
+        // Missing values always sort to the bottom regardless of direction --
+        // a null shouldn't get to masquerade as the "smallest" value on asc sort.
+        av = a[sortKey] ?? -Infinity;
+        bv = b[sortKey] ?? -Infinity;
+      }
+      if (av === bv) return 0;
+      const cmp = av < bv ? -1 : 1;
+      return descending ? -cmp : cmp;
+    });
+
+    tbody.innerHTML = sorted
+      .map((row) => {
+        const spread = rankSpread(row);
+        const highlight =
+          spread !== null && spread >= RANK_SPREAD_HIGHLIGHT_THRESHOLD ? ' data-highlight' : '';
+        const ecoNote = row.dependency_top_ecosystem
+          ? ` <span class="lib-table-eco">${row.dependency_top_ecosystem}</span>`
+          : '';
+        return `<tr${highlight}>
+          <td class="lib-table-name">${row.name}</td>
+          ${cell(row.import_count, row.import_rank, topN)}
+          ${cell(row.dependency_count, row.dependency_rank, topN).replace(
+            '</td>',
+            `${ecoNote}</td>`,
+          )}
+          ${cell(row.mention_count, row.mention_rank, topN)}
+        </tr>`;
+      })
+      .join('');
+  }
+
+  document.querySelectorAll<HTMLElement>('.lib-table-wrap').forEach((wrap) => {
+    const allRows: LibraryRow[] = JSON.parse(wrap.dataset.payload || '[]');
+    const topN = Number(wrap.dataset.topN) || 200;
+    const tbody = wrap.querySelector<HTMLElement>('[data-lib-table-body]')!;
+    const search = wrap.querySelector<HTMLInputElement>('[data-lib-table-search]')!;
+    const emptyMsg = wrap.querySelector<HTMLElement>('[data-lib-table-empty]')!;
+    const headers = wrap.querySelectorAll<HTMLElement>('th[data-sort-key]');
+
+    // Default sort is import_count descending, so the table isn't an
+    // alphabetical wall of 500 names on first paint -- imports is the widest,
+    // most complete-feeling view.
+    let sortKey: SortKey = 'import_count';
+    let descending = true;
+
+    function currentFiltered(): LibraryRow[] {
+      const query = search.value.trim().toLowerCase();
+      if (!query) return allRows;
+      return allRows.filter((r) => r.name.toLowerCase().includes(query));
+    }
+
+    function rerender() {
+      const filtered = currentFiltered();
+      emptyMsg.hidden = filtered.length > 0;
+      renderRows(tbody, filtered, sortKey, descending, topN);
+    }
+
+    search.addEventListener('input', rerender);
+
+    headers.forEach((th) => {
+      th.addEventListener('click', () => {
+        const key = th.dataset.sortKey as SortKey;
+        if (key === sortKey) {
+          descending = !descending;
+        } else {
+          sortKey = key;
+          descending = true;
+        }
+        headers.forEach((h) => h.removeAttribute('data-sort-active'));
+        th.dataset.sortActive = descending ? 'desc' : 'asc';
+        rerender();
+      });
+    });
+
+    const initialHeader = wrap.querySelector<HTMLElement>('[data-sort-key="import_count"]');
+    if (initialHeader) initialHeader.dataset.sortActive = 'desc';
+
+    rerender();
+  });
+</script>
+
+<style>
+  .lib-table-wrap {
+    margin-top: 1rem;
+  }
+  .lib-table-search {
+    margin-bottom: 0.75rem;
+  }
+  .lib-table-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    max-height: 28rem;
+    overflow-y: auto;
+  }
+  .lib-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+  .lib-table th {
+    position: sticky;
+    top: 0;
+    background: var(--color-bg-alt);
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .lib-table th[data-sort-active='desc']::after {
+    content: ' \25BC';
+  }
+  .lib-table th[data-sort-active='asc']::after {
+    content: ' \25B2';
+  }
+  /* tbody rows/cells are injected by client JS (see script above), so Astro's
+     scoped-style attribute is never attached to them -- these all need :global()
+     or the rule silently no-ops and falls back to global.scss's plain td style. */
+  .lib-table :global(td) {
+    padding: 0.4rem 0.75rem;
+    border-top: 1px solid var(--color-border);
+  }
+  .lib-table :global(.lib-table-name) {
+    font-weight: 600;
+  }
+  .lib-table :global(.lib-table-rank) {
+    color: var(--color-text-muted);
+    font-size: 0.8em;
+  }
+  .lib-table :global(.lib-table-eco) {
+    color: var(--color-text-muted);
+    font-size: 0.8em;
+  }
+  .lib-table :global(.lib-table-dash) {
+    color: var(--color-text-muted);
+    text-align: center;
+    cursor: help;
+  }
+  .lib-table :global(tr[data-highlight]) {
+    background: var(--color-highlight-bg);
+  }
+  .lib-table-empty {
+    padding: 0.5rem 0;
+  }
+</style>

@@ -12,7 +12,9 @@ repos = repos.with_columns(
 )
 repos = repos.filter(pl.col("creation_year") >= PUBLICATION_YEAR_FLOOR)
 
-repo_ids_with_deps = dependencies.select("repository_id").unique().with_columns(has_deps=True)
+repo_ids_with_deps = (
+    dependencies.select("repository_id").unique().with_columns(has_deps=True)
+)
 repos = repos.join(repo_ids_with_deps, left_on="id", right_on="repository_id", how="left")
 repos = repos.with_columns(pl.col("has_deps").fill_null(False))
 

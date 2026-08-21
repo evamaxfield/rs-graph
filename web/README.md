@@ -20,6 +20,7 @@ python3 -m venv .venv
 PYTHONPATH=. .venv/bin/python queries/dependency_manifest_growth.py
 PYTHONPATH=. .venv/bin/python queries/non_author_contributors.py
 PYTHONPATH=. .venv/bin/python queries/top_libraries.py
+PYTHONPATH=. .venv/bin/python queries/library_cross_view.py
 PYTHONPATH=. .venv/bin/python queries/embedding_clusters.py   # slow -- embeds + UMAPs a sample
 PYTHONPATH=. .venv/bin/python queries/repo_size_vs_impact.py  # AI4Science bonus card
 PYTHONPATH=. .venv/bin/python queries/home_stats.py

@@ -1,4 +1,4 @@
-"""License-mix note for the Limitations section: what can you actually reuse?
+"""License-mix note for the Limitations section: what can you actually reuse.
 
 Restricted to the same high-precision-linked repo population used everywhere
 else on the site -- see lib/confidence.py.
@@ -8,7 +8,6 @@ import json
 import os
 
 import polars as pl
-
 from lib.confidence import filter_high_precision_document_repository_links
 from lib.hf_loader import load_table
 
@@ -21,12 +20,16 @@ TOP_N = 8
 
 def run() -> dict:
     # --- site-snippet:start ---
-    hp_repo_ids = filter_high_precision_document_repository_links(
-        load_table("document_repository_link")
-    ).select("repository_id").unique()
+    hp_repo_ids = (
+        filter_high_precision_document_repository_links(load_table("document_repository_link"))
+        .select("repository_id")
+        .unique()
+    )
 
-    repos = load_table("repository").rename({"id": "repository_id"}).join(
-        hp_repo_ids, on="repository_id", how="inner"
+    repos = (
+        load_table("repository")
+        .rename({"id": "repository_id"})
+        .join(hp_repo_ids, on="repository_id", how="inner")
     )
     # --- site-snippet:end ---
 

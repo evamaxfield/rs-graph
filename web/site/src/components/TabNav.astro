@@ -19,11 +19,18 @@ const { tabs, nested = false, paramName } = Astro.props;
 
 <div class="tabnav-group" data-tabnav data-param-name={paramName}>
   <div class:list={['tabnav-buttons', nested && 'tabnav-buttons--nested']} role="tablist">
-    {tabs.map((t, i) => (
-      <button type="button" data-tab-target={t.id} aria-selected={i === 0 ? 'true' : 'false'} role="tab">
-        {t.label}
-      </button>
-    ))}
+    {
+      tabs.map((t, i) => (
+        <button
+          type="button"
+          data-tab-target={t.id}
+          aria-selected={i === 0 ? 'true' : 'false'}
+          role="tab"
+        >
+          {t.label}
+        </button>
+      ))
+    }
   </div>
   <slot />
 </div>
@@ -78,7 +85,9 @@ const { tabs, nested = false, paramName } = Astro.props;
       let wanted = params.get(paramName);
       if (!wanted) {
         for (const panel of panels) {
-          const nestedGroup = panel.querySelector<HTMLElement>('[data-tabnav][data-param-name]');
+          const nestedGroup = panel.querySelector<HTMLElement>(
+            '[data-tabnav][data-param-name]',
+          );
           const nestedParam = nestedGroup?.dataset.paramName;
           if (nestedParam && params.has(nestedParam)) {
             wanted = panel.dataset.tabPanel;

@@ -1,4 +1,4 @@
-"""Q1: How has dependency-manifest adoption grown over time?
+"""Q1: how dependency-manifest adoption has grown over time.
 
 For repositories in a high-precision article-repository link, what fraction
 declare at least one dependency (RepositoryDependency), by repo creation year.
@@ -14,7 +14,6 @@ import json
 import os
 
 import polars as pl
-
 from lib.confidence import (
     PUBLICATION_YEAR_FLOOR,
     filter_high_precision_document_repository_links,
@@ -42,7 +41,9 @@ def run() -> dict:
     )
     repos = repos.filter(pl.col("creation_year") >= PUBLICATION_YEAR_FLOOR)
 
-    repo_ids_with_deps = dependencies.select("repository_id").unique().with_columns(has_deps=True)
+    repo_ids_with_deps = (
+        dependencies.select("repository_id").unique().with_columns(has_deps=True)
+    )
     repos = repos.join(repo_ids_with_deps, left_on="id", right_on="repository_id", how="left")
     repos = repos.with_columns(pl.col("has_deps").fill_null(False))
 

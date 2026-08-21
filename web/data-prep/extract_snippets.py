@@ -12,9 +12,7 @@ START_MARKER = "# --- site-snippet:start ---"
 END_MARKER = "# --- site-snippet:end ---"
 
 QUERIES_DIR = os.path.join(os.path.dirname(__file__), "queries")
-GENERATED_DIR = os.path.join(
-    os.path.dirname(__file__), "..", "site", "src", "generated"
-)
+GENERATED_DIR = os.path.join(os.path.dirname(__file__), "..", "site", "src", "generated")
 
 
 def extract_snippet(path: str) -> str | None:

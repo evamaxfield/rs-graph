@@ -1,4 +1,4 @@
-"""Q4: Do clusters of science look different when you consider the code too?
+"""Q4: whether clusters of science look different when you consider the code too.
 
 Two side-by-side 2D UMAP embedding spaces -- one of repository text (name +
 description + README), one of article text (title + abstract) -- both colored
@@ -14,11 +14,10 @@ import os
 
 import numpy as np
 import polars as pl
-from sentence_transformers import SentenceTransformer
-from umap import UMAP
-
 from lib.confidence import filter_high_precision_document_repository_links
 from lib.hf_loader import load_table
+from sentence_transformers import SentenceTransformer
+from umap import UMAP
 
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "embedding_clusters.json")
 
@@ -63,15 +62,23 @@ def run() -> dict:
 
     readmes = (
         load_table("repository_readme")
-        .filter(pl.col("content").is_not_null() & (pl.col("content").str.len_chars() > MIN_TEXT_CHARS))
+        .filter(
+            pl.col("content").is_not_null()
+            & (pl.col("content").str.len_chars() > MIN_TEXT_CHARS)
+        )
         .select("repository_id", pl.col("content").alias("readme"))
     )
     abstracts = (
         load_table("document_abstract")
-        .filter(pl.col("content").is_not_null() & (pl.col("content").str.len_chars() > MIN_TEXT_CHARS))
+        .filter(
+            pl.col("content").is_not_null()
+            & (pl.col("content").str.len_chars() > MIN_TEXT_CHARS)
+        )
         .select("document_id", pl.col("content").alias("abstract"))
     )
-    repositories = load_table("repository").select("id", "owner", "name").rename({"id": "repository_id"})
+    repositories = (
+        load_table("repository").select("id", "owner", "name").rename({"id": "repository_id"})
+    )
     documents = load_table("document").select("id", "title").rename({"id": "document_id"})
     domains = _best_domain_per_document()
 
@@ -87,7 +94,9 @@ def run() -> dict:
     sample = sample.with_columns(
         (pl.col("owner") + "/" + pl.col("name")).alias("repo_full_name"),
         repo_text=(
-            pl.col("name").fill_null("") + " " + pl.col("readme").fill_null("").str.slice(0, 2000)
+            pl.col("name").fill_null("")
+            + " "
+            + pl.col("readme").fill_null("").str.slice(0, 2000)
         ),
         article_text=(pl.col("title").fill_null("") + " " + pl.col("abstract").fill_null("")),
     )
@@ -97,9 +106,9 @@ def run() -> dict:
     article_embeddings = model.encode(sample["article_text"].to_list(), show_progress_bar=False)
 
     n_neighbors = min(15, len(sample) - 1)
-    repo_2d = UMAP(n_neighbors=n_neighbors, min_dist=0.1, random_state=RANDOM_SEED).fit_transform(
-        np.asarray(repo_embeddings)
-    )
+    repo_2d = UMAP(
+        n_neighbors=n_neighbors, min_dist=0.1, random_state=RANDOM_SEED
+    ).fit_transform(np.asarray(repo_embeddings))
     article_2d = UMAP(
         n_neighbors=n_neighbors, min_dist=0.1, random_state=RANDOM_SEED
     ).fit_transform(np.asarray(article_embeddings))

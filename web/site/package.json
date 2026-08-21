@@ -3,10 +3,16 @@
   "type": "module",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "lint": "eslint .",
+    "format": "prettier --write \"src/**/*.{astro,ts,js,scss}\" \"*.mjs\"",
+    "format:check": "prettier --check \"src/**/*.{astro,ts,js,scss}\" \"*.mjs\""
   },
   "dependencies": {
     "@mozilla-protocol/core": "^22.0.0",
@@ -14,5 +20,13 @@
     "astro": "^5.1.0",
     "d3": "^7.9.0",
     "sass": "^1.99.0"
+  },
+  "devDependencies": {
+    "eslint": "^10.8.1",
+    "eslint-plugin-astro": "^3.1.0",
+    "prettier": "^3.9.6",
+    "prettier-plugin-astro": "^0.14.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0"
   }
 }

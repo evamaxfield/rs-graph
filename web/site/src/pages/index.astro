@@ -5,6 +5,7 @@ import TabNav from '../components/TabNav.astro';
 import LineChart from '../components/LineChart.astro';
 import BarChart from '../components/BarChart.astro';
 import ScatterChart from '../components/ScatterChart.astro';
+import LibraryTable from '../components/LibraryTable.astro';
 import CodeSnippet from '../components/CodeSnippet.astro';
 import { withBase } from '../lib/url';
 import { Code } from 'astro:components';
@@ -13,29 +14,35 @@ import homeStats from '../../public/data/home_stats.json';
 import q1 from '../../public/data/dependency_manifest_growth.json';
 import q2 from '../../public/data/non_author_contributors.json';
 import q3 from '../../public/data/top_libraries.json';
+import q3CrossView from '../../public/data/library_cross_view.json';
 import q4 from '../../public/data/embedding_clusters.json';
 import bonus from '../../public/data/ml_tooling_adoption.json';
 
 import q1Snippet from '../generated/dependency_manifest_growth.py.txt?raw';
 import q2Snippet from '../generated/non_author_contributors.py.txt?raw';
 import q3Snippet from '../generated/top_libraries.py.txt?raw';
+import q3CrossViewSnippet from '../generated/library_cross_view.py.txt?raw';
 import q4Snippet from '../generated/embedding_clusters.py.txt?raw';
 import bonusSnippet from '../generated/ml_tooling_adoption.py.txt?raw';
 
-const fieldOptions = q3.field_slices.map((f: { field_name: string }) => f.field_name);
 const domainCountEntries = Object.entries(q4.domain_counts as Record<string, number>).sort(
   (a, b) => b[1] - a[1],
 );
 const domainCountsSummary = domainCountEntries.map(([name, n]) => `${name} (${n})`).join(', ');
 
-const bonusDomainsByPct = [...bonus.domains].sort((a: { pct: number }, b: { pct: number }) => b.pct - a.pct);
+const bonusDomainsByPct = [...bonus.domains].sort(
+  (a: { pct: number }, b: { pct: number }) => b.pct - a.pct,
+);
 const bonusMaxDomain = bonusDomainsByPct[0];
 const bonusMinDomain = bonusDomainsByPct[bonusDomainsByPct.length - 1];
 
 // Q1 domain-filter dropdown options -- "All domains" (the original overall
 // series) plus one per top-4 domain, computed for real in dependency_manifest_growth.py.
 const q1FilterOptions = [
-  { label: 'All domains', data: q1.series.map((r: { year: number; pct: number }) => ({ year: r.year, pct: r.pct })) },
+  {
+    label: 'All domains',
+    data: q1.series.map((r: { year: number; pct: number }) => ({ year: r.year, pct: r.pct })),
+  },
   ...Object.entries(q1.domains as Record<string, { year: number; pct: number }[]>).map(
     ([domainName, series]) => ({
       label: domainName,
@@ -47,7 +54,11 @@ const q1FilterOptions = [
 // Q3 per-field library ranking dropdown -- one option per field already
 // present in field_slices, re-rendering the same bar chart in place.
 const q3FilterOptions = q3.field_slices.map(
-  (f: { field_name: string; n_repos: number; top_libraries: { name: string; pct: number }[] }) => ({
+  (f: {
+    field_name: string;
+    n_repos: number;
+    top_libraries: { name: string; pct: number }[];
+  }) => ({
     label: `${f.field_name} (n=${f.n_repos.toLocaleString()})`,
     data: f.top_libraries.map((l) => ({ name: l.name, count: l.pct })),
   }),
@@ -66,23 +77,6 @@ const questionTabs = [
   { id: 'q4', label: 'Q4: Code vs. text clusters' },
   { id: 'bonus', label: 'AI4Science bonus' },
 ];
-
-const quickstartSnippet = `pip install datasets polars
-
-from datasets import load_dataset
-import polars as pl
-
-def load_table(table: str) -> pl.DataFrame:
-    ds = load_dataset("evamxb/rs-graph-v2-full", table, split="train", token="<HF_TOKEN>")
-    return pl.from_arrow(ds.data.table)
-
-documents = load_table("document")
-article_repo_links = load_table("document_repository_link")
-repositories = load_table("repository")
-
-# Code-adjacent tables: README text + extracted imports (no raw source is stored)
-readmes = load_table("repository_readme")
-imports = load_table("repository_import")`;
 
 const loadingSnippet = `pip install datasets polars
 
@@ -140,8 +134,8 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
       <p class="body-lg hero__lede">
         RS-Graph connects {Math.round(homeStats.n_documents / 1000)}k+ academic papers to
         {Math.round(homeStats.n_repositories / 1000)}k+ code repositories (high-precision links,
-        {homeStats.year_min}–{homeStats.year_max}), tracking who wrote the paper, who wrote
-        the code, and whether those are the same people.
+        {homeStats.year_min}–{homeStats.year_max}), tracking who wrote the paper, who wrote the
+        code, and whether those are the same people.
       </p>
       <div class="hero__ctas">
         <a class="btn" href="#explore">Explore the data</a>
@@ -153,8 +147,10 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
         this dataset responsibly" below for the request path.
       </p>
       <p class="body-sm hero__access-note">
-        51.7% of linked repos carry a detected license (MIT 25.7% &middot; Apache-2.0 7.8% &middot;
-        GPLv3 6.9%) -- <a href={withBase('/#license-breakdown')}>full breakdown &darr;</a>
+        51.7% of linked repos carry a detected license (MIT 25.7% &middot; Apache-2.0 7.8%
+        &middot; GPLv3 6.9%): <a href={withBase('/#license-breakdown')}
+          >full breakdown &darr;</a
+        >
       </p>
     </div>
   </section>
@@ -164,33 +160,48 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
       <StatTile value={homeStats.n_documents.toLocaleString()} label="documents" />
       <StatTile value={homeStats.n_repositories.toLocaleString()} label="repositories" />
       <StatTile value={homeStats.n_links.toLocaleString()} label="article-repository links" />
-      <StatTile value={`${homeStats.year_min}–${homeStats.year_max}`} label="publication years" />
-      <StatTile value={homeStats.n_domains.toLocaleString()} label="research domains (broad, e.g. Life Sciences)" />
-      <StatTile value={homeStats.n_fields.toLocaleString()} label="research fields (specific, e.g. Genetics)" />
+      <StatTile
+        value={`${homeStats.year_min}–${homeStats.year_max}`}
+        label="publication years"
+      />
+      <StatTile
+        value={homeStats.n_domains.toLocaleString()}
+        label="research domains (broad, e.g. Life Sciences)"
+      />
+      <StatTile
+        value={homeStats.n_fields.toLocaleString()}
+        label="research fields (specific, e.g. Genetics)"
+      />
     </div>
     <details class="stats-footnote">
       <summary class="body-sm">How these numbers are filtered</summary>
       <p class="body-sm">
-        Already restricted to the high-precision population -- <code>document_repository_link</code>
-        filtered to <code>NULL OR confidence &gt;= 0.9994</code>, publication year &gt;= 2008 (GitHub's
-        launch; earlier dates on linked code are a data-encoding artifact). See the "Using this
-        dataset responsibly" section below for the full rationale.
+        Already restricted to the high-precision population: <code
+          >document_repository_link</code
+        >
+        filtered to <code>NULL OR confidence &gt;= 0.9994</code>, publication year &gt;= 2008
+        (GitHub's launch; earlier dates on linked code are a data-encoding artifact). See the
+        "Using this dataset responsibly" section below for the full rationale.
       </p>
       <p class="body-sm">
-        Domain and field above are the two broadest levels of OpenAlex's 4-level topic hierarchy --
-        domain (broadest, 4 values) &gt; field (26 values, e.g. Genetics) &gt; subfield &gt; topic
-        (most granular). See the <a href={withBase('/schema#documents')}>Topic table on the Schema
-        page</a> for all four levels.
+        Domain and field above are the two broadest levels of OpenAlex's 4-level topic hierarchy:
+        domain (broadest, 4 values) &gt; field (26 values, e.g. Genetics) &gt; subfield &gt;
+        topic (most granular). See the <a href={withBase('/schema#documents')}
+          >Topic table on the Schema page</a
+        > for all four levels.
       </p>
     </details>
   </section>
 
   <section class="container explore" id="explore">
     <h2 class="title-md">Loading the dataset &amp; example questions</h2>
-    <TabNav paramName="tab" tabs={[
-      { id: 'loading', label: 'Loading the Dataset' },
-      { id: 'examples', label: 'Example Questions' },
-    ]}>
+    <TabNav
+      paramName="tab"
+      tabs={[
+        { id: 'loading', label: 'Loading the Dataset' },
+        { id: 'examples', label: 'Example Questions' },
+      ]}
+    >
       <div data-tab-panel="loading">
         <p class="body-md intro">
           Every RS-Graph table is a separate HuggingFace dataset config under
@@ -198,13 +209,15 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
           polars.
         </p>
         <p class="body-sm quickstart-note">
-          Requires a HuggingFace access token -- both RS-Graph repos are private today. See
-          the "Using this dataset responsibly" section below for how to request one.
+          Requires a HuggingFace access token. Both RS-Graph repos are private today. See the
+          "Using this dataset responsibly" section below for how to request one.
         </p>
         <p class="body-sm quickstart-note">
           The snippet below loads <code>evamxb/rs-graph-v2-full</code>. For code-only analysis
-          (no author&harr;developer identity matching), request <code>evamxb/rs-graph-v2-redacted</code>
-          instead -- it excludes PII-bearing tables and is sufficient for everything except Q2.
+          (no author&harr;developer identity matching), request <code
+            >evamxb/rs-graph-v2-redacted</code
+          >
+          instead. It excludes PII-bearing tables and is sufficient for everything except Q2.
         </p>
         <Code
           code={loadingSnippet}
@@ -214,11 +227,13 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
           wrap
         />
         <p class="body-md">
-          Note the last join above: <code>repository_readme</code> and <code>repository_import</code>
-          are the two code-adjacent tables (README text and extracted library names) -- there is no
+          Note the last join above: <code>repository_readme</code> and <code
+            >repository_import</code
+          >
+          are the two code-adjacent tables (README text and extracted library names). There is no
           table containing actual source file contents. See
-          <a href={withBase('/schema#repositories-and-code')}>Repositories &amp; Code</a> on the
-          Schema page for what's actually stored.
+          <a href={withBase('/schema#repositories-and-code')}>Repositories &amp; Code</a> on the Schema
+          page for what's actually stored.
         </p>
       </div>
 
@@ -232,16 +247,25 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
         <TabNav nested paramName="q" tabs={questionTabs}>
           <div data-tab-panel="q1">
             <article class="question">
-              <h3 class="title-md">1. How has dependency-manifest adoption grown over time?</h3>
+              <h3 class="title-sm">1. How has dependency-manifest adoption grown over time?</h3>
               <p class="body-sm note">
-                Filtered using the recommended high-precision threshold -- see "Using this dataset
-                responsibly" below.
+                Filtered using the recommended high-precision threshold. See "Using this
+                dataset responsibly" below.
               </p>
               <p class="body-md" id="q1-narrative">
                 <span id="q1-narrative-domain">All domains: </span>Adoption climbs from
-                <strong id="q1-narrative-start">{q1.series.find((r: { year: number }) => r.year === 2015)?.pct}</strong>% of
-                repos created in 2015 to <strong id="q1-narrative-end">{q1.series.find((r: { year: number }) => r.year === 2025)?.pct}</strong>% by
-                2025 -- reproducibility practice is improving, but still leaves roughly <strong id="q1-narrative-remainder">{(100 - (q1.series.find((r: { year: number }) => r.year === 2025)?.pct ?? 0)).toFixed(1)}</strong>% of newly-created linked repos without a declared, installable environment.
+                <strong id="q1-narrative-start"
+                  >{q1.series.find((r: { year: number }) => r.year === 2015)?.pct}</strong
+                >% of repos created in 2015 to <strong id="q1-narrative-end"
+                  >{q1.series.find((r: { year: number }) => r.year === 2025)?.pct}</strong
+                >% by 2025. Reproducibility practice is improving, but still leaves roughly <strong
+                  id="q1-narrative-remainder"
+                  >{
+                    (
+                      100 - (q1.series.find((r: { year: number }) => r.year === 2025)?.pct ?? 0)
+                    ).toFixed(1)
+                  }</strong
+                >% of newly-created linked repos without a declared, installable environment.
               </p>
               <LineChart
                 id="chart-q1"
@@ -263,21 +287,25 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
 
           <div data-tab-panel="q2" hidden>
             <article class="question" id="q2">
-              <h3 class="title-md">2. Are code contributions recognized as authorship?</h3>
+              <h3 class="title-sm">2. Are code contributions recognized as authorship?</h3>
               <p class="body-sm note">
-                A direct follow-up to <a href="https://doi.org/10.1162/QSS.a.465">Code Contribution and Credit in Science</a> --
-                "does this replicate on v2?" Filtered using the recommended high-precision threshold.
+                A direct follow-up to <a href="https://doi.org/10.1162/QSS.a.465"
+                  >Code Contribution and Credit in Science</a
+                >: "does this replicate on v2?" Filtered using the recommended high-precision threshold.
               </p>
               <p class="body-md">
-                A "non-author contributor" here means someone who committed code to the linked repository
-                but is not listed as an author on the paper itself -- i.e. code work that the
-                publication-credit system (authorship) doesn't recognize at all. That's the citation/credit
-                gap this question measures.
+                A "non-author contributor" here means someone who committed code to the linked
+                repository but is not listed as an author on the paper itself: code work that the
+                publication-credit system (authorship) doesn't recognize at all.
               </p>
               <div class="card-grid">
                 <div class="stat-tile">
                   <span class="value">{q2.paper_equivalent.pct}%</span>
-                  <span class="label">v2, paper-equivalent filter (n={q2.paper_equivalent.n_qualifying_documents.toLocaleString()})</span>
+                  <span class="label"
+                    >v2, paper-equivalent filter (n={
+                      q2.paper_equivalent.n_qualifying_documents.toLocaleString()
+                    })</span
+                  >
                 </div>
                 <div class="stat-tile">
                   <span class="value">{q2.paper_equivalent.published_v1_finding_pct}%</span>
@@ -289,8 +317,10 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
                 </div>
               </div>
               <p class="body-sm">
-                {q2.paper_equivalent.pct}% lands almost exactly on the paper's own {q2.paper_equivalent.published_v1_finding_pct}% v1
-                finding -- a close replication once the correct confidence threshold is applied.
+                {q2.paper_equivalent.pct}% lands almost exactly on the paper's own {
+                  q2.paper_equivalent.published_v1_finding_pct
+                }% v1 finding, a close replication once the correct confidence threshold is
+                applied.
               </p>
               <details>
                 <summary class="body-sm">View the query</summary>
@@ -301,10 +331,14 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
 
           <div data-tab-panel="q3" hidden>
             <article class="question">
-              <h3 class="title-md">3. What libraries does this science actually run on -- and does the paper text say so?</h3>
+              <h3 class="title-sm">
+                3. What libraries does this science actually run on, and does the paper text
+                say so?
+              </h3>
               <p class="body-md">
-                Three parallel rankings, all restricted to high-precision article-repository links -- imported code,
-                manifest-declared dependencies (split by package ecosystem), and mentions in the paper text itself.
+                Three parallel rankings, all restricted to high-precision article-repository
+                links: imported code, manifest-declared dependencies (split by package
+                ecosystem), and mentions in the paper text itself.
               </p>
               <div class="chart-row">
                 <div>
@@ -313,25 +347,33 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
                 </div>
                 <div>
                   <h4 class="body-md">Top manifest-declared dependencies, by ecosystem</h4>
-                  <BarChart id="chart-q3-deps" data={q3.top_dependencies} colorField="ecosystem" />
+                  <BarChart
+                    id="chart-q3-deps"
+                    data={q3.top_dependencies}
+                    colorField="ecosystem"
+                  />
                 </div>
               </div>
               <p class="body-sm note">
-                Mentioned-in-text rankings are dominated by generic terms ("code", "scripts") -- SoftCite's NER-based
-                extraction catches common English words alongside real library names.
+                Mentioned-in-text rankings are dominated by generic terms ("code", "scripts") --
+                SoftCite's NER-based extraction catches common English words alongside real
+                library names.
               </p>
               <h4 class="body-md">Biggest import-vs-mention gap</h4>
               <p class="body-sm">
-                Code dependencies vastly outrun what gets named in the paper text -- {q3.import_vs_mention_gap[0].name} is
-                imported by {q3.import_vs_mention_gap[0].import_pct}% of repos but mentioned in only
-                {q3.import_vs_mention_gap[0].mention_pct}% of papers. This is the global figure across
-                all repos, not scoped to the field filter below.
+                Code dependencies vastly outrun what gets named in the paper text: {
+                  q3.import_vs_mention_gap[0].name
+                } is imported by {q3.import_vs_mention_gap[0].import_pct}% of repos but
+                mentioned in only
+                {q3.import_vs_mention_gap[0].mention_pct}% of papers -- a global figure across
+                all repos, not scoped to the field filter below. See the full cross-view lookup
+                table below for how any individual library's ranking shifts between imports,
+                dependencies, and mentions.
               </p>
               <h4 class="body-md">Per-field normalization</h4>
               <p class="body-sm note">
-                Note the axis change from the two charts above: this one is normalized to
-                percent of repos within the selected field, not the absolute repository counts
-                used above.
+                This chart normalizes to percent of repos within the selected field, not the
+                absolute repository counts used above.
               </p>
               <BarChart
                 id="chart-q3-field"
@@ -344,25 +386,53 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
                 <summary class="body-sm">View the query</summary>
                 <CodeSnippet code={q3Snippet} />
               </details>
+
+              <h4 class="body-md">Look up any library across all three views</h4>
+              <p class="body-sm">
+                Union of the top {q3CrossView.top_n_per_view} libraries by count in each view
+                ({q3CrossView.rows.length} distinct names total). A dash means the library fell
+                outside that view's top {q3CrossView.top_n_per_view}, not that it was measured
+                and found at zero. Rows with a large rank spread across views (highlighted) are
+                the torch/pytorch-style pattern: a library imported under one name and discussed
+                in papers under another.
+              </p>
+              <LibraryTable
+                id="chart-q3-cross-view"
+                rows={q3CrossView.rows}
+                topNPerView={q3CrossView.top_n_per_view}
+              />
+              <details>
+                <summary class="body-sm">View the query</summary>
+                <CodeSnippet code={q3CrossViewSnippet} />
+              </details>
             </article>
           </div>
 
           <div data-tab-panel="q4" hidden>
             <article class="question">
-              <h3 class="title-md">4. Do clusters of science look different when you consider the code too?</h3>
+              <h3 class="title-sm">
+                4. Do clusters of science look different when you consider the code too?
+              </h3>
               <p class="body-md">
-                Two side-by-side UMAP embedding spaces, colored by scientific domain -- one of repository text
-                (README + name), one of article text (title + abstract). Sample size: {q4.sample_size.toLocaleString()} pairs.
+                Two side-by-side UMAP embedding spaces, colored by scientific domain: one of
+                repository text (README + name), one of article text (title + abstract). Sample
+                size: {q4.sample_size.toLocaleString()} pairs.
               </p>
               <p class="body-sm note">{q4.note}</p>
               <p class="body-sm note">
-                The README/abstract pairing behind this chart is also a ready-made candidate benchmark for
-                code-adjacent-text&harr;natural-language retrieval or alignment tasks -- {q4.sample_size.toLocaleString()} real,
-                naturally-occurring pairs, no synthetic construction required.
+                The README/abstract pairing behind this chart is also a ready benchmark for
+                code-adjacent-text&harr;natural-language retrieval or alignment tasks: {
+                  q4.sample_size.toLocaleString()
+                } real, naturally-occurring pairs, no synthetic construction needed.
               </p>
               <p class="body-sm note">
-                Per-domain point counts in this sample: {domainCountsSummary}. Physical Sciences dominates
-                the sample -- read cluster shape with that skew in mind.
+                Per-domain point counts in this sample: {domainCountsSummary}. Physical Sciences
+                dominates the sample -- read cluster shape with that skew in mind.
+              </p>
+              <p class="body-sm note">
+                Hover a point in either panel to highlight the same article-repository pair in
+                the other, useful for checking whether a tight cluster in one space stays
+                together (or scatters) in the other.
               </p>
               <div class="chart-row">
                 <ScatterChart
@@ -372,6 +442,8 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
                   yField="repo_y"
                   colorField="domain_name"
                   title="Repository text"
+                  linkField="document_id"
+                  linkGroup="q4-umap"
                 />
                 <ScatterChart
                   id="chart-q4-article"
@@ -380,6 +452,8 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
                   yField="article_y"
                   colorField="domain_name"
                   title="Article text"
+                  linkField="document_id"
+                  linkGroup="q4-umap"
                 />
               </div>
               <details>
@@ -392,22 +466,45 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
           <div data-tab-panel="bonus" hidden>
             <article class="question card--bonus card">
               <span class="body-sm bonus-tag">AI4Science bonus -- not one of the four</span>
-              <h3 class="title-md">How has AI/ML-tooling adoption spread through scientific code, and does it vary by domain?</h3>
+              <h3 class="title-sm">
+                How has AI/ML-tooling adoption spread through scientific code, and does it vary
+                by domain?
+              </h3>
               <p class="body-md">
-                Repositories flagged by whether they import a canonical ML/AI library (<code>torch</code>,
-                <code>tensorflow</code>, <code>keras</code>, <code>jax</code>, <code>sklearn</code>), restricted to
-                high-precision article-repository links. This is the literal AI4Science question: not detecting
-                <a href={withBase('/#ai-signal-caveat')}>AI-written code</a>, but tracking how AI/ML methods get
-                adopted as instruments of science.
+                Repositories flagged by whether they import a canonical ML/AI library (<code
+                  >torch</code
+                >,
+                <code>tensorflow</code>, <code>keras</code>, <code>jax</code>, <code
+                  >sklearn</code
+                >), restricted to high-precision article-repository links. This is the literal
+                AI4Science question: not detecting
+                <a href={withBase('/#ai-signal-caveat')}>AI-written code</a>, but tracking how
+                AI/ML methods get adopted as instruments of science.
               </p>
               <div class="card-grid">
                 <div class="stat-tile">
-                  <span class="value">{bonus.series.find((r: { year: number }) => r.year === 2015)?.pct}%</span>
-                  <span class="label">of repos created in 2015 import an ML library (n={bonus.series.find((r: { year: number }) => r.year === 2015)?.total.toLocaleString()})</span>
+                  <span class="value"
+                    >{bonus.series.find((r: { year: number }) => r.year === 2015)?.pct}%</span
+                  >
+                  <span class="label"
+                    >of repos created in 2015 import an ML library (n={
+                      bonus.series
+                        .find((r: { year: number }) => r.year === 2015)
+                        ?.total.toLocaleString()
+                    })</span
+                  >
                 </div>
                 <div class="stat-tile">
-                  <span class="value">{bonus.series.find((r: { year: number }) => r.year === 2024)?.pct}%</span>
-                  <span class="label">by 2024 (n={bonus.series.find((r: { year: number }) => r.year === 2024)?.total.toLocaleString()})</span>
+                  <span class="value"
+                    >{bonus.series.find((r: { year: number }) => r.year === 2024)?.pct}%</span
+                  >
+                  <span class="label"
+                    >by 2024 (n={
+                      bonus.series
+                        .find((r: { year: number }) => r.year === 2024)
+                        ?.total.toLocaleString()
+                    })</span
+                  >
                 </div>
               </div>
               <LineChart
@@ -424,12 +521,14 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
                 colorField="domain_name"
               />
               <p class="body-sm note">
-                A clean, monotonic adoption curve -- {bonus.series.find((r: { year: number }) => r.year === 2015)?.pct}%
-                to {bonus.series.find((r: { year: number }) => r.year === 2024)?.pct}% in a decade -- and a nearly
-                2x spread by domain: {bonusMaxDomain.domain_name} leads at {bonusMaxDomain.pct}%, while{' '}
-                {bonusMinDomain.domain_name} trails at {bonusMinDomain.pct}%.
-                The 5-library canonical set is a judgment call -- it excludes e.g. <code>xgboost</code> and
-                <code>transformers</code> -- documented in the query below rather than picked ad hoc.
+                A clean, monotonic adoption curve: {
+                  bonus.series.find((r: { year: number }) => r.year === 2015)?.pct
+                }% to {bonus.series.find((r: { year: number }) => r.year === 2024)?.pct}% in a
+                decade, and a nearly 2x spread by domain -- {bonusMaxDomain.domain_name} leads at
+                {bonusMaxDomain.pct}%, while{' '}
+                {bonusMinDomain.domain_name} trails at {bonusMinDomain.pct}%. The 5-library
+                canonical set is a judgment call (it excludes e.g. <code>xgboost</code> and
+                <code>transformers</code>), documented in the query below rather than picked ad hoc.
               </p>
               <details>
                 <summary class="body-sm">View the query</summary>
@@ -448,17 +547,22 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
       <div class="accordion__body">
         <p class="body-sm">
           Every article-repository pair traces back to one of six upstream sources, recorded in
-          <code>dataset_source</code> and referenced by every <code>document_repository_link</code> row:
-          JOSS, PLOS, Papers with Code, SoftwareX, SoftCite 2025, and RS-Graph's own snowball-sampling
+          <code>dataset_source</code> and referenced by every <code
+            >document_repository_link</code
+          > row: JOSS, PLOS, Papers with Code, SoftwareX, SoftCite 2025, and RS-Graph's own snowball-sampling
           discovery model.
         </p>
         <p class="body-sm">
-          RS-Graph's ingestion pipeline retrieves article-repo pairs from a source, enriches article
-          metadata via OpenAlex and repository data via the GitHub API, matches authors to developers,
-          and stores everything in a SQLite database -- then publishes tables to HuggingFace via
-          console scripts such as <code>rs-graph-prelinked-dataset-ingestion</code> and
-          <code>rs-graph-upload-to-huggingface</code>. Want to add a data source, fix a bug, or discuss
-          the pipeline? Open an issue on <a href="https://github.com/evamaxfield/rs-graph">GitHub</a>.
+          RS-Graph's ingestion pipeline retrieves article-repo pairs from a source, enriches
+          article metadata via OpenAlex and repository data via the GitHub API, matches authors
+          to developers, and stores everything in a SQLite database. It then publishes tables to
+          HuggingFace via console scripts such as <code
+            >rs-graph-prelinked-dataset-ingestion</code
+          > and
+          <code>rs-graph-upload-to-huggingface</code>. To add a data source, fix a bug, or
+          discuss the pipeline, open an issue on <a
+            href="https://github.com/evamaxfield/rs-graph">GitHub</a
+          >.
         </p>
       </div>
     </details>
@@ -468,49 +572,73 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
       <div class="accordion__body">
         <h3 class="title-sm">Confidence-threshold methodology</h3>
         <p class="body-sm">
-          Two different fields, two different tables, two different recommended thresholds --
-          never conflate them, plus a publication-year floor applied everywhere on this site.
+          <code>predictive_model_confidence</code> shows up in two different tables with two
+          different recommended thresholds -- don't conflate them. A separate publication-year
+          floor (2008) applies sitewide; see below.
         </p>
         <p class="body-sm">
           <code>document_repository_link.predictive_model_confidence</code> -- <code>NULL</code> means
           curated ground truth (JOSS, PLOS, Papers with Code, SoftwareX, SoftCite), no model involved.
           A non-null value is the snowball-sampling-discovery model's own confidence.
-          <strong>Recommended filter:</strong> <code>IS NULL OR &gt;= 0.9994</code> (~0.99 precision).
-          Of 503,047 total links, the combined high-precision set is 282,057 links (56.1%), covering
-          275,255 documents and 268,873 repositories.
+          <strong>Recommended filter:</strong>
+          <code>IS NULL OR &gt;= 0.9994</code> (~0.99 precision). Of 503,047 total links, the combined
+          high-precision set is 282,057 links (56.1%), covering 275,255 documents and 268,873 repositories.
         </p>
         <p class="body-sm">
-          <code>researcher_developer_account_link.predictive_model_confidence</code> -- every row is
-          model-predicted, no curated case. <strong>Recommended filter:</strong> <code>&gt;= 0.9</code>
+          <code>researcher_developer_account_link.predictive_model_confidence</code> -- every row
+          is model-predicted, no curated case. <strong>Recommended filter:</strong>
+          <code>&gt;= 0.9</code>
           (retains 97.0% of links, 180,463 of 185,966).
         </p>
         <p class="body-sm">
-          <strong>Publication-year floor: 2008.</strong> GitHub launched February 2008; any document or
-          repository data implying earlier linked code is a data-encoding artifact, not a real
-          pre-GitHub repository. Every year-based stat/chart on this site filters to <code>&gt;= 2008</code>.
+          <strong>Publication-year floor: 2008.</strong> GitHub launched February 2008; any document
+          or repository data implying earlier linked code is a data-encoding artifact, not a real
+          pre-GitHub repository. Every year-based stat/chart on this site filters to <code
+            >&gt;= 2008</code
+          >.
         </p>
         <h3 class="title-sm">Limitations</h3>
         <ul class="body-sm limitations-list">
-          <li>Article-repository links are partly model-predicted -- see the confidence filter above.</li>
-          <li>Software-mention extraction (SoftCite NER) is noisy -- catches generic English words alongside real library names.</li>
-          <li>Author-developer matching has a real error rate even at the recommended threshold.</li>
+          <li>
+            Article-repository links are partly model-predicted -- see the confidence filter
+            above.
+          </li>
+          <li>
+            Software-mention extraction (SoftCite NER) is noisy -- catches generic English words
+            alongside real library names.
+          </li>
+          <li>
+            Author-developer matching has a real error rate even at the recommended threshold.
+          </li>
           <li>Coverage skews toward GitHub and Computer Science.</li>
           <li>API rate limits shaped ingestion order, not scientific importance.</li>
           <li id="license-breakdown">
-            Nearly half (48.3%) of the 268,873 high-precision-linked repos carry no detected license at
-            all; of the rest, MIT is 25.7%, Apache 2.0 is 7.8%, GPLv3 is 6.9%. Check <code>license</code>
+            Nearly half (48.3%) of the 268,873 high-precision-linked repos carry no detected
+            license at all; of the rest, MIT is 25.7%, Apache 2.0 is 7.8%, GPLv3 is 6.9%. Check <code
+              >license</code
+            >
             per-repository before training on or redistributing README/code-adjacent content at scale.
           </li>
-          <li id="ai-signal-caveat">No AI-authorship signal in the schema -- the closest proxy is <code>RepositoryImport.software_name_normalized</code>, i.e. whether a repo imports ML/AI tooling, not whether an AI agent wrote the code.</li>
-          <li>MPL-2.0 (footer) covers this repo's code, not the dataset -- treat the underlying papers'/repos' own licenses as controlling for redistribution.</li>
+          <li id="ai-signal-caveat">
+            No AI-authorship signal in the schema -- the closest proxy is <code
+              >RepositoryImport.software_name_normalized</code
+            >, i.e. whether a repo imports ML/AI tooling, not whether an AI agent wrote the
+            code.
+          </li>
+          <li>
+            MPL-2.0 (footer) covers this repo's code, not the dataset -- treat the underlying
+            papers'/repos' own licenses as controlling for redistribution.
+          </li>
         </ul>
         <h3 class="title-sm">Dataset versions &amp; access</h3>
         <p class="body-sm">
-          RS-Graph v2 ships as two HuggingFace dataset repos: <code>evamxb/rs-graph-v2-redacted</code>
+          RS-Graph v2 ships as two HuggingFace dataset repos: <code
+            >evamxb/rs-graph-v2-redacted</code
+          >
           (excludes PII-bearing tables, sufficient for everything except Q2 above) and
           <code>evamxb/rs-graph-v2-full</code> (every table, needed for Q2 and author&harr;developer
-          identity work). <strong>Both are private today</strong> -- to get access, open an issue or
-          email the maintainer for an <code>HF_TOKEN</code>; see the
+          identity work). <strong>Both are private today.</strong> To get access, open an issue
+          or email the maintainer for an <code>HF_TOKEN</code>; see the
           <a href="https://github.com/evamaxfield/rs-graph#rs-graph-v2">repo README</a> for the request
           path. There is no dataset revision/version number pinned anywhere yet -- note the date you
           pulled the data if reproducing a specific number matters.
@@ -525,8 +653,8 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
         <p class="body-sm">
           <strong>The dataset itself</strong> (v2, this site): there is no dataset DOI, Zenodo record,
           or <code>CITATION.cff</code> yet. Until one exists, cite the GitHub repository and the commit
-          you pulled data at (<code>git log -1 --format=%H</code>), per standard software-citation
-          practice for un-DOI'd artifacts.
+          you pulled data at (<code>git log -1 --format=%H</code>), per standard
+          software-citation practice for un-DOI'd artifacts.
         </p>
       </div>
     </details>
@@ -537,13 +665,14 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
         <p class="body-sm">
           <span class="badge badge--published body-sm">Published</span><br />
           <strong>Code Contribution and Credit in Science</strong><br />
-          Eva Maxfield Brown, Isaac Slaughter, Nicholas Weber &middot; Quantitative Science Studies (MIT Press)<br />
+          Eva Maxfield Brown, Isaac Slaughter, Nicholas Weber &middot; Quantitative Science Studies
+          (MIT Press)<br />
           <a href="https://doi.org/10.1162/QSS.a.465">https://doi.org/10.1162/QSS.a.465</a> &middot;
           <a href="https://arxiv.org/abs/2510.16242">arXiv preprint</a>
           <br /><em>(used rs-graph-v1, via Harvard Dataverse)</em>
         </p>
         <p class="body-sm">
-          Also in progress, no manuscript yet -- analysis/figure scripts only:
+          Also in progress, with analysis/figure scripts only so far:
           nature-comp-sci-rs-graph, pnas-software-in-science.
         </p>
       </div>
@@ -572,7 +701,9 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
     if (remainderEl && end !== undefined) remainderEl.textContent = (100 - end).toFixed(1);
   }
   function wireQ1Narrative() {
-    const select = document.querySelector<HTMLSelectElement>('[data-chart-filter-for="chart-q1"]');
+    const select = document.querySelector<HTMLSelectElement>(
+      '[data-chart-filter-for="chart-q1"]',
+    );
     if (!select || select.dataset.narrativeWired) return;
     select.dataset.narrativeWired = 'true';
     select.addEventListener('change', () => updateQ1Narrative(select));

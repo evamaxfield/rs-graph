@@ -1,4 +1,4 @@
-"""Q3: What libraries does this science actually run on -- and does the paper text say so?
+"""Q3: what libraries this science actually runs on, and whether the paper text says so.
 
 Three parallel rankings (imported, manifest-declared, mentioned-in-text), a
 per-scientific-field normalized breakdown, and an import-vs-mention gap metric.
@@ -11,7 +11,6 @@ import json
 import os
 
 import polars as pl
-
 from lib.confidence import filter_high_precision_document_repository_links
 from lib.hf_loader import load_table
 
@@ -38,9 +37,7 @@ def run() -> dict:
     hp_repo_ids = hp_links.select("repository_id").unique()
     hp_doc_ids = hp_links.select("document_id").unique()
 
-    imports = load_table("repository_import").join(
-        hp_repo_ids, on="repository_id", how="inner"
-    )
+    imports = load_table("repository_import").join(hp_repo_ids, on="repository_id", how="inner")
     dependencies = load_table("repository_dependency").join(
         hp_repo_ids, on="repository_id", how="inner"
     )
@@ -48,24 +45,28 @@ def run() -> dict:
         hp_doc_ids, on="document_id", how="inner"
     )
 
-    top_imports = _top_n_by_distinct(imports, "repository_id", "software_name_normalized", TOP_N)
-    top_mentions = _top_n_by_distinct(mentions, "document_id", "software_name_normalized", TOP_N)
+    top_imports = _top_n_by_distinct(
+        imports, "repository_id", "software_name_normalized", TOP_N
+    )
+    top_mentions = _top_n_by_distinct(
+        mentions, "document_id", "software_name_normalized", TOP_N
+    )
 
     # Top dependencies split by package ecosystem rather than pooled overall --
     # pooled top-10 is entirely pypi (scientific software skews Python), which
     # gives nothing to color-encode. Top N per ecosystem across the three
     # largest language ecosystems is the more informative, genuinely
     # multi-colored version of this chart.
-    TOP_ECOSYSTEMS = ["pypi", "npm", "cran"]
-    ECOSYSTEM_TOP_N = 5
+    top_ecosystems = ["pypi", "npm", "cran"]
+    ecosystem_top_n = 5
     dependencies_eco = dependencies.with_columns(pl.col("ecosystem").fill_null("unknown"))
     top_dependencies_rows = []
-    for ecosystem in TOP_ECOSYSTEMS:
+    for ecosystem in top_ecosystems:
         eco_top = _top_n_by_distinct(
             dependencies_eco.filter(pl.col("ecosystem") == ecosystem),
             "repository_id",
             "software_name_normalized",
-            ECOSYSTEM_TOP_N,
+            ecosystem_top_n,
         )
         for row in eco_top.iter_rows(named=True):
             top_dependencies_rows.append(
@@ -92,8 +93,8 @@ def run() -> dict:
         .select("repository_id", "field_name")
         .unique(subset=["repository_id"], keep="first")
     )
-    field_sizes = repo_field.group_by("field_name").agg(n_repos=pl.len()).sort(
-        "n_repos", descending=True
+    field_sizes = (
+        repo_field.group_by("field_name").agg(n_repos=pl.len()).sort("n_repos", descending=True)
     )
     top_fields = field_sizes.head(8)["field_name"].to_list()
 
@@ -131,9 +132,11 @@ def run() -> dict:
         .filter(pl.col("n") >= MIN_IMPORTING_REPOS_FOR_GAP)
         .with_columns(import_pct=(pl.col("n") / n_hp_repos * 100))
     )
-    mention_pcts = mentions.group_by("software_name_normalized").agg(
-        n_mentions=pl.col("document_id").n_unique()
-    ).with_columns(mention_pct=(pl.col("n_mentions") / n_hp_docs * 100))
+    mention_pcts = (
+        mentions.group_by("software_name_normalized")
+        .agg(n_mentions=pl.col("document_id").n_unique())
+        .with_columns(mention_pct=(pl.col("n_mentions") / n_hp_docs * 100))
+    )
     gap = (
         import_pcts.join(mention_pcts, on="software_name_normalized", how="left")
         .with_columns(pl.col("mention_pct").fill_null(0.0))
@@ -144,7 +147,10 @@ def run() -> dict:
     # --- site-snippet:end ---
 
     result = {
-        "question": "What libraries does this science actually run on -- and does the paper text say so?",
+        "question": (
+            "What libraries does this science actually run on -- "
+            "and does the paper text say so?"
+        ),
         "methodology": "document_repository_link filtered to NULL OR confidence >= 0.9994",
         "n_hp_repos": n_hp_repos,
         "n_hp_docs": n_hp_docs,

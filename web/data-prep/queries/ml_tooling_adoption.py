@@ -1,4 +1,4 @@
-"""AI4Science: how has ML/AI-library adoption spread through scientific code?
+"""AI4Science: how ML/AI-library adoption has spread through scientific code.
 
 For repositories in a high-precision article-repository link, flag any repo
 that imports a canonical ML/AI library (RepositoryImport.software_name_normalized
@@ -13,14 +13,15 @@ import json
 import os
 
 import polars as pl
-
 from lib.confidence import (
     PUBLICATION_YEAR_FLOOR,
     filter_high_precision_document_repository_links,
 )
 from lib.hf_loader import load_table
 
-OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "ml_tooling_adoption.json")
+OUTPUT_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "output", "ml_tooling_adoption.json"
+)
 
 # Canonical ML/AI library set. A judgment call -- excludes e.g. xgboost,
 # lightgbm, huggingface/transformers, onnx -- documented here rather than ad
@@ -78,9 +79,9 @@ def run() -> dict:
         .select("repository_id", "domain_name")
         .unique(subset=["repository_id"], keep="first")
     )
-    domain_repos = repo_domain.join(
-        ml_repo_ids, on="repository_id", how="left"
-    ).with_columns(pl.col("has_ml_import").fill_null(False))
+    domain_repos = repo_domain.join(ml_repo_ids, on="repository_id", how="left").with_columns(
+        pl.col("has_ml_import").fill_null(False)
+    )
     by_domain = (
         domain_repos.group_by("domain_name")
         .agg(total=pl.len(), with_ml=pl.col("has_ml_import").sum())
@@ -115,8 +116,9 @@ def run() -> dict:
         ),
         "methodology": (
             "document_repository_link filtered to NULL OR confidence >= 0.9994; "
-            f"repo creation_year >= {PUBLICATION_YEAR_FLOOR} and <= 2024 (2025 excluded, partial "
-            "year); ML/AI import set: torch/pytorch, tensorflow, keras, jax, sklearn/scikitlearn"
+            f"repo creation_year >= {PUBLICATION_YEAR_FLOOR} and <= 2024 "
+            "(2025 excluded, partial year); ML/AI import set: torch/pytorch, "
+            "tensorflow, keras, jax, sklearn/scikitlearn"
         ),
         "ml_library_names": sorted(ML_LIBRARY_NAMES),
         "series": series,

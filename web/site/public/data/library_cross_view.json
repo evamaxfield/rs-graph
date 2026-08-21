@@ -1,0 +1,5159 @@
+{
+  "question": "For a given library, where does it land across imports, declared dependencies, and paper-text mentions?",
+  "methodology": "Union of top-200-by-distinct-count in each of the three views (imports, dependencies pooled across ecosystems, mentions), restricted to high-precision article-repository links. A null count/rank means the library fell outside that view's top 200 -- not that it was measured and found at zero.",
+  "top_n_per_view": 200,
+  "n_hp_repos": 268873,
+  "n_hp_docs": 275255,
+  "rows": [
+    {
+      "name": "numpy",
+      "import_count": 162578,
+      "import_rank": 1,
+      "dependency_count": 66523,
+      "dependency_rank": 1,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": 1484,
+      "mention_rank": 13
+    },
+    {
+      "name": "torch",
+      "import_count": 106184,
+      "import_rank": 2,
+      "dependency_count": 42405,
+      "dependency_rank": 5,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "matplotlib",
+      "import_count": 105581,
+      "import_rank": 3,
+      "dependency_count": 46606,
+      "dependency_rank": 3,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": 1083,
+      "mention_rank": 17
+    },
+    {
+      "name": "scipy",
+      "import_count": 92146,
+      "import_rank": 4,
+      "dependency_count": 46655,
+      "dependency_rank": 2,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": 1649,
+      "mention_rank": 12
+    },
+    {
+      "name": "pandas",
+      "import_count": 85194,
+      "import_rank": 5,
+      "dependency_count": 42222,
+      "dependency_rank": 6,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": 346,
+      "mention_rank": 66
+    },
+    {
+      "name": "tqdm",
+      "import_count": 84171,
+      "import_rank": 6,
+      "dependency_count": 44220,
+      "dependency_rank": 4,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "sklearn",
+      "import_count": 69956,
+      "import_rank": 7,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 413,
+      "mention_rank": 54
+    },
+    {
+      "name": "torchvision",
+      "import_count": 49858,
+      "import_rank": 8,
+      "dependency_count": 29243,
+      "dependency_rank": 9,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pil",
+      "import_count": 49271,
+      "import_rank": 9,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "cv2",
+      "import_count": 36354,
+      "import_rank": 10,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "seaborn",
+      "import_count": 30846,
+      "import_rank": 11,
+      "dependency_count": 15773,
+      "dependency_rank": 28,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": 164,
+      "mention_rank": 164
+    },
+    {
+      "name": "transformers",
+      "import_count": 30179,
+      "import_rank": 12,
+      "dependency_count": 19613,
+      "dependency_rank": 15,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "yaml",
+      "import_count": 27466,
+      "import_rank": 13,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "tensorflow",
+      "import_count": 25879,
+      "import_rank": 14,
+      "dependency_count": 8496,
+      "dependency_rank": 87,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": 1898,
+      "mention_rank": 9
+    },
+    {
+      "name": "requests",
+      "import_count": 21402,
+      "import_rank": 15,
+      "dependency_count": 23694,
+      "dependency_rank": 12,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "skimage",
+      "import_count": 18615,
+      "import_rank": 16,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "wandb",
+      "import_count": 16463,
+      "import_rank": 17,
+      "dependency_count": 10924,
+      "dependency_rank": 58,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "h5py",
+      "import_count": 15802,
+      "import_rank": 18,
+      "dependency_count": 12882,
+      "dependency_rank": 43,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "nltk",
+      "import_count": 13547,
+      "import_rank": 19,
+      "dependency_count": 8792,
+      "dependency_rank": 82,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": 176,
+      "mention_rank": 150
+    },
+    {
+      "name": "einops",
+      "import_count": 13517,
+      "import_rank": 20,
+      "dependency_count": 10630,
+      "dependency_rank": 61,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "networkx",
+      "import_count": 12790,
+      "import_rank": 21,
+      "dependency_count": 16310,
+      "dependency_rank": 22,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": 256,
+      "mention_rank": 96
+    },
+    {
+      "name": "ipython",
+      "import_count": 11912,
+      "import_rank": 22,
+      "dependency_count": 13622,
+      "dependency_rank": 36,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": 184,
+      "mention_rank": 137
+    },
+    {
+      "name": "datasets",
+      "import_count": 11603,
+      "import_rank": 23,
+      "dependency_count": 9694,
+      "dependency_rank": 68,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pytest",
+      "import_count": 11565,
+      "import_rank": 24,
+      "dependency_count": 13164,
+      "dependency_rank": 41,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "tensorboardx",
+      "import_count": 11349,
+      "import_rank": 25,
+      "dependency_count": 7392,
+      "dependency_rank": 109,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "timm",
+      "import_count": 11187,
+      "import_rank": 26,
+      "dependency_count": 7834,
+      "dependency_rank": 104,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "mpltoolkits",
+      "import_count": 10652,
+      "import_rank": 27,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "ggplot2",
+      "import_count": 10517,
+      "import_rank": 28,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 361,
+      "mention_rank": 59
+    },
+    {
+      "name": "dplyr",
+      "import_count": 10190,
+      "import_rank": 29,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 246,
+      "mention_rank": 100
+    },
+    {
+      "name": "joblib",
+      "import_count": 9711,
+      "import_rank": 30,
+      "dependency_count": 16291,
+      "dependency_rank": 23,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "imageio",
+      "import_count": 9182,
+      "import_rank": 31,
+      "dependency_count": 9675,
+      "dependency_rank": 69,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "openai",
+      "import_count": 9038,
+      "import_rank": 32,
+      "dependency_count": 6198,
+      "dependency_rank": 153,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "omegaconf",
+      "import_count": 8900,
+      "import_rank": 33,
+      "dependency_count": 5479,
+      "dependency_rank": 186,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "six",
+      "import_count": 8571,
+      "import_rank": 34,
+      "dependency_count": 23818,
+      "dependency_rank": 11,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pytorchlightning",
+      "import_count": 8084,
+      "import_rank": 35,
+      "dependency_count": 5737,
+      "dependency_rank": 176,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "keras",
+      "import_count": 7573,
+      "import_rank": 36,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 654,
+      "mention_rank": 28
+    },
+    {
+      "name": "huggingfacehub",
+      "import_count": 7086,
+      "import_rank": 37,
+      "dependency_count": 9171,
+      "dependency_rank": 76,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "packaging",
+      "import_count": 6971,
+      "import_rank": 38,
+      "dependency_count": 18882,
+      "dependency_rank": 16,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "psutil",
+      "import_count": 6846,
+      "import_rank": 39,
+      "dependency_count": 13803,
+      "dependency_rank": 35,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "apex",
+      "import_count": 6785,
+      "import_rank": 40,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "tidyverse",
+      "import_count": 6008,
+      "import_rank": 41,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 293,
+      "mention_rank": 82
+    },
+    {
+      "name": "spacy",
+      "import_count": 5860,
+      "import_rank": 42,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 223,
+      "mention_rank": 119
+    },
+    {
+      "name": "pycocotools",
+      "import_count": 5848,
+      "import_rank": 43,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "torchgeometric",
+      "import_count": 5829,
+      "import_rank": 44,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "accelerate",
+      "import_count": 5720,
+      "import_rank": 45,
+      "dependency_count": 8533,
+      "dependency_rank": 86,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "numba",
+      "import_count": 5510,
+      "import_rank": 46,
+      "dependency_count": 7469,
+      "dependency_rank": 107,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "plotly",
+      "import_count": 5421,
+      "import_rank": 47,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "regex",
+      "import_count": 5358,
+      "import_rank": 48,
+      "dependency_count": 10271,
+      "dependency_rank": 65,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "hydra",
+      "import_count": 5286,
+      "import_rank": 49,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "torchmetrics",
+      "import_count": 5273,
+      "import_rank": 50,
+      "dependency_count": 5067,
+      "dependency_rank": 198,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "statsmodels",
+      "import_count": 5268,
+      "import_rank": 51,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 185,
+      "mention_rank": 135
+    },
+    {
+      "name": "google",
+      "import_count": 5231,
+      "import_rank": 52,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 657,
+      "mention_rank": 27
+    },
+    {
+      "name": "peft",
+      "import_count": 5182,
+      "import_rank": 53,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "gym",
+      "import_count": 5105,
+      "import_rank": 54,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "tidyr",
+      "import_count": 4441,
+      "import_rank": 55,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "tabulate",
+      "import_count": 4256,
+      "import_rank": 56,
+      "dependency_count": 6331,
+      "dependency_rank": 149,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "shapely",
+      "import_count": 4079,
+      "import_rank": 57,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "librosa",
+      "import_count": 4042,
+      "import_rank": 58,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "jax",
+      "import_count": 4025,
+      "import_rank": 59,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "stringr",
+      "import_count": 3972,
+      "import_rank": 60,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pkgresources",
+      "import_count": 3968,
+      "import_rank": 61,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "sentencetransformers",
+      "import_count": 3893,
+      "import_rank": 62,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "data.table",
+      "import_count": 3892,
+      "import_rank": 63,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "scales",
+      "import_count": 3840,
+      "import_rank": 64,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "easydict",
+      "import_count": 3815,
+      "import_rank": 65,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "bs4",
+      "import_count": 3787,
+      "import_rank": 66,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "albumentations",
+      "import_count": 3722,
+      "import_rank": 67,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "termcolor",
+      "import_count": 3684,
+      "import_rank": 68,
+      "dependency_count": 8028,
+      "dependency_rank": 99,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "faiss",
+      "import_count": 3661,
+      "import_rank": 69,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "open3d",
+      "import_count": 3564,
+      "import_rank": 70,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "sympy",
+      "import_count": 3546,
+      "import_rank": 71,
+      "dependency_count": 9299,
+      "dependency_rank": 74,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "mmcv",
+      "import_count": 3523,
+      "import_rank": 72,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "ipdb",
+      "import_count": 3504,
+      "import_rank": 73,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "absl",
+      "import_count": 3486,
+      "import_rank": 74,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "torchscatter",
+      "import_count": 3447,
+      "import_rank": 75,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "click",
+      "import_count": 3436,
+      "import_rank": 76,
+      "dependency_count": 13499,
+      "dependency_rank": 38,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "diffusers",
+      "import_count": 3433,
+      "import_rank": 77,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "torchaudio",
+      "import_count": 3417,
+      "import_rank": 78,
+      "dependency_count": 10072,
+      "dependency_rank": 66,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "reshape2",
+      "import_count": 3415,
+      "import_rank": 79,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pylab",
+      "import_count": 3379,
+      "import_rank": 80,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "ray",
+      "import_count": 3325,
+      "import_rank": 81,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pydantic",
+      "import_count": 3306,
+      "import_rank": 82,
+      "dependency_count": 6702,
+      "dependency_rank": 139,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "gensim",
+      "import_count": 3276,
+      "import_rank": 83,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 160,
+      "mention_rank": 168
+    },
+    {
+      "name": "rcolorbrewer",
+      "import_count": 3232,
+      "import_rank": 84,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "gridextra",
+      "import_count": 3123,
+      "import_rank": 85,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "trimesh",
+      "import_count": 3100,
+      "import_rank": 86,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "ftfy",
+      "import_count": 3090,
+      "import_rank": 87,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "rich",
+      "import_count": 3072,
+      "import_rank": 88,
+      "dependency_count": 5663,
+      "dependency_rank": 183,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "dotenv",
+      "import_count": 3057,
+      "import_rank": 89,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "gradio",
+      "import_count": 3031,
+      "import_rank": 90,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "kornia",
+      "import_count": 2981,
+      "import_rank": 91,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "fire",
+      "import_count": 2975,
+      "import_rank": 92,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "typingextensions",
+      "import_count": 2932,
+      "import_rank": 93,
+      "dependency_count": 18011,
+      "dependency_rank": 17,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "deepspeed",
+      "import_count": 2918,
+      "import_rank": 94,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "xgboost",
+      "import_count": 2903,
+      "import_rank": 95,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 610,
+      "mention_rank": 30
+    },
+    {
+      "name": "safetensors",
+      "import_count": 2884,
+      "import_rank": 96,
+      "dependency_count": 5434,
+      "dependency_rank": 187,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "soundfile",
+      "import_count": 2874,
+      "import_rank": 97,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "mass",
+      "import_count": 2869,
+      "import_rank": 98,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "fvcore",
+      "import_count": 2863,
+      "import_rank": 99,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "lmdb",
+      "import_count": 2850,
+      "import_rank": 100,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "nibabel",
+      "import_count": 2762,
+      "import_rank": 101,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "bio",
+      "import_count": 2760,
+      "import_rank": 102,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "ggpubr",
+      "import_count": 2737,
+      "import_rank": 103,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "clip",
+      "import_count": 2723,
+      "import_rank": 104,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "flashattn",
+      "import_count": 2690,
+      "import_rank": 105,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "cowplot",
+      "import_count": 2685,
+      "import_rank": 106,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "yacs",
+      "import_count": 2655,
+      "import_rank": 107,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "flask",
+      "import_count": 2643,
+      "import_rank": 108,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 138,
+      "mention_rank": 192
+    },
+    {
+      "name": "sentencepiece",
+      "import_count": 2630,
+      "import_rank": 109,
+      "dependency_count": 7815,
+      "dependency_rank": 105,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "xformers",
+      "import_count": 2549,
+      "import_rank": 110,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "plyr",
+      "import_count": 2539,
+      "import_rank": 111,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "onnxruntime",
+      "import_count": 2537,
+      "import_rank": 112,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "boto3",
+      "import_count": 2478,
+      "import_rank": 113,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "evaluate",
+      "import_count": 2467,
+      "import_rank": 114,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "astropy",
+      "import_count": 2452,
+      "import_rank": 115,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 177,
+      "mention_rank": 147
+    },
+    {
+      "name": "igraph",
+      "import_count": 2403,
+      "import_rank": 116,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 353,
+      "mention_rank": 62
+    },
+    {
+      "name": "jsonlines",
+      "import_count": 2368,
+      "import_rank": 117,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "thop",
+      "import_count": 2365,
+      "import_rank": 118,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "readr",
+      "import_count": 2330,
+      "import_rank": 119,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "tiktoken",
+      "import_count": 2303,
+      "import_rank": 120,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "fastapi",
+      "import_count": 2297,
+      "import_rank": 121,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "bitsandbytes",
+      "import_count": 2284,
+      "import_rank": 122,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "filelock",
+      "import_count": 2249,
+      "import_rank": 123,
+      "dependency_count": 11594,
+      "dependency_rank": 52,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "prettytable",
+      "import_count": 2249,
+      "import_rank": 124,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "loguru",
+      "import_count": 2244,
+      "import_rank": 125,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "tokenizers",
+      "import_count": 2240,
+      "import_rank": 126,
+      "dependency_count": 8306,
+      "dependency_rank": 93,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "dill",
+      "import_count": 2236,
+      "import_rank": 127,
+      "dependency_count": 6503,
+      "dependency_rank": 146,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "natsort",
+      "import_count": 2194,
+      "import_rank": 128,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "rdkit",
+      "import_count": 2159,
+      "import_rank": 129,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 239,
+      "mention_rank": 107
+    },
+    {
+      "name": "tibble",
+      "import_count": 2116,
+      "import_rank": 130,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "purrr",
+      "import_count": 2091,
+      "import_rank": 131,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "umap",
+      "import_count": 2084,
+      "import_rank": 132,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "uvicorn",
+      "import_count": 2065,
+      "import_rank": 133,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "mpi4py",
+      "import_count": 2018,
+      "import_rank": 134,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "vllm",
+      "import_count": 2016,
+      "import_rank": 135,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "readxl",
+      "import_count": 2004,
+      "import_rank": 136,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "patchwork",
+      "import_count": 1969,
+      "import_rank": 137,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "detectron2",
+      "import_count": 1952,
+      "import_rank": 138,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "onnx",
+      "import_count": 1947,
+      "import_rank": 139,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "torchxla",
+      "import_count": 1919,
+      "import_rank": 140,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "matrix",
+      "import_count": 1918,
+      "import_rank": 141,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "botocore",
+      "import_count": 1902,
+      "import_rank": 142,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "gdown",
+      "import_count": 1863,
+      "import_rank": 143,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "dgl",
+      "import_count": 1862,
+      "import_rank": 144,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "devtools",
+      "import_count": 1858,
+      "import_rank": 145,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "wget",
+      "import_count": 1845,
+      "import_rank": 146,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "decord",
+      "import_count": 1840,
+      "import_rank": 147,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "sacrebleu",
+      "import_count": 1822,
+      "import_rank": 148,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "dateutil",
+      "import_count": 1816,
+      "import_rank": 149,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "optuna",
+      "import_count": 1814,
+      "import_rank": 150,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "tensorflowprobability",
+      "import_count": 1811,
+      "import_rank": 151,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "lubridate",
+      "import_count": 1801,
+      "import_rank": 152,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "lpips",
+      "import_count": 1793,
+      "import_rank": 153,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "git",
+      "import_count": 1790,
+      "import_rank": 154,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 142,
+      "mention_rank": 186
+    },
+    {
+      "name": "optax",
+      "import_count": 1777,
+      "import_rank": 155,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "ipywidgets",
+      "import_count": 1767,
+      "import_rank": 156,
+      "dependency_count": 6825,
+      "dependency_rank": 128,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "simpleitk",
+      "import_count": 1759,
+      "import_rank": 157,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "doparallel",
+      "import_count": 1752,
+      "import_rank": 158,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "viridis",
+      "import_count": 1737,
+      "import_rank": 159,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "cvxpy",
+      "import_count": 1711,
+      "import_rank": 160,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "torchsummary",
+      "import_count": 1678,
+      "import_rank": 161,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "plyfile",
+      "import_count": 1674,
+      "import_rank": 162,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "fairscale",
+      "import_count": 1667,
+      "import_rank": 163,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "ggrepel",
+      "import_count": 1654,
+      "import_rank": 164,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "jieba",
+      "import_count": 1653,
+      "import_rank": 165,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "editdistance",
+      "import_count": 1650,
+      "import_rank": 166,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pyarrow",
+      "import_count": 1649,
+      "import_rank": 167,
+      "dependency_count": 6179,
+      "dependency_rank": 155,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "lightning",
+      "import_count": 1608,
+      "import_rank": 168,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "lxml",
+      "import_count": 1602,
+      "import_rank": 169,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "torchsparse",
+      "import_count": 1596,
+      "import_rank": 170,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pytorch3d",
+      "import_count": 1595,
+      "import_rank": 171,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "cupy",
+      "import_count": 1571,
+      "import_rank": 173,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "tensorflowdatasets",
+      "import_count": 1571,
+      "import_rank": 172,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "flax",
+      "import_count": 1565,
+      "import_rank": 174,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "torchtext",
+      "import_count": 1555,
+      "import_rank": 175,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "jinja2",
+      "import_count": 1553,
+      "import_rank": 176,
+      "dependency_count": 14931,
+      "dependency_rank": 30,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "trl",
+      "import_count": 1539,
+      "import_rank": 178,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "xarray",
+      "import_count": 1539,
+      "import_rank": 177,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "geopandas",
+      "import_count": 1535,
+      "import_rank": 179,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "foreach",
+      "import_count": 1479,
+      "import_rank": 180,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "visdom",
+      "import_count": 1475,
+      "import_rank": 181,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "sf",
+      "import_count": 1460,
+      "import_rank": 182,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "moviepy",
+      "import_count": 1456,
+      "import_rank": 183,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "fairseq",
+      "import_count": 1450,
+      "import_rank": 184,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "colorama",
+      "import_count": 1449,
+      "import_rank": 185,
+      "dependency_count": 8643,
+      "dependency_rank": 83,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "openclip",
+      "import_count": 1445,
+      "import_rank": 186,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "accimage",
+      "import_count": 1437,
+      "import_rank": 187,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "rougescore",
+      "import_count": 1417,
+      "import_rank": 188,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "cloudpickle",
+      "import_count": 1416,
+      "import_rank": 189,
+      "dependency_count": 6034,
+      "dependency_rank": 162,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "mmdet",
+      "import_count": 1416,
+      "import_rank": 190,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "tensorflowhub",
+      "import_count": 1402,
+      "import_rank": 191,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pytz",
+      "import_count": 1394,
+      "import_rank": 192,
+      "dependency_count": 17046,
+      "dependency_rank": 21,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "lme4",
+      "import_count": 1393,
+      "import_rank": 193,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 506,
+      "mention_rank": 38
+    },
+    {
+      "name": "gymnasium",
+      "import_count": 1381,
+      "import_rank": 194,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "cityscapesscripts",
+      "import_count": 1372,
+      "import_rank": 195,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "setuptools",
+      "import_count": 1369,
+      "import_rank": 196,
+      "dependency_count": 15400,
+      "dependency_rank": 29,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "magrittr",
+      "import_count": 1364,
+      "import_rank": 197,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "sphinxrtdtheme",
+      "import_count": 1353,
+      "import_rank": 198,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "sacremoses",
+      "import_count": 1339,
+      "import_rank": 199,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "av",
+      "import_count": 1335,
+      "import_rank": 200,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "abslpy",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 9636,
+      "dependency_rank": 71,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "actions/checkout",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 13229,
+      "dependency_rank": 39,
+      "dependency_top_ecosystem": "github-actions",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "actions/setuppython",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 8815,
+      "dependency_rank": 81,
+      "dependency_top_ecosystem": "github-actions",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "adam",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 748,
+      "mention_rank": 25
+    },
+    {
+      "name": "adamw",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 428,
+      "mention_rank": 52
+    },
+    {
+      "name": "aiohttp",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 7055,
+      "dependency_rank": 115,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "aiosignal",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6041,
+      "dependency_rank": 161,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "alphafold",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 154,
+      "mention_rank": 173
+    },
+    {
+      "name": "android",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 565,
+      "mention_rank": 32
+    },
+    {
+      "name": "anyio",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5746,
+      "dependency_rank": 175,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "apache",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 452,
+      "mention_rank": 47
+    },
+    {
+      "name": "apachespark",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 168,
+      "mention_rank": 157
+    },
+    {
+      "name": "ape",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 145,
+      "mention_rank": 185
+    },
+    {
+      "name": "api",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 512,
+      "mention_rank": 36
+    },
+    {
+      "name": "arcgis",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 205,
+      "mention_rank": 128
+    },
+    {
+      "name": "argon2cffi",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5138,
+      "dependency_rank": 195,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "asttokens",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6851,
+      "dependency_rank": 126,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "asynctimeout",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5713,
+      "dependency_rank": 179,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "attrs",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 12937,
+      "dependency_rank": 42,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "backcall",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 7474,
+      "dependency_rank": 106,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "bcftools",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 305,
+      "mention_rank": 75
+    },
+    {
+      "name": "beautifulsoup4",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 7052,
+      "dependency_rank": 116,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "bedtools",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 364,
+      "mention_rank": 58
+    },
+    {
+      "name": "bing",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 164,
+      "mention_rank": 163
+    },
+    {
+      "name": "bioconductor",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 803,
+      "mention_rank": 24
+    },
+    {
+      "name": "biomart",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 192,
+      "mention_rank": 132
+    },
+    {
+      "name": "biopython",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 255,
+      "mention_rank": 98
+    },
+    {
+      "name": "black",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5872,
+      "dependency_rank": 170,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "blas",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5912,
+      "dependency_rank": 167,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "blast",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 838,
+      "mention_rank": 22
+    },
+    {
+      "name": "blastn",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 414,
+      "mention_rank": 53
+    },
+    {
+      "name": "blastp",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 357,
+      "mention_rank": 60
+    },
+    {
+      "name": "blastx",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 150,
+      "mention_rank": 179
+    },
+    {
+      "name": "bleach",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6786,
+      "dependency_rank": 133,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "blender",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 225,
+      "mention_rank": 116
+    },
+    {
+      "name": "bowtie",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 341,
+      "mention_rank": 68
+    },
+    {
+      "name": "bowtie2",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 618,
+      "mention_rank": 29
+    },
+    {
+      "name": "bwa",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 290,
+      "mention_rank": 84
+    },
+    {
+      "name": "bwamem",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 550,
+      "mention_rank": 33
+    },
+    {
+      "name": "bzip2",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5763,
+      "dependency_rank": 174,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "cacertificates",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 8551,
+      "dependency_rank": 85,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "cachetools",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 7358,
+      "dependency_rank": 110,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "cellprofiler",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 166,
+      "mention_rank": 158
+    },
+    {
+      "name": "cellranger",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 327,
+      "mention_rank": 70
+    },
+    {
+      "name": "centos",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 134,
+      "mention_rank": 199
+    },
+    {
+      "name": "certifi",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 20017,
+      "dependency_rank": 14,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "cffi",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 12442,
+      "dependency_rank": 45,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "chardet",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6479,
+      "dependency_rank": 148,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "charsetnormalizer",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 13584,
+      "dependency_rank": 37,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "chembl",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 206,
+      "mention_rank": 127
+    },
+    {
+      "name": "chrome",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 173,
+      "mention_rank": 153
+    },
+    {
+      "name": "cityscapes",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 141,
+      "mention_rank": 188
+    },
+    {
+      "name": "clustalomega",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 138,
+      "mention_rank": 193
+    },
+    {
+      "name": "clusterprofiler",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 243,
+      "mention_rank": 104
+    },
+    {
+      "name": "code",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 14377,
+      "mention_rank": 1
+    },
+    {
+      "name": "codes",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 512,
+      "mention_rank": 37
+    },
+    {
+      "name": "contourpy",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 8287,
+      "dependency_rank": 94,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "corenlp",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 152,
+      "mention_rank": 176
+    },
+    {
+      "name": "cplex",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 135,
+      "mention_rank": 197
+    },
+    {
+      "name": "cran",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 321,
+      "mention_rank": 72
+    },
+    {
+      "name": "cryptography",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6877,
+      "dependency_rank": 125,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "cuda",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 451,
+      "mention_rank": 48
+    },
+    {
+      "name": "cudatoolkit",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5708,
+      "dependency_rank": 180,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "cudnn",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 184,
+      "mention_rank": 138
+    },
+    {
+      "name": "cutadapt",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 293,
+      "mention_rank": 81
+    },
+    {
+      "name": "cyclegan",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 275,
+      "mention_rank": 89
+    },
+    {
+      "name": "cycler",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 16243,
+      "dependency_rank": 24,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "cython",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 7414,
+      "dependency_rank": 108,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": 163,
+      "mention_rank": 165
+    },
+    {
+      "name": "cytoscape",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 438,
+      "mention_rank": 49
+    },
+    {
+      "name": "dada2",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 171,
+      "mention_rank": 154
+    },
+    {
+      "name": "david",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 181,
+      "mention_rank": 143
+    },
+    {
+      "name": "dbscan",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 188,
+      "mention_rank": 133
+    },
+    {
+      "name": "debugpy",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6654,
+      "dependency_rank": 143,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "decorator",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 12705,
+      "dependency_rank": 44,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "deeplab",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 289,
+      "mention_rank": 85
+    },
+    {
+      "name": "deeplabv3+",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 183,
+      "mention_rank": 142
+    },
+    {
+      "name": "deepwalk",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 183,
+      "mention_rank": 141
+    },
+    {
+      "name": "defusedxml",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6671,
+      "dependency_rank": 141,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "deseq2",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 493,
+      "mention_rank": 39
+    },
+    {
+      "name": "diamond",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 176,
+      "mention_rank": 149
+    },
+    {
+      "name": "docker",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 230,
+      "mention_rank": 112
+    },
+    {
+      "name": "eclipse",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 160,
+      "mention_rank": 169
+    },
+    {
+      "name": "edger",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 232,
+      "mention_rank": 110
+    },
+    {
+      "name": "elmo",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 206,
+      "mention_rank": 126
+    },
+    {
+      "name": "ensembl",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 1043,
+      "mention_rank": 19
+    },
+    {
+      "name": "entrypoints",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5892,
+      "dependency_rank": 168,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "excel",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 662,
+      "mention_rank": 26
+    },
+    {
+      "name": "executing",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6803,
+      "dependency_rank": 132,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "fastqc",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 457,
+      "mention_rank": 46
+    },
+    {
+      "name": "fasttext",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 227,
+      "mention_rank": 113
+    },
+    {
+      "name": "fasttree",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 221,
+      "mention_rank": 120
+    },
+    {
+      "name": "featurecounts",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 179,
+      "mention_rank": 146
+    },
+    {
+      "name": "fiji",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 298,
+      "mention_rank": 79
+    },
+    {
+      "name": "firefox",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 184,
+      "mention_rank": 139
+    },
+    {
+      "name": "flake8",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5121,
+      "dependency_rank": 196,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "flowjo",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 210,
+      "mention_rank": 125
+    },
+    {
+      "name": "fonttools",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 10780,
+      "dependency_rank": 59,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "freesurfer",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 350,
+      "mention_rank": 64
+    },
+    {
+      "name": "freetype",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6091,
+      "dependency_rank": 159,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "frozenlist",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6044,
+      "dependency_rank": 160,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "fsspec",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 9151,
+      "dependency_rank": 77,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "future",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6933,
+      "dependency_rank": 123,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "galaxy",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 183,
+      "mention_rank": 140
+    },
+    {
+      "name": "gatk",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 515,
+      "mention_rank": 35
+    },
+    {
+      "name": "geneious",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 137,
+      "mention_rank": 196
+    },
+    {
+      "name": "ggplot",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 1004,
+      "mention_rank": 20
+    },
+    {
+      "name": "ggtree",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 152,
+      "mention_rank": 175
+    },
+    {
+      "name": "gitdb",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 4979,
+      "dependency_rank": 200,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "github",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 5624,
+      "mention_rank": 3
+    },
+    {
+      "name": "gitpython",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5979,
+      "dependency_rank": 163,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "glmnet",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 255,
+      "mention_rank": 97
+    },
+    {
+      "name": "glove",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 317,
+      "mention_rank": 73
+    },
+    {
+      "name": "googleauth",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6495,
+      "dependency_rank": 147,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "googleauthoauthlib",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5531,
+      "dependency_rank": 185,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "googlechrome",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 138,
+      "mention_rank": 194
+    },
+    {
+      "name": "googleearth",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 157,
+      "mention_rank": 171
+    },
+    {
+      "name": "googlemaps",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 165,
+      "mention_rank": 162
+    },
+    {
+      "name": "googlenet",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 168,
+      "mention_rank": 156
+    },
+    {
+      "name": "googlescholar",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 341,
+      "mention_rank": 69
+    },
+    {
+      "name": "googletranslate",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 138,
+      "mention_rank": 195
+    },
+    {
+      "name": "graphpadprism",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 516,
+      "mention_rank": 34
+    },
+    {
+      "name": "graphsage",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 242,
+      "mention_rank": 105
+    },
+    {
+      "name": "gromacs",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 184,
+      "mention_rank": 136
+    },
+    {
+      "name": "grpcio",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 8385,
+      "dependency_rank": 89,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "gui",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 149,
+      "mention_rank": 182
+    },
+    {
+      "name": "gurobi",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 199,
+      "mention_rank": 129
+    },
+    {
+      "name": "hmmer",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 325,
+      "mention_rank": 71
+    },
+    {
+      "name": "huggingface",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 245,
+      "mention_rank": 101
+    },
+    {
+      "name": "idna",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 17549,
+      "dependency_rank": 20,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "imagej",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 1073,
+      "mention_rank": 18
+    },
+    {
+      "name": "importlibmetadata",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 11632,
+      "dependency_rank": 51,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "importlibresources",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6125,
+      "dependency_rank": 156,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "intelopenmp",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5734,
+      "dependency_rank": 177,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "interface",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 265,
+      "mention_rank": 93
+    },
+    {
+      "name": "ios",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 180,
+      "mention_rank": 144
+    },
+    {
+      "name": "ipykernel",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 11197,
+      "dependency_rank": 55,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "ipythongenutils",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5961,
+      "dependency_rank": 165,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "iqtree",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 291,
+      "mention_rank": 83
+    },
+    {
+      "name": "jedi",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 10634,
+      "dependency_rank": 60,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "jpeg",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5843,
+      "dependency_rank": 171,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "jsonschema",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 9268,
+      "dependency_rank": 75,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "julia",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 310,
+      "mention_rank": 74
+    },
+    {
+      "name": "jupyter",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 7033,
+      "dependency_rank": 117,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": 378,
+      "mention_rank": 56
+    },
+    {
+      "name": "jupyterclient",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 9556,
+      "dependency_rank": 72,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "jupytercore",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 9669,
+      "dependency_rank": 70,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "jupyterlabpygments",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5337,
+      "dependency_rank": 189,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "kiwisolver",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 15965,
+      "dependency_rank": 26,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "latex",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 5074,
+      "mention_rank": 6
+    },
+    {
+      "name": "ldimpllinux64",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6563,
+      "dependency_rank": 145,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "libffi",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 8285,
+      "dependency_rank": 95,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "libgccmutex",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 7100,
+      "dependency_rank": 114,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "libgccng",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 7346,
+      "dependency_rank": 111,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "libgomp",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5199,
+      "dependency_rank": 193,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "libpng",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6105,
+      "dependency_rank": 157,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "libraries",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 226,
+      "mention_rank": 115
+    },
+    {
+      "name": "library",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 1803,
+      "mention_rank": 11
+    },
+    {
+      "name": "libstdcxxng",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 7235,
+      "dependency_rank": 113,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "libtiff",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5821,
+      "dependency_rank": 172,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "limma",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 277,
+      "mention_rank": 87
+    },
+    {
+      "name": "linux",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 2624,
+      "mention_rank": 8
+    },
+    {
+      "name": "lz4c",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5139,
+      "dependency_rank": 194,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "macos",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 354,
+      "mention_rank": 61
+    },
+    {
+      "name": "macs2",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 134,
+      "mention_rank": 200
+    },
+    {
+      "name": "mafft",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 570,
+      "mention_rank": 31
+    },
+    {
+      "name": "markdown",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 9042,
+      "dependency_rank": 79,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "markupsafe",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 14725,
+      "dependency_rank": 32,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "mask",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 149,
+      "mention_rank": 180
+    },
+    {
+      "name": "maskrcnn",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 141,
+      "mention_rank": 189
+    },
+    {
+      "name": "mathematica",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 351,
+      "mention_rank": 63
+    },
+    {
+      "name": "matlab",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 5080,
+      "mention_rank": 5
+    },
+    {
+      "name": "matplotlibinline",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 8277,
+      "dependency_rank": 96,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "maxquant",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 149,
+      "mention_rank": 181
+    },
+    {
+      "name": "mechanicalturk",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 349,
+      "mention_rank": 65
+    },
+    {
+      "name": "minimap2",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 250,
+      "mention_rank": 99
+    },
+    {
+      "name": "mistune",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6717,
+      "dependency_rank": 136,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "mkl",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6287,
+      "dependency_rank": 151,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "mklfft",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6985,
+      "dependency_rank": 120,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "mklrandom",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6840,
+      "dependency_rank": 127,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "mklservice",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6812,
+      "dependency_rank": 131,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "mobilenet",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 135,
+      "mention_rank": 198
+    },
+    {
+      "name": "module",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 261,
+      "mention_rank": 94
+    },
+    {
+      "name": "modules",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 141,
+      "mention_rank": 187
+    },
+    {
+      "name": "mpi",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 176,
+      "mention_rank": 148
+    },
+    {
+      "name": "mpmath",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 8343,
+      "dependency_rank": 92,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "multidict",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6688,
+      "dependency_rank": 140,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "muscle",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 299,
+      "mention_rank": 77
+    },
+    {
+      "name": "mysql",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 296,
+      "mention_rank": 80
+    },
+    {
+      "name": "nbclient",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5408,
+      "dependency_rank": 188,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "nbconvert",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6782,
+      "dependency_rank": 134,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "nbformat",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 7298,
+      "dependency_rank": 112,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "ncurses",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 8007,
+      "dependency_rank": 100,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "nestasyncio",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 8373,
+      "dependency_rank": 91,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "nextflow",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 148,
+      "mention_rank": 183
+    },
+    {
+      "name": "ninja",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5802,
+      "dependency_rank": 173,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "notebook",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6924,
+      "dependency_rank": 124,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "nvidia",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 298,
+      "mention_rank": 78
+    },
+    {
+      "name": "oauthlib",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6092,
+      "dependency_rank": 158,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "opencv",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 462,
+      "mention_rank": 44
+    },
+    {
+      "name": "opencvpython",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 15783,
+      "dependency_rank": 27,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "openmp",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 175,
+      "mention_rank": 151
+    },
+    {
+      "name": "openmpmutex",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5706,
+      "dependency_rank": 181,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "openpose",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 140,
+      "mention_rank": 190
+    },
+    {
+      "name": "openssl",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 9148,
+      "dependency_rank": 78,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "openstreetmap",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 240,
+      "mention_rank": 106
+    },
+    {
+      "name": "package",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 1334,
+      "mention_rank": 14
+    },
+    {
+      "name": "packages",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 225,
+      "mention_rank": 117
+    },
+    {
+      "name": "pandocfilters",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6624,
+      "dependency_rank": 144,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "parso",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 10627,
+      "dependency_rank": 62,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pexpect",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 10557,
+      "dependency_rank": 63,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pheatmap",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 157,
+      "mention_rank": 170
+    },
+    {
+      "name": "photoshop",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 166,
+      "mention_rank": 159
+    },
+    {
+      "name": "phyloseq",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 215,
+      "mention_rank": 123
+    },
+    {
+      "name": "phytools",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 153,
+      "mention_rank": 174
+    },
+    {
+      "name": "picard",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 217,
+      "mention_rank": 122
+    },
+    {
+      "name": "pickleshare",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 8493,
+      "dependency_rank": 88,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pillow",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 30098,
+      "dependency_rank": 8,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pip",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 14568,
+      "dependency_rank": 33,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pipeline",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 303,
+      "mention_rank": 76
+    },
+    {
+      "name": "platformdirs",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 7917,
+      "dependency_rank": 102,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "plink",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 396,
+      "mention_rank": 55
+    },
+    {
+      "name": "pluggy",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5097,
+      "dependency_rank": 197,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "postgresql",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 245,
+      "mention_rank": 102
+    },
+    {
+      "name": "program",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 458,
+      "mention_rank": 45
+    },
+    {
+      "name": "programs",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 188,
+      "mention_rank": 134
+    },
+    {
+      "name": "prometheusclient",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6733,
+      "dependency_rank": 135,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "prompttoolkit",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 11051,
+      "dependency_rank": 56,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "protobuf",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 14759,
+      "dependency_rank": 31,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "ptyprocess",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 10430,
+      "dependency_rank": 64,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pureeval",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6825,
+      "dependency_rank": 129,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pyasn1",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6962,
+      "dependency_rank": 122,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pyasn1modules",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6707,
+      "dependency_rank": 137,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pycparser",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 11708,
+      "dependency_rank": 50,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pygments",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 13195,
+      "dependency_rank": 40,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pymol",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 223,
+      "mention_rank": 118
+    },
+    {
+      "name": "pyopenssl",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5292,
+      "dependency_rank": 190,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pyparsing",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 17952,
+      "dependency_rank": 18,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pypi",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 374,
+      "mention_rank": 57
+    },
+    {
+      "name": "pysocks",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6968,
+      "dependency_rank": 121,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "python",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 16035,
+      "dependency_rank": 25,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": 806,
+      "mention_rank": 23
+    },
+    {
+      "name": "pythondateutil",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 20314,
+      "dependency_rank": 13,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pytorch",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 7834,
+      "dependency_rank": 103,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": 4784,
+      "mention_rank": 7
+    },
+    {
+      "name": "pyyaml",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 23992,
+      "dependency_rank": 10,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "pyzmq",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 10051,
+      "dependency_rank": 67,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "qgis",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 180,
+      "mention_rank": 145
+    },
+    {
+      "name": "qiime",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 151,
+      "mention_rank": 178
+    },
+    {
+      "name": "randomforest",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 257,
+      "mention_rank": 95
+    },
+    {
+      "name": "raxml",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 433,
+      "mention_rank": 50
+    },
+    {
+      "name": "readline",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 8103,
+      "dependency_rank": 98,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "repeatmasker",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 275,
+      "mention_rank": 90
+    },
+    {
+      "name": "requestsoauthlib",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5940,
+      "dependency_rank": 166,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "roberta",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 138,
+      "mention_rank": 191
+    },
+    {
+      "name": "rpackage",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 243,
+      "mention_rank": 103
+    },
+    {
+      "name": "rsa",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6704,
+      "dependency_rank": 138,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "rsem",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 197,
+      "mention_rank": 131
+    },
+    {
+      "name": "rstan",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 161,
+      "mention_rank": 166
+    },
+    {
+      "name": "rstudio",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 486,
+      "mention_rank": 40
+    },
+    {
+      "name": "samtools",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 1174,
+      "mention_rank": 16
+    },
+    {
+      "name": "sas",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 155,
+      "mention_rank": 172
+    },
+    {
+      "name": "scala",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 165,
+      "mention_rank": 160
+    },
+    {
+      "name": "scanpy",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 272,
+      "mention_rank": 91
+    },
+    {
+      "name": "scikit",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 474,
+      "mention_rank": 42
+    },
+    {
+      "name": "scikitimage",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 12136,
+      "dependency_rank": 48,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "scikitlearn",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 34406,
+      "dependency_rank": 7,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": 1803,
+      "mention_rank": 10
+    },
+    {
+      "name": "script",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 5089,
+      "mention_rank": 4
+    },
+    {
+      "name": "scripts",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 6885,
+      "mention_rank": 2
+    },
+    {
+      "name": "send2trash",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6223,
+      "dependency_rank": 152,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "seurat",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 432,
+      "mention_rank": 51
+    },
+    {
+      "name": "simclr",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 226,
+      "mention_rank": 114
+    },
+    {
+      "name": "smmap",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 4980,
+      "dependency_rank": 199,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "snakemake",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 165,
+      "mention_rank": 161
+    },
+    {
+      "name": "sniffio",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5704,
+      "dependency_rank": 182,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "software",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 885,
+      "mention_rank": 21
+    },
+    {
+      "name": "soupsieve",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5961,
+      "dependency_rank": 164,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "spades",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 211,
+      "mention_rank": 124
+    },
+    {
+      "name": "spark",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 169,
+      "mention_rank": 155
+    },
+    {
+      "name": "sphinx",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 7000,
+      "dependency_rank": 119,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "spss",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 232,
+      "mention_rank": 109
+    },
+    {
+      "name": "sqlite",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 7957,
+      "dependency_rank": 101,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": 234,
+      "mention_rank": 108
+    },
+    {
+      "name": "stackdata",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6824,
+      "dependency_rank": 130,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "stan",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 231,
+      "mention_rank": 111
+    },
+    {
+      "name": "star",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 346,
+      "mention_rank": 67
+    },
+    {
+      "name": "stata",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 219,
+      "mention_rank": 121
+    },
+    {
+      "name": "tensorboard",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 14553,
+      "dependency_rank": 34,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "tensorboarddataserver",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5225,
+      "dependency_rank": 192,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "terminado",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6289,
+      "dependency_rank": 150,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "threadpoolctl",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 11401,
+      "dependency_rank": 54,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "tk",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 8570,
+      "dependency_rank": 84,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "tomli",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5718,
+      "dependency_rank": 178,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "tophat",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 146,
+      "mention_rank": 184
+    },
+    {
+      "name": "tornado",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 11914,
+      "dependency_rank": 49,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "traitlets",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 10999,
+      "dependency_rank": 57,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "trimmomatic",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 474,
+      "mention_rank": 41
+    },
+    {
+      "name": "triton",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5258,
+      "dependency_rank": 191,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "tzdata",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 9407,
+      "dependency_rank": 73,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "ubuntu",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 466,
+      "mention_rank": 43
+    },
+    {
+      "name": "ucscgenomebrowser",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 270,
+      "mention_rank": 92
+    },
+    {
+      "name": "unet",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 175,
+      "mention_rank": 152
+    },
+    {
+      "name": "unix",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 161,
+      "mention_rank": 167
+    },
+    {
+      "name": "urllib3",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 17755,
+      "dependency_rank": 19,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "usearch",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 151,
+      "mention_rank": 177
+    },
+    {
+      "name": "vcftools",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 199,
+      "mention_rank": 130
+    },
+    {
+      "name": "vegan",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 276,
+      "mention_rank": 88
+    },
+    {
+      "name": "wcwidth",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 12197,
+      "dependency_rank": 46,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "webencodings",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 7012,
+      "dependency_rank": 118,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "werkzeug",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 9015,
+      "dependency_rank": 80,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "wheel",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 11538,
+      "dependency_rank": 53,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "widgetsnbextension",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5615,
+      "dependency_rank": 184,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "windows",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 1263,
+      "mention_rank": 15
+    },
+    {
+      "name": "windows10",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": null,
+      "dependency_rank": null,
+      "dependency_top_ecosystem": null,
+      "mention_count": 283,
+      "mention_rank": 86
+    },
+    {
+      "name": "wrapt",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6181,
+      "dependency_rank": 154,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "xz",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 8377,
+      "dependency_rank": 90,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "yarl",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 6667,
+      "dependency_rank": 142,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "zipp",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 12189,
+      "dependency_rank": 47,
+      "dependency_top_ecosystem": "pypi",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "zlib",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 8211,
+      "dependency_rank": 97,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    },
+    {
+      "name": "zstd",
+      "import_count": null,
+      "import_rank": null,
+      "dependency_count": 5883,
+      "dependency_rank": 169,
+      "dependency_top_ecosystem": "conda",
+      "mention_count": null,
+      "mention_rank": null
+    }
+  ]
+}

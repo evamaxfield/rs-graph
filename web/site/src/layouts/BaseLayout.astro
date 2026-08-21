@@ -8,7 +8,10 @@ interface Props {
   description?: string;
 }
 
-const { title, description = 'RS-Graph: linking scientific publications to their code repositories.' } = Astro.props;
+const {
+  title,
+  description = 'RS-Graph: linking scientific publications to their code repositories.',
+} = Astro.props;
 ---
 
 <!doctype html>
@@ -18,6 +21,13 @@ const { title, description = 'RS-Graph: linking scientific publications to their
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
     <title>{title} · RS-Graph</title>
+    <script is:inline>
+      // Runs before first paint to avoid a flash of the wrong theme.
+      const saved = localStorage.getItem('theme');
+      if (saved === 'light' || saved === 'dark') {
+        document.documentElement.setAttribute('data-theme', saved);
+      }
+    </script>
   </head>
   <body>
     <Nav />

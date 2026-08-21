@@ -19,6 +19,36 @@
   --color-card-bg: #ffffff;
   --color-highlight-bg: color-mix(in srgb, #{colors.$color-yellow-40} 30%, transparent);
 
+  // Mozilla Protocol's type-scale custom properties, hand-copied from
+  // node_modules/@mozilla-protocol/core/protocol/css/includes/themes/_mozilla.scss's
+  // %mozilla-type-scale placeholder (desktop values). The text-title-*/text-body-*
+  // mixins used below emit @supports(--css: variables) overrides that reference
+  // these var() names directly, but this project never @extends %mozilla-type-scale
+  // onto :root, so without this block every one of those vars is undefined and
+  // font-size silently falls through to the browser default (16px) for all text.
+  --title-2xl-size: 4.75rem;
+  --title-2xl-line-height: 0.9;
+  --title-xl-size: 4.125rem;
+  --title-xl-line-height: 0.9;
+  --title-lg-size: 3.5rem;
+  --title-lg-line-height: 1.1;
+  --title-md-size: 3rem;
+  --title-md-line-height: 1.1;
+  --title-sm-size: 2.375rem;
+  --title-sm-line-height: 1.1;
+  --title-xs-size: 1.75rem;
+  --title-xs-line-height: 1.1;
+  --title-2xs-size: 1.5rem;
+  --title-2xs-line-height: 1.25;
+  --title-3xs-size: 1.125rem;
+  --title-3xs-line-height: 1.25;
+  --body-xl-size: 1.313rem;
+  --body-lg-size: 1.125rem;
+  --body-md-size: 1rem;
+  --body-sm-size: 0.875rem;
+  --body-xs-size: 0.75rem;
+  --body-line-height: 1.25;
+
   // Broader Protocol palette, used for section accents / accordion headers /
   // tab-nav active states / chart categorical color, not just brand blue.
   --color-green: #{colors.$color-green-70};
@@ -65,6 +95,62 @@
     --chart-6: #{colors.$color-yellow-40};
     --chart-7: #{colors.$color-red-40};
   }
+}
+
+// Manual theme toggle: an explicit data-theme attribute on <html> wins over the
+// prefers-color-scheme media query in both directions. Values mirror the blocks above.
+:root[data-theme='light'] {
+  --color-bg: #ffffff;
+  --color-bg-alt: #{colors.$color-light-gray-05};
+  --color-text: #{colors.$color-ink-80};
+  --color-text-muted: #{colors.$color-ink-60};
+  --color-brand: #{colors.$color-blue-60};
+  --color-brand-dark: #{colors.$color-blue-70};
+  --color-accent: #{colors.$color-violet-60};
+  --color-bonus: #{colors.$color-orange-60};
+  --color-border: #{colors.$color-light-gray-30};
+  --color-card-bg: #ffffff;
+
+  --color-green: #{colors.$color-green-70};
+  --color-purple: #{colors.$color-purple-60};
+  --color-pink: #{colors.$color-pink-60};
+  --color-yellow: #{colors.$color-yellow-70};
+  --color-red: #{colors.$color-red-60};
+
+  --chart-1: #{colors.$color-blue-60};
+  --chart-2: #{colors.$color-green-70};
+  --chart-3: #{colors.$color-orange-60};
+  --chart-4: #{colors.$color-violet-60};
+  --chart-5: #{colors.$color-pink-60};
+  --chart-6: #{colors.$color-yellow-70};
+  --chart-7: #{colors.$color-red-60};
+}
+
+:root[data-theme='dark'] {
+  --color-bg: #{colors.$color-ink-90};
+  --color-bg-alt: #{colors.$color-ink-80};
+  --color-text: #{colors.$color-light-gray-10};
+  --color-text-muted: #{colors.$color-light-gray-40};
+  --color-brand: #{colors.$color-blue-40};
+  --color-brand-dark: #{colors.$color-blue-30};
+  --color-accent: #{colors.$color-violet-40};
+  --color-bonus: #{colors.$color-orange-40};
+  --color-border: #{colors.$color-ink-70};
+  --color-card-bg: #{colors.$color-ink-80};
+
+  --color-green: #{colors.$color-green-40};
+  --color-purple: #{colors.$color-purple-40};
+  --color-pink: #{colors.$color-pink-40};
+  --color-yellow: #{colors.$color-yellow-40};
+  --color-red: #{colors.$color-red-40};
+
+  --chart-1: #{colors.$color-blue-40};
+  --chart-2: #{colors.$color-green-40};
+  --chart-3: #{colors.$color-orange-40};
+  --chart-4: #{colors.$color-violet-40};
+  --chart-5: #{colors.$color-pink-40};
+  --chart-6: #{colors.$color-yellow-40};
+  --chart-7: #{colors.$color-red-40};
 }
 
 * {
@@ -217,11 +303,26 @@ pre.astro-code span {
   }
 }
 
+// Same dark Shiki theme for the manual toggle (data-theme="dark"), independent of OS
+// preference -- without this, toggling dark mode with the OS in light mode left code
+// blocks stuck bright/light in the middle of an otherwise dark page.
+:root[data-theme='dark'] pre.astro-code,
+:root[data-theme='dark'] pre.astro-code span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+}
+
 // Visual cue for anchor-jump targets (e.g. "full breakdown" links into the
 // limitations list) so a reader can tell which item they were sent to.
+// scroll-margin applies to any target; the highlight background is scoped off
+// section/details so linking into a big wrapper (e.g. #explore, a schema
+// family accordion) doesn't tint its entire contents permanently.
 :target {
-  background: var(--color-highlight-bg);
   scroll-margin-top: 1rem;
+}
+
+:target:not(section):not(details) {
+  background: var(--color-highlight-bg);
 }
 
 table {
@@ -361,6 +462,40 @@ td {
 
 .accordion--hidden {
   display: none;
+}
+
+// Per-family color accent on the Schema page's 7 entity-family accordions --
+// gives the most structurally "categorical" page on the site some wayfinding
+// use of the existing chart palette instead of 7 visually-identical accordions.
+// Mapped by family slug (semantic) rather than nth-child (positional) so the
+// mapping survives reordering families in schemaData.ts.
+#schema-families .accordion {
+  border-left: 4px solid var(--color-border);
+}
+
+#schema-families .accordion[data-family-slug='documents'] {
+  border-left-color: var(--chart-1);
+}
+#schema-families .accordion[data-family-slug='people-and-institutions'] {
+  border-left-color: var(--chart-2);
+}
+#schema-families .accordion[data-family-slug='funding'] {
+  border-left-color: var(--chart-3);
+}
+#schema-families .accordion[data-family-slug='repositories-and-code'] {
+  border-left-color: var(--chart-4);
+}
+// developer-accounts and article-repo-links swapped from the initial chart-5/
+// chart-6 mapping -- yellow-70 (chart-6) sat too close to funding's orange-60
+// (chart-3) in light mode; pink-60 (chart-5) separates from orange more clearly.
+#schema-families .accordion[data-family-slug='developer-accounts-and-matching'] {
+  border-left-color: var(--chart-6);
+}
+#schema-families .accordion[data-family-slug='article-repository-links'] {
+  border-left-color: var(--chart-5);
+}
+#schema-families .accordion[data-family-slug='provenance-and-internals'] {
+  border-left-color: var(--chart-7);
 }
 
 // Footer-ish accordion sections (Data Sources / Methodology / Publications) --

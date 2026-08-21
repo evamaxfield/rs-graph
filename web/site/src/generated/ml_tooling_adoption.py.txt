@@ -45,9 +45,9 @@ repo_domain = (
     .select("repository_id", "domain_name")
     .unique(subset=["repository_id"], keep="first")
 )
-domain_repos = repo_domain.join(
-    ml_repo_ids, on="repository_id", how="left"
-).with_columns(pl.col("has_ml_import").fill_null(False))
+domain_repos = repo_domain.join(ml_repo_ids, on="repository_id", how="left").with_columns(
+    pl.col("has_ml_import").fill_null(False)
+)
 by_domain = (
     domain_repos.group_by("domain_name")
     .agg(total=pl.len(), with_ml=pl.col("has_ml_import").sum())

@@ -179,7 +179,11 @@ lint.extend-ignore = [
 "**/migrations/*.py" = ["D"]
 
 [tool.pyrefly]
-project-excludes = ["migrations/**", "notebooks/**", "publications/**"]
+# web/data-prep is excluded because it is its own self-contained project (own
+# pyproject.toml, own .venv) with a `lib` import root at web/data-prep/, not the repo
+# root -- checking it against this project's config falsely reports every `from lib
+# import ...` as unresolved. Style/lint coverage (ruff) still applies to it normally.
+project-excludes = ["migrations/**", "notebooks/**", "publications/**", "web/data-prep/**"]
 ignore-missing-imports = ["easyDataverse"]
 
 # `__tablename__` on every SQLModel subclass is flagged as an inconsistent override of

@@ -7,13 +7,13 @@ import { families } from '../../lib/schemaData';
   <section class="container">
     <h1 class="title-lg">Schema reference</h1>
     <p class="body-md intro">
-      All 27 tables, grouped into 7 entity families. Every table ships together in one dataset --
+      All 27 tables, grouped into 7 entity families. Every table ships together in one dataset:
       no coverage badges, nothing "coming soon." Every table also carries
-      <code>created_datetime</code> / <code>updated_datetime</code> timestamps, omitted from the
-      field tables below to avoid repetition.
+      <code>created_datetime</code> / <code>updated_datetime</code> timestamps, omitted from the field
+      tables below to avoid repetition.
     </p>
     <p class="body-sm intro">
-      Each table below links to its HuggingFace dataset viewer -- since both RS-Graph repos are
+      Each table below links to its HuggingFace dataset viewer. Since both RS-Graph repos are
       private today, that link requires signing in with an authorized HF account (see the Home
       page's "Using this dataset responsibly" section for the request path).
     </p>
@@ -21,68 +21,94 @@ import { families } from '../../lib/schemaData';
     <input
       type="search"
       class="schema-search"
-      placeholder="Search tables, families, or field names (e.g. confidence, fwci)"
+      placeholder="Search tables or fields (e.g. confidence, fwci)"
       aria-label="Search schema tables and families"
       id="schema-search-input"
     />
-    <p class="body-sm search-empty" id="schema-search-empty" hidden>No tables match your search.</p>
+    <p class="body-sm search-empty" id="schema-search-empty" hidden>
+      No tables match your search.
+    </p>
 
     <div id="schema-families">
-      {families.map((family) => (
-        <details class="accordion" id={family.slug} data-family-slug={family.slug} data-family-title={family.title.toLowerCase()}>
-          <summary class="body-md">
-            <span class="family-title">{family.title}</span>
-            <span class="body-sm table-count">{family.tables.length} tables</span>
-          </summary>
-          <div class="accordion__body">
-            <p class="body-sm reason">{family.reason}</p>
-            {family.slug === 'developer-accounts-and-matching' || family.slug === 'article-repository-links' ? (
-              <div class="notification body-sm">
-                This family includes a <code>predictive_model_confidence</code> field -- see the
-                Home page's "Using this dataset responsibly" section for the recommended filter
-                threshold.
-              </div>
-            ) : null}
-            {family.slug === 'repositories-and-code' && (
-              <div class="notification body-sm">
-                This dataset does not include source file contents -- only READMEs, extracted
-                imports/dependencies, and file-tree metadata. There is no table you can join to get
-                actual code.
-              </div>
-            )}
-            {family.tables.map((table: { name: string; docstring: string; fields: { name: string; type: string }[] }) => (
-              <div
-                class="table-block"
-                data-table-name={table.name.toLowerCase()}
-                data-table-search={[
-                  table.name,
-                  table.docstring,
-                  ...table.fields.map((f) => `${f.name} ${f.type}`),
-                ].join(' ').toLowerCase()}
-              >
-                <h3 class="title-sm">{table.name}</h3>
-                <p class="body-sm docstring">{table.docstring}</p>
-                <table>
-                  <thead>
-                    <tr><th>Field</th><th>Type</th></tr>
-                  </thead>
-                  <tbody>
-                    {table.fields.map((f) => (
-                      <tr><td><code>{f.name}</code></td><td>{f.type}</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-                <a
-                  class="body-sm viewer-link"
-                  href={`https://huggingface.co/datasets/evamxb/rs-graph-v2-full/viewer/${table.name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()}`}
-                >
-                  View sample rows on the HuggingFace dataset viewer &rarr;
-                </a>
-              </div>
-            ))}
-          </div>
-        </details>
-      ))}
+      {
+        families.map((family) => (
+          <details
+            class="accordion"
+            id={family.slug}
+            data-family-slug={family.slug}
+            data-family-title={family.title.toLowerCase()}
+          >
+            <summary class="body-md">
+              <span class="family-title">{family.title}</span>
+              <span class="body-sm table-count">{family.tables.length} tables</span>
+            </summary>
+            <div class="accordion__body">
+              <p class="body-sm reason">{family.reason}</p>
+              {family.slug === 'developer-accounts-and-matching' ||
+              family.slug === 'article-repository-links' ? (
+                <div class="notification body-sm">
+                  This family includes a <code>predictive_model_confidence</code> field -- see
+                  the Home page's "Using this dataset responsibly" section for the recommended
+                  filter threshold.
+                </div>
+              ) : null}
+              {family.slug === 'repositories-and-code' && (
+                <div class="notification body-sm">
+                  This dataset does not include source file contents: only READMEs, extracted
+                  imports/dependencies, and file-tree metadata. There is no table you can join
+                  to get actual code.
+                </div>
+              )}
+              {family.tables.map(
+                (table: {
+                  name: string;
+                  docstring: string;
+                  fields: { name: string; type: string }[];
+                }) => (
+                  <div
+                    class="table-block"
+                    data-table-name={table.name.toLowerCase()}
+                    data-table-search={[
+                      table.name,
+                      table.docstring,
+                      ...table.fields.map((f) => `${f.name} ${f.type}`),
+                    ]
+                      .join(' ')
+                      .toLowerCase()}
+                  >
+                    <h3 class="title-sm">{table.name}</h3>
+                    <p class="body-sm docstring">{table.docstring}</p>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Field</th>
+                          <th>Type</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {table.fields.map((f) => (
+                          <tr>
+                            <td>
+                              <code class="field-name">{f.name}</code>
+                            </td>
+                            <td>{f.type}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <a
+                      class="body-sm viewer-link"
+                      href={`https://huggingface.co/datasets/evamxb/rs-graph-v2-full/viewer/${table.name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()}`}
+                    >
+                      View sample rows on the HuggingFace dataset viewer &rarr;
+                    </a>
+                  </div>
+                ),
+              )}
+            </div>
+          </details>
+        ))
+      }
     </div>
   </section>
 </BaseLayout>
@@ -90,7 +116,37 @@ import { families } from '../../lib/schemaData';
 <script>
   const input = document.getElementById('schema-search-input') as HTMLInputElement;
   const emptyMsg = document.getElementById('schema-search-empty') as HTMLElement;
-  const families = Array.from(document.querySelectorAll<HTMLDetailsElement>('[data-family-slug]'));
+  const families = Array.from(
+    document.querySelectorAll<HTMLDetailsElement>('[data-family-slug]'),
+  );
+
+  function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  // Highlight the matched substring in a visible text element, restoring the
+  // element's original text first so repeated keystrokes don't nest <mark>s.
+  function highlight(el: HTMLElement, query: string) {
+    if (el.dataset.original === undefined) el.dataset.original = el.textContent || '';
+    const original = el.dataset.original;
+    if (!query) {
+      el.textContent = original;
+      return;
+    }
+    const match = original.match(new RegExp(escapeRegExp(query), 'i'));
+    if (!match || match.index === undefined) {
+      el.textContent = original;
+      return;
+    }
+    const start = match.index;
+    const end = start + match[0].length;
+    el.textContent = '';
+    el.append(
+      document.createTextNode(original.slice(0, start)),
+      Object.assign(document.createElement('mark'), { textContent: original.slice(start, end) }),
+      document.createTextNode(original.slice(end)),
+    );
+  }
 
   input.addEventListener('input', () => {
     const query = input.value.trim().toLowerCase();
@@ -102,11 +158,22 @@ import { families } from '../../lib/schemaData';
       const familyMatches = query === '' || familyTitle.includes(query);
       let familyHasMatchingTable = false;
 
+      const familyTitleEl = family.querySelector<HTMLElement>('.family-title');
+      if (familyTitleEl) highlight(familyTitleEl, familyMatches ? query : '');
+
       tables.forEach((table) => {
         const tableMatches = query === '' || (table.dataset.tableSearch || '').includes(query);
         const show = familyMatches || tableMatches;
         table.classList.toggle('accordion--hidden', !show);
         if (tableMatches && query !== '') familyHasMatchingTable = true;
+
+        const nameEl = table.querySelector<HTMLElement>('h3');
+        const docEl = table.querySelector<HTMLElement>('.docstring');
+        const fieldEls = Array.from(table.querySelectorAll<HTMLElement>('.field-name'));
+        const highlightQuery = tableMatches ? query : '';
+        if (nameEl) highlight(nameEl, highlightQuery);
+        if (docEl) highlight(docEl, highlightQuery);
+        fieldEls.forEach((fieldEl) => highlight(fieldEl, highlightQuery));
       });
 
       const showFamily = query === '' || familyMatches || familyHasMatchingTable;
@@ -165,5 +232,10 @@ import { families } from '../../lib/schemaData';
   .search-empty {
     color: var(--color-text-muted);
     margin-bottom: 1rem;
+  }
+  :global(#schema-families mark) {
+    background: var(--color-highlight-bg);
+    color: inherit;
+    border-radius: 2px;
   }
 </style>

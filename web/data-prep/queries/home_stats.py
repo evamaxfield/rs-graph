@@ -10,7 +10,6 @@ import json
 import os
 
 import polars as pl
-
 from lib.confidence import (
     PUBLICATION_YEAR_FLOOR,
     filter_high_precision_document_repository_links,
@@ -42,9 +41,14 @@ def run() -> dict:
     # distinct publication venues (journals, conferences, etc.) behind the
     # filtered document population -- via Document -> Location -> Source
     locations = load_table("location").select("id", "source_id").rename({"id": "location_id"})
-    sources = load_table("source").select("id", "name", "source_type").rename({"id": "source_id"})
+    sources = (
+        load_table("source").select("id", "name", "source_type").rename({"id": "source_id"})
+    )
     venue_docs = documents.join(
-        filtered_links.select("document_id").unique(), left_on="id", right_on="document_id", how="semi"
+        filtered_links.select("document_id").unique(),
+        left_on="id",
+        right_on="document_id",
+        how="semi",
     )
     venues = (
         venue_docs.select(pl.col("primary_location_id").alias("location_id"))

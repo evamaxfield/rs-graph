@@ -22,14 +22,18 @@ const {
 ---
 
 <div class="chart-wrap">
-  {filterOptions && (
-    <label class="body-sm chart-filter">
-      {filterLabel}
-      <select data-chart-filter-for={id}>
-        {filterOptions.map((f, i) => <option value={i}>{f.label}</option>)}
-      </select>
-    </label>
-  )}
+  {
+    filterOptions && (
+      <label class="body-sm chart-filter">
+        {filterLabel}
+        <select data-chart-filter-for={id}>
+          {filterOptions.map((f, i) => (
+            <option value={i}>{f.label}</option>
+          ))}
+        </select>
+      </label>
+    )
+  }
   <div
     id={id}
     class="chart chart--line"
@@ -37,7 +41,8 @@ const {
     data-y-label={yLabel}
     data-y-max={yMax}
     data-filter-options={filterOptions ? JSON.stringify(filterOptions) : undefined}
-  ></div>
+  >
+  </div>
 </div>
 
 <script>
@@ -50,12 +55,20 @@ const {
       width: el.clientWidth || 640,
       height: 340,
       marginLeft: 50,
-      x: { label: 'Repo creation year' },
+      x: { label: 'Repo creation year', tickFormat: (d: number) => String(d) },
       y: { label: yLabel, domain: [0, yMax] },
       marks: [
         Plot.lineY(data, { x: 'year', y: 'pct', stroke: 'var(--chart-1)', strokeWidth: 2 }),
         Plot.dot(data, { x: 'year', y: 'pct', fill: 'var(--chart-1)' }),
         Plot.ruleY([0]),
+        Plot.tip(
+          data,
+          Plot.pointerX({
+            x: 'year',
+            y: 'pct',
+            title: (d: { year: number; pct: number }) => `${d.year}\n${d.pct}%`,
+          }),
+        ),
       ],
     });
     el.replaceChildren(plot);
@@ -64,9 +77,13 @@ const {
   // Wire filter dropdowns immediately (not gated on visibility) -- a user can
   // reach the <select> before its chart has scrolled into view.
   document.querySelectorAll<HTMLElement>('.chart--line').forEach((el) => {
-    const filterOptions = el.dataset.filterOptions ? JSON.parse(el.dataset.filterOptions) : null;
+    const filterOptions = el.dataset.filterOptions
+      ? JSON.parse(el.dataset.filterOptions)
+      : null;
     if (!filterOptions) return;
-    const select = document.querySelector<HTMLSelectElement>(`[data-chart-filter-for="${el.id}"]`);
+    const select = document.querySelector<HTMLSelectElement>(
+      `[data-chart-filter-for="${el.id}"]`,
+    );
     select?.addEventListener('change', () => {
       renderLineChart(el, filterOptions[Number(select.value)].data);
       observer.unobserve(el);

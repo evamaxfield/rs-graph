@@ -1,4 +1,4 @@
-"""Q2: Are code contributions recognized as authorship? (qss-code-authors replication)
+"""Q2: whether code contributions are recognized as authorship (qss-code-authors replication).
 
 Matches repository contributors to researchers via ResearcherDeveloperAccountLink
 (confidence >= 0.9), restricted throughout to high-precision article-repository links.
@@ -9,14 +9,15 @@ import json
 import os
 
 import polars as pl
-
 from lib.confidence import (
     filter_high_confidence_researcher_developer_links,
     filter_high_precision_document_repository_links,
 )
 from lib.hf_loader import load_table
 
-OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "non_author_contributors.json")
+OUTPUT_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "output", "non_author_contributors.json"
+)
 
 
 def run() -> dict:

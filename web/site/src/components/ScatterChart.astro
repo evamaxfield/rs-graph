@@ -6,8 +6,10 @@ interface Props {
   yField: string;
   colorField: string;
   title?: string;
+  linkField?: string;
+  linkGroup?: string;
 }
-const { id, data, xField, yField, colorField, title } = Astro.props;
+const { id, data, xField, yField, colorField, title, linkField, linkGroup } = Astro.props;
 ---
 
 <div class="scatter-panel">
@@ -19,22 +21,68 @@ const { id, data, xField, yField, colorField, title } = Astro.props;
     data-x-field={xField}
     data-y-field={yField}
     data-color-field={colorField}
-  ></div>
+    data-link-field={linkField}
+    data-link-group={linkGroup}
+  >
+  </div>
 </div>
 
 <script>
   import * as Plot from '@observablehq/plot';
 
   const PALETTE = [
-    'var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)',
-    'var(--chart-5)', 'var(--chart-6)', 'var(--chart-7)',
+    'var(--chart-1)',
+    'var(--chart-2)',
+    'var(--chart-3)',
+    'var(--chart-4)',
+    'var(--chart-5)',
+    'var(--chart-6)',
+    'var(--chart-7)',
   ];
 
+  const DEFAULT_OPACITY = 0.65;
+  const DIMMED_OPACITY = 0.15;
+  const DEFAULT_RADIUS = 2.5;
+  const HOVER_RADIUS = 4.5;
+  // Panels sharing a linkGroup highlight each other's matching point on hover --
+  // keyed by linkGroup so multiple independent sibling-pairs on one page don't
+  // cross-talk. Each entry lists the circle elements in data order, each carrying
+  // a data-link-id attribute set at render time (see renderScatterChart).
+  const linkedPanels = new Map<string, SVGCircleElement[][]>();
+
+  function highlightById(group: string, id: string | null) {
+    const panels = linkedPanels.get(group) || [];
+    panels.forEach((circles) => {
+      circles.forEach((circle) => {
+        if (id === null) {
+          circle.style.opacity = String(DEFAULT_OPACITY);
+          circle.style.r = String(DEFAULT_RADIUS);
+          circle.style.stroke = '';
+          circle.style.strokeWidth = '';
+        } else if (circle.dataset.linkId === id) {
+          // Bump radius + add a contrasting halo so the one highlighted point
+          // is findable against ~3.2k dimmed overlapping neighbors.
+          circle.style.opacity = '1';
+          circle.style.r = String(HOVER_RADIUS);
+          circle.style.stroke = 'var(--color-text)';
+          circle.style.strokeWidth = '1.5';
+        } else {
+          circle.style.opacity = String(DIMMED_OPACITY);
+          circle.style.r = String(DEFAULT_RADIUS);
+          circle.style.stroke = '';
+          circle.style.strokeWidth = '';
+        }
+      });
+    });
+  }
+
   function renderScatterChart(el: HTMLElement) {
-    const data = JSON.parse(el.dataset.payload || '[]');
+    const data: Record<string, unknown>[] = JSON.parse(el.dataset.payload || '[]');
     const cx = el.dataset.xField as string;
     const cy = el.dataset.yField as string;
     const cc = el.dataset.colorField as string;
+    const linkField = el.dataset.linkField;
+    const linkGroup = el.dataset.linkGroup;
     const plot = Plot.plot({
       width: el.clientWidth || 480,
       height: 460,
@@ -46,15 +94,52 @@ const { id, data, xField, yField, colorField, title } = Astro.props;
           fill: cc,
           r: 2.5,
           fillOpacity: 0.65,
-          title: (d: Record<string, unknown>) => `${d.repo_full_name}\n${d.document_title}\n${d[cc]}`,
+          title: (d: Record<string, unknown>) =>
+            `${d.repo_full_name}\n${d.document_title}\n${d[cc]}`,
         }),
+        // Native SVG <title> above only surfaces a plain browser tooltip on the
+        // exact point under the cursor -- with ~3.2k overlapping points that's
+        // unreliable, so add a proper pointer-following tip for the nearest mark.
+        Plot.tip(
+          data,
+          Plot.pointer({
+            x: cx,
+            y: cy,
+            title: (d: Record<string, unknown>) =>
+              `${d.repo_full_name}\n${d.document_title}\n${d[cc]}`,
+          }),
+        ),
       ],
       x: { axis: null },
       y: { axis: null },
     });
     el.replaceChildren(plot);
+
+    if (!linkField || !linkGroup) return;
+
+    // Map each rendered <circle> back to its data row's linkField value (e.g.
+    // document_id) via a data-attribute, so a sibling panel can find "the same
+    // row" without re-deriving it from pixel position. Plot.dot preserves input
+    // order with no sort/facet applied here, so index i lines up with data[i].
+    const circles = Array.from(plot.querySelectorAll('circle')) as SVGCircleElement[];
+    circles.forEach((circle, i) => {
+      const row = data[i];
+      if (row) circle.dataset.linkId = String(row[linkField]);
+    });
+
+    const panels = linkedPanels.get(linkGroup) || [];
+    panels.push(circles);
+    linkedPanels.set(linkGroup, panels);
+
+    plot.addEventListener('pointermove', (event: PointerEvent) => {
+      const circle = (event.target as Element).closest('circle') as SVGCircleElement | null;
+      highlightById(linkGroup, circle?.dataset.linkId ?? null);
+    });
+    plot.addEventListener('pointerleave', () => highlightById(linkGroup, null));
   }
 
+  // Lazy-render on first visibility (see BarChart.astro for the same pattern) --
+  // a screenshot/QA tool that doesn't scroll first will see a blank gap here by design.
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
       if (!entry.isIntersecting) return;
@@ -62,7 +147,9 @@ const { id, data, xField, yField, colorField, title } = Astro.props;
       observer.unobserve(entry.target);
     });
   });
-  document.querySelectorAll<HTMLElement>('.chart--scatter').forEach((el) => observer.observe(el));
+  document
+    .querySelectorAll<HTMLElement>('.chart--scatter')
+    .forEach((el) => observer.observe(el));
 </script>
 
 <style>

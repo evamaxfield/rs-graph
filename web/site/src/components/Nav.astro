@@ -12,9 +12,42 @@ const links = [
     <a href={withBase('/')} class="nav__brand">RS-Graph</a>
     <div class="nav__links">
       {links.map((link) => <a href={withBase(link.href)}>{link.label}</a>)}
+      <button
+        type="button"
+        class="theme-toggle"
+        id="theme-toggle"
+        aria-label="Toggle light/dark theme"
+      >
+        <span class="theme-toggle__icon" aria-hidden="true">🌙</span>
+      </button>
     </div>
   </div>
 </nav>
+
+<script>
+  // Cycles the manual theme override and persists the choice; falls back to the
+  // OS preference (via the media query in global.scss) when nothing is saved.
+  const button = document.getElementById('theme-toggle');
+  const icon = button?.querySelector('.theme-toggle__icon');
+
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+  const currentTheme = () =>
+    document.documentElement.getAttribute('data-theme') ?? (prefersDark ? 'dark' : 'light');
+
+  const syncIcon = () => {
+    if (icon) icon.textContent = currentTheme() === 'dark' ? '☀️' : '🌙';
+  };
+
+  button?.addEventListener('click', () => {
+    const next = currentTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+    syncIcon();
+  });
+
+  syncIcon();
+</script>
 
 <style>
   .nav {
@@ -47,5 +80,22 @@ const links = [
   }
   .nav__links a:hover {
     color: var(--color-brand);
+  }
+  .theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-bg-alt);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+  }
+  .theme-toggle:hover {
+    border-color: var(--color-brand);
   }
 </style>

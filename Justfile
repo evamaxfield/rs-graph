@@ -32,10 +32,16 @@ install:
 	uv pip install -e ".[dev,lint,modeling,data-v2,pipeline]"
 
 # lint, format, and check all files
+# (this also covers web/data-prep -- it's a plain Python tree under the repo root)
 lint:
 	-ruff check . --fix
 	-ruff format .
 	-pyrefly check
+
+# lint and format the web/site Astro/TS frontend (ESLint + Prettier)
+lint-web:
+	cd web/site && npm run lint
+	cd web/site && npm run format
 
 ###############################################################################
 # Release and versioning
