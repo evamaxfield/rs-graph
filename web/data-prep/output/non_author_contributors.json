@@ -1,0 +1,18 @@
+{
+  "question": "Are code contributions recognized as authorship?",
+  "methodology": "document_repository_link filtered to NULL OR confidence >= 0.9994; researcher_developer_account_link filtered to confidence >= 0.9",
+  "unrestricted": {
+    "n_hp_linked_documents": 275255,
+    "n_with_confidently_matched_contributor": 244445,
+    "n_with_non_author_contributor": 78468,
+    "pct_of_all_hp_linked": 28.51,
+    "pct_of_matched": 32.1
+  },
+  "paper_equivalent": {
+    "description": "single linked repository, 3-11 listed authors",
+    "n_qualifying_documents": 209771,
+    "n_with_non_author_contributor": 59905,
+    "pct": 28.56,
+    "published_v1_finding_pct": 28.6
+  }
+}

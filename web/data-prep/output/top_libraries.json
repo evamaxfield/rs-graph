@@ -1,0 +1,599 @@
+{
+  "question": "What libraries does this science actually run on -- and does the paper text say so?",
+  "methodology": "document_repository_link filtered to NULL OR confidence >= 0.9994",
+  "n_hp_repos": 268873,
+  "n_hp_docs": 275255,
+  "top_imported": [
+    {
+      "name": "numpy",
+      "count": 162578
+    },
+    {
+      "name": "torch",
+      "count": 106184
+    },
+    {
+      "name": "matplotlib",
+      "count": 105581
+    },
+    {
+      "name": "scipy",
+      "count": 92146
+    },
+    {
+      "name": "pandas",
+      "count": 85194
+    },
+    {
+      "name": "tqdm",
+      "count": 84171
+    },
+    {
+      "name": "sklearn",
+      "count": 69956
+    },
+    {
+      "name": "torchvision",
+      "count": 49858
+    },
+    {
+      "name": "pil",
+      "count": 49271
+    },
+    {
+      "name": "cv2",
+      "count": 36354
+    }
+  ],
+  "top_dependencies": [
+    {
+      "name": "numpy",
+      "count": 59426,
+      "ecosystem": "pypi"
+    },
+    {
+      "name": "torch",
+      "count": 42299,
+      "ecosystem": "pypi"
+    },
+    {
+      "name": "matplotlib",
+      "count": 41975,
+      "ecosystem": "pypi"
+    },
+    {
+      "name": "scipy",
+      "count": 41776,
+      "ecosystem": "pypi"
+    },
+    {
+      "name": "tqdm",
+      "count": 40186,
+      "ecosystem": "pypi"
+    },
+    {
+      "name": "knitr",
+      "count": 3983,
+      "ecosystem": "cran"
+    },
+    {
+      "name": "rmarkdown",
+      "count": 3697,
+      "ecosystem": "cran"
+    },
+    {
+      "name": "testthat",
+      "count": 3492,
+      "ecosystem": "cran"
+    },
+    {
+      "name": "ggplot2",
+      "count": 3025,
+      "ecosystem": "cran"
+    },
+    {
+      "name": "dplyr",
+      "count": 2648,
+      "ecosystem": "cran"
+    },
+    {
+      "name": "ms",
+      "count": 845,
+      "ecosystem": "npm"
+    },
+    {
+      "name": "debug",
+      "count": 844,
+      "ecosystem": "npm"
+    },
+    {
+      "name": "semver",
+      "count": 813,
+      "ecosystem": "npm"
+    },
+    {
+      "name": "@types/node",
+      "count": 788,
+      "ecosystem": "npm"
+    },
+    {
+      "name": "ansistyles",
+      "count": 786,
+      "ecosystem": "npm"
+    }
+  ],
+  "top_mentions": [
+    {
+      "name": "code",
+      "count": 14377
+    },
+    {
+      "name": "scripts",
+      "count": 6885
+    },
+    {
+      "name": "github",
+      "count": 5624
+    },
+    {
+      "name": "script",
+      "count": 5089
+    },
+    {
+      "name": "matlab",
+      "count": 5080
+    },
+    {
+      "name": "latex",
+      "count": 5074
+    },
+    {
+      "name": "pytorch",
+      "count": 4784
+    },
+    {
+      "name": "linux",
+      "count": 2624
+    },
+    {
+      "name": "tensorflow",
+      "count": 1898
+    },
+    {
+      "name": "library",
+      "count": 1803
+    }
+  ],
+  "field_slices": [
+    {
+      "field_name": "Computer Science",
+      "n_repos": 134684,
+      "top_libraries": [
+        {
+          "name": "numpy",
+          "pct": 70.0
+        },
+        {
+          "name": "torch",
+          "pct": 53.4
+        },
+        {
+          "name": "matplotlib",
+          "pct": 40.8
+        },
+        {
+          "name": "tqdm",
+          "pct": 40.3
+        },
+        {
+          "name": "scipy",
+          "pct": 36.7
+        },
+        {
+          "name": "pandas",
+          "pct": 33.3
+        },
+        {
+          "name": "sklearn",
+          "pct": 30.6
+        },
+        {
+          "name": "torchvision",
+          "pct": 26.3
+        },
+        {
+          "name": "pil",
+          "pct": 25.3
+        },
+        {
+          "name": "cv2",
+          "pct": 17.9
+        }
+      ]
+    },
+    {
+      "field_name": "Engineering",
+      "n_repos": 25841,
+      "top_libraries": [
+        {
+          "name": "numpy",
+          "pct": 61.2
+        },
+        {
+          "name": "matplotlib",
+          "pct": 45.2
+        },
+        {
+          "name": "torch",
+          "pct": 39.5
+        },
+        {
+          "name": "scipy",
+          "pct": 37.8
+        },
+        {
+          "name": "tqdm",
+          "pct": 29.3
+        },
+        {
+          "name": "pandas",
+          "pct": 26.1
+        },
+        {
+          "name": "sklearn",
+          "pct": 21.7
+        },
+        {
+          "name": "torchvision",
+          "pct": 20.3
+        },
+        {
+          "name": "pil",
+          "pct": 20.0
+        },
+        {
+          "name": "cv2",
+          "pct": 19.2
+        }
+      ]
+    },
+    {
+      "field_name": "Biochemistry, Genetics and Molecular Biology",
+      "n_repos": 21431,
+      "top_libraries": [
+        {
+          "name": "numpy",
+          "pct": 40.6
+        },
+        {
+          "name": "pandas",
+          "pct": 30.7
+        },
+        {
+          "name": "matplotlib",
+          "pct": 28.3
+        },
+        {
+          "name": "scipy",
+          "pct": 26.5
+        },
+        {
+          "name": "sklearn",
+          "pct": 19.9
+        },
+        {
+          "name": "seaborn",
+          "pct": 13.4
+        },
+        {
+          "name": "tqdm",
+          "pct": 13.3
+        },
+        {
+          "name": "torch",
+          "pct": 13.2
+        },
+        {
+          "name": "ggplot2",
+          "pct": 12.1
+        },
+        {
+          "name": "dplyr",
+          "pct": 11.0
+        }
+      ]
+    },
+    {
+      "field_name": "Physics and Astronomy",
+      "n_repos": 12845,
+      "top_libraries": [
+        {
+          "name": "numpy",
+          "pct": 60.4
+        },
+        {
+          "name": "matplotlib",
+          "pct": 51.6
+        },
+        {
+          "name": "scipy",
+          "pct": 44.8
+        },
+        {
+          "name": "pandas",
+          "pct": 24.8
+        },
+        {
+          "name": "tqdm",
+          "pct": 18.0
+        },
+        {
+          "name": "torch",
+          "pct": 16.7
+        },
+        {
+          "name": "sklearn",
+          "pct": 15.6
+        },
+        {
+          "name": "astropy",
+          "pct": 13.9
+        },
+        {
+          "name": "mpltoolkits",
+          "pct": 9.6
+        },
+        {
+          "name": "h5py",
+          "pct": 9.5
+        }
+      ]
+    },
+    {
+      "field_name": "Medicine",
+      "n_repos": 12009,
+      "top_libraries": [
+        {
+          "name": "numpy",
+          "pct": 51.8
+        },
+        {
+          "name": "matplotlib",
+          "pct": 38.2
+        },
+        {
+          "name": "pandas",
+          "pct": 34.1
+        },
+        {
+          "name": "scipy",
+          "pct": 31.0
+        },
+        {
+          "name": "torch",
+          "pct": 30.7
+        },
+        {
+          "name": "sklearn",
+          "pct": 26.6
+        },
+        {
+          "name": "tqdm",
+          "pct": 24.3
+        },
+        {
+          "name": "torchvision",
+          "pct": 18.7
+        },
+        {
+          "name": "pil",
+          "pct": 18.4
+        },
+        {
+          "name": "cv2",
+          "pct": 16.2
+        }
+      ]
+    },
+    {
+      "field_name": "Mathematics",
+      "n_repos": 8383,
+      "top_libraries": [
+        {
+          "name": "numpy",
+          "pct": 31.1
+        },
+        {
+          "name": "matplotlib",
+          "pct": 24.8
+        },
+        {
+          "name": "scipy",
+          "pct": 22.1
+        },
+        {
+          "name": "pandas",
+          "pct": 18.4
+        },
+        {
+          "name": "sklearn",
+          "pct": 12.8
+        },
+        {
+          "name": "ggplot2",
+          "pct": 12.2
+        },
+        {
+          "name": "dplyr",
+          "pct": 10.6
+        },
+        {
+          "name": "torch",
+          "pct": 10.1
+        },
+        {
+          "name": "tqdm",
+          "pct": 9.7
+        },
+        {
+          "name": "seaborn",
+          "pct": 8.6
+        }
+      ]
+    },
+    {
+      "field_name": "Environmental Science",
+      "n_repos": 7154,
+      "top_libraries": [
+        {
+          "name": "numpy",
+          "pct": 31.3
+        },
+        {
+          "name": "matplotlib",
+          "pct": 24.8
+        },
+        {
+          "name": "pandas",
+          "pct": 22.4
+        },
+        {
+          "name": "dplyr",
+          "pct": 19.9
+        },
+        {
+          "name": "scipy",
+          "pct": 18.9
+        },
+        {
+          "name": "ggplot2",
+          "pct": 18.1
+        },
+        {
+          "name": "sklearn",
+          "pct": 13.2
+        },
+        {
+          "name": "tidyverse",
+          "pct": 12.4
+        },
+        {
+          "name": "torch",
+          "pct": 11.5
+        },
+        {
+          "name": "tqdm",
+          "pct": 11.4
+        }
+      ]
+    },
+    {
+      "field_name": "Social Sciences",
+      "n_repos": 6519,
+      "top_libraries": [
+        {
+          "name": "numpy",
+          "pct": 50.7
+        },
+        {
+          "name": "pandas",
+          "pct": 41.5
+        },
+        {
+          "name": "matplotlib",
+          "pct": 32.7
+        },
+        {
+          "name": "sklearn",
+          "pct": 29.0
+        },
+        {
+          "name": "torch",
+          "pct": 27.1
+        },
+        {
+          "name": "tqdm",
+          "pct": 26.7
+        },
+        {
+          "name": "scipy",
+          "pct": 25.2
+        },
+        {
+          "name": "transformers",
+          "pct": 15.9
+        },
+        {
+          "name": "seaborn",
+          "pct": 14.7
+        },
+        {
+          "name": "requests",
+          "pct": 10.3
+        }
+      ]
+    }
+  ],
+  "import_vs_mention_gap": [
+    {
+      "name": "numpy",
+      "import_pct": 60.47,
+      "mention_pct": 0.54,
+      "gap_points": 59.9
+    },
+    {
+      "name": "torch",
+      "import_pct": 39.49,
+      "mention_pct": 0.01,
+      "gap_points": 39.5
+    },
+    {
+      "name": "matplotlib",
+      "import_pct": 39.27,
+      "mention_pct": 0.39,
+      "gap_points": 38.9
+    },
+    {
+      "name": "scipy",
+      "import_pct": 34.27,
+      "mention_pct": 0.6,
+      "gap_points": 33.7
+    },
+    {
+      "name": "pandas",
+      "import_pct": 31.69,
+      "mention_pct": 0.13,
+      "gap_points": 31.6
+    },
+    {
+      "name": "tqdm",
+      "import_pct": 31.31,
+      "mention_pct": 0.0,
+      "gap_points": 31.3
+    },
+    {
+      "name": "sklearn",
+      "import_pct": 26.02,
+      "mention_pct": 0.15,
+      "gap_points": 25.9
+    },
+    {
+      "name": "torchvision",
+      "import_pct": 18.54,
+      "mention_pct": 0.02,
+      "gap_points": 18.5
+    },
+    {
+      "name": "pil",
+      "import_pct": 18.33,
+      "mention_pct": 0.0,
+      "gap_points": 18.3
+    },
+    {
+      "name": "cv2",
+      "import_pct": 13.52,
+      "mention_pct": 0.0,
+      "gap_points": 13.5
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+hp_links = filter_high_precision_document_repository_links(
+    load_table("document_repository_link")
+).select("document_id", "repository_id")
+
+documents = load_table("document").with_columns(
+    pl.col("publication_date").str.to_date().dt.year().alias("publication_year")
+)
+documents = documents.filter(pl.col("publication_year") >= PUBLICATION_YEAR_FLOOR)
+
+filtered_links = hp_links.join(
+    documents.select("id", "publication_year").rename({"id": "document_id"}),
+    on="document_id",
+    how="inner",
+)
+
+topic = load_table("topic")
+
+# distinct publication venues (journals, conferences, etc.) behind the
+# filtered document population -- via Document -> Location -> Source
+locations = load_table("location").select("id", "source_id").rename({"id": "location_id"})
+sources = load_table("source").select("id", "name", "source_type").rename({"id": "source_id"})
+venue_docs = documents.join(
+    filtered_links.select("document_id").unique(), left_on="id", right_on="document_id", how="semi"
+)
+venues = (
+    venue_docs.select(pl.col("primary_location_id").alias("location_id"))
+    .drop_nulls()
+    .join(locations, on="location_id", how="inner")
+    .join(sources, on="source_id", how="inner")
+)
+n_distinct_venues = venues["name"].n_unique()
+venue_type_counts = (
+    venues.select("name", "source_type")
+    .unique()
+    .group_by("source_type")
+    .agg(n=pl.len())
+    .sort("n", descending=True)
+)

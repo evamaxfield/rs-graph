@@ -1,0 +1,428 @@
+// Site-wide styles built on Mozilla Protocol's design tokens (colors,
+// typography scale, spacing) -- see the plan doc's "Mozilla Protocol" section
+// for the full component mapping. We use Protocol's tokens/mixins directly
+// rather than its full component CSS, since this site's page list doesn't
+// need the whole framework.
+@use '@mozilla-protocol/core/protocol/css/includes/lib' as *;
+@use '@mozilla-protocol/core/protocol/css/includes/tokens/dist/colors/colors' as colors;
+
+:root {
+  --color-bg: #ffffff;
+  --color-bg-alt: #{colors.$color-light-gray-05};
+  --color-text: #{colors.$color-ink-80};
+  --color-text-muted: #{colors.$color-ink-60};
+  --color-brand: #{colors.$color-blue-60};
+  --color-brand-dark: #{colors.$color-blue-70};
+  --color-accent: #{colors.$color-violet-60};
+  --color-bonus: #{colors.$color-orange-60};
+  --color-border: #{colors.$color-light-gray-30};
+  --color-card-bg: #ffffff;
+  --color-highlight-bg: color-mix(in srgb, #{colors.$color-yellow-40} 30%, transparent);
+
+  // Broader Protocol palette, used for section accents / accordion headers /
+  // tab-nav active states / chart categorical color, not just brand blue.
+  --color-green: #{colors.$color-green-70};
+  --color-purple: #{colors.$color-purple-60};
+  --color-pink: #{colors.$color-pink-60};
+  --color-yellow: #{colors.$color-yellow-70};
+  --color-red: #{colors.$color-red-60};
+
+  // Categorical chart palette (Observable Plot color ranges reference these
+  // as CSS var() strings so they follow light/dark automatically).
+  --chart-1: #{colors.$color-blue-60};
+  --chart-2: #{colors.$color-green-70};
+  --chart-3: #{colors.$color-orange-60};
+  --chart-4: #{colors.$color-violet-60};
+  --chart-5: #{colors.$color-pink-60};
+  --chart-6: #{colors.$color-yellow-70};
+  --chart-7: #{colors.$color-red-60};
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #{colors.$color-ink-90};
+    --color-bg-alt: #{colors.$color-ink-80};
+    --color-text: #{colors.$color-light-gray-10};
+    --color-text-muted: #{colors.$color-light-gray-40};
+    --color-brand: #{colors.$color-blue-40};
+    --color-brand-dark: #{colors.$color-blue-30};
+    --color-accent: #{colors.$color-violet-40};
+    --color-bonus: #{colors.$color-orange-40};
+    --color-border: #{colors.$color-ink-70};
+    --color-card-bg: #{colors.$color-ink-80};
+
+    --color-green: #{colors.$color-green-40};
+    --color-purple: #{colors.$color-purple-40};
+    --color-pink: #{colors.$color-pink-40};
+    --color-yellow: #{colors.$color-yellow-40};
+    --color-red: #{colors.$color-red-40};
+
+    --chart-1: #{colors.$color-blue-40};
+    --chart-2: #{colors.$color-green-40};
+    --chart-3: #{colors.$color-orange-40};
+    --chart-4: #{colors.$color-violet-40};
+    --chart-5: #{colors.$color-pink-40};
+    --chart-6: #{colors.$color-yellow-40};
+    --chart-7: #{colors.$color-red-40};
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+a {
+  color: var(--color-brand);
+}
+
+.title-2xl {
+  @include text-title-2xl;
+  font-weight: 700;
+}
+.title-lg {
+  @include text-title-lg;
+  font-weight: 700;
+}
+.title-md {
+  @include text-title-md;
+  font-weight: 600;
+}
+.title-sm {
+  @include text-title-sm;
+  font-weight: 600;
+}
+.body-md {
+  @include text-body-md;
+}
+.body-lg {
+  @include text-body-lg;
+}
+.body-sm {
+  @include text-body-sm;
+}
+
+.container {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.card {
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1.5rem;
+  display: block;
+}
+
+// Cards double as full-card links (e.g. home, schema/explore index grids) --
+// reset anchor styling so only the title reads as a link, not the whole body.
+a.card {
+  color: inherit;
+  text-decoration: none;
+}
+
+a.card h3 {
+  color: var(--color-brand);
+}
+
+.card--bonus {
+  border-color: var(--color-bonus);
+  border-width: 2px;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1.5rem;
+}
+
+.stat-tile {
+  text-align: center;
+  padding: 1rem;
+}
+
+.stat-tile .value {
+  @include text-title-lg;
+  font-weight: 700;
+  color: var(--color-brand);
+  display: block;
+}
+
+.stat-tile .label {
+  @include text-body-sm;
+  color: var(--color-text-muted);
+}
+
+.btn {
+  display: inline-block;
+  padding: 0.6rem 1.4rem;
+  border-radius: 4px;
+  font-weight: 600;
+  text-decoration: none;
+  background: var(--color-brand);
+  color: #fff;
+}
+
+.btn:hover {
+  background: var(--color-brand-dark);
+}
+
+.btn--secondary {
+  background: transparent;
+  color: var(--color-brand);
+  border: 1px solid var(--color-brand);
+}
+
+pre,
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+}
+
+pre {
+  background: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+// Shiki dual-theme (astro:components' <Code> with defaultColor={false}) --
+// light by default, switched to the dark theme's CSS vars under prefers-color-scheme.
+pre.astro-code,
+pre.astro-code span {
+  color: var(--shiki-light);
+  background-color: var(--shiki-light-bg) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  pre.astro-code,
+  pre.astro-code span {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+  }
+}
+
+// Visual cue for anchor-jump targets (e.g. "full breakdown" links into the
+// limitations list) so a reader can tell which item they were sent to.
+:target {
+  background: var(--color-highlight-bg);
+  scroll-margin-top: 1rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.notification {
+  border-left: 4px solid var(--color-brand);
+  background: var(--color-bg-alt);
+  padding: 1rem 1.25rem;
+  border-radius: 0 6px 6px 0;
+}
+
+.footer {
+  border-top: 1px solid var(--color-border);
+  margin-top: 4rem;
+  padding: 2rem 0;
+  color: var(--color-text-muted);
+}
+
+.footer .container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+// Rotate a bit of Protocol color through card-grid top borders for visual
+// interest, instead of every card reading identically neutral.
+.card-grid > .card:nth-child(6n + 1),
+.card-grid > a.card:nth-child(6n + 1) {
+  border-top: 3px solid var(--color-brand);
+}
+.card-grid > .card:nth-child(6n + 2),
+.card-grid > a.card:nth-child(6n + 2) {
+  border-top: 3px solid var(--color-green);
+}
+.card-grid > .card:nth-child(6n + 3),
+.card-grid > a.card:nth-child(6n + 3) {
+  border-top: 3px solid var(--color-accent);
+}
+.card-grid > .card:nth-child(6n + 4),
+.card-grid > a.card:nth-child(6n + 4) {
+  border-top: 3px solid var(--color-pink);
+}
+.card-grid > .card:nth-child(6n + 5),
+.card-grid > a.card:nth-child(6n + 5) {
+  border-top: 3px solid var(--color-bonus);
+}
+.card-grid > .card:nth-child(6n + 6),
+.card-grid > a.card:nth-child(6n + 6) {
+  border-top: 3px solid var(--color-purple);
+}
+
+// Tab-nav: a small button-row control that swaps sibling panels client-side.
+.tabnav-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tabnav-buttons button {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.6rem 1.1rem;
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tabnav-buttons button:hover {
+  color: var(--color-text);
+}
+
+.tabnav-buttons button[aria-selected='true'] {
+  color: var(--color-brand);
+  border-bottom-color: var(--color-brand);
+}
+
+.tabnav-buttons--nested button[aria-selected='true'] {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+// Accordion: native <details>, styled so the summary reads as a clickable header.
+.accordion {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+}
+
+.accordion summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 1rem 1.25rem;
+  font-weight: 600;
+  background: var(--color-bg-alt);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.accordion summary::-webkit-details-marker {
+  display: none;
+}
+
+.accordion summary::after {
+  content: '+';
+  font-weight: 700;
+  color: var(--color-brand);
+  flex-shrink: 0;
+}
+
+.accordion[open] summary::after {
+  content: '\2212';
+}
+
+.accordion .accordion__body {
+  padding: 1.25rem;
+}
+
+.accordion--hidden {
+  display: none;
+}
+
+// Footer-ish accordion sections (Data Sources / Methodology / Publications) --
+// visually de-emphasized, smaller text, sits near the bottom of Home.
+.footer-sections {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.footer-sections .accordion {
+  font-size: 0.9rem;
+}
+
+.footer-sections .accordion summary {
+  font-size: 0.85rem;
+  padding: 0.75rem 1rem;
+}
+
+.footer-sections .accordion__body {
+  padding: 1rem;
+  color: var(--color-text-muted);
+}
+
+// Schema search box
+.schema-search {
+  width: 100%;
+  max-width: 28rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font: inherit;
+  background: var(--color-card-bg);
+  color: var(--color-text);
+  margin-bottom: 1.5rem;
+}
+
+.schema-search:focus {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 1px;
+}
+
+.chart-filter {
+  display: block;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+}
+
+.chart-filter select {
+  display: block;
+  margin-top: 0.25rem;
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--color-brand);
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: var(--color-card-bg);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+// Observable Plot legend/swatch text should follow theme, not the SVG default.
+.chart .plot-d3-legend {
+  color: var(--color-text);
+}

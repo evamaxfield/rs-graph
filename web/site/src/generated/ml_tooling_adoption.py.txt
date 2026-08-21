@@ -1,0 +1,56 @@
+hp_links = filter_high_precision_document_repository_links(
+    load_table("document_repository_link")
+).select("document_id", "repository_id")
+hp_repo_ids = hp_links.select("repository_id").unique()
+
+imports = load_table("repository_import").join(hp_repo_ids, on="repository_id", how="inner")
+ml_repo_ids = (
+    imports.filter(pl.col("software_name_normalized").is_in(ML_LIBRARY_NAMES))
+    .select("repository_id")
+    .unique()
+    .with_columns(has_ml_import=True)
+)
+
+repositories = load_table("repository").join(
+    hp_repo_ids, left_on="id", right_on="repository_id", how="inner"
+)
+repos = repositories.join(
+    ml_repo_ids, left_on="id", right_on="repository_id", how="left"
+).with_columns(pl.col("has_ml_import").fill_null(False))
+repos = repos.with_columns(
+    pl.col("creation_datetime").str.to_datetime().dt.year().alias("creation_year")
+).filter(
+    (pl.col("creation_year") >= PUBLICATION_YEAR_FLOOR) & (pl.col("creation_year") <= 2024)
+)
+
+by_year = (
+    repos.group_by("creation_year")
+    .agg(total=pl.len(), with_ml=pl.col("has_ml_import").sum())
+    .with_columns(pct=(pl.col("with_ml") / pl.col("total") * 100).round(1))
+    .sort("creation_year")
+)
+
+# domain breakdown: each document's best-scoring topic -> domain_name
+document_topic = load_table("document_topic")
+topic = load_table("topic").select("id", "domain_name").rename({"id": "topic_id"})
+best_topic = (
+    document_topic.sort("score", descending=True)
+    .group_by("document_id")
+    .head(1)
+    .join(topic, on="topic_id")
+    .select("document_id", "domain_name")
+)
+repo_domain = (
+    hp_links.join(best_topic, on="document_id")
+    .select("repository_id", "domain_name")
+    .unique(subset=["repository_id"], keep="first")
+)
+domain_repos = repo_domain.join(
+    ml_repo_ids, on="repository_id", how="left"
+).with_columns(pl.col("has_ml_import").fill_null(False))
+by_domain = (
+    domain_repos.group_by("domain_name")
+    .agg(total=pl.len(), with_ml=pl.col("has_ml_import").sum())
+    .with_columns(pct=(pl.col("with_ml") / pl.col("total") * 100).round(1))
+    .sort("total", descending=True)
+)

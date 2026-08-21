@@ -1,0 +1,76 @@
+---
+interface Props {
+  id: string;
+  data: Record<string, unknown>[];
+  xField: string;
+  yField: string;
+  colorField: string;
+  title?: string;
+}
+const { id, data, xField, yField, colorField, title } = Astro.props;
+---
+
+<div class="scatter-panel">
+  {title && <h4 class="body-md scatter-panel__title">{title}</h4>}
+  <div
+    id={id}
+    class="chart chart--scatter"
+    data-payload={JSON.stringify(data)}
+    data-x-field={xField}
+    data-y-field={yField}
+    data-color-field={colorField}
+  ></div>
+</div>
+
+<script>
+  import * as Plot from '@observablehq/plot';
+
+  const PALETTE = [
+    'var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)',
+    'var(--chart-5)', 'var(--chart-6)', 'var(--chart-7)',
+  ];
+
+  function renderScatterChart(el: HTMLElement) {
+    const data = JSON.parse(el.dataset.payload || '[]');
+    const cx = el.dataset.xField as string;
+    const cy = el.dataset.yField as string;
+    const cc = el.dataset.colorField as string;
+    const plot = Plot.plot({
+      width: el.clientWidth || 480,
+      height: 460,
+      color: { legend: true, range: PALETTE },
+      marks: [
+        Plot.dot(data, {
+          x: cx,
+          y: cy,
+          fill: cc,
+          r: 2.5,
+          fillOpacity: 0.65,
+          title: (d: Record<string, unknown>) => `${d.repo_full_name}\n${d.document_title}\n${d[cc]}`,
+        }),
+      ],
+      x: { axis: null },
+      y: { axis: null },
+    });
+    el.replaceChildren(plot);
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      renderScatterChart(entry.target as HTMLElement);
+      observer.unobserve(entry.target);
+    });
+  });
+  document.querySelectorAll<HTMLElement>('.chart--scatter').forEach((el) => observer.observe(el));
+</script>
+
+<style>
+  .scatter-panel__title {
+    text-align: center;
+    margin-bottom: 0.5rem;
+  }
+  .chart {
+    min-height: 460px;
+  }
+</style>

@@ -1,0 +1,51 @@
+---
+import { withBase } from '../lib/url';
+
+const links = [
+  { href: '/', label: 'Home' },
+  { href: '/schema', label: 'Schema' },
+];
+---
+
+<nav class="nav">
+  <div class="container nav__inner">
+    <a href={withBase('/')} class="nav__brand">RS-Graph</a>
+    <div class="nav__links">
+      {links.map((link) => <a href={withBase(link.href)}>{link.label}</a>)}
+    </div>
+  </div>
+</nav>
+
+<style>
+  .nav {
+    border-bottom: 1px solid var(--color-border);
+  }
+  .nav__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .nav__brand {
+    font-weight: 700;
+    font-size: 1.1rem;
+    text-decoration: none;
+    color: var(--color-text);
+  }
+  .nav__links {
+    display: flex;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+  }
+  .nav__links a {
+    text-decoration: none;
+    color: var(--color-text);
+    font-weight: 500;
+  }
+  .nav__links a:hover {
+    color: var(--color-brand);
+  }
+</style>

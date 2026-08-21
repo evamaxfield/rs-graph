@@ -1,0 +1,38 @@
+hp_links = filter_high_precision_document_repository_links(
+    load_table("document_repository_link")
+).select("document_id", "repository_id")
+repo_contributors = load_table("repository_contributor").select(
+    "repository_id", "developer_account_id"
+)
+rdal = filter_high_confidence_researcher_developer_links(
+    load_table("researcher_developer_account_link")
+).select("researcher_id", "developer_account_id")
+authors = load_table("document_contributor").select("document_id", "researcher_id").unique()
+
+# every confidently-matched code contributor's researcher_id, per document
+doc_contributor_researchers = (
+    hp_links.join(repo_contributors, on="repository_id")
+    .join(rdal, on="developer_account_id")
+    .select("document_id", "researcher_id")
+    .unique()
+)
+
+# contributors who are NOT listed authors on that document
+non_author_rows = doc_contributor_researchers.join(
+    authors, on=["document_id", "researcher_id"], how="anti"
+)
+
+unrestricted_docs = hp_links.select("document_id").unique()
+matched_docs = doc_contributor_researchers.select("document_id").unique()
+non_author_docs = non_author_rows.select("document_id").unique()
+
+# paper-equivalent filter: single linked repository, 3-11 listed authors
+repo_count_per_doc = hp_links.group_by("document_id").agg(n_repos=pl.len())
+author_count_per_doc = authors.group_by("document_id").agg(n_authors=pl.len())
+paper_docs = (
+    repo_count_per_doc.filter(pl.col("n_repos") == 1)
+    .join(author_count_per_doc, on="document_id")
+    .filter(pl.col("n_authors").is_between(3, 11))
+    .select("document_id")
+)
+paper_non_author_docs = non_author_docs.join(paper_docs, on="document_id")

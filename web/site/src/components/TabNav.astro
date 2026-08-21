@@ -1,0 +1,94 @@
+---
+// Small client-side tab-nav: renders a button row, expects sibling
+// `[data-tab-panel]` elements (passed via slot) to be shown/hidden by id.
+// Multiple instances on one page (including nested ones) wire independently
+// via `:scope >` selectors scoped to each `[data-tabnav]` container.
+interface Tab {
+  id: string;
+  label: string;
+}
+interface Props {
+  tabs: Tab[];
+  nested?: boolean;
+  // Query-param name this group's selection syncs to (e.g. "tab", "q") --
+  // omit to keep a tab group purely client-local, un-addressable by URL.
+  paramName?: string;
+}
+const { tabs, nested = false, paramName } = Astro.props;
+---
+
+<div class="tabnav-group" data-tabnav data-param-name={paramName}>
+  <div class:list={['tabnav-buttons', nested && 'tabnav-buttons--nested']} role="tablist">
+    {tabs.map((t, i) => (
+      <button type="button" data-tab-target={t.id} aria-selected={i === 0 ? 'true' : 'false'} role="tab">
+        {t.label}
+      </button>
+    ))}
+  </div>
+  <slot />
+</div>
+
+<script>
+  function activateTab(
+    buttons: HTMLButtonElement[],
+    panels: HTMLElement[],
+    id: string,
+  ): boolean {
+    const btn = buttons.find((b) => b.dataset.tabTarget === id);
+    if (!btn) return false;
+    buttons.forEach((b) => b.setAttribute('aria-selected', String(b === btn)));
+    panels.forEach((panel) => {
+      panel.hidden = panel.dataset.tabPanel !== id;
+    });
+    return true;
+  }
+
+  function wireTabNavs() {
+    document.querySelectorAll<HTMLElement>('[data-tabnav]').forEach((group) => {
+      if (group.dataset.wired) return;
+      group.dataset.wired = 'true';
+      const buttons = Array.from(
+        group.querySelectorAll<HTMLButtonElement>(':scope > .tabnav-buttons > button'),
+      );
+      const panels = Array.from(
+        group.querySelectorAll<HTMLElement>(':scope > [data-tab-panel]'),
+      );
+      const paramName = group.dataset.paramName;
+
+      buttons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const targetId = btn.dataset.tabTarget;
+          if (!targetId) return;
+          activateTab(buttons, panels, targetId);
+          if (paramName) {
+            const url = new URL(window.location.href);
+            url.searchParams.set(paramName, targetId);
+            window.history.replaceState(null, '', url);
+          }
+        });
+      });
+
+      if (!paramName) return;
+
+      // Deep-link on load: honor this group's own param, or -- if absent --
+      // reveal whichever panel contains a nested tab group whose own param
+      // is present, so e.g. "?q=q3" alone still opens the "Example Questions"
+      // panel that q3's nested tabs live inside.
+      const params = new URLSearchParams(window.location.search);
+      let wanted = params.get(paramName);
+      if (!wanted) {
+        for (const panel of panels) {
+          const nestedGroup = panel.querySelector<HTMLElement>('[data-tabnav][data-param-name]');
+          const nestedParam = nestedGroup?.dataset.paramName;
+          if (nestedParam && params.has(nestedParam)) {
+            wanted = panel.dataset.tabPanel;
+            break;
+          }
+        }
+      }
+      if (wanted) activateTab(buttons, panels, wanted);
+    });
+  }
+  wireTabNavs();
+  document.addEventListener('astro:page-load', wireTabNavs);
+</script>

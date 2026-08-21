@@ -1,0 +1,33 @@
+{
+  "methodology": "document_repository_link filtered to NULL OR confidence >= 0.9994; publication_year >= 2008",
+  "n_documents": 275231,
+  "n_repositories": 268860,
+  "n_links": 282033,
+  "year_min": 2008,
+  "year_max": 2026,
+  "n_domains": 4,
+  "n_fields": 26,
+  "n_distinct_venues": 6848,
+  "venue_type_counts": [
+    {
+      "source_type": "journal",
+      "n": 5950
+    },
+    {
+      "source_type": "conference",
+      "n": 415
+    },
+    {
+      "source_type": "repository",
+      "n": 287
+    },
+    {
+      "source_type": "book series",
+      "n": 151
+    },
+    {
+      "source_type": "ebook platform",
+      "n": 45
+    }
+  ]
+}

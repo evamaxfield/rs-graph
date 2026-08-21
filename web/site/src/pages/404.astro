@@ -1,0 +1,21 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { withBase } from '../lib/url';
+---
+
+<BaseLayout title="Page Not Found">
+  <section class="container not-found">
+    <h1 class="title-lg">404 -- page not found</h1>
+    <p class="body-md">
+      That page doesn't exist. Try the <a href={withBase('/')}>home page</a> or the
+      <a href={withBase('/schema')}>schema reference</a>.
+    </p>
+  </section>
+</BaseLayout>
+
+<style>
+  .not-found {
+    padding: 4rem 0;
+    text-align: center;
+  }
+</style>

@@ -1,0 +1,574 @@
+{
+  "question": "How has dependency-manifest adoption grown over time?",
+  "methodology": "document_repository_link filtered to NULL OR confidence >= 0.9994; repo creation_year >= 2008",
+  "series": [
+    {
+      "year": 2008,
+      "total": 4,
+      "with_deps": 2,
+      "pct": 50.0
+    },
+    {
+      "year": 2009,
+      "total": 22,
+      "with_deps": 7,
+      "pct": 31.8
+    },
+    {
+      "year": 2010,
+      "total": 69,
+      "with_deps": 14,
+      "pct": 20.3
+    },
+    {
+      "year": 2011,
+      "total": 212,
+      "with_deps": 58,
+      "pct": 27.4
+    },
+    {
+      "year": 2012,
+      "total": 410,
+      "with_deps": 79,
+      "pct": 19.3
+    },
+    {
+      "year": 2013,
+      "total": 946,
+      "with_deps": 179,
+      "pct": 18.9
+    },
+    {
+      "year": 2014,
+      "total": 1846,
+      "with_deps": 368,
+      "pct": 19.9
+    },
+    {
+      "year": 2015,
+      "total": 3451,
+      "with_deps": 639,
+      "pct": 18.5
+    },
+    {
+      "year": 2016,
+      "total": 5430,
+      "with_deps": 1149,
+      "pct": 21.2
+    },
+    {
+      "year": 2017,
+      "total": 8839,
+      "with_deps": 1983,
+      "pct": 22.4
+    },
+    {
+      "year": 2018,
+      "total": 13219,
+      "with_deps": 3193,
+      "pct": 24.2
+    },
+    {
+      "year": 2019,
+      "total": 19469,
+      "with_deps": 5504,
+      "pct": 28.3
+    },
+    {
+      "year": 2020,
+      "total": 28137,
+      "with_deps": 8930,
+      "pct": 31.7
+    },
+    {
+      "year": 2021,
+      "total": 33684,
+      "with_deps": 11704,
+      "pct": 34.7
+    },
+    {
+      "year": 2022,
+      "total": 38234,
+      "with_deps": 14535,
+      "pct": 38.0
+    },
+    {
+      "year": 2023,
+      "total": 44403,
+      "with_deps": 18663,
+      "pct": 42.0
+    },
+    {
+      "year": 2024,
+      "total": 47145,
+      "with_deps": 21977,
+      "pct": 46.6
+    },
+    {
+      "year": 2025,
+      "total": 22378,
+      "with_deps": 10913,
+      "pct": 48.8
+    },
+    {
+      "year": 2026,
+      "total": 975,
+      "with_deps": 462,
+      "pct": 47.4
+    }
+  ],
+  "domains": {
+    "Physical Sciences": [
+      {
+        "year": 2008,
+        "total": 2,
+        "with_deps": 1,
+        "pct": 50.0
+      },
+      {
+        "year": 2009,
+        "total": 16,
+        "with_deps": 6,
+        "pct": 37.5
+      },
+      {
+        "year": 2010,
+        "total": 42,
+        "with_deps": 10,
+        "pct": 23.8
+      },
+      {
+        "year": 2011,
+        "total": 126,
+        "with_deps": 27,
+        "pct": 21.4
+      },
+      {
+        "year": 2012,
+        "total": 251,
+        "with_deps": 44,
+        "pct": 17.5
+      },
+      {
+        "year": 2013,
+        "total": 585,
+        "with_deps": 104,
+        "pct": 17.8
+      },
+      {
+        "year": 2014,
+        "total": 1094,
+        "with_deps": 206,
+        "pct": 18.8
+      },
+      {
+        "year": 2015,
+        "total": 2127,
+        "with_deps": 356,
+        "pct": 16.7
+      },
+      {
+        "year": 2016,
+        "total": 3532,
+        "with_deps": 680,
+        "pct": 19.3
+      },
+      {
+        "year": 2017,
+        "total": 6009,
+        "with_deps": 1320,
+        "pct": 22.0
+      },
+      {
+        "year": 2018,
+        "total": 9330,
+        "with_deps": 2312,
+        "pct": 24.8
+      },
+      {
+        "year": 2019,
+        "total": 14171,
+        "with_deps": 4206,
+        "pct": 29.7
+      },
+      {
+        "year": 2020,
+        "total": 20831,
+        "with_deps": 7085,
+        "pct": 34.0
+      },
+      {
+        "year": 2021,
+        "total": 25604,
+        "with_deps": 9547,
+        "pct": 37.3
+      },
+      {
+        "year": 2022,
+        "total": 29369,
+        "with_deps": 11876,
+        "pct": 40.4
+      },
+      {
+        "year": 2023,
+        "total": 35161,
+        "with_deps": 15486,
+        "pct": 44.0
+      },
+      {
+        "year": 2024,
+        "total": 35325,
+        "with_deps": 16980,
+        "pct": 48.1
+      },
+      {
+        "year": 2025,
+        "total": 11800,
+        "with_deps": 5814,
+        "pct": 49.3
+      },
+      {
+        "year": 2026,
+        "total": 738,
+        "with_deps": 377,
+        "pct": 51.1
+      }
+    ],
+    "Life Sciences": [
+      {
+        "year": 2008,
+        "total": 1,
+        "with_deps": 1,
+        "pct": 100.0
+      },
+      {
+        "year": 2009,
+        "total": 4,
+        "with_deps": 1,
+        "pct": 25.0
+      },
+      {
+        "year": 2010,
+        "total": 18,
+        "with_deps": 2,
+        "pct": 11.1
+      },
+      {
+        "year": 2011,
+        "total": 60,
+        "with_deps": 21,
+        "pct": 35.0
+      },
+      {
+        "year": 2012,
+        "total": 111,
+        "with_deps": 28,
+        "pct": 25.2
+      },
+      {
+        "year": 2013,
+        "total": 246,
+        "with_deps": 46,
+        "pct": 18.7
+      },
+      {
+        "year": 2014,
+        "total": 516,
+        "with_deps": 105,
+        "pct": 20.3
+      },
+      {
+        "year": 2015,
+        "total": 884,
+        "with_deps": 177,
+        "pct": 20.0
+      },
+      {
+        "year": 2016,
+        "total": 1270,
+        "with_deps": 291,
+        "pct": 22.9
+      },
+      {
+        "year": 2017,
+        "total": 1816,
+        "with_deps": 430,
+        "pct": 23.7
+      },
+      {
+        "year": 2018,
+        "total": 2384,
+        "with_deps": 557,
+        "pct": 23.4
+      },
+      {
+        "year": 2019,
+        "total": 3141,
+        "with_deps": 777,
+        "pct": 24.7
+      },
+      {
+        "year": 2020,
+        "total": 3820,
+        "with_deps": 952,
+        "pct": 24.9
+      },
+      {
+        "year": 2021,
+        "total": 3971,
+        "with_deps": 1039,
+        "pct": 26.2
+      },
+      {
+        "year": 2022,
+        "total": 4075,
+        "with_deps": 1146,
+        "pct": 28.1
+      },
+      {
+        "year": 2023,
+        "total": 3773,
+        "with_deps": 1163,
+        "pct": 30.8
+      },
+      {
+        "year": 2024,
+        "total": 3512,
+        "with_deps": 1274,
+        "pct": 36.3
+      },
+      {
+        "year": 2025,
+        "total": 1523,
+        "with_deps": 586,
+        "pct": 38.5
+      },
+      {
+        "year": 2026,
+        "total": 87,
+        "with_deps": 28,
+        "pct": 32.2
+      }
+    ],
+    "Social Sciences": [
+      {
+        "year": 2008,
+        "total": 1,
+        "with_deps": 0,
+        "pct": 0.0
+      },
+      {
+        "year": 2009,
+        "total": 1,
+        "with_deps": 0,
+        "pct": 0.0
+      },
+      {
+        "year": 2010,
+        "total": 6,
+        "with_deps": 1,
+        "pct": 16.7
+      },
+      {
+        "year": 2011,
+        "total": 21,
+        "with_deps": 9,
+        "pct": 42.9
+      },
+      {
+        "year": 2012,
+        "total": 33,
+        "with_deps": 6,
+        "pct": 18.2
+      },
+      {
+        "year": 2013,
+        "total": 71,
+        "with_deps": 19,
+        "pct": 26.8
+      },
+      {
+        "year": 2014,
+        "total": 151,
+        "with_deps": 38,
+        "pct": 25.2
+      },
+      {
+        "year": 2015,
+        "total": 279,
+        "with_deps": 77,
+        "pct": 27.6
+      },
+      {
+        "year": 2016,
+        "total": 387,
+        "with_deps": 111,
+        "pct": 28.7
+      },
+      {
+        "year": 2017,
+        "total": 627,
+        "with_deps": 145,
+        "pct": 23.1
+      },
+      {
+        "year": 2018,
+        "total": 888,
+        "with_deps": 196,
+        "pct": 22.1
+      },
+      {
+        "year": 2019,
+        "total": 1269,
+        "with_deps": 341,
+        "pct": 26.9
+      },
+      {
+        "year": 2020,
+        "total": 1823,
+        "with_deps": 509,
+        "pct": 27.9
+      },
+      {
+        "year": 2021,
+        "total": 2269,
+        "with_deps": 673,
+        "pct": 29.7
+      },
+      {
+        "year": 2022,
+        "total": 2658,
+        "with_deps": 867,
+        "pct": 32.6
+      },
+      {
+        "year": 2023,
+        "total": 2905,
+        "with_deps": 1031,
+        "pct": 35.5
+      },
+      {
+        "year": 2024,
+        "total": 4049,
+        "with_deps": 1762,
+        "pct": 43.5
+      },
+      {
+        "year": 2025,
+        "total": 1534,
+        "with_deps": 698,
+        "pct": 45.5
+      },
+      {
+        "year": 2026,
+        "total": 72,
+        "with_deps": 26,
+        "pct": 36.1
+      }
+    ],
+    "Health Sciences": [
+      {
+        "year": 2010,
+        "total": 3,
+        "with_deps": 1,
+        "pct": 33.3
+      },
+      {
+        "year": 2011,
+        "total": 5,
+        "with_deps": 1,
+        "pct": 20.0
+      },
+      {
+        "year": 2012,
+        "total": 12,
+        "with_deps": 1,
+        "pct": 8.3
+      },
+      {
+        "year": 2013,
+        "total": 38,
+        "with_deps": 7,
+        "pct": 18.4
+      },
+      {
+        "year": 2014,
+        "total": 72,
+        "with_deps": 14,
+        "pct": 19.4
+      },
+      {
+        "year": 2015,
+        "total": 143,
+        "with_deps": 22,
+        "pct": 15.4
+      },
+      {
+        "year": 2016,
+        "total": 211,
+        "with_deps": 49,
+        "pct": 23.2
+      },
+      {
+        "year": 2017,
+        "total": 354,
+        "with_deps": 73,
+        "pct": 20.6
+      },
+      {
+        "year": 2018,
+        "total": 589,
+        "with_deps": 111,
+        "pct": 18.8
+      },
+      {
+        "year": 2019,
+        "total": 838,
+        "with_deps": 161,
+        "pct": 19.2
+      },
+      {
+        "year": 2020,
+        "total": 1616,
+        "with_deps": 363,
+        "pct": 22.5
+      },
+      {
+        "year": 2021,
+        "total": 1784,
+        "with_deps": 423,
+        "pct": 23.7
+      },
+      {
+        "year": 2022,
+        "total": 2028,
+        "with_deps": 603,
+        "pct": 29.7
+      },
+      {
+        "year": 2023,
+        "total": 2182,
+        "with_deps": 795,
+        "pct": 36.4
+      },
+      {
+        "year": 2024,
+        "total": 2208,
+        "with_deps": 908,
+        "pct": 41.1
+      },
+      {
+        "year": 2025,
+        "total": 892,
+        "with_deps": 344,
+        "pct": 38.6
+      },
+      {
+        "year": 2026,
+        "total": 32,
+        "with_deps": 10,
+        "pct": 31.2
+      }
+    ]
+  }
+}

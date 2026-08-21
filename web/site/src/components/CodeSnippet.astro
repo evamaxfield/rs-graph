@@ -1,0 +1,35 @@
+---
+// Renders a snippet extracted verbatim from a data-prep/queries/*.py file --
+// see web/data-prep/extract_snippets.py. Never hand-retype these.
+import { Code } from 'astro:components';
+
+interface Props {
+  code: string;
+  lang?: string;
+}
+const { code, lang = 'python' } = Astro.props;
+---
+
+<div class="snippet">
+  <Code
+    code={code}
+    lang={lang}
+    themes={{ light: 'github-light', dark: 'github-dark-dimmed' }}
+    defaultColor={false}
+    wrap
+  />
+</div>
+
+<style>
+  .snippet {
+    font-size: 0.8rem;
+    max-height: 24rem;
+    overflow: auto;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+  }
+  .snippet :global(pre) {
+    margin: 0;
+    padding: 1rem;
+  }
+</style>
