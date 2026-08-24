@@ -5,10 +5,10 @@
 import math
 import os
 import shutil
-import time
 from pathlib import Path
 
 import polars as pl
+import pyarrow.parquet as pq
 import typer
 from datasets import Dataset
 from dotenv import load_dotenv
@@ -113,32 +113,46 @@ def upload_to_huggingface(
             df.write_parquet(output_dir / f"{table_name}.parquet")
             continue
 
-        batch_dir = output_dir / f"{table_name}_batches"
-        batch_dir.mkdir()
-
-        for i, offset in tqdm(
-            enumerate(range(0, row_count, BATCH_SIZE)),
-            desc=f"Processing {table_name}",
-            total=math.ceil(row_count / BATCH_SIZE),
-        ):
-            batch_df = pl.read_database(
-                f"SELECT * FROM {table_name} LIMIT {BATCH_SIZE} OFFSET {offset}",
-                connection=engine,
-                infer_schema_length=None,
-            )
-            batch_df.write_parquet(batch_dir / f"batch_{i}.parquet")
-            del batch_df
-
-        # Combine batch parquets into a single file via LazyFrame
-        pl.scan_parquet(batch_dir / "batch_*.parquet").sink_parquet(
-            output_dir / f"{table_name}.parquet"
-        )
-
-        # Remove batch files to save space
-        time.sleep(1)  # Ensure all file handles are released
-        for batch_file in batch_dir.glob("batch_*.parquet"):
-            batch_file.unlink()
-        batch_dir.rmdir()
+        # Keyset pagination on `id` (every table's primary key -- see
+        # db/models.py) instead of LIMIT/OFFSET: OFFSET makes SQLite re-scan
+        # through every already-read row on each batch, so a large table split
+        # into many batches degrades toward quadratic instead of linear.
+        # `WHERE id > last_seen_id ORDER BY id LIMIT batch_size` reads each row
+        # exactly once regardless of how many batches the table is split into.
+        #
+        # Each batch is appended straight into the table's final parquet file
+        # via a single ParquetWriter, instead of writing N separate batch files
+        # and then reading them all back to recombine into one -- that combine
+        # step was a full extra read+write pass over data that had just been
+        # written a moment before.
+        last_id = -1
+        writer: pq.ParquetWriter | None = None
+        try:
+            with tqdm(
+                desc=f"Processing {table_name}",
+                total=math.ceil(row_count / BATCH_SIZE),
+            ) as pbar:
+                while True:
+                    batch_df = pl.read_database(
+                        f"SELECT * FROM {table_name} WHERE id > {last_id} "
+                        f"ORDER BY id LIMIT {BATCH_SIZE}",
+                        connection=engine,
+                        infer_schema_length=None,
+                    )
+                    if batch_df.is_empty():
+                        break
+                    batch_table = batch_df.to_arrow()
+                    if writer is None:
+                        writer = pq.ParquetWriter(
+                            output_dir / f"{table_name}.parquet", batch_table.schema
+                        )
+                    writer.write_table(batch_table)
+                    last_id = batch_df["id"].max()
+                    del batch_df, batch_table
+                    pbar.update(1)
+        finally:
+            if writer is not None:
+                writer.close()
 
     # Upload each table as a separate config
     print(f"Uploading {len(to_process_table_names)} tables to {repo_id}")
