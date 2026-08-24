@@ -18,6 +18,23 @@ Pillow:
   - python imaging library
   - python image library
 
+torch:
+  - pytorch
+
 beautifulsoup4:
   - bs4
   - beautifulsoup
+
+scikit-image:
+  - skimage
+
+PyYAML:
+  - yaml
+
+absl-py:
+  - absl
+
+huggingface-hub:
+  - huggingfacehub
+  - huggingface hub
+  - huggingface
