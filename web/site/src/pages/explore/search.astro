@@ -1,0 +1,23 @@
+---
+// Kept as an alias so old /explore/search links (e.g. anything already
+// indexed or bookmarked) keep working after the 2026-08-23 Papers-with-Code
+// style redesign moved the real page to /explore (index.astro). Meta-refresh
+// redirect rather than Astro.redirect() -- this is a static export (GitHub
+// Pages), no server to issue a real 301 from.
+import { withBase } from '../../lib/url';
+
+const target = withBase('/explore');
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="refresh" content={`0; url=${target}`} />
+    <link rel="canonical" href={target} />
+    <title>Explore the Data · RS-Graph</title>
+  </head>
+  <body>
+    <p>This page moved to <a href={target}>Explore the Data</a>.</p>
+  </body>
+</html>

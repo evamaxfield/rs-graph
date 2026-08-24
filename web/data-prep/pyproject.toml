@@ -1,5 +1,6 @@
 [project]
 name = "rs-graph-web-data-prep"
+version = "0.0.0"
 description = "Precompute layer for the rs-graph docs/marketing site"
 requires-python = ">=3.12"
 dependencies = [
@@ -12,8 +13,18 @@ dependencies = [
   "umap-learn>=0.5,<0.6",
   "scikit-learn>=1,<2",
   "numpy>=1,<3",
+  "rapidfuzz>=3,<4",
+  "pyyaml>=6,<7",
+  "rustworkx>=0.15,<1",
 ]
 
 [build-system]
 requires = ["setuptools>=65"]
 build-backend = "setuptools.build_meta"
+
+# This isn't a distributable package -- it's a scripts + deps holder run via
+# `PYTHONPATH=. .venv/bin/python queries/<script>.py` (see ../README.md).
+# Without this, setuptools' flat-layout auto-discovery finds lib/, output/,
+# and queries/ as candidate top-level packages and refuses to build.
+[tool.setuptools]
+packages = []

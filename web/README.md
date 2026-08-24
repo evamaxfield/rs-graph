@@ -21,8 +21,9 @@ PYTHONPATH=. .venv/bin/python queries/dependency_manifest_growth.py
 PYTHONPATH=. .venv/bin/python queries/non_author_contributors.py
 PYTHONPATH=. .venv/bin/python queries/top_libraries.py
 PYTHONPATH=. .venv/bin/python queries/library_cross_view.py
-PYTHONPATH=. .venv/bin/python queries/embedding_clusters.py   # slow -- embeds + UMAPs a sample
-PYTHONPATH=. .venv/bin/python queries/repo_size_vs_impact.py  # AI4Science bonus card
+PYTHONPATH=. .venv/bin/python queries/ml_tooling_adoption.py
+PYTHONPATH=. .venv/bin/python queries/coauthorship_network.py
+PYTHONPATH=. .venv/bin/python queries/embedding_clusters.py   # slow -- embeds + UMAPs a sample; NOT rendered on the site (see below)
 PYTHONPATH=. .venv/bin/python queries/home_stats.py
 .venv/bin/python extract_snippets.py   # regenerates site/src/generated/*.py.txt
 
@@ -31,7 +32,11 @@ cp output/*.json ../site/public/data/
 ```
 
 `embedding_clusters.py`'s `SAMPLE_SIZE` constant is currently 3,200 -- the plan doc recommends up
-to 5,000 for a more statistically robust production run.
+to 5,000 for a more statistically robust production run. Its output is **not currently wired into
+the site** -- the "code vs. text clusters" question it backed was cut (2026-08-23, see
+`experiments-comms/memory/2026-08-23-rs-graph-docs-site-q3-rework-q4-cut-coauthorship.md`); the
+script is left in place in case that question comes back, but running it is optional for a normal
+site regen.
 
 ## Running the site locally
 

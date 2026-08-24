@@ -1,14 +1,26 @@
 {
-  "question": "How has AI/ML-tooling adoption spread through scientific code, and does it vary by domain?",
-  "methodology": "document_repository_link filtered to NULL OR confidence >= 0.9994; repo creation_year >= 2008 and <= 2024 (2025 excluded, partial year); ML/AI import set: torch/pytorch, tensorflow, keras, jax, sklearn/scikitlearn",
+  "question": "How has the use of ML/AI methods grown in scientific code, and does it vary by domain?",
+  "methodology": "document_repository_link filtered to NULL OR confidence >= 0.9994; repo creation_year >= 2008 and <= 2024 (2025 excluded, partial year); ML/AI import set: accelerate, catboost, diffusers, flax, jax, keras, lightgbm, onnx, onnxruntime, peft, pytorch, scikitlearn, sentencetransformers, sklearn, tensorflow, timm, torch, transformers, xgboost",
   "ml_library_names": [
+    "accelerate",
+    "catboost",
+    "diffusers",
+    "flax",
     "jax",
     "keras",
+    "lightgbm",
+    "onnx",
+    "onnxruntime",
+    "peft",
     "pytorch",
     "scikitlearn",
+    "sentencetransformers",
     "sklearn",
     "tensorflow",
-    "torch"
+    "timm",
+    "torch",
+    "transformers",
+    "xgboost"
   ],
   "series": [
     {
@@ -26,8 +38,8 @@
     {
       "year": 2010,
       "total": 69,
-      "with_ml": 5,
-      "pct": 7.2
+      "with_ml": 6,
+      "pct": 8.7
     },
     {
       "year": 2011,
@@ -38,8 +50,8 @@
     {
       "year": 2012,
       "total": 410,
-      "with_ml": 12,
-      "pct": 2.9
+      "with_ml": 14,
+      "pct": 3.4
     },
     {
       "year": 2013,
@@ -56,88 +68,88 @@
     {
       "year": 2015,
       "total": 3451,
-      "with_ml": 230,
+      "with_ml": 231,
       "pct": 6.7
     },
     {
       "year": 2016,
       "total": 5430,
-      "with_ml": 701,
-      "pct": 12.9
+      "with_ml": 709,
+      "pct": 13.1
     },
     {
       "year": 2017,
       "total": 8839,
-      "with_ml": 2042,
-      "pct": 23.1
+      "with_ml": 2056,
+      "pct": 23.3
     },
     {
       "year": 2018,
       "total": 13219,
-      "with_ml": 4531,
-      "pct": 34.3
+      "with_ml": 4544,
+      "pct": 34.4
     },
     {
       "year": 2019,
       "total": 19469,
-      "with_ml": 8368,
-      "pct": 43.0
+      "with_ml": 8395,
+      "pct": 43.1
     },
     {
       "year": 2020,
       "total": 28137,
-      "with_ml": 13353,
-      "pct": 47.5
+      "with_ml": 13399,
+      "pct": 47.6
     },
     {
       "year": 2021,
       "total": 33684,
-      "with_ml": 17528,
-      "pct": 52.0
+      "with_ml": 17612,
+      "pct": 52.3
     },
     {
       "year": 2022,
       "total": 38234,
-      "with_ml": 21521,
-      "pct": 56.3
+      "with_ml": 21652,
+      "pct": 56.6
     },
     {
       "year": 2023,
       "total": 44403,
-      "with_ml": 26487,
-      "pct": 59.7
+      "with_ml": 26689,
+      "pct": 60.1
     },
     {
       "year": 2024,
       "total": 47145,
-      "with_ml": 29543,
-      "pct": 62.7
+      "with_ml": 29870,
+      "pct": 63.4
     }
   ],
   "domains": [
     {
       "domain_name": "Physical Sciences",
-      "total": 196127,
-      "with_ml": 110951,
-      "pct": 56.6
+      "total": 196118,
+      "with_ml": 111693,
+      "pct": 57.0
     },
     {
       "domain_name": "Life Sciences",
-      "total": 31214,
-      "with_ml": 8670,
-      "pct": 27.8
+      "total": 31215,
+      "with_ml": 8744,
+      "pct": 28.0
     },
     {
       "domain_name": "Social Sciences",
-      "total": 19033,
-      "with_ml": 7449,
-      "pct": 39.1
+      "total": 19040,
+      "with_ml": 7569,
+      "pct": 39.8
     },
     {
       "domain_name": "Health Sciences",
-      "total": 13002,
-      "with_ml": 5589,
-      "pct": 43.0
+      "total": 13003,
+      "with_ml": 5641,
+      "pct": 43.4
     }
   ]
 }

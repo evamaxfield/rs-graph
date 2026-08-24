@@ -1,12 +1,12 @@
-"""AI4Science: how ML/AI-library adoption has spread through scientific code.
+"""How the use of ML/AI methods has grown in scientific code.
 
 For repositories in a high-precision article-repository link, flag any repo
 that imports a canonical ML/AI library (RepositoryImport.software_name_normalized
-matching torch/pytorch, tensorflow, keras, jax, or sklearn/scikitlearn), then
-break the adoption rate out two ways: by repo creation year (2008-2024, the
-2025 partial year excluded) and by scientific domain (via each document's
-top-scoring topic -> Topic.domain_name). Same precompute pattern as Q1/Q3 --
-RepositoryImport + confidence-filtered join + group-by, no new machinery.
+matching the ML_LIBRARY_NAMES set below), then break the adoption rate out two
+ways: by repo creation year (2008-2024, the 2025 partial year excluded) and by
+scientific domain (via each document's top-scoring topic -> Topic.domain_name).
+Same precompute pattern used elsewhere on the site -- RepositoryImport +
+confidence-filtered join + group-by, no new machinery.
 """
 
 import json
@@ -23,11 +23,37 @@ OUTPUT_PATH = os.path.join(
     os.path.dirname(__file__), "..", "output", "ml_tooling_adoption.json"
 )
 
-# Canonical ML/AI library set. A judgment call -- excludes e.g. xgboost,
-# lightgbm, huggingface/transformers, onnx -- documented here rather than ad
-# hoc, doesn't change the qualitative story (torch alone is already the
-# dominant driver, see Q3's top-imported-libraries ranking).
-ML_LIBRARY_NAMES = {"torch", "pytorch", "tensorflow", "keras", "jax", "sklearn", "scikitlearn"}
+# Canonical ML/AI library set. Deliberately restricted to genuinely
+# ML/AI-specific tooling -- deep-learning frameworks (torch/pytorch,
+# tensorflow, keras, jax/flax), classical-ML libraries (sklearn, xgboost,
+# lightgbm, catboost), and the Hugging Face-centered modeling ecosystem
+# (transformers, sentence-transformers, diffusers, accelerate, peft, timm,
+# onnx/onnxruntime for model interop and inference). Excludes general
+# scientific-computing libraries (numpy, pandas, scipy) and general
+# CV/NLP toolkits that aren't ML-specific in themselves (opencv, pillow,
+# spacy, nltk) even though they're common in ML pipelines -- a judgment call,
+# documented here rather than ad hoc.
+ML_LIBRARY_NAMES = {
+    "torch",
+    "pytorch",
+    "tensorflow",
+    "keras",
+    "jax",
+    "flax",
+    "sklearn",
+    "scikitlearn",
+    "transformers",
+    "sentencetransformers",
+    "xgboost",
+    "lightgbm",
+    "catboost",
+    "onnx",
+    "onnxruntime",
+    "diffusers",
+    "accelerate",
+    "peft",
+    "timm",
+}
 
 
 def run() -> dict:
@@ -111,14 +137,14 @@ def run() -> dict:
 
     return {
         "question": (
-            "How has AI/ML-tooling adoption spread through scientific code, "
+            "How has the use of ML/AI methods grown in scientific code, "
             "and does it vary by domain?"
         ),
         "methodology": (
             "document_repository_link filtered to NULL OR confidence >= 0.9994; "
             f"repo creation_year >= {PUBLICATION_YEAR_FLOOR} and <= 2024 "
-            "(2025 excluded, partial year); ML/AI import set: torch/pytorch, "
-            "tensorflow, keras, jax, sklearn/scikitlearn"
+            "(2025 excluded, partial year); ML/AI import set: "
+            f"{', '.join(sorted(ML_LIBRARY_NAMES))}"
         ),
         "ml_library_names": sorted(ML_LIBRARY_NAMES),
         "series": series,

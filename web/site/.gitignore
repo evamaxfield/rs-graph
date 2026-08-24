@@ -2,3 +2,9 @@ node_modules/
 dist/
 .astro/
 .env
+
+# Raw search records staged from web/data-prep/output/search_*.json --
+# regenerate with `cp` per web/README.md, then `npm run build-search-index`
+# (or `npm run dev`/`npm run build`, which run it automatically) to produce
+# the actual MiniSearch indices under public/search-index/.
+search-data/

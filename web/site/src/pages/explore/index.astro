@@ -1,0 +1,402 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout
+  title="Explore the Data"
+  description="Browse and search rs-graph's article-repository pairs."
+>
+  <section class="container">
+    <h1 class="title-lg">Explore the data</h1>
+    <p class="body-md intro">
+      Every card below is one high-precision article&ndash;repository pair &mdash; a paper and
+      the code repository linked to it. Search, filter by field, and sort below; everything
+      here runs client-side against a precomputed index &mdash; no server, no live API calls.
+    </p>
+    <p class="body-sm intro">
+      This covers every high-precision pair in rs-graph &mdash; see the count noted under the
+      search box for exactly how many are browsable. Browse the full dataset (including authors,
+      developers, and every other table) directly via the
+      <a href="https://huggingface.co/datasets/evamxb/rs-graph-v2-full"
+        >HuggingFace dataset viewer</a
+      >.
+    </p>
+
+    <p class="body-sm explore-count" data-explore-count></p>
+    <input
+      type="search"
+      class="schema-search explore-search-input"
+      placeholder="Search by paper title or repository name (e.g. pandas, protein folding)"
+      aria-label="Search article-repository pairs"
+      data-explore-input
+    />
+    <div class="explore-controls">
+      <label class="body-sm chart-filter">
+        Filter by field
+        <select data-explore-field-filter>
+          <option value="">All fields</option>
+        </select>
+      </label>
+      <label class="body-sm chart-filter">
+        Sort by
+        <select data-explore-sort>
+          <option value="date-desc">Publication date (newest first)</option>
+          <option value="date-asc">Publication date (oldest first)</option>
+          <option value="citations-desc">Citations (highest first)</option>
+          <option value="citations-asc">Citations (lowest first)</option>
+          <option value="stars-desc">Stars (highest first)</option>
+          <option value="stars-asc">Stars (lowest first)</option>
+        </select>
+      </label>
+    </div>
+    <div class="explore-results card-grid" data-explore-results></div>
+    <div class="explore-pagination" data-explore-pagination></div>
+  </section>
+</BaseLayout>
+
+<script>
+  import { withBase } from '../../lib/url';
+
+  const RESULTS_PER_PAGE = 20;
+  const INDEX_URL = withBase('/search-index/articles-repos.json');
+
+  // [title, doi, cited_by_count, publication_date, field_idx|null, repo_full_name, stars]
+  type RawRecord = [string, string, number, string, number | null, string, number];
+
+  interface Pair {
+    title: string;
+    doi: string;
+    citedByCount: number;
+    publicationDate: string;
+    fieldIdx: number | null;
+    repoFullName: string;
+    stars: number;
+  }
+
+  interface IndexPayload {
+    fields: string[];
+    records: RawRecord[];
+  }
+
+  function escapeHtml(s: string): string {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // Plain case-insensitive substring matching against the raw records --
+  // deliberately not a fuzzy/prefix search index (see build-search-index.mjs
+  // for why: an inverted index roughly doubled the download size for not
+  // much real benefit on a browse feature like this one).
+  async function loadPairs(): Promise<{ fields: string[]; pairs: Pair[] }> {
+    const res = await fetch(INDEX_URL);
+    const payload: IndexPayload = await res.json();
+    const pairs = payload.records.map(
+      ([title, doi, citedByCount, publicationDate, fieldIdx, repoFullName, stars]) => ({
+        title,
+        doi,
+        citedByCount,
+        publicationDate,
+        fieldIdx,
+        repoFullName,
+        stars,
+      }),
+    );
+    return { fields: payload.fields, pairs };
+  }
+
+  type SortKey = 'date-desc' | 'date-asc' | 'citations-desc' | 'citations-asc' | 'stars-desc' | 'stars-asc';
+
+  function matchesQuery(pair: Pair, needle: string): boolean {
+    return (
+      pair.title.toLowerCase().includes(needle) ||
+      pair.repoFullName.toLowerCase().includes(needle)
+    );
+  }
+
+  function matchesField(pair: Pair, fieldIdx: number | null): boolean {
+    return fieldIdx === null || pair.fieldIdx === fieldIdx;
+  }
+
+  // Records arrive sorted by publication_date descending (see search_index.py),
+  // so "date-desc" is a pass-through; every other option needs an explicit sort.
+  function sortPairs(pairs: Pair[], sortKey: SortKey): Pair[] {
+    if (sortKey === 'date-desc') return pairs;
+    const sorted = [...pairs];
+    switch (sortKey) {
+      case 'date-asc':
+        sorted.sort((a, b) => a.publicationDate.localeCompare(b.publicationDate));
+        break;
+      case 'citations-desc':
+        sorted.sort((a, b) => b.citedByCount - a.citedByCount);
+        break;
+      case 'citations-asc':
+        sorted.sort((a, b) => a.citedByCount - b.citedByCount);
+        break;
+      case 'stars-desc':
+        sorted.sort((a, b) => b.stars - a.stars);
+        break;
+      case 'stars-asc':
+        sorted.sort((a, b) => a.stars - b.stars);
+        break;
+    }
+    return sorted;
+  }
+
+  function renderCard(pair: Pair, fields: string[]): string {
+    const doiUrl = `https://doi.org/${pair.doi}`;
+    const repoUrl = `https://github.com/${pair.repoFullName}`;
+    const fieldLabel = pair.fieldIdx !== null ? fields[pair.fieldIdx] : null;
+    const date = pair.publicationDate;
+
+    // nth-child in the underlying card-grid drives the Protocol color-rotation
+    // border via CSS -- no class needed here beyond "card", the grid position
+    // does the work (see .card-grid > .card:nth-child(6n + N) in global.scss).
+    return `<div class="card explore-card">
+      <div class="explore-card-header">
+        <p class="body-md explore-card-title">
+          <a href="${escapeHtml(doiUrl)}" target="_blank" rel="noopener noreferrer"
+            >${escapeHtml(pair.title)}</a
+          >
+        </p>
+        ${fieldLabel ? `<span class="explore-card-field">${escapeHtml(fieldLabel)}</span>` : ''}
+      </div>
+      <p class="body-sm explore-card-repo">
+        <a href="${escapeHtml(repoUrl)}" target="_blank" rel="noopener noreferrer"
+          >${escapeHtml(pair.repoFullName)}</a
+        >
+      </p>
+      <div class="explore-card-meta body-sm">
+        <span>${escapeHtml(date)}</span>
+        <span>${pair.citedByCount.toLocaleString()} citations</span>
+        <span>${pair.stars.toLocaleString()} stars</span>
+      </div>
+    </div>`;
+  }
+
+  function renderPage(
+    fields: string[],
+    results: Pair[],
+    page: number,
+    resultsEl: HTMLElement,
+    paginationEl: HTMLElement,
+  ) {
+    const totalPages = Math.max(1, Math.ceil(results.length / RESULTS_PER_PAGE));
+    const clampedPage = Math.min(Math.max(page, 0), totalPages - 1);
+    const start = clampedPage * RESULTS_PER_PAGE;
+    const pageResults = results.slice(start, start + RESULTS_PER_PAGE);
+
+    if (results.length === 0) {
+      resultsEl.innerHTML = '<p class="body-sm">No matching pairs.</p>';
+      paginationEl.innerHTML = '';
+      return;
+    }
+
+    resultsEl.innerHTML = pageResults.map((pair) => renderCard(pair, fields)).join('');
+
+    paginationEl.innerHTML = '';
+    if (totalPages > 1) {
+      const info = document.createElement('span');
+      info.className = 'body-sm explore-pagination-info';
+      info.textContent = `Page ${clampedPage + 1} of ${totalPages} (${results.length.toLocaleString()} results)`;
+
+      const prevBtn = document.createElement('button');
+      prevBtn.type = 'button';
+      prevBtn.textContent = 'Previous';
+      prevBtn.disabled = clampedPage === 0;
+      prevBtn.addEventListener('click', () =>
+        renderPage(fields, results, clampedPage - 1, resultsEl, paginationEl),
+      );
+
+      const nextBtn = document.createElement('button');
+      nextBtn.type = 'button';
+      nextBtn.textContent = 'Next';
+      nextBtn.disabled = clampedPage >= totalPages - 1;
+      nextBtn.addEventListener('click', () =>
+        renderPage(fields, results, clampedPage + 1, resultsEl, paginationEl),
+      );
+
+      paginationEl.appendChild(prevBtn);
+      paginationEl.appendChild(info);
+      paginationEl.appendChild(nextBtn);
+    }
+  }
+
+  async function main() {
+    const input = document.querySelector<HTMLInputElement>('[data-explore-input]');
+    const fieldFilter = document.querySelector<HTMLSelectElement>('[data-explore-field-filter]');
+    const sortSelect = document.querySelector<HTMLSelectElement>('[data-explore-sort]');
+    const resultsEl = document.querySelector<HTMLElement>('[data-explore-results]');
+    const paginationEl = document.querySelector<HTMLElement>('[data-explore-pagination]');
+    const countEl = document.querySelector<HTMLElement>('[data-explore-count]');
+    if (!input || !fieldFilter || !sortSelect || !resultsEl || !paginationEl) return;
+
+    const originalPlaceholder = input.placeholder;
+    input.disabled = true;
+    input.placeholder = 'Loading…';
+
+    const { fields, pairs } = await loadPairs();
+
+    input.disabled = false;
+    input.placeholder = originalPlaceholder;
+    if (countEl) {
+      countEl.textContent = `Browsing ${pairs.length.toLocaleString()} article-repository pairs.`;
+    }
+
+    // Populate the field/domain filter from the index's own fields lookup,
+    // sorted alphabetically so it's scannable rather than in raw index order.
+    const fieldOptionOrder = fields
+      .map((label, idx) => ({ label, idx }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    for (const { label, idx } of fieldOptionOrder) {
+      const opt = document.createElement('option');
+      opt.value = String(idx);
+      opt.textContent = label;
+      fieldFilter.appendChild(opt);
+    }
+
+    // Search, field filter, and sort all compose against the full pairs
+    // array -- each control just recomputes the same three-step pipeline.
+    function applyControls() {
+      const query = input!.value.trim().toLowerCase();
+      const selectedField = fieldFilter!.value === '' ? null : Number(fieldFilter!.value);
+      const sortKey = sortSelect!.value as SortKey;
+
+      let results = pairs;
+      if (query) results = results.filter((p) => matchesQuery(p, query));
+      if (selectedField !== null) results = results.filter((p) => matchesField(p, selectedField));
+      results = sortPairs(results, sortKey);
+
+      renderPage(fields, results, 0, resultsEl!, paginationEl!);
+    }
+
+    // Records already arrive sorted by publication_date descending (see
+    // search_index.py), matching the default "date-desc" sort option.
+    applyControls();
+
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    input.addEventListener('input', () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(applyControls, 150);
+    });
+    fieldFilter.addEventListener('change', applyControls);
+    sortSelect.addEventListener('change', applyControls);
+  }
+
+  main().catch((err) => {
+    console.error('Failed to load explore index', err);
+    const resultsEl = document.querySelector<HTMLElement>('[data-explore-results]');
+    if (resultsEl) {
+      resultsEl.innerHTML =
+        '<p class="body-sm">Search index failed to load. Try refreshing the page.</p>';
+    }
+  });
+</script>
+
+<style>
+  .intro {
+    max-width: 48rem;
+    margin-bottom: 1rem;
+  }
+  .explore-count {
+    color: var(--color-text-muted);
+    margin-bottom: 0.5rem;
+  }
+  .explore-search-input {
+    max-width: 100%;
+  }
+  .explore-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .explore-controls .chart-filter {
+    margin-bottom: 0;
+  }
+  /* Reuses the site's .card-grid (see global.scss) so results pick up the
+     same Protocol color-rotation top borders as the home/schema card grids;
+     minmax is narrower than the default 16rem since these cards are denser. */
+  .explore-results {
+    grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+    gap: 0.75rem;
+    margin-top: 1rem;
+  }
+  .explore-card {
+    padding: 0.9rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .explore-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .explore-card-title {
+    word-break: break-word;
+  }
+  .explore-card-title :global(a) {
+    color: var(--color-brand);
+    text-decoration: none;
+  }
+  .explore-card-title :global(a:hover) {
+    text-decoration: underline;
+  }
+  .explore-card-field {
+    flex: 0 0 auto;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--color-accent);
+    background: var(--color-bg-alt);
+    border-radius: 4px;
+    padding: 0.2rem 0.5rem;
+    white-space: nowrap;
+  }
+  .explore-card-repo :global(a) {
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .explore-card-repo :global(a:hover) {
+    text-decoration: underline;
+    color: var(--color-brand);
+  }
+  .explore-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    color: var(--color-text-muted);
+    margin-top: 0.2rem;
+  }
+  .explore-pagination {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.25rem;
+  }
+  .explore-pagination :global(button) {
+    padding: 0.4rem 0.9rem;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background: var(--color-card-bg);
+    color: var(--color-text);
+    cursor: pointer;
+    font: inherit;
+  }
+  .explore-pagination :global(button:disabled) {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .explore-pagination :global(button:not(:disabled):hover) {
+    border-color: var(--color-brand);
+  }
+  .explore-pagination-info {
+    color: var(--color-text-muted);
+  }
+</style>

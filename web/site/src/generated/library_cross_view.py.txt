@@ -12,14 +12,29 @@ mentions = load_table("document_software_mention").join(
     hp_doc_ids, on="document_id", how="inner"
 )
 
+# Collapse same-view alternate spellings (e.g. a conda dependency named
+# "pytorch" vs a pypi dependency named "torch") before ranking -- see
+# _collapse_intra_view_alternates for why this has to happen per-view,
+# ahead of the cross-view fuzzy alignment below.
+imports = _collapse_intra_view_alternates(
+    imports, "repository_id", "software_name_normalized"
+)
+mentions = _collapse_intra_view_alternates(
+    mentions, "document_id", "software_name_normalized"
+)
+
 import_ranked = _ranked_counts(imports, "repository_id", "software_name_normalized")
 mention_ranked = _ranked_counts(mentions, "document_id", "software_name_normalized")
 
 # Dependencies pooled across ecosystems -- one row per (name, repository_id)
 # regardless of which ecosystem(s) declared it, so a repo declaring the same
-# normalized name in two ecosystems only counts once.
+# normalized name in two ecosystems only counts once. Alternates collapse
+# happens first so "torch" (pypi) and "pytorch" (conda) pool as one name.
 dependencies_pooled = dependencies.select(
     "repository_id", "software_name_normalized", "ecosystem"
+)
+dependencies_pooled = _collapse_intra_view_alternates(
+    dependencies_pooled, "repository_id", "software_name_normalized"
 ).unique(subset=["repository_id", "software_name_normalized"], keep="first")
 dependency_ranked = _ranked_counts(
     dependencies_pooled, "repository_id", "software_name_normalized"
@@ -38,66 +53,37 @@ dependency_top_ecosystem = (
     )
 )
 
-union_names = (
-    set(import_ranked.head(TOP_N_PER_VIEW)["software_name_normalized"].to_list())
-    | set(dependency_ranked.head(TOP_N_PER_VIEW)["software_name_normalized"].to_list())
-    | set(mention_ranked.head(TOP_N_PER_VIEW)["software_name_normalized"].to_list())
-)
-union_df = pl.DataFrame({"software_name_normalized": sorted(union_names)})
+import_top = import_ranked.head(TOP_N_PER_VIEW)["software_name_normalized"].to_list()
+dependency_top = dependency_ranked.head(TOP_N_PER_VIEW)[
+    "software_name_normalized"
+].to_list()
+mention_top = mention_ranked.head(TOP_N_PER_VIEW)["software_name_normalized"].to_list()
 
-merged = (
-    union_df.join(
-        import_ranked.rename({"count": "import_count", "rank": "import_rank"}),
-        on="software_name_normalized",
-        how="left",
-    )
-    .join(
-        dependency_ranked.rename({"count": "dependency_count", "rank": "dependency_rank"}),
-        on="software_name_normalized",
-        how="left",
-    )
-    .join(dependency_top_ecosystem, on="software_name_normalized", how="left")
-    .join(
-        mention_ranked.rename({"count": "mention_count", "rank": "mention_rank"}),
-        on="software_name_normalized",
-        how="left",
-    )
+# The core fix: reconcile the three top-N name lists into canonical,
+# cross-view library identities via fuzzy alignment instead of an exact
+# string join -- see module docstring for the algorithm.
+groups, n_merges_applied, n_merges_skipped = _canonical_groups(
+    import_top, dependency_top, mention_top
 )
-# Only keep a view's count/rank if the name is actually within that view's
-# own top N -- the union can include a name that is top-200 in one view but
-# ranked, say, #350 in another; that tail rank isn't meaningful to expose.
-merged = merged.with_columns(
-    [
-        pl.when(pl.col("import_rank") <= TOP_N_PER_VIEW)
-        .then(pl.col("import_count"))
-        .otherwise(None)
-        .alias("import_count"),
-        pl.when(pl.col("import_rank") <= TOP_N_PER_VIEW)
-        .then(pl.col("import_rank"))
-        .otherwise(None)
-        .alias("import_rank"),
-        pl.when(pl.col("dependency_rank") <= TOP_N_PER_VIEW)
-        .then(pl.col("dependency_count"))
-        .otherwise(None)
-        .alias("dependency_count"),
-        pl.when(pl.col("dependency_rank") <= TOP_N_PER_VIEW)
-        .then(pl.col("dependency_rank"))
-        .otherwise(None)
-        .alias("dependency_rank"),
-        pl.when(pl.col("dependency_rank") <= TOP_N_PER_VIEW)
-        .then(pl.col("dependency_top_ecosystem"))
-        .otherwise(None)
-        .alias("dependency_top_ecosystem"),
-        pl.when(pl.col("mention_rank") <= TOP_N_PER_VIEW)
-        .then(pl.col("mention_count"))
-        .otherwise(None)
-        .alias("mention_count"),
-        pl.when(pl.col("mention_rank") <= TOP_N_PER_VIEW)
-        .then(pl.col("mention_rank"))
-        .otherwise(None)
-        .alias("mention_rank"),
-    ]
-).sort("import_count", descending=True, nulls_last=True)
+
+lookups = {
+    "import": {
+        r["software_name_normalized"]: (r["count"], r["rank"])
+        for r in import_ranked.head(TOP_N_PER_VIEW).iter_rows(named=True)
+    },
+    "dependency": {
+        r["software_name_normalized"]: (r["count"], r["rank"])
+        for r in dependency_ranked.head(TOP_N_PER_VIEW).iter_rows(named=True)
+    },
+    "mention": {
+        r["software_name_normalized"]: (r["count"], r["rank"])
+        for r in mention_ranked.head(TOP_N_PER_VIEW).iter_rows(named=True)
+    },
+}
+dep_ecosystem_lookup = {
+    r["software_name_normalized"]: r["dependency_top_ecosystem"]
+    for r in dependency_top_ecosystem.iter_rows(named=True)
+}
 
 n_hp_repos = hp_repo_ids.height
 n_hp_docs = hp_doc_ids.height

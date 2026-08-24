@@ -1,0 +1,48 @@
+{
+  "methodology": "document_repository_link filtered to NULL OR confidence >= 0.9994",
+  "n_repos": 268873,
+  "n_no_license": 129980,
+  "pct_no_license": 48.3,
+  "top_licenses": [
+    {
+      "license": "MIT License",
+      "n": 69043,
+      "pct": 25.7
+    },
+    {
+      "license": "Apache License 2.0",
+      "n": 20930,
+      "pct": 7.8
+    },
+    {
+      "license": "GNU General Public License v3.0",
+      "n": 18556,
+      "pct": 6.9
+    },
+    {
+      "license": "Other",
+      "n": 15886,
+      "pct": 5.9
+    },
+    {
+      "license": "BSD 3-Clause \"New\" or \"Revised\" License",
+      "n": 5206,
+      "pct": 1.9
+    },
+    {
+      "license": "GNU General Public License v2.0",
+      "n": 1594,
+      "pct": 0.6
+    },
+    {
+      "license": "GNU Affero General Public License v3.0",
+      "n": 1512,
+      "pct": 0.6
+    },
+    {
+      "license": "Creative Commons Zero v1.0 Universal",
+      "n": 1358,
+      "pct": 0.5
+    }
+  ]
+}

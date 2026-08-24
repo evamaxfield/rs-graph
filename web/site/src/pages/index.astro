@@ -4,8 +4,8 @@ import StatTile from '../components/StatTile.astro';
 import TabNav from '../components/TabNav.astro';
 import LineChart from '../components/LineChart.astro';
 import BarChart from '../components/BarChart.astro';
-import ScatterChart from '../components/ScatterChart.astro';
 import LibraryTable from '../components/LibraryTable.astro';
+import NetworkChart from '../components/NetworkChart.astro';
 import CodeSnippet from '../components/CodeSnippet.astro';
 import { withBase } from '../lib/url';
 import { Code } from 'astro:components';
@@ -15,26 +15,46 @@ import q1 from '../../public/data/dependency_manifest_growth.json';
 import q2 from '../../public/data/non_author_contributors.json';
 import q3 from '../../public/data/top_libraries.json';
 import q3CrossView from '../../public/data/library_cross_view.json';
-import q4 from '../../public/data/embedding_clusters.json';
-import bonus from '../../public/data/ml_tooling_adoption.json';
+import mlAdoption from '../../public/data/ml_tooling_adoption.json';
+import coauthorship from '../../public/data/coauthorship_network.json';
 
 import q1Snippet from '../generated/dependency_manifest_growth.py.txt?raw';
 import q2Snippet from '../generated/non_author_contributors.py.txt?raw';
 import q3Snippet from '../generated/top_libraries.py.txt?raw';
 import q3CrossViewSnippet from '../generated/library_cross_view.py.txt?raw';
-import q4Snippet from '../generated/embedding_clusters.py.txt?raw';
-import bonusSnippet from '../generated/ml_tooling_adoption.py.txt?raw';
+import mlAdoptionSnippet from '../generated/ml_tooling_adoption.py.txt?raw';
+import coauthorshipSnippet from '../generated/coauthorship_network.py.txt?raw';
 
-const domainCountEntries = Object.entries(q4.domain_counts as Record<string, number>).sort(
-  (a, b) => b[1] - a[1],
-);
-const domainCountsSummary = domainCountEntries.map(([name, n]) => `${name} (${n})`).join(', ');
-
-const bonusDomainsByPct = [...bonus.domains].sort(
+const mlAdoptionDomainsByPct = [...mlAdoption.domains].sort(
   (a: { pct: number }, b: { pct: number }) => b.pct - a.pct,
 );
-const bonusMaxDomain = bonusDomainsByPct[0];
-const bonusMinDomain = bonusDomainsByPct[bonusDomainsByPct.length - 1];
+const mlAdoptionMaxDomain = mlAdoptionDomainsByPct[0];
+const mlAdoptionMinDomain = mlAdoptionDomainsByPct[mlAdoptionDomainsByPct.length - 1];
+
+// Co-authorship: domain sorted by largest-connected-component fraction, the
+// stat that shows the starkest cross-domain spread (see the query's own
+// docstring for why -- Physical Sciences' large collaborations vs. smaller,
+// tighter groups elsewhere).
+const coauthorshipByComponentFrac = [...coauthorship.domains].sort(
+  (a: { largest_component_frac: number }, b: { largest_component_frac: number }) =>
+    b.largest_component_frac - a.largest_component_frac,
+);
+const coauthorshipMaxComponent = coauthorshipByComponentFrac[0];
+const coauthorshipMinComponent =
+  coauthorshipByComponentFrac[coauthorshipByComponentFrac.length - 1];
+const coauthorshipByTransitivity = [...coauthorship.domains].sort(
+  (a: { transitivity: number }, b: { transitivity: number }) => b.transitivity - a.transitivity,
+);
+const coauthorshipMaxTransitivity = coauthorshipByTransitivity[0];
+const coauthorshipMinTransitivity =
+  coauthorshipByTransitivity[coauthorshipByTransitivity.length - 1];
+const coauthorshipDensityBarData = coauthorship.domains.map(
+  (d: { domain_name: string; n_researchers: number }) => ({
+    name: d.domain_name,
+    count: d.n_researchers,
+    domain_name: d.domain_name,
+  }),
+);
 
 // Q1 domain-filter dropdown options -- "All domains" (the original overall
 // series) plus one per top-4 domain, computed for real in dependency_manifest_growth.py.
@@ -64,18 +84,24 @@ const q3FilterOptions = q3.field_slices.map(
   }),
 );
 
-const bonusDomainBarData = bonus.domains.map((d: { domain_name: string; pct: number }) => ({
-  name: d.domain_name,
-  count: d.pct,
-  domain_name: d.domain_name,
-}));
+const mlAdoptionDomainBarData = mlAdoption.domains.map(
+  (d: { domain_name: string; pct: number }) => ({
+    name: d.domain_name,
+    count: d.pct,
+    domain_name: d.domain_name,
+  }),
+);
 
+// Simple-to-complex order: ML/AI-tooling adoption (single import flag, no
+// cross-table joins) -> manifest adoption -> author credit -> libraries used
+// (three joined views + fuzzy cross-view reconciliation) -> co-authorship
+// network (a graph built and analyzed with rustworkx), most complex last.
 const questionTabs = [
-  { id: 'q1', label: 'Q1: Manifest adoption' },
-  { id: 'q2', label: 'Q2: Author credit' },
-  { id: 'q3', label: 'Q3: Libraries used' },
-  { id: 'q4', label: 'Q4: Code vs. text clusters' },
-  { id: 'bonus', label: 'AI4Science bonus' },
+  { id: 'ml-adoption', label: '1. ML/AI-tooling adoption' },
+  { id: 'q1', label: '2. Manifest adoption' },
+  { id: 'q2', label: '3. Author credit' },
+  { id: 'q3', label: '4. Libraries used' },
+  { id: 'coauthorship', label: '5. Co-authorship network' },
 ];
 
 const loadingSnippet = `pip install datasets polars
@@ -238,15 +264,89 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
 
       <div data-tab-panel="examples" hidden>
         <p class="body-md intro">
-          Four worked questions, simple to complex, plus one AI4Science bonus, each backed by a
-          real query against the dataset. Every snippet below is pulled verbatim from the script
-          that produced the number -- see <code>web/data-prep/queries/</code> in the repo.
+          Five worked questions, simple to complex, each backed by a real query against the
+          dataset. Every snippet below is pulled verbatim from the script that produced the
+          number -- see <code>web/data-prep/queries/</code> in the repo.
         </p>
 
         <TabNav nested paramName="q" tabs={questionTabs}>
-          <div data-tab-panel="q1">
+          <div data-tab-panel="ml-adoption">
             <article class="question">
-              <h3 class="title-sm">1. How has dependency-manifest adoption grown over time?</h3>
+              <h3 class="title-sm">
+                1. How has the use of ML/AI methods grown in scientific code, and does it vary
+                by domain?
+              </h3>
+              <p class="body-md">
+                Repositories flagged by whether they import a canonical ML/AI library (deep
+                learning frameworks, classical-ML libraries, and the Hugging Face-centered
+                modeling ecosystem -- see "View the query" for the full set), restricted to
+                high-precision article-repository links. This tracks how AI/ML methods get
+                adopted as instruments of science, not <a href={withBase('/#ai-signal-caveat')}
+                  >AI-written code</a
+                > -- a different question the schema can't directly answer.
+              </p>
+              <div class="card-grid">
+                <div class="stat-tile">
+                  <span class="value"
+                    >{
+                      mlAdoption.series.find((r: { year: number }) => r.year === 2015)?.pct
+                    }%</span
+                  >
+                  <span class="label"
+                    >of repos created in 2015 import an ML library (n={
+                      mlAdoption.series
+                        .find((r: { year: number }) => r.year === 2015)
+                        ?.total.toLocaleString()
+                    })</span
+                  >
+                </div>
+                <div class="stat-tile">
+                  <span class="value"
+                    >{
+                      mlAdoption.series.find((r: { year: number }) => r.year === 2024)?.pct
+                    }%</span
+                  >
+                  <span class="label"
+                    >by 2024 (n={
+                      mlAdoption.series
+                        .find((r: { year: number }) => r.year === 2024)
+                        ?.total.toLocaleString()
+                    })</span
+                  >
+                </div>
+              </div>
+              <LineChart
+                id="chart-ml-adoption"
+                data={mlAdoption.series}
+                yLabel="% of repos importing an ML/AI library"
+                yMax={70}
+              />
+              <h4 class="body-md">By scientific domain (all years pooled)</h4>
+              <BarChart
+                id="chart-ml-adoption-domain"
+                data={mlAdoptionDomainBarData}
+                xLabel="% of repos importing an ML/AI library"
+                colorField="domain_name"
+              />
+              <p class="body-sm note">
+                A clean, monotonic adoption curve: {
+                  mlAdoption.series.find((r: { year: number }) => r.year === 2015)?.pct
+                }% to {mlAdoption.series.find((r: { year: number }) => r.year === 2024)?.pct}%
+                in a decade, and a real spread by domain -- {mlAdoptionMaxDomain.domain_name} leads
+                at {mlAdoptionMaxDomain.pct}%, while {mlAdoptionMinDomain.domain_name} trails at
+                {mlAdoptionMinDomain.pct}%. The canonical-library set is a judgment call,
+                documented in the query below rather than picked ad hoc.
+              </p>
+              <details>
+                <summary class="body-sm">View the query</summary>
+                <CodeSnippet code={mlAdoptionSnippet} />
+              </details>
+            </article>
+          </div>
+
+          <div data-tab-panel="q1" hidden>
+            <article class="question">
+              <h3 class="title-sm">2. How has dependency-manifest adoption grown over time?</h3>
               <p class="body-sm note">
                 Filtered using the recommended high-precision threshold. See "Using this dataset
                 responsibly" below.
@@ -286,7 +386,7 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
 
           <div data-tab-panel="q2" hidden>
             <article class="question" id="q2">
-              <h3 class="title-sm">2. Are code contributions recognized as authorship?</h3>
+              <h3 class="title-sm">3. Are code contributions recognized as authorship?</h3>
               <p class="body-sm note">
                 A direct follow-up to <a href="https://doi.org/10.1162/QSS.a.465"
                   >Code Contribution and Credit in Science</a
@@ -332,7 +432,7 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
           <div data-tab-panel="q3" hidden>
             <article class="question">
               <h3 class="title-sm">
-                3. What libraries does this science actually run on, and does the paper text say
+                4. What libraries does this science actually run on, and does the paper text say
                 so?
               </h3>
               <p class="body-md">
@@ -389,13 +489,17 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
 
               <h4 class="body-md">Look up any library across all three views</h4>
               <p class="body-sm">
-                Union of the top {q3CrossView.top_n_per_view} libraries by count in each view ({
-                  q3CrossView.rows.length
-                } distinct names total). A dash means the library fell outside that view's top {
+                Union of the top {q3CrossView.top_n_per_view} libraries by count in each view, reconciled
+                into {q3CrossView.n_canonical_groups} canonical cross-view identities via fuzzy alignment
+                (the same Hungarian-algorithm + rapidfuzz machinery used elsewhere in rs_graph to
+                align software names within one article-repo pair, extended here to a global, three-way
+                reconciliation) rather than an exact string match -- {
+                  q3CrossView.n_groups_with_multiple_spellings
+                } rows are spelled differently across at least two views (e.g. "torch" as an import
+                and pypi dependency vs. "pytorch" as a paper-text mention -- now one row, not two
+                disconnected ones). A dash means the library fell outside that view's top {
                   q3CrossView.top_n_per_view
-                }, not that it was measured and found at zero. Rows with a large rank spread
-                across views (highlighted) are the torch/pytorch-style pattern: a library
-                imported under one name and discussed in papers under another.
+                }, not that it was measured and found at zero.
               </p>
               <LibraryTable
                 id="chart-q3-cross-view"
@@ -409,132 +513,91 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
             </article>
           </div>
 
-          <div data-tab-panel="q4" hidden>
+          <div data-tab-panel="coauthorship" hidden>
             <article class="question">
               <h3 class="title-sm">
-                4. Do clusters of science look different when you consider the code too?
+                5. Does co-authorship network structure differ across scientific domains?
               </h3>
               <p class="body-md">
-                Two side-by-side UMAP embedding spaces, colored by scientific domain: one of
-                repository text (README + name), one of article text (title + abstract). Sample
-                size: {q4.sample_size.toLocaleString()} pairs.
-              </p>
-              <p class="body-sm note">{q4.note}</p>
-              <p class="body-sm note">
-                The README/abstract pairing behind this chart is also a ready benchmark for
-                code-adjacent-text&harr;natural-language retrieval or alignment tasks: {
-                  q4.sample_size.toLocaleString()
-                } real, naturally-occurring pairs, no synthetic construction needed.
-              </p>
-              <p class="body-sm note">
-                Per-domain point counts in this sample: {domainCountsSummary}. Physical Sciences
-                dominates the sample -- read cluster shape with that skew in mind.
-              </p>
-              <p class="body-sm note">
-                Hover a point in either panel to highlight the same article-repository pair in
-                the other, useful for checking whether a tight cluster in one space stays
-                together (or scatters) in the other.
-              </p>
-              <div class="chart-row">
-                <ScatterChart
-                  id="chart-q4-repo"
-                  data={q4.points}
-                  xField="repo_x"
-                  yField="repo_y"
-                  colorField="domain_name"
-                  title="Repository text"
-                  linkField="document_id"
-                  linkGroup="q4-umap"
-                />
-                <ScatterChart
-                  id="chart-q4-article"
-                  data={q4.points}
-                  xField="article_x"
-                  yField="article_y"
-                  colorField="domain_name"
-                  title="Article text"
-                  linkField="document_id"
-                  linkGroup="q4-umap"
-                />
-              </div>
-              <details>
-                <summary class="body-sm">View the query</summary>
-                <CodeSnippet code={q4Snippet} />
-              </details>
-            </article>
-          </div>
-
-          <div data-tab-panel="bonus" hidden>
-            <article class="question card--bonus card">
-              <span class="body-sm bonus-tag">AI4Science bonus -- not one of the four</span>
-              <h3 class="title-sm">
-                How has AI/ML-tooling adoption spread through scientific code, and does it vary
-                by domain?
-              </h3>
-              <p class="body-md">
-                Repositories flagged by whether they import a canonical ML/AI library (<code
-                  >torch</code
-                >,
-                <code>tensorflow</code>, <code>keras</code>, <code>jax</code>, <code
-                  >sklearn</code
-                >), restricted to high-precision article-repository links. This is the literal
-                AI4Science question: not detecting
-                <a href={withBase('/#ai-signal-caveat')}>AI-written code</a>, but tracking how
-                AI/ML methods get adopted as instruments of science.
+                The only author-identity structure the schema actually has at the document level
+                is <code>document_contributor</code> (researcher &harr; document). A co-authorship
+                graph -- an edge between two researchers whenever they share a document -- is the
+                one network genuinely implied by that data, not assumed on top of it. Built and analyzed
+                with <a href="https://www.rustworkx.org/">rustworkx</a>: one undirected graph
+                per domain, restricted to high-precision article-repository links and documents
+                with {coauthorship.min_authors}&ndash;{coauthorship.max_authors} listed authors (bounds
+                the all-pairs edge count so large-consortium papers don't dominate).
               </p>
               <div class="card-grid">
                 <div class="stat-tile">
-                  <span class="value"
-                    >{bonus.series.find((r: { year: number }) => r.year === 2015)?.pct}%</span
-                  >
+                  <span class="value">{coauthorshipMaxComponent.largest_component_pct}%</span>
                   <span class="label"
-                    >of repos created in 2015 import an ML library (n={
-                      bonus.series
-                        .find((r: { year: number }) => r.year === 2015)
-                        ?.total.toLocaleString()
-                    })</span
+                    >of {coauthorshipMaxComponent.domain_name} researchers sit in one connected component</span
                   >
                 </div>
                 <div class="stat-tile">
-                  <span class="value"
-                    >{bonus.series.find((r: { year: number }) => r.year === 2024)?.pct}%</span
-                  >
+                  <span class="value">{coauthorshipMinComponent.largest_component_pct}%</span>
                   <span class="label"
-                    >by 2024 (n={
-                      bonus.series
-                        .find((r: { year: number }) => r.year === 2024)
-                        ?.total.toLocaleString()
-                    })</span
+                    >same, {coauthorshipMinComponent.domain_name} (most fragmented)</span
+                  >
+                </div>
+                <div class="stat-tile">
+                  <span class="value">{coauthorshipMaxTransitivity.transitivity}</span>
+                  <span class="label"
+                    >{coauthorshipMaxTransitivity.domain_name} transitivity (tightest-knit)</span
+                  >
+                </div>
+                <div class="stat-tile">
+                  <span class="value">{coauthorshipMinTransitivity.transitivity}</span>
+                  <span class="label"
+                    >{coauthorshipMinTransitivity.domain_name} transitivity (loosest)</span
                   >
                 </div>
               </div>
-              <LineChart
-                id="chart-bonus"
-                data={bonus.series}
-                yLabel="% of repos importing an ML/AI library"
-                yMax={70}
-              />
-              <h4 class="body-md">By scientific domain (all years pooled)</h4>
+              <p class="body-sm">
+                A real cross-domain difference, and not the same one on both statistics:{' '}
+                {coauthorshipMaxComponent.domain_name} has by far the largest share of researchers
+                in one giant connected component ({
+                  coauthorshipMaxComponent.largest_component_pct
+                }%) but the loosest local clustering ({coauthorshipMaxComponent.transitivity})
+                -- consistent with large, sprawling collaborations that connect many people
+                transitively without forming many closed triangles. {
+                  coauthorshipMinComponent.domain_name
+                } and {
+                  coauthorshipMinTransitivity.domain_name ===
+                  coauthorshipMinComponent.domain_name
+                    ? 'it'
+                    : coauthorshipMinTransitivity.domain_name
+                } run the opposite way: smaller, fragmented components but much tighter-knit local
+                groups ({coauthorshipMaxTransitivity.transitivity}&ndash;{
+                  coauthorshipMinTransitivity.transitivity
+                } transitivity elsewhere) -- the pattern you'd expect from small, stable wet-lab or
+                field-study teams rather than large instrument collaborations.
+              </p>
+              <h4 class="body-md">Researchers per domain (graph size)</h4>
               <BarChart
-                id="chart-bonus-domain"
-                data={bonusDomainBarData}
-                xLabel="% of repos importing an ML/AI library"
+                id="chart-coauthorship-size"
+                data={coauthorshipDensityBarData}
+                xLabel="Distinct researchers"
                 colorField="domain_name"
               />
+              <h4 class="body-md">
+                Illustrative subgraph -- {coauthorship.illustrative_domain}, largest connected
+                component (sampled to {coauthorship.illustrative_max_nodes} nodes)
+              </h4>
               <p class="body-sm note">
-                A clean, monotonic adoption curve: {
-                  bonus.series.find((r: { year: number }) => r.year === 2015)?.pct
-                }% to {bonus.series.find((r: { year: number }) => r.year === 2024)?.pct}% in a
-                decade, and a nearly 2x spread by domain -- {bonusMaxDomain.domain_name} leads at
-                {bonusMaxDomain.pct}%, while{' '}
-                {bonusMinDomain.domain_name} trails at {bonusMinDomain.pct}%. The 5-library
-                canonical set is a judgment call (it excludes e.g. <code>xgboost</code> and
-                <code>transformers</code>), documented in the query below rather than picked ad
-                hoc.
+                A precomputed rustworkx spring layout, not a live force simulation -- hover a
+                node for its researcher ID.
               </p>
+              <NetworkChart
+                id="chart-coauthorship-network"
+                nodes={coauthorship.illustrative_nodes}
+                edges={coauthorship.illustrative_edges}
+                idLabel="researcher"
+              />
               <details>
                 <summary class="body-sm">View the query</summary>
-                <CodeSnippet code={bonusSnippet} />
+                <CodeSnippet code={coauthorshipSnippet} />
               </details>
             </article>
           </div>
@@ -758,14 +821,6 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
   }
   .question .note {
     color: var(--color-text-muted);
-  }
-  .bonus-tag {
-    display: inline-block;
-    color: var(--color-bonus);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    margin-bottom: 0.5rem;
   }
   .chart-row {
     display: grid;

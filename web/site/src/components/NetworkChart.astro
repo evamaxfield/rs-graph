@@ -1,0 +1,139 @@
+---
+// Renders a precomputed graph layout (nodes already have x/y from a
+// rustworkx spring_layout run in data-prep -- nothing is laid out in the
+// browser). `edges[].source`/`target` are *array indices* into `nodes`, not
+// the `id` field -- `id` is only carried through for the hover tooltip.
+interface NetworkNode {
+  id: number;
+  x: number;
+  y: number;
+}
+interface NetworkEdge {
+  source: number;
+  target: number;
+}
+interface Props {
+  id: string;
+  nodes: NetworkNode[];
+  edges: NetworkEdge[];
+  idLabel?: string;
+}
+const { id, nodes, edges, idLabel = 'researcher' } = Astro.props;
+---
+
+<div class="chart-wrap">
+  <div
+    id={id}
+    class="chart chart--network"
+    data-nodes={JSON.stringify(nodes)}
+    data-edges={JSON.stringify(edges)}
+    data-id-label={idLabel}
+  >
+  </div>
+</div>
+
+<script>
+  const PADDING = 28;
+  const NODE_RADIUS = 3.5;
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
+  interface NetworkNode {
+    id: number;
+    x: number;
+    y: number;
+  }
+  interface NetworkEdge {
+    source: number;
+    target: number;
+  }
+
+  function renderNetworkChart(el: HTMLElement) {
+    const nodes: NetworkNode[] = JSON.parse(el.dataset.nodes || '[]');
+    const edges: NetworkEdge[] = JSON.parse(el.dataset.edges || '[]');
+    const idLabel = el.dataset.idLabel || 'node';
+    const width = el.clientWidth || 640;
+    const height = 480;
+
+    const xs = nodes.map((n) => n.x);
+    const ys = nodes.map((n) => n.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const spanX = maxX - minX || 1;
+    const spanY = maxY - minY || 1;
+    const sx = (x: number) => PADDING + ((x - minX) / spanX) * (width - 2 * PADDING);
+    const sy = (y: number) => PADDING + ((y - minY) / spanY) * (height - 2 * PADDING);
+
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.setAttribute('width', String(width));
+    svg.setAttribute('height', String(height));
+    svg.classList.add('network-svg');
+
+    const edgeGroup = document.createElementNS(SVG_NS, 'g');
+    edgeGroup.setAttribute('class', 'network-edges');
+    edges.forEach(({ source, target }) => {
+      const a = nodes[source];
+      const b = nodes[target];
+      if (!a || !b) return;
+      const line = document.createElementNS(SVG_NS, 'line');
+      line.setAttribute('x1', String(sx(a.x)));
+      line.setAttribute('y1', String(sy(a.y)));
+      line.setAttribute('x2', String(sx(b.x)));
+      line.setAttribute('y2', String(sy(b.y)));
+      line.setAttribute('class', 'network-edge');
+      edgeGroup.appendChild(line);
+    });
+    svg.appendChild(edgeGroup);
+
+    const nodeGroup = document.createElementNS(SVG_NS, 'g');
+    nodeGroup.setAttribute('class', 'network-nodes');
+    nodes.forEach((node) => {
+      const circle = document.createElementNS(SVG_NS, 'circle');
+      circle.setAttribute('cx', String(sx(node.x)));
+      circle.setAttribute('cy', String(sy(node.y)));
+      circle.setAttribute('r', String(NODE_RADIUS));
+      circle.setAttribute('class', 'network-node');
+      const title = document.createElementNS(SVG_NS, 'title');
+      title.textContent = `${idLabel} ${node.id}`;
+      circle.appendChild(title);
+      nodeGroup.appendChild(circle);
+    });
+    svg.appendChild(nodeGroup);
+
+    el.replaceChildren(svg);
+  }
+
+  // Lazy-render on first visibility (see BarChart.astro for the same pattern).
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      renderNetworkChart(entry.target as HTMLElement);
+      observer.unobserve(entry.target);
+    });
+  });
+  document
+    .querySelectorAll<HTMLElement>('.chart--network')
+    .forEach((el) => observer.observe(el));
+</script>
+
+<style>
+  .chart--network {
+    min-height: 480px;
+  }
+  .network-svg {
+    width: 100%;
+    height: auto;
+  }
+  .network-edge {
+    stroke: var(--color-border);
+    stroke-width: 1;
+    opacity: 0.6;
+  }
+  .network-node {
+    fill: var(--chart-1);
+    stroke: var(--color-bg);
+    stroke-width: 0.75;
+  }
+</style>

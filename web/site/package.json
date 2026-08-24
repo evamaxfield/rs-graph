@@ -7,8 +7,9 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
+    "build-search-index": "node scripts/build-search-index.mjs",
+    "dev": "npm run build-search-index && astro dev",
+    "build": "npm run build-search-index && astro build",
     "preview": "astro preview",
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.{astro,ts,js,scss}\" \"*.mjs\"",
@@ -19,6 +20,7 @@
     "@observablehq/plot": "^0.6.16",
     "astro": "^5.1.0",
     "d3": "^7.9.0",
+    "minisearch": "^7.2.0",
     "sass": "^1.99.0"
   },
   "devDependencies": {

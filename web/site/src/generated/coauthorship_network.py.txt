@@ -1,0 +1,82 @@
+hp_doc_ids = (
+    filter_high_precision_document_repository_links(load_table("document_repository_link"))
+    .select("document_id")
+    .unique()
+)
+
+authors = (
+    load_table("document_contributor")
+    .select("document_id", "researcher_id")
+    .unique()
+    .join(hp_doc_ids, on="document_id", how="inner")
+)
+
+author_counts = authors.group_by("document_id").agg(n_authors=pl.len())
+qualifying_docs = author_counts.filter(
+    pl.col("n_authors").is_between(MIN_AUTHORS, MAX_AUTHORS)
+).select("document_id")
+authors = authors.join(qualifying_docs, on="document_id", how="inner")
+
+# domain per document: best-scoring topic -> domain_name (same join
+# pattern used by ml_tooling_adoption.py and dependency_manifest_growth.py)
+document_topic = load_table("document_topic")
+topic = load_table("topic").select("id", "domain_name").rename({"id": "topic_id"})
+best_topic = (
+    document_topic.sort("score", descending=True)
+    .group_by("document_id")
+    .head(1)
+    .join(topic, on="topic_id")
+    .select("document_id", "domain_name")
+)
+authors = authors.join(best_topic, on="document_id", how="inner")
+
+domain_stats = []
+graphs_by_domain: dict[str, rx.PyGraph] = {}
+for domain_name in sorted(authors["domain_name"].unique().to_list()):
+    domain_authors = authors.filter(pl.col("domain_name") == domain_name)
+
+    # all co-author pairs within each document, one direction only
+    # (researcher_id_a < researcher_id_b), weighted by shared doc count.
+    pairs = (
+        domain_authors.join(domain_authors, on="document_id", suffix="_b")
+        .filter(pl.col("researcher_id") < pl.col("researcher_id_b"))
+        .group_by(["researcher_id", "researcher_id_b"])
+        .agg(n_shared_docs=pl.col("document_id").n_unique())
+        .rename({"researcher_id": "researcher_id_a", "researcher_id_b": "researcher_id_b"})
+    )
+    node_ids = domain_authors["researcher_id"].unique().to_list()
+    graph = _build_domain_graph(pairs, node_ids)
+    graphs_by_domain[domain_name] = graph
+
+    n_nodes = graph.num_nodes()
+    n_edges = graph.num_edges()
+    density = (2 * n_edges / (n_nodes * (n_nodes - 1))) if n_nodes > 1 else 0.0
+    components = rx.connected_components(graph)
+    largest_component_frac = (
+        max(len(c) for c in components) / n_nodes if n_nodes else 0.0
+    )
+    transitivity = rx.transitivity(graph) if n_nodes > 2 else 0.0
+
+    domain_stats.append(
+        {
+            "domain_name": domain_name,
+            "n_researchers": n_nodes,
+            "n_coauthorship_edges": n_edges,
+            "n_qualifying_documents": domain_authors["document_id"].n_unique(),
+            "density": round(density, 5),
+            "largest_component_frac": round(largest_component_frac, 4),
+            "largest_component_pct": round(largest_component_frac * 100, 1),
+            "transitivity": round(transitivity, 4),
+        }
+    )
+
+# Illustrative subgraph: the largest connected component of whichever
+# domain has the most researchers, BFS-sampled down to a renderable size.
+illustrative_domain = max(domain_stats, key=lambda d: d["n_researchers"])["domain_name"]
+illustrative_graph = graphs_by_domain[illustrative_domain]
+components = rx.connected_components(illustrative_graph)
+largest_component = max(components, key=len)
+start_node = max(largest_component, key=lambda n: len(illustrative_graph.neighbors(n)))
+sample_indices = _bfs_sample(illustrative_graph, start_node, MAX_ILLUSTRATIVE_NODES)
+subgraph = illustrative_graph.subgraph(sample_indices)
+layout = rx.spring_layout(subgraph, seed=42)

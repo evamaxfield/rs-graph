@@ -160,14 +160,14 @@
       "count": 1898
     },
     {
-      "name": "library",
+      "name": "scikitlearn",
       "count": 1803
     }
   ],
   "field_slices": [
     {
       "field_name": "Computer Science",
-      "n_repos": 134684,
+      "n_repos": 134689,
       "top_libraries": [
         {
           "name": "numpy",
@@ -191,7 +191,7 @@
         },
         {
           "name": "pandas",
-          "pct": 33.3
+          "pct": 33.2
         },
         {
           "name": "sklearn",
@@ -213,7 +213,7 @@
     },
     {
       "field_name": "Engineering",
-      "n_repos": 25841,
+      "n_repos": 25839,
       "top_libraries": [
         {
           "name": "numpy",
@@ -237,7 +237,7 @@
         },
         {
           "name": "pandas",
-          "pct": 26.1
+          "pct": 26.2
         },
         {
           "name": "sklearn",
@@ -259,7 +259,7 @@
     },
     {
       "field_name": "Biochemistry, Genetics and Molecular Biology",
-      "n_repos": 21431,
+      "n_repos": 21433,
       "top_libraries": [
         {
           "name": "numpy",
@@ -305,7 +305,7 @@
     },
     {
       "field_name": "Physics and Astronomy",
-      "n_repos": 12845,
+      "n_repos": 12846,
       "top_libraries": [
         {
           "name": "numpy",
@@ -313,7 +313,7 @@
         },
         {
           "name": "matplotlib",
-          "pct": 51.6
+          "pct": 51.7
         },
         {
           "name": "scipy",
@@ -351,7 +351,7 @@
     },
     {
       "field_name": "Medicine",
-      "n_repos": 12009,
+      "n_repos": 12008,
       "top_libraries": [
         {
           "name": "numpy",
@@ -397,7 +397,7 @@
     },
     {
       "field_name": "Mathematics",
-      "n_repos": 8383,
+      "n_repos": 8380,
       "top_libraries": [
         {
           "name": "numpy",
@@ -405,7 +405,7 @@
         },
         {
           "name": "matplotlib",
-          "pct": 24.8
+          "pct": 24.7
         },
         {
           "name": "scipy",
@@ -413,11 +413,11 @@
         },
         {
           "name": "pandas",
-          "pct": 18.4
+          "pct": 18.3
         },
         {
           "name": "sklearn",
-          "pct": 12.8
+          "pct": 12.7
         },
         {
           "name": "ggplot2",
@@ -437,13 +437,13 @@
         },
         {
           "name": "seaborn",
-          "pct": 8.6
+          "pct": 8.5
         }
       ]
     },
     {
       "field_name": "Environmental Science",
-      "n_repos": 7154,
+      "n_repos": 7155,
       "top_libraries": [
         {
           "name": "numpy",
@@ -489,7 +489,7 @@
     },
     {
       "field_name": "Social Sciences",
-      "n_repos": 6519,
+      "n_repos": 6521,
       "top_libraries": [
         {
           "name": "numpy",
