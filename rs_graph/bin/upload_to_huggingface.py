@@ -34,7 +34,6 @@ REDACTED_TABLES: set[str] = {
 
 SKIPPED_TABLES: set[str] = {
     "alembic_version",
-    "repository_file",  # This table is massive, skip it for now.
 }
 
 BATCH_SIZE: int = 2**20  # 1,048,576 rows per batch
@@ -47,8 +46,9 @@ def upload_to_huggingface(  # noqa: C901
     database_path: str = typer.Argument(
         help="Path to the SQLite database file to use.",
     ),
-    redact: bool = True,
-    org: str = "evamxb",
+    redact: bool = False,
+    org: str = "sci-soft-collections",
+    include_repository_file: bool = False,
 ) -> None:
     """
     Read all tables from the rs-graph-v2 SQLite database and upload
@@ -91,6 +91,11 @@ def upload_to_huggingface(  # noqa: C901
         if table_name not in SKIPPED_TABLES
         and (not redact or table_name not in REDACTED_TABLES)
     ]
+
+    # Handle repository file
+    if not include_repository_file:
+        if "repository_file" in to_process_table_names:
+            to_process_table_names.remove("repository_file")
 
     # Write each table to parquet in batches to avoid OOM
     for table_name in tqdm(
