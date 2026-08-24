@@ -1,40 +1,3 @@
-"""New question: does co-authorship network structure differ by scientific domain?
-
-Why this question, out of the "brainstorm one" brief: `document_contributor`
-(researcher_id <-> document_id, with `position`/`is_corresponding`) is the only
-author-identity structure the schema actually has at the document level --
-there's no richer social-network table (no explicit "collaborator" edge, no
-institution-level affiliation graph beyond `document_contributor_institution`,
-which is a different question). A co-authorship graph -- an edge between two
-researchers whenever they share a document -- is the one network genuinely
-implied by the data as it exists, not assumed on top of it. Domain (the same
-4-value `Topic.domain_name` used elsewhere on the site) is a clean, already-
-validated categorical split to compare that graph's shape across, and "is
-collaboration structurally different in Physical Sciences vs. Life Sciences"
-is a real, checkable science-of-science question (large multi-author physics
-collaborations vs. smaller wet-lab groups is a documented pattern in the
-literature) rather than a novel claim invented for this site.
-
-Scope, restricted throughout to high-precision article-repository links (same
-population as the rest of the site) and to documents with 2-12 listed authors
--- the upper bound exists because a handful of large-consortium papers (some
-research-software papers list 100+ authors) would otherwise blow up the
-per-document all-pairs edge count combinatorially without adding real
-co-authorship *structure* insight, just star-shaped noise around one paper.
-
-Graph construction and every statistic below uses rustworkx (not networkx),
-per an explicit requirement for this pass: one undirected PyGraph per domain,
-nodes = researchers with a qualifying document in that domain, edges = a
-researcher pair sharing at least one qualifying document (weighted by shared
-document count). Reports, per domain: node/edge counts, graph density,
-largest-connected-component fraction, and global transitivity (clustering
-coefficient) -- the three standard shape statistics for "is this network
-denser/more fragmented than that one." Also precomputes a small illustrative
-subgraph (one domain's largest connected component, BFS-sampled down to a
-size a static SVG can render) with a rustworkx spring layout, so the site can
-show an actual picture alongside the per-domain numbers.
-"""
-
 import json
 import os
 from collections import deque
@@ -69,7 +32,8 @@ def _build_domain_graph(pairs: pl.DataFrame, node_ids: list[int]) -> rx.PyGraph:
 
 def _bfs_sample(graph: rx.PyGraph, start: int, max_nodes: int) -> list[int]:
     """BFS out from `start`, capped at `max_nodes` -- keeps the illustrative
-    subgraph visibly connected, unlike a uniform random node sample would."""
+    subgraph visibly connected, unlike a uniform random node sample would.
+    """
     visited = {start}
     order = [start]
     queue = deque([start])
@@ -142,9 +106,7 @@ def run() -> dict:
         n_edges = graph.num_edges()
         density = (2 * n_edges / (n_nodes * (n_nodes - 1))) if n_nodes > 1 else 0.0
         components = rx.connected_components(graph)
-        largest_component_frac = (
-            max(len(c) for c in components) / n_nodes if n_nodes else 0.0
-        )
+        largest_component_frac = max(len(c) for c in components) / n_nodes if n_nodes else 0.0
         transitivity = rx.transitivity(graph) if n_nodes > 2 else 0.0
 
         domain_stats.append(
@@ -180,9 +142,7 @@ def run() -> dict:
         }
         for i in subgraph.node_indices()
     ]
-    illustrative_edges = [
-        {"source": int(a), "target": int(b)} for a, b in subgraph.edge_list()
-    ]
+    illustrative_edges = [{"source": int(a), "target": int(b)} for a, b in subgraph.edge_list()]
 
     result = {
         "question": (

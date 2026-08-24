@@ -1,39 +1,3 @@
-"""Q_libraries supplement: a per-library lookup table joining all three views.
-
-Each of the three library-usage rankings (imported, manifest-declared
-dependencies, mentioned-in-text) uses a different naming convention for the
-same underlying library -- torch/pytorch being the canonical example -- and
-top_libraries.py only ever surfaces the top 10 of each in isolation. Exact
-string matching on `software_name_normalized` therefore misses real matches
-across views (torch vs pytorch, sklearn vs scikit-learn, etc).
-
-This builds one row per *canonical library identity*, not one row per raw
-name, by reusing `rs_graph.utils.software_alignment.align_software_names()`
--- the same Hungarian-algorithm + rapidfuzz + alternates-table machinery
-already used to align software names within a single article-repo pair
-elsewhere in rs_graph -- extended here to a global, three-way reconciliation
-across the whole dataset:
-
-1. Pairwise-align the top-200-by-count name lists for each pair of views
-   (imports<->dependencies, imports<->mentions, dependencies<->mentions).
-   Each pairwise alignment is a one-to-one (Hungarian) assignment, so a name
-   is matched to at most one partner per other view.
-2. Union the three pairwise alignments into canonical groups via a greedy,
-   highest-score-first union-find, with one guard: a merge is only applied
-   if it would not put two different names from the *same* view into one
-   group. This is what keeps the merge well-defined despite fuzzy alignment
-   being non-transitive (A~B and B~C at the cutoff doesn't guarantee A~C) --
-   processing edges strongest-first and refusing same-view collisions means
-   a weak indirect chain can never silently fuse two genuinely different
-   libraries into one row, since the strong direct edges are locked in
-   first and a later, weaker edge that would violate the one-name-per-view
-   invariant is simply skipped rather than forcing a merge.
-
-Dependencies are pooled across ecosystems into one count/rank (this is a
-lookup table, not a chart needing ecosystem color), with the top-contributing
-ecosystem retained as a side signal.
-"""
-
 import json
 import os
 import sys
@@ -42,11 +6,12 @@ import polars as pl
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
-from lib.confidence import filter_high_precision_document_repository_links  # noqa: E402
-from lib.hf_loader import load_table  # noqa: E402
-from rs_graph.utils.identifier_normalization import normalize_name  # noqa: E402
-from rs_graph.utils.software_alignment import align_software_names  # noqa: E402
-from rs_graph.utils.software_alternates import load_alternate_groups  # noqa: E402
+from lib.confidence import filter_high_precision_document_repository_links
+from lib.hf_loader import load_table
+
+from rs_graph.utils.identifier_normalization import normalize_name
+from rs_graph.utils.software_alignment import align_software_names
+from rs_graph.utils.software_alternates import load_alternate_groups
 
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "library_cross_view.json")
 
@@ -118,7 +83,8 @@ def _ranked_counts(df: pl.DataFrame, id_col: str, name_col: str) -> pl.DataFrame
 
 class _UnionFind:
     """Union-find over (view, name) nodes, refusing merges that would put two
-    different names from the same view into one group."""
+    different names from the same view into one group.
+    """
 
     def __init__(self) -> None:
         self.parent: dict[tuple[str, str], tuple[str, str]] = {}
@@ -369,7 +335,7 @@ def run() -> dict:
         "methodology": (
             "Each view first has same-view alternate spellings collapsed via the "
             "curated software-name-alternates table (e.g. a pypi dependency named "
-            "\"torch\" and a conda dependency named \"pytorch\"), then ranked to "
+            '"torch" and a conda dependency named "pytorch"), then ranked to '
             f"top-{TOP_N_PER_VIEW}-by-distinct-count in each of the three views "
             "(imports, dependencies pooled across ecosystems, mentions), restricted "
             "to high-precision article-repository links. The three top-N lists are "

@@ -43,7 +43,7 @@ BATCH_SIZE: int = 2**20  # 1,048,576 rows per batch
 
 
 @app.command()
-def upload_to_huggingface(
+def upload_to_huggingface(  # noqa: C901
     database_path: str = typer.Argument(
         help="Path to the SQLite database file to use.",
     ),

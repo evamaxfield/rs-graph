@@ -10,8 +10,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     <h1 class="title-lg">Explore the data</h1>
     <p class="body-md intro">
       Every card below is one high-precision article&ndash;repository pair &mdash; a paper and
-      the code repository linked to it. Search, filter by field, and sort below; everything
-      here runs client-side against a precomputed index &mdash; no server, no live API calls.
+      the code repository linked to it. Search, filter by field, and sort below; everything here
+      runs client-side against a precomputed index &mdash; no server, no live API calls.
     </p>
     <p class="body-sm intro">
       This covers every high-precision pair in rs-graph &mdash; see the count noted under the
@@ -107,7 +107,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     return { fields: payload.fields, pairs };
   }
 
-  type SortKey = 'date-desc' | 'date-asc' | 'citations-desc' | 'citations-asc' | 'stars-desc' | 'stars-asc';
+  type SortKey =
+    'date-desc' | 'date-asc' | 'citations-desc' | 'citations-asc' | 'stars-desc' | 'stars-asc';
 
   function matchesQuery(pair: Pair, needle: string): boolean {
     return (
@@ -226,7 +227,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
   async function main() {
     const input = document.querySelector<HTMLInputElement>('[data-explore-input]');
-    const fieldFilter = document.querySelector<HTMLSelectElement>('[data-explore-field-filter]');
+    const fieldFilter = document.querySelector<HTMLSelectElement>(
+      '[data-explore-field-filter]',
+    );
     const sortSelect = document.querySelector<HTMLSelectElement>('[data-explore-sort]');
     const resultsEl = document.querySelector<HTMLElement>('[data-explore-results]');
     const paginationEl = document.querySelector<HTMLElement>('[data-explore-pagination]');
@@ -266,7 +269,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
       let results = pairs;
       if (query) results = results.filter((p) => matchesQuery(p, query));
-      if (selectedField !== null) results = results.filter((p) => matchesField(p, selectedField));
+      if (selectedField !== null)
+        results = results.filter((p) => matchesField(p, selectedField));
       results = sortPairs(results, sortKey);
 
       renderPage(fields, results, 0, resultsEl!, paginationEl!);
