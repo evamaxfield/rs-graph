@@ -6,7 +6,7 @@ import polars as pl
 from datasets import load_dataset
 from dotenv import load_dotenv
 
-DATASET_REPO = "evamxb/rs-graph-v2-full"
+DATASET_REPO = "sci-soft-collections/rs-graph-v2-full"
 
 _ENV_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env")
 load_dotenv(_ENV_PATH)

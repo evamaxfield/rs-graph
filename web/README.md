@@ -5,7 +5,7 @@ Docs/marketing site for the rs-graph dataset. See
 
 ## Layout
 
-- `data-prep/` -- Python. Queries `evamxb/rs-graph-v2-full` on HuggingFace and writes small,
+- `data-prep/` -- Python. Queries `sci-soft-collections/rs-graph-v2-full` on HuggingFace and writes small,
   committed JSON files to `data-prep/output/`. Nothing heavy runs in the browser or in CI.
 - `site/` -- Astro app. Imports `data-prep/output/*.json` (staged into `site/public/data/`) and
   renders charts with Observable Plot. Zero JS shipped per page except the chart islands.
