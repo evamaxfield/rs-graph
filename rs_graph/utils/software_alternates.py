@@ -31,7 +31,7 @@ def load_alternate_groups(
     seen: dict[str, str] = {}  # norm_name -> install_key (for error messages)
 
     for install_name, alternates in raw.items():
-        all_names = [install_name, *alternates]
+        all_names = [install_name, *(alternates or [])]
         norm_set: set[str] = set()
         for name in all_names:
             norm = normalize_name(name)
@@ -61,3 +61,19 @@ def are_alternates(norm_a: str, norm_b: str) -> bool:
     if group is None:
         return False
     return norm_b in group
+
+
+def are_known_distinct(norm_a: str, norm_b: str) -> bool:
+    """
+    Veto check: both names are in the registry but in different groups, so they are
+    known-distinct software and fuzzy matching must not pair them (e.g. stlearn vs.
+    sklearn at fuzz 86, ipython vs. python at fuzz 92).
+    """
+    mapping = load_alternate_groups()
+    group_a = mapping.get(norm_a)
+    if group_a is None:
+        return False
+    group_b = mapping.get(norm_b)
+    if group_b is None:
+        return False
+    return group_a is not group_b

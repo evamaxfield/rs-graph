@@ -38,3 +38,54 @@ huggingface-hub:
   - huggingfacehub
   - huggingface hub
   - huggingface
+
+scikit-learn:
+  - sklearn
+
+biopython:
+  - bio
+
+caffe:
+  - pycaffe
+
+# pylab and mpl_toolkits are modules shipped inside matplotlib itself -- importing either
+# means using matplotlib (round 5 pass 1: 1,918 / 7,058 repos import pylab / mpl_toolkits
+# alongside a declared matplotlib dependency with no match).
+matplotlib:
+  - pylab
+  - mpl_toolkits
+
+# COBRApy's install/import name is `cobra` (round 5 pass 1: mention "COBRApy" vs. import
+# `cobra`, fuzz 83, 27 pairs corpus-wide).
+cobra:
+  - cobrapy
+
+# petsc4py is the Python binding of PETSc -- same software, like caffe/pycaffe
+# (round 5 pass 1: mention "PETSc" vs. import `petsc4py`, fuzz 77).
+petsc:
+  - petsc4py
+
+# python-Levenshtein installs the `Levenshtein` import module (round 5 pass 1: 487 repos
+# declare python-levenshtein and import levenshtein with no match, fuzz 79).
+python-Levenshtein:
+  - levenshtein
+
+# Singleton groups: registered so the veto rule (are_known_distinct) blocks fuzzy
+# near-misses against other registered names, without asserting any synonymy.
+# stlearn (spatial transcriptomics) must never fuzzy-match sklearn (fuzz 86);
+# python (the interpreter, as declared in conda env files) must never fuzzy-match
+# ipython (fuzz 92).
+stlearn: []
+
+python: []
+
+ipython: []
+
+# pytorch3d (3D deep learning library) must never fuzzy-match pytorch/torch (fuzz 87 vs.
+# "pytorch"; round 5 pass 1: a "PyTorch" mention matched a pytorch3d import; 398 repos
+# import pytorch3d alongside a declared pytorch dependency).
+pytorch3d: []
+
+# PythonQt (C++/Qt scripting binding) must never fuzzy-match python (fuzz 86; round 5
+# pass 1: a pythonqt import matched a declared `python` conda dependency).
+pythonqt: []

@@ -8,7 +8,7 @@ from rapidfuzz import fuzz
 from scipy.optimize import linear_sum_assignment
 
 from .identifier_normalization import normalize_name
-from .software_alternates import are_alternates
+from .software_alternates import are_alternates, are_known_distinct
 
 AlignmentMethod = Literal["global_min_diff", "greedy_max_first"]
 
@@ -112,6 +112,9 @@ def align_software_names(
         for j, na in enumerate(norm_a):
             if use_alternates and are_alternates(na, nb):
                 sim_matrix[i, j] = 100.0
+            elif use_alternates and are_known_distinct(na, nb):
+                # Registry veto: both names known, in different groups -- never fuzzy-match.
+                sim_matrix[i, j] = 0.0
             else:
                 sim_matrix[i, j] = fuzz.ratio(nb, na)
 
