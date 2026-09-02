@@ -54,6 +54,9 @@ caffe:
 matplotlib:
   - pylab
   - mpl_toolkits
+  # conda's matplotlib-base is matplotlib itself (round 5 pass 5: 3,606 repos declare
+  # matplotlib-base and import matplotlib with no match, fuzz 83).
+  - matplotlib-base
 
 # COBRApy's install/import name is `cobra` (round 5 pass 1: mention "COBRApy" vs. import
 # `cobra`, fuzz 83, 27 pairs corpus-wide).
@@ -69,6 +72,106 @@ petsc:
 # declare python-levenshtein and import levenshtein with no match, fuzz 79).
 python-Levenshtein:
   - levenshtein
+
+# python-dateutil installs the `dateutil` import module (round 5 pass 2: 1,441 repos
+# declare python-dateutil and import dateutil with no match, fuzz 73).
+python-dateutil:
+  - dateutil
+
+# pkg_resources ships inside setuptools -- importing it means using setuptools
+# (round 5 pass 2: 1,135 repos declare setuptools and import pkg_resources, fuzz 27).
+setuptools:
+  - pkg_resources
+
+# faiss-gpu / faiss-cpu are conda/pip build variants of the same faiss library
+# (round 5 pass 2: 635 repos declare faiss-gpu and import faiss, fuzz 77).
+faiss:
+  - faiss-gpu
+  - faiss-cpu
+
+# tensorflow-gpu / tensorflow-cpu are build variants of tensorflow itself (fuzz 87 already
+# matched them; grouping makes it exact and protects them from the tensorflow-hub veto below).
+tensorflow:
+  - tensorflow-gpu
+  - tensorflow-cpu
+
+# keras-gpu / keras-base are conda build variants of keras (round 5 pass 2: 77 / 35 repos,
+# fuzz 71-77).
+keras:
+  - keras-gpu
+  - keras-base
+
+# psycopg2-binary is the same software as psycopg2, packaged with bundled libpq
+# (round 5 pass 2: 306 repos, fuzz 73).
+psycopg2:
+  - psycopg2-binary
+
+# The grpcio package installs the `grpc` import module (round 5 pass 2: 249 repos, fuzz 80).
+grpcio:
+  - grpc
+
+# PySocks installs the `socks` import module (round 5 pass 2, fuzz 83).
+PySocks:
+  - socks
+
+# The weblogo package installs the `weblogolib` import module (round 5 pass 2, fuzz 82).
+weblogo:
+  - weblogolib
+
+# The pyro-ppl package installs the `pyro` import module (round 5 pass 3: 240 repos
+# declare pyro-ppl and import pyro with no match, fuzz 73).
+pyro-ppl:
+  - pyro
+
+# The pysha3 package installs the `sha3` import module (round 5 pass 3, fuzz 80).
+pysha3:
+  - sha3
+
+# The hydra-core package installs the `hydra` import module (round 5 pass 4: 4,353 repos
+# declare hydra-core and import hydra with no match, fuzz 71).
+hydra-core:
+  - hydra
+
+# djangorestframework installs the `rest_framework` import module (round 5 pass 4:
+# 280 repos, fuzz 81).
+djangorestframework:
+  - rest_framework
+
+# msgpack-python is the former PyPI name of msgpack (round 5 pass 4: 81 repos, fuzz 70).
+msgpack:
+  - msgpack-python
+
+# path.py is the former PyPI name of the `path` package/module (round 5 pass 4: 66 repos,
+# fuzz 73).
+path.py:
+  - path
+
+# scikit-fuzzy installs the `skfuzzy` import module -- same pattern as scikit-learn/sklearn
+# (round 5 pass 4: 36 repos, fuzz 78).
+scikit-fuzzy:
+  - skfuzzy
+
+# django-allauth installs the `allauth` import module (round 5 pass 4: 32 repos, fuzz 70).
+django-allauth:
+  - allauth
+
+# idaes-pse installs the `idaes` import module (round 5 pass 4: 14 repos, fuzz 77).
+idaes-pse:
+  - idaes
+
+# pyzmq installs the `zmq` import module (round 5 pass 5: 367 repos, fuzz 75).
+pyzmq:
+  - zmq
+
+# bctpy (Brain Connectivity Toolbox for Python) installs the `bct` import module
+# (round 5 pass 5: 22 repos + 3 mention-side pairs, fuzz 75).
+bctpy:
+  - bct
+
+# imbalanced-learn installs the `imblearn` import module -- same pattern as
+# scikit-learn/sklearn (round 5 pass 5: 482 repos + 9 mention-side pairs, fuzz 70).
+imbalanced-learn:
+  - imblearn
 
 # Singleton groups: registered so the veto rule (are_known_distinct) blocks fuzzy
 # near-misses against other registered names, without asserting any synonymy.
@@ -89,3 +192,20 @@ pytorch3d: []
 # PythonQt (C++/Qt scripting binding) must never fuzzy-match python (fuzz 86; round 5
 # pass 1: a pythonqt import matched a declared `python` conda dependency).
 pythonqt: []
+
+# tensorflow-hub is a separate library from tensorflow and must never fuzzy-match it
+# (fuzz 87; round 5 pass 2: a "TensorFlow" mention matched a tensorflow_hub import).
+tensorflow-hub: []
+
+# pROC and PRROC are two distinct R packages for ROC/PR analysis and must never
+# fuzzy-match each other (fuzz 89; round 5 pass 2: a "PRROC" mention matched a pROC
+# import).
+pROC: []
+
+PRROC: []
+
+# g:Profiler (gprofiler) and the SigProfiler tool family are distinct software and must
+# never fuzzy-match (round 5 pass 5: a "SigProfiler" mention matched a gprofiler import).
+gprofiler: []
+
+sigprofiler: []

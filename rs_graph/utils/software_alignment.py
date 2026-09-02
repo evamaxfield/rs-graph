@@ -32,7 +32,11 @@ def _solve_global_min_diff(
     n_b, n_a = sim_matrix.shape
     max_size = max(n_a, n_b)
     cost_matrix = np.full((max_size, max_size), -cutoff)
-    cost_matrix[:n_b, :n_a] = -sim_matrix
+    # Gate sub-cutoff similarities to 0 before solving: they can never become accepted
+    # matches, so they must not influence which above-cutoff assignment wins (otherwise a
+    # junk item can "absorb" a column at sub-cutoff similarity and steal an exact match's
+    # partner whenever a near-tie alternative exists).
+    cost_matrix[:n_b, :n_a] = -np.where(sim_matrix >= cutoff, sim_matrix, 0.0)
     row_ind, col_ind = linear_sum_assignment(cost_matrix)
     pairs: list[tuple[int, int, float]] = []
     for i, j in zip(row_ind, col_ind, strict=False):
@@ -110,8 +114,12 @@ def align_software_names(
     sim_matrix = np.zeros((len(norm_b), len(norm_a)))
     for i, nb in enumerate(norm_b):
         for j, na in enumerate(norm_a):
-            if use_alternates and are_alternates(na, nb):
+            if na == nb:
                 sim_matrix[i, j] = 100.0
+            elif use_alternates and are_alternates(na, nb):
+                # Slightly below an exact-name match so one-to-one assignment prefers
+                # identical names over alias-group ties (still far above any cutoff).
+                sim_matrix[i, j] = 99.9
             elif use_alternates and are_known_distinct(na, nb):
                 # Registry veto: both names known, in different groups -- never fuzzy-match.
                 sim_matrix[i, j] = 0.0
