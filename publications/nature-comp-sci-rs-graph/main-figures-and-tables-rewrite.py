@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 
 """
-Nature Computational Science `rs-graph` manuscript -- figures and tables, rewritten.
+Nature Computational Science `rs-graph` manuscript -- figures and tables.
 
-Replication-package policy: every function here loads directly from HuggingFace
-(`sci-soft-collections/rs-graph-v2-full`), applies the standard filters itself, and is
-runnable standalone. Implements Units 1-13 of the manuscript's figure/table build plan:
-Figures 1-4, the logistic regression, Table 1, and the seed-pair-count, contributor-count,
-classification-model verification, ARMM ROC/PR, date-delta, mining-rounds, and
-co-authorship-network statistics/tables.
+Every command loads directly from HuggingFace (`sci-soft-collections/rs-graph-v2-full`),
+applies the standard filters itself, and is runnable standalone -- no dependency on a local
+SQLite checkout. Builds Figures 1-4, Table 1, the mention-predictors logistic regression, and
+the supporting statistics/tables cited in the manuscript text.
 """
 
 from __future__ import annotations
@@ -49,10 +47,10 @@ OUTPUT_DIR = Path(__file__).parent / "outputs"
 
 def _pwc_coverage_statistic(df: pl.DataFrame) -> dict[str, float]:
     """
-    Standalone PwC-coverage statistic (Unit 2, output 1): what fraction of PwC's official
-    paper<->code links does rs-graph's own PwC-sourced, filtered pair set cover -- plus the
-    manuscript line 23 "% increase over the verified, accessible subset of Papers with Code"
-    statistic (our filtered PwC-sourced pairs ARE that subset, per the paper's FOOTNOTE 1).
+    Compute what fraction of PwC's official paper<->code links rs-graph's own PwC-sourced,
+    filtered pair set covers, plus the manuscript's "% increase over the verified, accessible
+    subset of Papers with Code" statistic (line 23; our filtered PwC-sourced pairs are that
+    subset).
     """
     print("\nLoading pwc-archive/links-between-paper-and-code from HuggingFace...")
     pwc_ds = load_dataset("pwc-archive/links-between-paper-and-code")
@@ -92,12 +90,11 @@ def _field_literature_penetration(
     df: pl.DataFrame, field_order: list[str]
 ) -> pl.DataFrame | None:
     """
-    Field-level literature penetration (round 4, R4): rs-graph pair count per top field
-    divided by that field's total OpenAlex work count over the same publication-year window.
-    One cached `pyalex` count query per field ("Other" is skipped -- it isn't an OpenAlex
-    field); the fetched counts are cached to a local JSON so re-renders don't refetch.
-    Returns None (and the figure skips the annotation) if OpenAlex is unreachable and no
-    cache exists.
+    Compute field-level literature penetration: rs-graph pair count per top field divided by
+    that field's total OpenAlex work count over the same publication-year window. One `pyalex`
+    count query per field ("Other" is skipped -- it isn't an OpenAlex field); fetched counts
+    are cached to a local JSON so re-renders don't refetch. Returns None (and the figure skips
+    the annotation) if OpenAlex is unreachable and no cache exists.
     """
     import pyalex
 
@@ -169,13 +166,11 @@ def _field_literature_penetration(
 @app.command()
 def figure_2_dataset_coverage(output_dir: Path = OUTPUT_DIR) -> None:
     """
-    Figure 2: dataset coverage, restructured to two raw-count panels (review-response round):
-    (A) pair counts by field -- rs-graph, stacked seed vs. mined, beside the verified PwC
-    subset (FOOTNOTE 1's comparable PwC population); (B) pair counts per publication year
-    stacked by top-6 fields + Other, with the mined share of each year's pairs overlaid on a
-    secondary axis. The old field-proportion panel survives as
-    `figure2_field_proportions.csv` (line 23's percentages), and a seed-source x field
-    supplement table rides along.
+    Build Figure 2: dataset coverage. (A) pair counts by field -- rs-graph, stacked seed vs.
+    mined, beside the verified PwC subset; (B) pair counts per publication year stacked by
+    top-6 fields + Other, with the mined share of each year's pairs overlaid on a secondary
+    axis. Also saves the field-proportion table (line 23's percentages) and a seed-source x
+    field supplement table.
     """
     evaplot.set_style("evaplot_rc")
     df = u.load_filtered_pairs(top_n_fields=10)
@@ -311,8 +306,8 @@ def figure_2_dataset_coverage(output_dir: Path = OUTPUT_DIR) -> None:
     axes[0].invert_yaxis()
     axes[0].set_xlabel("Article-Repository Pairs")
 
-    # Field-level literature penetration (round 4, R4): per-bar annotation of rs-graph pairs
-    # as a share of the field's total OpenAlex literature over the same year window.
+    # Per-bar annotation: rs-graph pairs as a share of the field's total OpenAlex literature
+    # over the same year window.
     penetration = _field_literature_penetration(df, field_order)
     if penetration is not None:
         u.save_table(penetration, "figure2_field_literature_penetration", output_dir)
@@ -343,8 +338,8 @@ def figure_2_dataset_coverage(output_dir: Path = OUTPUT_DIR) -> None:
     # overlaid as a line on a secondary axis (the plan's default choice -- preserves the
     # field-by-year detail while still showing what mining contributed when).
     b_fields = [*top6_fields, "Other"]
-    # Genuinely distinct categorical hues (round 2: the blended green-orange field palette
-    # read as a gradient, not categories); Other stays gray.
+    # Distinct categorical hues (the blended green-orange palette reads as a gradient at
+    # seven categories); Other stays gray.
     b_colors = [*sns.color_palette("colorblind", n_colors=len(top6_fields)), "#bbbbbb"]
     years = sorted(year_field.get_column("document_publication_year").unique().to_list())
     bottoms = np.zeros(len(years))
@@ -375,8 +370,7 @@ def figure_2_dataset_coverage(output_dir: Path = OUTPUT_DIR) -> None:
     axes[1].set_xticks([y for y in years if y % 2 == 0])
     handles_b, labels_b = axes[1].get_legend_handles_labels()
     handles_b2, labels_b2 = ax_b2.get_legend_handles_labels()
-    # Outside the axes entirely (round 2): the mined-share line occupies the upper left, and no
-    # in-panel pocket stays clear of bars or line at every year.
+    # Legend outside the axes: no in-panel pocket stays clear of bars or line at every year.
     leg_b = axes[1].legend(
         handles_b + handles_b2,
         labels_b + labels_b2,
@@ -432,8 +426,8 @@ _TESTING_PKGS: set[str] = {
     "jasmine",
     "vitest",
 }
-# ruff is both linter and formatter; kept under linting. pre-commit is orchestration; kept
-# under linting to match prior behavior (flagged for Eva if she'd rather drop it).
+# ruff is both linter and formatter; kept under linting. pre-commit is orchestration; also
+# kept under linting.
 _LINTING_PKGS: set[str] = {
     "flake8",
     "pylint",
@@ -532,9 +526,9 @@ MANIFEST_ADOPTION_MIN_REPOS_PER_YEAR = 100
 
 
 def _manifest_adoption_over_time(df: pl.DataFrame, deps: pl.DataFrame) -> pl.DataFrame:
-    # Dedup to one row per repository (first-seen publication year), matching Panel C's unit of
-    # analysis -- both panels report a "% of Repos" statistic, so a repository linked to
-    # multiple papers must not be counted once per paper.
+    # Dedup to one row per repository (first-seen publication year) -- the panel reports a
+    # "% of Repos" statistic, so a repository linked to multiple papers must not be counted
+    # once per paper.
     current_year = date.today().year
     year_repo = (
         df.select("repository_id", "document_publication_year", "repository_primary_language")
@@ -630,9 +624,8 @@ def _dependency_category_adoption(
 
 def _fwci_distribution_frame(fwci_docs: pl.DataFrame) -> pl.DataFrame:
     # `> 0` is required for the log-scale histogram (log(0) is undefined), but it also drops
-    # every zero-lifetime-citation document (a valid, non-null 0.0 ratio) from the distribution
-    # and median line -- disclose that exclusion explicitly, matching every other panel in this
-    # figure that caps/excludes data (Panel A's whisker cap, Panel C's domain-granularity note).
+    # every zero-lifetime-citation document (a valid 0.0 ratio) from the distribution and
+    # median line -- report that exclusion.
     n_before_zero_filter = fwci_docs.filter(pl.col("document_raw_fwci").is_not_null()).height
     d = fwci_docs.filter(
         pl.col("document_raw_fwci").is_not_null() & (pl.col("document_raw_fwci") > 0)
@@ -649,8 +642,7 @@ def _fwci_distribution_frame(fwci_docs: pl.DataFrame) -> pl.DataFrame:
 def _fwsi_vs_fwci_by_field(
     df: pl.DataFrame, fwci_docs: pl.DataFrame, fwsi_repos: pl.DataFrame
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
-    # Re-prune fields at top-5 + Other specifically for this panel, so the six-field
-    # breakdown matches the manuscript's six named fields (top 5 + "Other").
+    # Re-prune to top-5 + Other so the breakdown matches the manuscript's six named fields.
     top5 = (
         df.get_column("document_field_name")
         .value_counts(sort=True)
@@ -687,10 +679,8 @@ def _fwsi_vs_fwci_by_field(
             grp.get_column("document_raw_fwci").to_numpy(),
             grp.get_column("repository_modified_fwsi").to_numpy(),
         )
-        # 95% CI on Spearman rho via Fisher z-transform (standard approximation) -- n varies
-        # substantially by field (e.g. Computer Science n=140,054 vs. smaller fields), so a
-        # bare bar chart with no uncertainty band invites over-reading small rho differences
-        # between fields as meaningful.
+        # 95% CI on Spearman rho via Fisher z-transform -- n varies substantially by field,
+        # so a bare rho with no uncertainty invites over-reading small differences.
         z = np.arctanh(rho)
         se = 1.0 / np.sqrt(grp.height - 3)
         ci_lo, ci_hi = np.tanh(z - 1.96 * se), np.tanh(z + 1.96 * se)
@@ -724,9 +714,8 @@ def _spearman_with_ci(x: np.ndarray, y: np.ndarray) -> dict[str, float]:
 
 def _stars_vs_citations_by_field(df: pl.DataFrame) -> pl.DataFrame:
     """
-    Panel E content (round 4, R5 decision): per-field Spearman rho between raw repository
-    stargazer counts and raw document citation counts, at the pair level, top-5 fields +
-    Other, plus a pooled/overall row.
+    Compute per-field Spearman rho between raw repository stargazer counts and raw document
+    citation counts, at the pair level, top-5 fields + Other, plus a pooled/overall row.
     """
     top5 = (
         df.get_column("document_field_name")
@@ -775,7 +764,7 @@ def _stars_vs_citations_by_field(df: pl.DataFrame) -> pl.DataFrame:
     return pl.DataFrame(rows)
 
 
-# License-category keyword lists for Panel F (round 4, R5's approved 6th characteristic).
+# License-category keyword lists for Panel F.
 # Matched against GitHub's license display names as stored in `repository_license`; checked
 # copyleft-first so share-alike CC variants never fall through to the permissive CC match.
 _COPYLEFT_LICENSE_KEYWORDS: tuple[str, ...] = (
@@ -866,13 +855,12 @@ def figure_3_software_development_characteristics(
     output_dir: Path = OUTPUT_DIR,
 ) -> None:
     """
-    Figure 3: software development characteristics, one consolidated 6-panel figure (Eva's
-    round-4 decision -- not split): (A) dev activity duration, (B) dependency-manifest
-    adoption over time, (C) dependency-category adoption over time, (D) raw-FWCI
-    distribution, (E) raw-stars-vs-raw-citations Spearman rho by field as a horizontal
-    forest plot with a pooled row, (F) license adoption over time (any / permissive /
-    copyleft). Also produces the article-vs-preprint supplemental split as a bonus output
-    from the same computations (Unit 3).
+    Build Figure 3: software development characteristics, one consolidated 6-panel figure.
+    (A) dev activity duration, (B) dependency-manifest adoption over time, (C)
+    dependency-category adoption over time, (D) raw-FWCI distribution, (E)
+    raw-stars-vs-raw-citations Spearman rho by field as a horizontal forest plot with a
+    pooled row, (F) license adoption over time (any / permissive / copyleft). Also produces
+    the article-vs-preprint supplemental split from the same computations.
     """
     evaplot.set_style("evaplot_rc")
     df = u.load_filtered_pairs(top_n_fields=10)
@@ -882,8 +870,8 @@ def figure_3_software_development_characteristics(
     print(f"  repository_dependency: {len(deps):,} rows")
     deps = u.clean_dependency_names(deps)
 
-    # Raw OpenAlex FWCI everywhere FWCI appears (Finding 2 decision) -- the previous modified
-    # (in-sample) FWCI stays available in utils but is no longer on the paper path.
+    # Raw OpenAlex FWCI everywhere FWCI appears; modified (in-sample) FWCI stays available in
+    # utils but is not on the paper path.
     fwci_docs = u.raw_fwci_docs(df)
     fwsi_repos = u.compute_modified_fwsi(df)
 
@@ -899,8 +887,7 @@ def figure_3_software_development_characteristics(
     fwci_dist = _fwci_distribution_frame(fwci_docs)
     _pair_level_fwsi_fwci, rho_df = _fwsi_vs_fwci_by_field(df, fwci_docs, fwsi_repos)
 
-    # FWSI-vs-FWCI rho stays on record as a CSV, but Panel E now plots raw stars vs. raw
-    # citations (round-4 decision overriding the round-1 FWSI x FWCI panel content).
+    # FWSI-vs-FWCI rho is saved as CSV only; Panel E plots raw stars vs. raw citations.
     u.save_table(rho_df, "figure3_fwsi_fwci_spearman_by_field", output_dir)
     print("\nFWSI-vs-raw-FWCI Spearman rho by field (CSV only, no longer plotted):")
     print(rho_df)
@@ -915,8 +902,7 @@ def figure_3_software_development_characteristics(
     print("\nLicense adoption by year (Panel F):")
     print(license_adoption)
 
-    # Panel B/C data as labeled tables -- the manuscript cites exact adoption percentages
-    # that previously only existed as plotted ink.
+    # Panel B/C data as labeled tables -- the manuscript cites exact adoption percentages.
     u.save_table(manifest_adoption, "figure3_manifest_adoption_by_year", output_dir)
     current_year = date.today().year
     category_by_year_plotted = category_by_year.filter(
@@ -969,7 +955,7 @@ def figure_3_software_development_characteristics(
     print("\nMedian raw OpenAlex FWCI by field (incl. zero-citation docs):")
     print(fwci_by_field)
 
-    # ---- 2x3 grid, six panels (round-4: license panel joins as F) ----
+    # ---- 2x3 grid, six panels ----
     fig = plt.figure(figsize=(19, 11))
     gs = fig.add_gridspec(2, 6, hspace=0.75, wspace=1.3)
     ax_a = fig.add_subplot(gs[0, 0:2])
@@ -982,9 +968,8 @@ def figure_3_software_development_characteristics(
     for ax, label in zip([ax_a, ax_b, ax_c, ax_d, ax_e, ax_f], "ABCDEF", strict=True):
         u.add_panel_label(ax, label)
 
-    # A: dev activity duration by source -- horizontal boxplots (duration on x), which also
-    # fixes the rotated-label crowding. The "Negative = ..." explainer moves to the paper's
-    # figure caption rather than living as in-plot ink.
+    # A: dev activity duration by source -- horizontal boxplots (duration on x); the
+    # "Negative = ..." explainer lives in the paper's figure caption.
     sns.boxplot(
         data=dev_duration.to_pandas(),
         y="dataset_source_name_canonical",
@@ -1000,8 +985,7 @@ def figure_3_software_development_characteristics(
     )
     u.style_legend(leg)
     ax_a.axvline(0, color="#888888", linewidth=0.8, linestyle=":")
-    # Whisker compression fix, now on the x-axis: cap to the 2nd-98th percentile so long-tail
-    # whiskers don't squeeze the interquartile boxes into an unreadable band.
+    # Cap x-limits to the 2nd-98th percentile so long-tail whiskers don't squeeze the boxes.
     u.cap_ylim_to_quantiles(ax_a, dev_duration.to_pandas()["duration_years"], axis="x")
     u.shrink_ticks(ax_a, size=8)
 
@@ -1027,9 +1011,8 @@ def figure_3_software_development_characteristics(
     )
     u.shrink_ticks(ax_b, size=8)
 
-    # C: dependency-category adoption over time -- five lines (Testing, Linting, Formatting,
-    # Type Checking, Documentation), pooled across domains; per-domain snapshot goes to the
-    # backing CSV / supplement instead of in-figure bars.
+    # C: dependency-category adoption over time -- five lines, pooled across domains; the
+    # per-domain snapshot goes to the backing CSV / supplement.
     sns.lineplot(
         data=category_by_year_plotted.filter(
             pl.col("total") >= MANIFEST_ADOPTION_MIN_REPOS_PER_YEAR
@@ -1050,10 +1033,8 @@ def figure_3_software_development_characteristics(
     u.style_legend(ax_c.legend(fontsize=6.5, title="", loc="upper left"), fontsize=6.5)
     u.shrink_ticks(ax_c, size=8)
 
-    # D: raw OpenAlex FWCI distribution
-    # bins=25 (down from seaborn's log-scale "auto" default): the auto rule was producing
-    # visible jagged/spiky bin-to-bin noise unrelated to real signal, distracting against the
-    # other four panels' clean lines (round-4 figure critique, priority item 4).
+    # D: raw OpenAlex FWCI distribution. bins=25: seaborn's log-scale "auto" rule produced
+    # jagged bin-to-bin noise unrelated to real signal.
     sns.histplot(
         data=fwci_dist.to_pandas(), x="document_raw_fwci", ax=ax_d, log_scale=True, bins=25
     )
@@ -1076,10 +1057,8 @@ def figure_3_software_development_characteristics(
         loc="upper right",
     )
 
-    # E: raw-stars-vs-raw-citations Spearman rho by field (round-4 content decision), drawn
-    # as a horizontal forest plot -- the canonical orientation for one-effect-per-group
-    # displays -- with the pooled/overall rho as the top row and a reference line at its
-    # value (round-4, R5).
+    # E: raw-stars-vs-raw-citations Spearman rho by field, drawn as a horizontal forest plot
+    # with the pooled/overall rho as the top row and a reference line at its value.
     pooled_row = stars_rho_df.filter(pl.col("field") == "All fields (pooled)")
     field_rows = stars_rho_df.filter(pl.col("field") != "All fields (pooled)").sort(
         "rho", descending=True
@@ -1120,7 +1099,7 @@ def figure_3_software_development_characteristics(
     )
 
     # F: license adoption over time -- any / permissive / copyleft license share of repos by
-    # first-seen publication year (round-4's approved 6th characteristic).
+    # first-seen publication year.
     license_plotted = license_adoption.filter(
         pl.col("n_repos") >= LICENSE_ADOPTION_MIN_REPOS_PER_YEAR
     )
@@ -1163,12 +1142,9 @@ def figure_3_software_development_characteristics(
     dev_duration_split = dev_duration.filter(
         pl.col("document_type_bucket").is_in(["article", "preprint"])
     )
-    # A third, gold/magenta pair -- distinct from both the teal/orange Fig. 3A uses for
-    # Before/After and the blue/purple Fig. 3C uses for Testing/Linting, so this unrelated
-    # article/preprint binary doesn't get pattern-matched onto either (round-4 figure critique,
-    # priority item 3).
-    # Horizontal, matching main Figure 3 Panel A's axis swap; the "Negative = ..." explainer
-    # moves to the paper's figure caption.
+    # Gold/magenta pair -- distinct from the teal/orange and blue/purple binaries used in the
+    # main Figure 3, so this unrelated article/preprint binary isn't pattern-matched onto
+    # either. Horizontal, matching main Panel A.
     sns.boxplot(
         data=dev_duration_split.to_pandas(),
         y="period",
@@ -1182,7 +1158,7 @@ def figure_3_software_development_characteristics(
     axes_supp[0].set_xlabel("Duration (Years)")
     u.style_legend(axes_supp[0].legend(fontsize=7, title=""))
     axes_supp[0].axvline(0, color="#888888", linewidth=0.8, linestyle=":")
-    # Same whisker-compression fix applied to main Figure 3 Panel A, on the x-axis.
+    # Same 2nd-98th percentile x-limit cap as main Figure 3 Panel A.
     u.cap_ylim_to_quantiles(
         axes_supp[0], dev_duration_split.to_pandas()["duration_years"], axis="x"
     )
@@ -1193,12 +1169,8 @@ def figure_3_software_development_characteristics(
         on="document_id",
         how="left",
     ).filter(pl.col("document_type_bucket").is_in(["article", "preprint"]))
-    # Stepped histograms alone left the article/preprint peaks (both ~0.7 FWCI) nearly
-    # indistinguishable where they overlap most -- lowered histogram alpha so it reads as
-    # context/density rather than the primary signal, and added a smooth KDE line on top of each
-    # series so the "preprint peaks slightly higher, in a narrower range" story is visible at a
-    # glance instead of requiring the reader to disentangle overlapping step edges (round-3
-    # figure critique, priority item 4).
+    # Stepped histograms alone leave the overlapping article/preprint peaks hard to
+    # distinguish -- low histogram alpha for context, with a KDE line per series on top.
     sns.histplot(
         data=fwci_dist_split.to_pandas(),
         x="document_raw_fwci",
@@ -1238,11 +1210,9 @@ def figure_3_software_development_characteristics(
 ###############################################################################
 # Figure 4 -- software mention rate by field, over time
 
-# Raised from 5 -> 30 after figure review: a floor of 5 let single-digit-n field-year cells
-# (e.g. Engineering 2013, n=11) through, producing a large single-year percentage spike (11.4%)
-# that visually dominated the whole plot despite being statistical noise. 30 pushes every
-# plotted field's effective start year to ~2015-2016, where cell sizes are large enough for the
-# rate to be meaningfully stable, without a hard-coded cutoff year.
+# A lower floor lets single-digit-n field-year cells through, producing single-year
+# percentage spikes that are statistical noise; 30 pushes every plotted field's effective
+# start year to where cell sizes make the rate stable, without a hard-coded cutoff year.
 MIN_PAIRS_PER_CELL = 30
 
 
@@ -1254,11 +1224,10 @@ def figure_4_mention_rate_by_field_and_year(
     top_n_fields_plotted: int = 6,
 ) -> None:
     """
-    Figure 4: rate at which imported software is also explicitly mentioned in the paper's
-    text, by field and publication year. Uses `align_software_names(method="global_min_diff")`
-    per document-repository pair (two views at a time: imports vs. mentions), with the import
-    name always taken as canonical -- never the global three-way `library_cross_view.py` tool.
-    See Unit 4 of the build plan.
+    Build Figure 4: rate at which imported software is also explicitly mentioned in the
+    paper's text, by field and publication year. Uses
+    `align_software_names(method="global_min_diff")` per document-repository pair (two views
+    at a time: imports vs. mentions), with the import name always taken as canonical.
     """
     evaplot.set_style("evaplot_rc")
     df = u.load_filtered_pairs(top_n_fields=10)
@@ -1341,16 +1310,11 @@ def figure_4_mention_rate_by_field_and_year(
     )
     u.save_table(field_year_agg, "figure4_mention_rate_by_field_year_full", output_dir)
 
-    # Software-mention extraction lags behind the most recent publication years -- years with
-    # zero matched imports despite a large import volume reflect that the
-    # document_software_mention table hasn't been populated for those documents yet, not a real
-    # collapse in mention rate. The same lag can also be *partial* rather than total: round-2
-    # figure review found the overall mention rate drops from 2.0% (2022) to 0.6% (2023) --
-    # roughly a 3x collapse simultaneous across every field, despite 2023 having the highest
-    # import volume of any year -- which is the signature of partially-populated extraction, not
-    # a real behavioral shift. Walk backward from the most recent year, dropping any year whose
-    # overall rate falls below 40% of the next-older (more mature) year's rate, until the
-    # series stabilizes (round-2 figure critique, priority item 3).
+    # Software-mention extraction lags behind the most recent publication years: zero or
+    # sharply depressed rates despite large import volume are the signature of
+    # partially-populated extraction, not a real behavioral shift. Walk backward from the most
+    # recent year, dropping any year whose overall rate falls below 40% of the next-older
+    # (more mature) year's rate, until the series stabilizes.
     yearly_totals = (
         field_year_agg.group_by("document_publication_year")
         .agg(pl.sum("matched_imports").alias("matched"), pl.sum("total_imports").alias("total"))
@@ -1374,10 +1338,8 @@ def figure_4_mention_rate_by_field_and_year(
     max_plot_year = yearly_rows[idx]["document_publication_year"]
     if stale_years:
         print(
-            f"\nCAVEAT: years {sorted(stale_years)} show zero or sharply depressed (< 40% of "
-            f"the prior year's rate) mention rates despite substantial import volume -- "
-            f"document_software_mention extraction hasn't caught up to these publication years "
-            f"yet. Capping the plotted year range at {max_plot_year}."
+            f"\nYears {sorted(stale_years)} dropped (zero or sharply depressed mention rates; "
+            f"extraction not caught up). Capping the plotted year range at {max_plot_year}."
         )
     field_year_agg = field_year_agg.filter(pl.col("document_publication_year") <= max_plot_year)
 
@@ -1396,13 +1358,9 @@ def figure_4_mention_rate_by_field_and_year(
         .get_column("document_field_name_pruned")
         .to_list()
     )
-    # Which fields are plotted is still decided by this figure's own eligible-pair counts, but
-    # the *order* (legend, line style/marker assignment) is re-sorted to match Figure 2 Panel A's
-    # global prevalence order instead of this local subset's order -- Figure 4's field order had
-    # no principled basis of its own to justify a different sequence, while Figure 2's order gives
-    # a reader continuity across the figure set (round-4 figure critique, priority item 5 /
-    # open structural question 1). Fig 3 Panel E's rho-sorted order is left untouched: it encodes
-    # an effect-size ranking that is the actual point of that panel, not an arbitrary sequence.
+    # Which fields are plotted is decided by this figure's own eligible-pair counts, but the
+    # order (legend, line style/marker assignment) follows Figure 2 Panel A's global
+    # prevalence order for continuity across the figure set.
     canonical_field_order = (
         df.get_column("document_field_name_pruned")
         .value_counts(sort=True)
@@ -1421,8 +1379,7 @@ def figure_4_mention_rate_by_field_and_year(
     )
     print(f"\nOverall software mention rate across all eligible pairs: {overall_rate:.1f}%")
 
-    # Per-field aggregate rates (post stale-year cap) -- the paper's "Physics highest (12.5%),
-    # Computer Science lowest (5.1%)" numbers, previously not saved anywhere.
+    # Per-field aggregate rates (post stale-year cap) -- the paper's per-field percentages.
     field_overall = (
         field_year_agg.group_by("document_field_name_pruned")
         .agg(
@@ -1442,12 +1399,9 @@ def figure_4_mention_rate_by_field_and_year(
     print(field_overall)
 
     # Headline summary stats -- overall rate, per-language (Python/R) rates, and the share of
-    # pairs mentioning none of their imports; all cited in the manuscript text but previously
-    # printed to stdout only (or not computed at all). Every rate is reported twice: over ALL
-    # pairs with >=1 import (the figure's denominator, where a document absent from the
-    # SoftCite mention extraction counts as mentioning nothing), and CONDITIONAL on the
-    # document having >=1 extracted mention -- the two denominators differ by ~4x, so which
-    # one the manuscript text means must be an explicit choice.
+    # pairs mentioning none of their imports. Every rate is reported twice: over ALL pairs
+    # with >=1 import (the figure's denominator), and CONDITIONAL on the document having >=1
+    # extracted mention -- the two denominators differ by ~4x.
     with_mention = pair_rates.filter(pl.col("has_any_mention"))
 
     def _rate(frame: pl.DataFrame, lang: str | None = None) -> float:
@@ -1524,14 +1478,10 @@ def figure_4_mention_rate_by_field_and_year(
 
     fig, ax = plt.subplots(figsize=(10, 5.5))
     u.add_panel_label(ax, "A")
-    # Anchored on the same green/orange family as Figures 2 and 3, rather than evaplot's full
-    # 8-hue dark2/vivid cycle -- see `u.field_palette` for why.
+    # Anchored on the same green/orange family as Figures 2 and 3 (see `u.field_palette`).
     field_colors = u.field_palette(len(top_fields))
-    # Two of the six fields (Computer Science, Engineering) land on adjacent, near-identical
-    # greens in the blended palette and cross repeatedly in the 1-2% band -- color alone isn't
-    # sufficient to tell them apart, including for colorblind readers. `style=` on the same hue
-    # column gives every field a distinct marker + dash pattern in addition to its color (round-2
-    # figure critique, priority item 4).
+    # Adjacent fields land on near-identical greens in the blended palette, so `style=` gives
+    # every field a distinct marker + dash pattern in addition to its color.
     sns.lineplot(
         data=plotted.to_pandas(),
         x="document_publication_year",
@@ -1547,14 +1497,8 @@ def figure_4_mention_rate_by_field_and_year(
     )
     ax.set_xlabel("Publication Year")
     ax.set_ylabel("Software Mention Rate (%)")
-    # Round-4 moved this from outside the axes to the lower-right on the assumption that
-    # BGMB/high-volatility lines occupy the upper-left/middle and lower-right stays clear -- but
-    # Computer Science and Engineering, the two flattest/lowest-valued lines, sit in exactly that
-    # lower-right region for the entire 2018-2022 range, so their line/marker ink was rendering
-    # underneath the (partially transparent) legend box. There is no pocket inside these axes
-    # that stays clear of data at every plotted year, so back out to outside the axes -- the
-    # width cost round 4 was trying to avoid is worth paying to guarantee zero data occlusion
-    # (round-5 figure critique, priority item 2).
+    # Legend outside the axes: no pocket inside these axes stays clear of data at every
+    # plotted year.
     leg = ax.legend(
         title="Field",
         loc="center left",
@@ -1582,8 +1526,7 @@ def figure_4_mention_rate_by_field_and_year(
 # Unit 5 -- Predictors of Software Mentioning (logistic regression)
 
 RARE_SOFTWARE_MIN_COUNT = 3
-# Reused verbatim (fresh implementation, not copied) from the pnas reference's
-# `MENTION_EXCLUDE_NORMALIZED` set.
+# Generic software names excluded from the regression population.
 GENERIC_SOFTWARE_NAME_EXCLUDE: set[str] = {
     "code",
     "latex",
@@ -1628,9 +1571,8 @@ def _remove_rare_and_generic_software(
     min_count: int = RARE_SOFTWARE_MIN_COUNT,
     trace: list[dict] | None = None,
 ) -> pl.DataFrame:
-    """Rare-software filter, reimplemented fresh: exclude libraries with usage count < 3, plus
-    a small generic-mention exclude list (both per the pnas reference
-    `_remove_extremely_rare_software_usage`, not copied).
+    """Exclude libraries with usage count < `min_count` plus a small generic-name exclude
+    list.
     """
     n_before = df.height
     df = df.filter(~pl.col("library_name_normalized").is_in(GENERIC_SOFTWARE_NAME_EXCLUDE))
@@ -1665,9 +1607,8 @@ def _remove_rare_and_generic_software(
 def _trim_extreme_usage_pairs(
     df: pl.DataFrame, upper_q: float = 0.99, trace: list[dict] | None = None
 ) -> pl.DataFrame:
-    """Extreme-usage-outlier trim, reimplemented fresh: drop entire (document, repository)
-    pairs whose per-pair library count exceeds the 99th percentile (per the pnas reference
-    `_remove_pairs_with_extreme_software_usage`, not copied).
+    """Drop entire (document, repository) pairs whose per-pair library count exceeds the
+    `upper_q` percentile.
     """
     pair_counts = df.group_by(["document_id", "repository_id"]).agg(
         pl.len().alias("n_libraries")
@@ -1698,9 +1639,8 @@ def _trim_extreme_usage_pairs(
 def _fit_and_cluster(formula: str, data, doc_groups: np.ndarray, lib_groups: np.ndarray):
     """Fit a logit model, then replace its covariance with the two-way (document x library)
     cluster-robust covariance (Cameron-Gelbach-Miller estimator) via
-    `statsmodels.stats.sandwich_covariance.cov_cluster_2groups`, per the plan doc's confirmed
-    approach -- fit first with a placeholder cov_type, then swap in the two-way covariance for
-    SEs/p-values/CIs rather than passing a `cov_type=` to `.fit()`.
+    `statsmodels.stats.sandwich_covariance.cov_cluster_2groups` -- fit first, then swap in
+    the two-way covariance for SEs/p-values/CIs rather than passing a `cov_type=` to `.fit()`.
     """
     model = smf.logit(formula, data=data).fit(disp=0, maxiter=1000)
     cov_both, _cov_doc, _cov_lib = cov_cluster_2groups(
@@ -1715,8 +1655,8 @@ def _fit_and_cluster(formula: str, data, doc_groups: np.ndarray, lib_groups: np.
 
 
 # Figure 4's saved stale-cap year (`max_plot_year_after_stale_cap` in
-# figure4_mention_rate_summary.csv) -- mention extraction is absent/partial after this year, so
-# later rows are structurally is_mentioned=False (see unit16's coverage diagnostic).
+# figure4_mention_rate_summary.csv) -- mention extraction is absent/partial after this year,
+# so later rows are structurally is_mentioned=False (see the mentions-coverage diagnostic).
 UNIT5_YEAR_CAP = 2022
 
 
@@ -1751,9 +1691,8 @@ def _unit5_prepare_features(
     )
 
     # ---- Popularity: log cumulative imports through the paper's own publication year ----
-    # Popularity-at-time-of-publication, not lifetime popularity -- the confirmed direction (a)
-    # choice, since lifetime popularity uses post-publication information to explain the paper's
-    # own behavior (a temporal-ordering problem).
+    # Popularity-at-time-of-publication, not lifetime popularity -- lifetime popularity uses
+    # post-publication information to explain the paper's own behavior.
     per_lib_year = (
         long_df.group_by(["library_name_normalized", "document_publication_year"])
         .agg(pl.len().alias("n_in_year"))
@@ -1817,15 +1756,15 @@ def unit5_predictors_of_software_mentioning(
     year_cap: int = UNIT5_YEAR_CAP,
 ) -> None:
     """
-    Unit 5: logistic regression modeling whether an imported library is explicitly mentioned in
-    a paper's text, at the (document, library) row level -- the "why" companion to Figure 4's
+    Fit logistic regressions modeling whether an imported library is explicitly mentioned.
+    Rows are at the (document, library) level -- the "why" companion to Figure 4's
     "how often." Age = years since a library's first-ever corpus appearance; popularity = log
     cumulative imports through the paper's own publication year. Fits four specifications
     (age_only, popularity_only, raw, controlled) with two-way (document x library)
-    cluster-robust SEs, across a labeled grid of variants (review-response round):
+    cluster-robust SEs, across a labeled grid of variants.
 
-      - alignment_variant: grouped_hungarian (per-pair one-to-one assignment, the original) vs.
-        independent (each import scored against every mention name independently).
+      - alignment_variant: grouped_hungarian (per-pair one-to-one assignment) vs. independent
+        (each import scored against every mention name independently).
       - denominator_variant: all_pairs_with_imports vs. conditional_on_any_mention (documents
         with >=1 extracted mention only).
       - year_cap_applied: with and without Figure 4's stale-year cap (default 2022) -- rows
@@ -1923,7 +1862,7 @@ def unit5_predictors_of_software_mentioning(
                 )
                 for name, (formula, key_predictors, spec_cols) in specs.items():
                     # Per-spec drop_nulls: only the columns this spec actually uses, so
-                    # simpler specs keep more data (review-response 1.1 recommendation).
+                    # simpler specs keep more data.
                     model_df = (
                         grid_df.select(
                             "is_mentioned",
@@ -2002,12 +1941,9 @@ def unit5_predictors_of_software_mentioning(
     print("\n--- Unit 5 filter-chain trace ---")
     print(trace_df)
     print(
-        "\nFLAGGED-AS-POSSIBLY-STRICTER-THAN-NECESSARY: (1) the old all-columns drop_nulls "
-        "(now per-spec); (2) the rare-software floor of 3 and the p99 usage trim (rows "
-        "removed reported above); (3) rows after the stale-mention year cap (compare the "
-        "year_cap_applied variants in the summary CSV)."
+        "\nSensitivity notes: rare-software floor of 3 and p99 usage trim (rows removed "
+        "reported above); year-cap variants comparable in the summary CSV.\n"
     )
-    print("---------------------------------------------------------------------\n")
 
 
 ###############################################################################
@@ -2030,13 +1966,12 @@ def table1_top_software_by_usage(
     top_n_per_ecosystem: int = TABLE1_TOP_N_PER_ECOSYSTEM,
 ) -> None:
     """
-    Table 1: single row-per-software table (Option B, confirmed design), anchored on the
-    import-normalized software name, split by ecosystem (Python / R) and ranked within each by
-    import count. Dependency count comes from a *second*, separate import-vs-dependency
-    Hungarian alignment -- same tool, cutoff, and two-views-at-a-time constraint as Figure 4's
-    import-vs-mention pass, never combined into one three-way alignment. Mention count reuses
-    Figure 4's per-(document,repository)-pair import-vs-mention alignment logic, aggregated per
-    software instead of per field/year. See Unit 6 of the build plan.
+    Build Table 1: one row per software, anchored on the import-normalized software name,
+    split by ecosystem (Python / R) and ranked within each by import count. Dependency count
+    comes from a second, separate import-vs-dependency Hungarian alignment -- same tool,
+    cutoff, and two-views-at-a-time constraint as Figure 4's import-vs-mention pass, never
+    combined into one three-way alignment. Mention count reuses Figure 4's per-pair
+    import-vs-mention alignment logic, aggregated per software instead of per field/year.
     """
     df = u.load_filtered_pairs(top_n_fields=10)
 
@@ -2054,8 +1989,8 @@ def table1_top_software_by_usage(
 
     # ---- Restrict to Python/R ecosystem repositories ----
     # `repository_primary_language` is GitHub's byte-count-based language classification.
-    # "Jupyter Notebook"-classified repos are very likely Python-ecosystem in practice, but are
-    # excluded here rather than assumed -- reported below rather than silently folded in.
+    # "Jupyter Notebook"-classified repos are likely Python-ecosystem in practice, but are
+    # excluded rather than assumed -- the count is reported below.
     n_before_lang = df.n_unique("repository_id")
     lang_df = df.filter(pl.col("repository_primary_language").is_in(["Python", "R"]))
     n_after_lang = lang_df.n_unique("repository_id")
@@ -2176,10 +2111,9 @@ def table1_top_software_by_usage(
 
     n_unmatched_mentions = len(all_mention_names_seen - matched_mention_names)
     print(
-        f"\nFOOTNOTE / LIMITATION: {n_unmatched_mentions:,} distinct mentioned-software names "
-        "among eligible pairs never matched to any import at cutoff="
-        f"{cutoff} -- software mentioned in article text but never imported by the linked "
-        "repository cannot be represented in this import-anchored table."
+        f"\n{n_unmatched_mentions:,} distinct mentioned-software names never matched any "
+        f"import at cutoff={cutoff} (software mentioned but never imported cannot appear in "
+        "this import-anchored table)."
     )
 
     # ---- Assemble table ----
@@ -2222,12 +2156,10 @@ SEED_SOURCE_NAMES: list[str] = ["joss", "plos", "pwc", "softcite_2025", "softwar
 @app.command()
 def seed_source_pair_counts(output_dir: Path = OUTPUT_DIR) -> None:
     """
-    Unit 7: fills the five `[N]` seed-pair-count placeholders in the manuscript (lines 101,
-    103, 105 x2, 107, 125) -- all on the same code path (a group-by of
-    `document_repository_link` by source, restricted to seed rows i.e. `iteration IS NULL`),
-    per the general instructions' grouping rule. Reports both the raw (unfiltered) counts and
-    the standard-filtered counts, since the plan doc's 2026-08-24 reference numbers are raw
-    group-by counts, while the standard filtered-pairs table is what every other figure/table
+    Fill the five `[N]` seed-pair-count placeholders in the manuscript (lines 101, 103,
+    105 x2, 107, 125) -- all from one group-by of `document_repository_link` by source,
+    restricted to seed rows (`iteration IS NULL`). Reports both raw (unfiltered) counts and
+    standard-filtered counts, since the filtered-pairs table is what every other figure/table
     in this paper is built from.
     """
     print("Loading document_repository_link and dataset_source from HuggingFace...")
@@ -2316,9 +2248,9 @@ def seed_source_pair_counts(output_dir: Path = OUTPUT_DIR) -> None:
 @app.command()
 def median_repository_contributor_count(output_dir: Path = OUTPUT_DIR) -> None:
     """
-    Unit 8: fills line 33's `X%` placeholder -- "The median scientific repository has only a
-    single contributor (X%)...". Filters at the pair level first (standard filters), derives
-    the surviving repository set, then computes per-repository contributor counts from
+    Fill line 33's `X%` placeholder -- "The median scientific repository has only a single
+    contributor (X%)...". Filters at the pair level first (standard filters), derives the
+    surviving repository set, then computes per-repository contributor counts from
     `repository_contributor` (repositories with no `repository_contributor` rows at all count
     as 0 contributors, not dropped).
     """
@@ -2430,13 +2362,11 @@ def median_repository_contributor_count(output_dir: Path = OUTPUT_DIR) -> None:
 ###############################################################################
 # Unit 9 -- statistic: classification model table verification
 #
-# Per the replication-package policy's explicit exception, model training/eval artifacts stay
-# in `sci-soft-models` -- this reads the three deployed models' saved `results.json` files
-# directly from a sibling `sci-soft-models` checkout rather than retraining or reimplementing
-# any of the three classifiers here. (The installed `sci-soft-models` package itself can't be
-# imported cleanly in this env -- `binary_article_repo_em/data/__init__.py` resolves a
-# symlinked local DB path at import time that doesn't exist outside Eva's rs-graph checkout --
-# so this reads the JSON files directly instead of importing the package.)
+# Model training/eval artifacts stay in `sci-soft-models` -- this reads the three deployed
+# models' saved `results.json` files directly from a sibling `sci-soft-models` checkout
+# rather than retraining or reimplementing any classifier here. The JSON files are read
+# directly (not through the package) because `binary_article_repo_em/data/__init__.py`
+# resolves a symlinked local DB path at import time.
 
 SCI_SOFT_MODELS_REPO = Path(__file__).resolve().parents[3] / "sci-soft-models"
 
@@ -2459,9 +2389,9 @@ CLASSIFICATION_MODELS_TABLE: list[dict] = [
         "stated_recall": 0.950,
         "stated_f1": 0.944,
         "metric_prefix": None,  # flat precision/recall/f1 keys, not macro_/binary_-prefixed
-        # Round-4 decision: the paper cites the published Brown/Slaughter/Weber figures
-        # (0.938/0.950/0.944); the sci-soft-models artifact currently reports higher numbers.
-        # The gap is recorded as a flagged note, not treated as a table error.
+        # The paper cites the published Brown/Slaughter/Weber figures (0.938/0.950/0.944);
+        # the sci-soft-models artifact currently reports higher numbers. The gap is recorded
+        # as a flagged note, not treated as a table error.
         "known_discrepancy_note": (
             "Cited value = published Brown/Slaughter/Weber figures; the sci-soft-models "
             "artifact's current saved eval differs (see 'actual'). Known discrepancy -- "
@@ -2485,11 +2415,9 @@ MISMATCH_TOLERANCE = 0.005
 @app.command()
 def classification_models_table_verification(output_dir: Path = OUTPUT_DIR) -> None:
     """
-    Unit 9: verifies the numbers already populated in the manuscript's "Table X.
-    Classification models trained and utilized..." (line 81) against each deployed model's
-    saved evaluation results in `sci-soft-models`, to confirm the manuscript's stated
-    precision/recall/F1 are still accurate. Table numbering itself is not touched -- only the
-    stated performance figures are verified.
+    Verify the numbers in the manuscript's "Table X. Classification models trained and
+    utilized..." (line 81) against each deployed model's saved evaluation results in
+    `sci-soft-models`, confirming the stated precision/recall/F1 are still accurate.
     """
     print("--- Classification models table verification (Unit 9) ---\n")
     any_mismatch = False
@@ -2548,8 +2476,8 @@ def classification_models_table_verification(output_dir: Path = OUTPUT_DIR) -> N
         print()
 
     # ---- ARMM detail verification (manuscript lines 207-211): per-field, per-period,
-    # per-source, and README-length numbers, from the single-feature-eval artifacts exposed by
-    # sci-soft-models' accessors (lazy import, same reasoning as Unit 10). ----
+    # per-source, and README-length numbers, from sci-soft-models' single-feature-eval
+    # accessors (imported lazily -- see the ARMM diagnostics section header). ----
     from sci_soft_models.binary_article_repo_em import (
         load_performance_by_readme_length,
         load_single_feature_eval,
@@ -2669,29 +2597,24 @@ def classification_models_table_verification(output_dir: Path = OUTPUT_DIR) -> N
 ###############################################################################
 # Unit 10 -- ARMM model diagnostics (confusion matrices, README-length performance)
 #
-# Per the replication-package policy's explicit exception, model training/eval artifacts stay
-# in `sci-soft-models` -- this imports the held-out test predictions and eval tables through
-# `sci_soft_models.binary_article_repo_em`'s accessor functions
-# (`load_final_model_test_predictions` / `load_performance_by_readme_length`) rather
-# than retraining or reimplementing the model here. Imports are done lazily inside the command
-# below rather than at module level: `binary_article_repo_em`'s data module resolves a symlinked
-# local DB path at import time that only exists in a full rs-graph-plus-data checkout, so an
-# import failure here should only break this one command, not the whole script (same reasoning
-# already applied to Unit 9's `classification_models_table_verification`).
+# Model training/eval artifacts stay in `sci-soft-models` -- this imports the held-out test
+# predictions and eval tables through `sci_soft_models.binary_article_repo_em`'s accessor
+# functions rather than retraining or reimplementing the model. Imports are done lazily
+# inside the command rather than at module level: `binary_article_repo_em`'s data module
+# resolves a symlinked local DB path at import time that only exists in a full
+# rs-graph-plus-data checkout, so an import failure should only break this one command.
 
 
 @app.command()
 def unit10_armm_model_diagnostics(output_dir: Path = OUTPUT_DIR) -> None:
     """
-    Unit 10 (review-response round): ARMM held-out-test diagnostics. The ROC/PR curve figure
-    was cut entirely (Eva's decision) -- line 217 now describes the two threshold-determination
-    methods in prose. This command builds:
+    Build the ARMM held-out-test diagnostics.
 
-      - the pooled confusion matrix (line 207, kept, `Blues` cmap by standard convention);
+      - the pooled confusion matrix (line 207, `Blues` cmap by standard convention);
       - per-field confusion matrices for the top-8 fields + the held-out "Other"/"Unknown"
         buckets (line 207's promised figure), each panel annotated with n and macro F1;
-      - the performance-by-README-length figure (line ~211's placeholder), from the
-        `load_performance_by_readme_length` accessor added to sci-soft-models.
+      - the performance-by-README-length figure (line ~211's placeholder), from
+        sci-soft-models' `load_performance_by_readme_length` accessor.
     """
     from sci_soft_models.binary_article_repo_em import (
         load_final_model_test_predictions,
@@ -2732,7 +2655,7 @@ def unit10_armm_model_diagnostics(output_dir: Path = OUTPUT_DIR) -> None:
     n_fields = len(field_order)
     n_cols = 3
     n_rows = (n_fields + n_cols - 1) // n_cols
-    # Taller rows + explicit hspace: the grid's rows were too cramped (round-3 feedback).
+    # Taller rows + explicit hspace so the grid's rows aren't cramped.
     fig_ff, axes_ff = plt.subplots(
         n_rows,
         n_cols,
@@ -2757,8 +2680,7 @@ def unit10_armm_model_diagnostics(output_dir: Path = OUTPUT_DIR) -> None:
     for j in range(n_fields, len(axes_flat)):
         axes_flat[j].set_axis_off()
     fig_ff.suptitle("ARMM Held-Out Test Confusion Matrices by Field", y=1.005)
-    # Wider row spacing (round-3 feedback: rows too cramped); passed through adjust_layout so
-    # tight_layout doesn't collapse it again.
+    # Row spacing passed through adjust_layout so tight_layout doesn't collapse it again.
     evaplot.adjust_layout(fig_ff, hspace=0.45)
     fig_ff.subplots_adjust(hspace=0.45)
     u.save_figure(fig_ff, "unit10_armm_confusion_matrix_by_field", output_dir)
@@ -2802,17 +2724,17 @@ def unit10_armm_model_diagnostics(output_dir: Path = OUTPUT_DIR) -> None:
         )
     ax_rl.set_xlabel("Repository README Length (Characters)")
     ax_rl.set_ylabel("Macro F1")
-    # Zero-based y-axis (round-3 decision): the tight autoscale made 0.96 vs. 0.98 look like
-    # a large gap; full scale shows performance is uniformly high.
+    # Zero-based y-axis: a tight autoscale makes 0.96 vs. 0.98 look like a large gap; full
+    # scale shows performance is uniformly high.
     ax_rl.set_ylim(0, 1.02)
     u.shrink_ticks(ax_rl, size=9)
     evaplot.adjust_layout(fig_rl)
     u.save_figure(fig_rl, "unit10_armm_performance_by_readme_length", output_dir)
     plt.close(fig_rl)
 
-    # ---- Summary performance-metric tables (round 4, R6): three breakdowns as tables, not
-    # confusion matrices -- by publication-year bin, by corresponding-author country, and by
-    # first-author country -- with missingness buckets disclosed as their own rows. ----
+    # ---- Summary performance-metric tables: three breakdowns -- by publication-year bin,
+    # by corresponding-author country, and by first-author country -- with missingness
+    # buckets disclosed as their own rows. ----
     year_bin_labels = {
         "pub-year-bin-01": "< 2016",
         "pub-year-bin-02": "2016-2020",
@@ -2920,22 +2842,21 @@ def _plot_date_delta_panel(
 @app.command()
 def unit11_date_delta_figure(output_dir: Path = OUTPUT_DIR) -> None:
     """
-    Unit 11: Line 229's date-delta figure -- justifies the 90th/10th-percentile
+    Build line 229's date-delta figure -- justifies the 90th/10th-percentile
     repository-creation-vs-publication-date inclusion window used elsewhere in the pipeline.
-    Round-4 changes: (1) strict ONE-TO-ONE linking, matching
-    `notebooks/snowball-sampling-discovery-prep.ipynb`'s dedup (drop every document linked
-    to more than one repository and every repository linked to more than one document --
-    `unique(keep="none")` on each id in turn) -- Eva's justification: isolate the clearest
-    best-paper-to-best-repo match, at little coverage cost since most pairs are one-to-one
-    anyway; (2) mined pairs return as a SIXTH panel on the by-source supplemental, kept
-    separate from the seed-only panels (the pooled figure and its window-defining
-    percentiles stay seed-only: mined pairs were selected *through* the window, so pooling
-    them would be circular). The by-document-type supplemental stays seed-only.
+    Uses strict one-to-one linking, matching
+    `notebooks/snowball-sampling-discovery-prep.ipynb`'s dedup (drop every document linked to
+    more than one repository and every repository linked to more than one document), which
+    isolates the clearest paper-to-repo match at little coverage cost. Mined pairs appear
+    only as a sixth panel on the by-source supplemental; the pooled figure and its
+    window-defining percentiles stay seed-only (mined pairs were selected *through* the
+    window, so pooling them would be circular). The by-document-type supplemental is also
+    seed-only.
     """
     evaplot.set_style("evaplot_rc")
     df = u.load_filtered_pairs(top_n_fields=10)
 
-    # ---- Strict one-to-one linking (round 4), notebook dedup replicated exactly ----
+    # ---- Strict one-to-one linking (same dedup as the snowball-sampling prep notebook) ----
     n_before_dedup = df.height
     df = df.unique(subset="document_id", keep="none").unique(
         subset="repository_id", keep="none"
@@ -2992,7 +2913,7 @@ def unit11_date_delta_figure(output_dir: Path = OUTPUT_DIR) -> None:
 
     percentile_rows = [{"breakdown": "pooled", "group": "all", "n": df.height, **pooled_stats}]
 
-    # ---- Supplemental 1: by seed source, plus mined pairs as a sixth panel (round 4) ----
+    # ---- Supplemental 1: by seed source, plus mined pairs as a sixth panel ----
     sources = sorted(
         df.get_column("dataset_source_name_canonical").drop_nulls().unique().to_list()
     )
@@ -3070,12 +2991,12 @@ def unit11_date_delta_figure(output_dir: Path = OUTPUT_DIR) -> None:
 @app.command()
 def mining_rounds_table(output_dir: Path = OUTPUT_DIR) -> None:
     """
-    Unit 12: fills Table X (line 237) and line 254's `X` placeholder. Two halves:
-      (a) new article-repository pairs per source/iteration -- a genuine group-by on
+    Fill Table X (line 237) and line 254's `X` placeholder. Two halves:
+      (a) new article-repository pairs per source/iteration -- a group-by on
           `document_repository_link`'s (dataset_source_id, iteration).
       (b) new researcher-developer-account identity links per iteration -- a structural join
-          (not timestamp-based) attributing each identity link to the earliest iteration whose
-          document-repository pair could have produced it, per the plan doc's join spec.
+          (not timestamp-based) attributing each identity link to the earliest iteration
+          whose document-repository pair could have produced it.
     """
     print("Loading document_repository_link, dataset_source from HuggingFace...")
     raw_links = u.load_table("document_repository_link")
@@ -3129,14 +3050,11 @@ def mining_rounds_table(output_dir: Path = OUTPUT_DIR) -> None:
         pairs_by_source_iteration, "unit12a_new_pairs_by_source_and_iteration_raw", output_dir
     )
 
-    # ---- Same group-by, but restricted to the standard-filtered pairs table (i.e. pairs that
-    # actually cleared the 0.9994-or-NULL confidence threshold and are retained in the final
-    # rs-graph dataset). The raw group-by above counts every candidate row written to
-    # document_repository_link regardless of confidence; most predicted (non-seed) rows do NOT
-    # meet 0.9994, so the raw per-iteration counts substantially overstate what's actually
-    # retained. This filtered version is what "new pairs added to the dataset" in the
-    # manuscript's Table X (line 237) and line 254 actually means, and it lines up closely with
-    # the manuscript's existing (stale, 3-round) numbers -- see the plan-doc update for details.
+    # ---- Same group-by, restricted to the standard-filtered pairs table. The raw group-by
+    # above counts every candidate row regardless of confidence; most predicted (non-seed)
+    # rows do NOT meet 0.9994, so raw per-iteration counts overstate what's retained. The
+    # filtered version is what "new pairs added to the dataset" in Table X and line 254
+    # actually means.
     filtered_pairs_for_iteration = u.load_filtered_pairs()
     pairs_by_iteration_filtered = (
         filtered_pairs_for_iteration.with_columns(
@@ -3193,8 +3111,8 @@ def mining_rounds_table(output_dir: Path = OUTPUT_DIR) -> None:
         f"{u.DEFAULT_RDAL_CONFIDENCE_THRESHOLD}: {rdal_filtered.height:,} identity links remain"
     )
 
-    # Reuse the already-loaded standard-filtered pairs table (line ~2092) instead of re-running
-    # the full HuggingFace load/join/filter pipeline a second time for the same default args.
+    # Reuse the already-loaded standard-filtered pairs table instead of re-running the full
+    # HuggingFace load/join/filter pipeline for the same default args.
     drl_filtered = filtered_pairs_for_iteration.select(
         "document_id", "repository_id", "link_processing_iteration"
     )
@@ -3205,7 +3123,7 @@ def mining_rounds_table(output_dir: Path = OUTPUT_DIR) -> None:
 
     # Expand each identity to its researcher's candidate documents, then narrow to the
     # document-repository pairs whose repository is also in that identity's developer
-    # account's contribution list -- exactly the candidate-pair definition from the plan doc.
+    # account's contribution list.
     rdal_docs = rdal_filtered.join(
         document_contributors.select("researcher_id", "document_id"), on="researcher_id"
     )
@@ -3259,19 +3177,12 @@ def mining_rounds_table(output_dir: Path = OUTPUT_DIR) -> None:
     u.save_table(identities_by_iteration, "unit12b_new_identities_by_iteration", output_dir)
 
     print(
-        "\nCAVEATS (per plan doc, stated plainly rather than hidden):\n"
-        "  (a) A researcher-developer pair connected through document-repository links "
-        "spanning multiple iterations is attributed to the earliest one -- a 'first possible "
-        "discovery' choice, not a certainty (a later pair's match pass could in principle have "
-        "independently produced the same identity link).\n"
-        "  (b) An identity whose earliest qualifying pair came from a seed source (iteration "
-        "bucket -1 / NULL) correctly attributes to that seed source even if it also links via "
-        "later mining rounds -- this is correct behavior (it wasn't newly discovered by mining), "
-        "not a bug.\n"
-        "  (c) Co-authorship/co-contribution on more than one document-repository link at the "
-        "SAME earliest iteration is handled correctly by construction (min() is well-defined); "
-        "ambiguity only arises across different iterations, which 'earliest qualifying pair' "
-        "resolves deterministically.\n"
+        "\nAttribution caveats:\n"
+        "  (a) An identity connected through pairs spanning multiple iterations attributes "
+        "to the earliest ('first possible discovery', not a certainty).\n"
+        "  (b) An identity whose earliest qualifying pair came from a seed source attributes "
+        "to the seed even if it also links via later mining rounds.\n"
+        "  (c) Ties within one iteration are unambiguous (min() is well-defined).\n"
     )
 
     print(
@@ -3303,23 +3214,14 @@ def _pack_components_layout(
     """
     Lay out a graph by connected component instead of one global force layout.
 
-    This sample's topology is a forest of thousands of small disjoint article-repository-
-    author-developer "stars" (confirmed empirically: a 2,000-seed-pair sample produced 1,944
-    components across 10,454 nodes -- almost every component is a single tiny star). A global
-    `rx.graph_spring_layout` call has no attractive force between disconnected components, so
-    at low sample sizes they happen to land with enough incidental whitespace between them to
-    read as separate clusters, but at higher sample sizes (confirmed at 10,000 seed pairs,
-    50,871 nodes) they collapse into one dense, randomly-packed, illegible disc -- the layout
-    solver is doing its job correctly, there's just no macro-structure for it to reveal.
-
-    Packing instead: lay out each component on its own with a local spring layout, then place
-    components into a grid (largest first, left-to-right/top-to-bottom, sized by each
-    component's bounding box) with padding between cells proportional to cell size. This makes
-    the sample's real structure -- many small stars of varying size, plus a handful of larger,
-    more richly-connected hub components -- directly visible as distinguishable shapes with
-    real gaps between them, at any sample size, since the canvas grows with the number of
-    components rather than staying fixed. Returns positions plus the packed canvas's width and
-    height (in data units) so the caller can size the figure to match.
+    A random-pair sample's topology is a forest of thousands of small disjoint
+    article-repository-author-developer "stars". A global `rx.graph_spring_layout` call has
+    no attractive force between disconnected components, so at large sample sizes they
+    collapse into one dense, illegible disc. Packing instead: lay out each component with a
+    local spring layout, then place components into a grid (largest first, sized by each
+    component's bounding box) with padding proportional to cell size, so the sample's real
+    structure stays visible at any sample size. Returns positions plus the packed canvas's
+    width and height (in data units) so the caller can size the figure to match.
     """
     rng = random.Random(seed)
     components = [list(c) for c in rx.connected_components(graph)]
@@ -3332,10 +3234,9 @@ def _pack_components_layout(
         else:
             sub = graph.subgraph(comp)
             k = 1.5 / (len(comp) ** 0.5)
-            # Spring layout is ~quadratic in node count (measured 2026-09-01: 5k nodes ~5s,
-            # 15k ~44s, 30k ~176s at 60 iters) -- snowball sampling produces components with
-            # tens of thousands of nodes, so iteration count steps down as size grows to keep
-            # the figure's total layout time in single-digit minutes.
+            # Spring layout is ~quadratic in node count (5k nodes ~5s, 30k ~176s at 60
+            # iters); iteration count steps down as size grows to keep total layout time in
+            # single-digit minutes.
             if len(comp) < 50:
                 n_iter = 60
             elif len(comp) < 5_000:
@@ -3387,13 +3288,11 @@ def _global_spring_layout(
     graph: rx.PyGraph, seed: int = 42
 ) -> tuple[dict[int, tuple[float, float]], float, float]:
     """
-    One global spring layout over the whole sampled graph (round 2: Eva's requested revert to
-    a traditional network rendering). The packed-by-component layout above was built for the
-    old random-pair sample's forest-of-tiny-stars topology; the snowball sample instead puts
-    ~99% of pairs in one giant component, which a conventional force layout can render
-    directly. Iteration count steps down with node count (spring layout is ~quadratic) to keep
-    layout time in single-digit minutes; k is slightly above rustworkx's 1/sqrt(n) default to
-    spread the giant component's dense core.
+    Lay out the whole sampled graph with one global spring layout. The snowball sample puts
+    ~99% of pairs in one giant component, which a conventional force layout renders directly
+    (the packed-by-component layout above exists for forest-of-tiny-stars topologies).
+    Iteration count steps down with node count (spring layout is ~quadratic); k is slightly
+    above rustworkx's 1/sqrt(n) default to spread the giant component's dense core.
     """
     n = len(graph.node_indices())
     if n < 5_000:
@@ -3419,10 +3318,10 @@ def _forceatlas2_positions(
     repulsion_sample: int = 8192,
 ) -> dict[int, tuple[float, float]]:
     """
-    ForceAtlas2 layout (round 4, R3's approved second layout variant), implemented here
-    because the installed `networkx.forceatlas2_layout` materializes full O(n^2) pairwise
-    matrices (~50+GB at this graph's ~59k nodes) and no other FA2/igraph/graphviz package is
-    installed. Follows the FA2 paper's forces (degree+1 node mass, linear edge attraction,
+    ForceAtlas2 layout, implemented here because the installed
+    `networkx.forceatlas2_layout` materializes full O(n^2) pairwise matrices (~50+GB at this
+    graph's ~59k nodes) and no other FA2/igraph/graphviz package is installed. Follows the
+    FA2 paper's forces (degree+1 node mass, linear edge attraction,
     mass-scaled repulsion, gravity) and its adaptive global-speed/swing update. Repulsion
     uses a fresh random node sample per iteration (scaled by n/sample) when the graph is
     large -- the standard sampling approximation, keeping each iteration O(n * sample)
@@ -3502,16 +3401,14 @@ def _build_quadpartite_graph(
     repo_devs: pl.DataFrame,
     identity_edges: pl.DataFrame,
     doc_fields: dict[int, str] | None = None,
-    repo_langs: dict[int, str] | None = None,
 ) -> rx.PyGraph:
     """Build the quad-partite `rx.PyGraph` from the already-sampled/capped/filtered frames.
-    `doc_fields` / `repo_langs` attach the field/primary-language color-encoding attributes
-    (round 4, R3) to article/repository nodes.
+    `doc_fields` attaches the field color-encoding attribute to article nodes -- the only
+    color-encoded node type.
     """
     graph: rx.PyGraph = rx.PyGraph()
     node_idx: dict[tuple[str, int], int] = {}
     doc_fields = doc_fields or {}
-    repo_langs = repo_langs or {}
 
     def _add_node(node_type: str, node_id: int) -> int:
         key = (node_type, node_id)
@@ -3519,8 +3416,6 @@ def _build_quadpartite_graph(
             payload = {"type": node_type, "id": node_id}
             if node_type == "article":
                 payload["group"] = doc_fields.get(node_id, "Other")
-            elif node_type == "repository":
-                payload["group"] = repo_langs.get(node_id, "Other")
             node_idx[key] = graph.add_node(payload)
         return node_idx[key]
 
@@ -3571,15 +3466,14 @@ def figure_1_quadpartite_network(
     layout: str = "both",
 ) -> None:
     """
-    Figure 1, panel 1: the quad-partite network -- articles, repositories, researchers
+    Build Figure 1, panel 1: the quad-partite network -- articles, repositories, researchers
     (authors), and developer accounts (contributors) -- rendered together with rustworkx.
-    Panels 2/3 of Figure 1 (the growth-model diagram and the workflow diagram) are Eva's own
-    hand-made images and are out of scope here.
+    Panels 2/3 of Figure 1 (the growth-model and workflow diagrams) are hand-made images and
+    out of scope here.
 
-    Sampling (review-response round): SNOWBALL from well-linked identity hubs, replacing the
-    old uniform-random pair sample, whose fragmented look was a sampling artifact -- two
-    randomly sampled pairs are bridged only if both happen to be drawn AND share an entity,
-    which is rare at 10k/310k. Design:
+    Sampling: SNOWBALL from well-linked identity hubs, rather than a uniform-random pair
+    sample (two randomly sampled pairs are bridged only if both happen to be drawn AND share
+    an entity, which is rare, so random samples look artificially fragmented). Design:
 
       - Anchors: the top `n_top_hub_anchors` identity links (researcher, developer) by
         pair-degree (pairs reachable through either side), plus `n_random_hub_anchors`
@@ -3587,16 +3481,15 @@ def figure_1_quadpartite_network(
         the stratified tail keeps the figure from over-representing anomalous mega-hubs.
       - Growth: BFS over pairs, mediated by entities. Each popped pair contributes up to
         `max_contributors_per_side` authors/contributors PLUS, always, any identity-linked
-        author/contributor (the old hard cap severed identity edges whenever the linked person
-        wasn't among the first contributor rows). Each collected entity (and its identity
-        counterpart) contributes up to `max_pairs_per_entity` new pairs (seeded subsample) --
-        the anti-hub-domination valve.
+        author/contributor (a hard cap alone would sever identity edges whenever the linked
+        person isn't among the first contributor rows). Each collected entity (and its
+        identity counterpart) contributes up to `max_pairs_per_entity` new pairs (seeded
+        subsample), which keeps hubs from dominating.
       - Stop the instant the `n_pairs` budget fills; if all anchors exhaust below budget, top
         up with uniform-random pairs and report the top-up count.
 
     Confidence filters: pair confidence >= 0.9994 or NULL (standard); identity links at
-    >= `rdal_confidence_threshold` (default 0.97, the paper's stated threshold -- previously
-    0.99 here, now aligned with the manuscript).
+    >= `rdal_confidence_threshold` (default 0.97, the paper's stated threshold).
     """
     evaplot.set_style("evaplot_rc")
     rng = random.Random(random_seed)
@@ -3703,16 +3596,15 @@ def figure_1_quadpartite_network(
             frontier.append(p)
 
     def _collect_entities(ordered: list[int], identity_map: dict[int, list[int]]) -> list[int]:
-        # Cap at max_contributors_per_side, but ALWAYS include identity-linked entities --
-        # the cap alone severed identity edges whenever the linked person wasn't among the
-        # first rows (the old figure's connectivity failure).
+        # Cap at max_contributors_per_side, but always include identity-linked entities so
+        # the cap never severs identity edges.
         kept = list(ordered[:max_contributors_per_side])
         kept += [e for e in ordered[max_contributors_per_side:] if e in identity_map]
         return list(dict.fromkeys(kept))
 
-    # Seed ALL planned anchors' pairs up front (plan 6.3 step 1) so the sample spans every
-    # anchor neighborhood rather than exhausting the budget on the first hub's BFS; the
-    # remaining tail is a reserve drawn only if the frontier empties below budget.
+    # Seed ALL planned anchors' pairs up front so the sample spans every anchor neighborhood
+    # rather than exhausting the budget on the first hub's BFS; the remaining tail is a
+    # reserve drawn only if the frontier empties below budget.
     n_anchors_used = 0
     for anchor_r, anchor_d in anchor_queue[: n_top_hub_anchors + n_random_hub_anchors]:
         if len(sampled) >= budget:
@@ -3811,8 +3703,8 @@ def figure_1_quadpartite_network(
         f"(both endpoints present in the sampled graph)."
     )
 
-    # ---- Node color-encoding metadata (round 4, R3): articles by field (top 6 + Other),
-    # repositories by primary language (top 3 + Other); people-nodes stay grey. ----
+    # ---- Node color-encoding metadata: only articles carry color, by field (top 6 +
+    # Other); all other node types are grey outline-only shapes. ----
     fig1_fields = (
         pairs.get_column("document_field_name_pruned")
         .value_counts(sort=True)
@@ -3827,28 +3719,12 @@ def figure_1_quadpartite_network(
         .unique(subset="document_id")
         .iter_rows()
     }
-    fig1_langs = (
-        pairs.get_column("repository_primary_language")
-        .drop_nulls()
-        .value_counts(sort=True)
-        .head(3)
-        .get_column("repository_primary_language")
-        .to_list()
-    )
-    repo_langs = {
-        rid: (lang if lang in fig1_langs else "Other")
-        for rid, lang in pairs.select("repository_id", "repository_primary_language")
-        .unique(subset="repository_id")
-        .iter_rows()
-    }
-
     graph = _build_quadpartite_graph(
         sampled_pairs,
         doc_authors,
         repo_devs,
         identity_edges,
         doc_fields=doc_fields,
-        repo_langs=repo_langs,
     )
 
     n_nodes = len(graph.nodes())
@@ -3878,9 +3754,8 @@ def figure_1_quadpartite_network(
         f"top-5 component sizes: {comp_sizes[:5]}."
     )
 
-    # ---- Largest connected component only (round 4, R3 decision): the satellite ring read
-    # as fragmentation, the opposite of the figure's message; the caption still reports how
-    # many components existed. ----
+    # ---- Subset to the largest connected component; the caption reports how many
+    # components existed. ----
     n_dropped_nodes = n_nodes - len(largest_comp)
     graph = graph.subgraph(list(largest_comp))
     print(
@@ -3897,8 +3772,8 @@ def figure_1_quadpartite_network(
         f"{pct_pairs_in_largest:.0f}% of pairs)"
     )
 
-    # Spring is the primary output (round 2 decision); ForceAtlas2 is an additional variant,
-    # not a replacement (round 4, R3); "packed" keeps the old per-component layout available.
+    # Spring is the primary output; ForceAtlas2 is an additional variant; "packed" keeps the
+    # per-component layout available.
     if layout in ("both", "spring", "forceatlas2"):
         print("\nComputing global spring layout...")
         positions, canvas_width, canvas_height = _global_spring_layout(graph, seed=random_seed)
@@ -3911,7 +3786,6 @@ def figure_1_quadpartite_network(
                 suptitle_base + " -- spring layout",
                 output_dir,
                 fig1_fields,
-                fig1_langs,
                 stem="figure1_quadpartite_network",
             )
         if layout in ("both", "forceatlas2"):
@@ -3927,7 +3801,6 @@ def figure_1_quadpartite_network(
                 suptitle_base + " -- ForceAtlas2 layout",
                 output_dir,
                 fig1_fields,
-                fig1_langs,
                 stem="figure1_quadpartite_network_forceatlas2",
             )
     else:
@@ -3942,7 +3815,6 @@ def figure_1_quadpartite_network(
             suptitle_base + " -- packed layout",
             output_dir,
             fig1_fields,
-            fig1_langs,
             stem="figure1_quadpartite_network",
         )
 
@@ -3955,17 +3827,14 @@ def _draw_quadpartite_network(
     suptitle: str,
     output_dir: Path,
     field_order: list[str],
-    lang_order: list[str],
     stem: str = "figure1_quadpartite_network",
 ) -> None:
-    """Draw and save one Figure 1 render (round-4 encoding): articles colored by field,
-    repositories by primary language, people-nodes small/light grey; edge alphas per the
-    approved round-3/round-4 values; LineCollections and scatters rasterized so the PDF
-    stays small and fast to open.
+    """Draw and save one Figure 1 render: only articles carry color (by field, matching
+    Figure 2 Panel B's palette); repositories/researchers/developers are grey outline-only
+    shapes; all edges uniform grey differentiated by alpha/linewidth; LineCollections and
+    scatters rasterized so the PDF stays small and fast to open.
     """
-    # Field colors match Figure 2 Panel B's colorblind palette; language colors are dark
-    # tab20b picks so the two color scales can't be confused (shapes differ too: articles
-    # are circles, repositories squares).
+    # Field colors match Figure 2 Panel B's colorblind palette.
     field_colors = dict(
         zip(
             [*field_order, "Other"],
@@ -3973,41 +3842,37 @@ def _draw_quadpartite_network(
             strict=True,
         )
     )
-    lang_palette = ["#393b79", "#ad494a", "#8c6d31", "#6b6b6b"]
-    lang_colors = dict(
-        zip([*lang_order, "Other"], lang_palette[: len(lang_order) + 1], strict=True)
-    )
+    repo_grey = "#999999"
     people_grey = "#cccccc"
 
-    # Approved round-4 transparency/size values (round-3 review, endorsed by Eva): the
-    # saturated identity-edge core was hiding the structure; node color is now the primary
-    # signal, so edges recede.
+    # Uniform grey edges: edge type is differentiated only by alpha/linewidth, never by hue.
+    edge_grey = "#888888"
     edge_style = {
-        "authored_by": {"color": "#aaaaaa", "lw": 0.35, "ls": "-", "zorder": 1, "alpha": 0.12},
+        "authored_by": {"color": edge_grey, "lw": 0.35, "ls": "-", "zorder": 1, "alpha": 0.12},
         "contributed_to": {
-            "color": "#aaaaaa",
+            "color": edge_grey,
             "lw": 0.35,
             "ls": "-",
             "zorder": 1,
             "alpha": 0.12,
         },
         "article_repository_link": {
-            "color": "#555555",
+            "color": edge_grey,
             "lw": 0.7,
             "ls": "-",
             "zorder": 2,
             "alpha": 0.3,
         },
-        "identity": {"color": "#c2438a", "lw": 0.9, "ls": "-", "zorder": 3, "alpha": 0.25},
+        "identity": {"color": edge_grey, "lw": 0.9, "ls": "-", "zorder": 3, "alpha": 0.25},
     }
     marker_size = 6.0
     people_marker_size = 4.0
     node_alpha = 0.6
     marker_lw = 0.25
 
-    _REF_CANVAS_EXTENT = 143.2  # canvas width measured at the 2,000-seed-pair calibration run
+    ref_canvas_extent = 143.2  # canvas width measured at the 2,000-seed-pair calibration run
     canvas_extent = max(canvas_width, canvas_height)
-    figsize_in = min(22.0, max(14.0, 14.0 * canvas_extent / _REF_CANVAS_EXTENT))
+    figsize_in = min(22.0, max(14.0, 14.0 * canvas_extent / ref_canvas_extent))
 
     fig, ax = plt.subplots(figsize=(figsize_in, figsize_in))
 
@@ -4033,38 +3898,38 @@ def _draw_quadpartite_network(
         )
     ax.autoscale_view()
 
-    # Colored, filled article/repository nodes (grouped by field/language).
-    for ntype, marker, color_map in [
-        ("article", "o", field_colors),
-        ("repository", "s", lang_colors),
-    ]:
-        xs_by_group: dict[str, list[float]] = {}
-        ys_by_group: dict[str, list[float]] = {}
-        for node_i in graph.node_indices():
-            nd = graph[node_i]
-            if nd["type"] != ntype:
-                continue
-            group = nd.get("group", "Other")
-            x, y = positions[node_i]
-            xs_by_group.setdefault(group, []).append(x)
-            ys_by_group.setdefault(group, []).append(y)
-        for group, xs in xs_by_group.items():
-            ax.scatter(
-                xs,
-                ys_by_group[group],
-                c=color_map.get(group, "#bbbbbb"),
-                marker=marker,
-                s=marker_size,
-                alpha=node_alpha,
-                edgecolors="none",
-                linewidths=marker_lw,
-                zorder=4,
-                rasterized=True,
-            )
+    # Colored, filled article nodes (grouped by field) -- the only color-encoded node type.
+    xs_by_group: dict[str, list[float]] = {}
+    ys_by_group: dict[str, list[float]] = {}
+    for node_i in graph.node_indices():
+        nd = graph[node_i]
+        if nd["type"] != "article":
+            continue
+        group = nd.get("group", "Other")
+        x, y = positions[node_i]
+        xs_by_group.setdefault(group, []).append(x)
+        ys_by_group.setdefault(group, []).append(y)
+    for group, xs in xs_by_group.items():
+        ax.scatter(
+            xs,
+            ys_by_group[group],
+            c=field_colors.get(group, "#bbbbbb"),
+            marker="o",
+            s=marker_size,
+            alpha=node_alpha,
+            edgecolors="none",
+            linewidths=marker_lw,
+            zorder=4,
+            rasterized=True,
+        )
 
-    # People-nodes: smallest and lightest -- researchers + developers are the majority of
-    # nodes and deliberately not the story.
-    for ntype, marker in [("researcher", "D"), ("developer", "^")]:
+    # Grey outline-only shapes for everything else: repositories keep article-node size and a
+    # darker grey so they read above the people-nodes, which stay smallest/lightest.
+    for ntype, marker, edge_color, size, alpha in [
+        ("repository", "s", repo_grey, marker_size, node_alpha),
+        ("researcher", "D", people_grey, people_marker_size, 0.5),
+        ("developer", "^", people_grey, people_marker_size, 0.5),
+    ]:
         xs, ys = [], []
         for node_i in graph.node_indices():
             nd = graph[node_i]
@@ -4078,10 +3943,10 @@ def _draw_quadpartite_network(
             xs,
             ys,
             facecolors="none",
-            edgecolors=people_grey,
+            edgecolors=edge_color,
             marker=marker,
-            s=people_marker_size,
-            alpha=0.5,
+            s=size,
+            alpha=alpha,
             linewidths=marker_lw,
             zorder=4,
             rasterized=True,
@@ -4104,15 +3969,12 @@ def _draw_quadpartite_network(
         _marker_handle("o", field_colors[f], f"Article: {f}") for f in [*field_order, "Other"]
     ]
     legend_handles += [
-        _marker_handle("s", lang_colors[lang], f"Repository: {lang}")
-        for lang in [*lang_order, "Other"]
-    ]
-    legend_handles += [
+        _marker_handle("s", repo_grey, "Repository", hollow=True),
         _marker_handle("D", people_grey, "Researcher (author)", hollow=True),
         _marker_handle("^", people_grey, "Developer account", hollow=True),
-        mlines.Line2D([], [], color="#aaaaaa", lw=1.2, label="Authorship / contribution"),
-        mlines.Line2D([], [], color="#555555", lw=1.5, label="Article-repository link"),
-        mlines.Line2D([], [], color="#c2438a", lw=1.8, label="Researcher-developer identity"),
+        mlines.Line2D([], [], color=edge_grey, lw=1.2, label="Authorship / contribution"),
+        mlines.Line2D([], [], color=edge_grey, lw=1.5, label="Article-repository link"),
+        mlines.Line2D([], [], color=edge_grey, lw=1.8, label="Researcher-developer identity"),
     ]
 
     legend = ax.legend(
@@ -4135,13 +3997,11 @@ def _draw_quadpartite_network(
 ###############################################################################
 # Unit 13 -- co-authorship network (fresh rebuild)
 #
-# The manuscript's Results text currently cites 11,568 components / 91% in the largest
-# component / 46 researchers in the next-largest component, sourced from the docs-site's
-# `web/data-prep/queries/coauthorship_network.py` rustworkx pipeline. Per the
-# replication-package policy, that pipeline's numbers must not be cited directly in the
-# manuscript -- this is a fresh rustworkx rebuild inside this package. The docs-site pipeline
-# is used only as reference for *what* the computation needs to do (edge-construction rule,
-# author-count bound), never as a source of code or numbers to copy.
+# The manuscript's Results text cites component statistics originally sourced from the
+# docs-site's `web/data-prep/queries/coauthorship_network.py` pipeline; those numbers must be
+# rebuilt inside this replication package before being cited. The docs-site pipeline is
+# reference only for what the computation needs to do (edge-construction rule, author-count
+# bound).
 
 
 @app.command()
@@ -4151,27 +4011,20 @@ def unit13_coauthorship_network(
     max_authors: int = 12,
 ) -> None:
     """
-    Unit 13: co-authorship network statistics -- connected component count, largest
-    component's size/percentage, and the next-largest component's size, matching the three
-    numbers the manuscript currently cites (11,568 / 91% / 46).
+    Compute co-authorship network statistics -- connected component count, largest
+    component's size/percentage, and the next-largest component's size (the three numbers the
+    manuscript cites).
 
-    Edge-construction rule (matching the docs-site reference exactly): nodes are researchers;
-    one undirected edge per *co-authoring researcher pair* (not one edge per shared document),
-    weighted by the number of documents that pair co-authored together
-    (`n_shared_docs`). Documents are bounded to `min_authors`-`max_authors` listed authors
-    before generating all-pairs edges within a document -- without this bound, a handful of
-    large-consortium papers with hundreds of listed authors would each contribute up to
-    C(n_authors, 2) edges, dominating both runtime and the edge set with combinatorial noise
-    that says little about real collaboration structure. This is the same bound the docs-site
-    reference applies, carried forward here as a legitimate computational/methodological
-    safeguard rather than reused code.
+    Edge-construction rule: nodes are researchers; one undirected edge per co-authoring
+    researcher pair (not one edge per shared document), weighted by the number of documents
+    that pair co-authored together (`n_shared_docs`). Documents are bounded to
+    `min_authors`-`max_authors` listed authors before generating all-pairs edges within a
+    document -- without this bound, large-consortium papers would each contribute up to
+    C(n_authors, 2) edges of combinatorial noise.
 
-    Researcher-developer-account identity-link filter (>=0.9) is deliberately NOT applied
-    here. That filter establishes confidence that a *researcher* (paper author) and a
-    *developer account* (GitHub contributor) are the same person -- it constrains
-    researcher<->developer identity, which this analysis never touches. Co-authorship is a
-    purely researcher<->researcher relationship (who wrote a paper with whom), so there are no
-    developer-account identities in scope for the filter to act on.
+    The researcher-developer identity-link confidence filter is deliberately NOT applied:
+    it constrains researcher<->developer identity, and co-authorship is a purely
+    researcher<->researcher relationship, so there are no identities in scope for it.
     """
     pairs = u.load_filtered_pairs()
     filtered_document_ids = pairs.get_column("document_id").unique().to_list()
@@ -4296,13 +4149,13 @@ def unit13_coauthorship_network(
 @app.command()
 def unit14_network_entity_edge_counts(output_dir: Path = OUTPUT_DIR) -> None:
     """
-    Unit 14: fills the manuscript's full-network paragraph (line 29) -- article, repository,
+    Fill the manuscript's full-network paragraph (line 29) -- article, repository,
     researcher, and developer-account node counts, plus authorship, contribution,
     article-repository-link, and researcher-developer identity edge counts. Entities are
-    derived from the standard-filtered pairs (pair-level filtering first, per the plan doc);
-    identity-link counts are reported at both the standing >=0.9 threshold and the
-    manuscript-Methods-stated >=0.97 threshold, restricted to identities whose researcher and
-    developer account both appear in the network.
+    derived from the standard-filtered pairs (pair-level filtering first); identity-link
+    counts are reported at both the >=0.9 and the manuscript-Methods-stated >=0.97
+    thresholds, restricted to identities whose researcher and developer account both appear
+    in the network.
     """
     pairs = u.load_filtered_pairs()
     n_links = pairs.height
@@ -4342,8 +4195,8 @@ def unit14_network_entity_edge_counts(output_dir: Path = OUTPUT_DIR) -> None:
             .unique()
             .height
         )
-        # Both thresholds explicitly: 0.9 (the repo-wide convention) and 0.97 (the
-        # paper-local default) -- kept as two columns so either can be cited.
+        # Both thresholds: 0.9 (the repo-wide convention) and 0.97 (the paper-local
+        # default) -- kept as two columns so either can be cited.
         for thr in (0.9, 0.97)
     }
 
@@ -4378,7 +4231,7 @@ def unit14_network_entity_edge_counts(output_dir: Path = OUTPUT_DIR) -> None:
 ###############################################################################
 # Unit 15 -- import-vs-dependency IoU over time
 
-# Dropped 100 -> 50 in round 4 (applies to all IoU comparisons; CSVs keep every year).
+# Minimum pairs per year for plotted lines; CSVs keep every year.
 UNIT15_MIN_PAIRS_PER_YEAR = 50
 
 
@@ -4388,7 +4241,7 @@ def _top5_unmatched_rows(
     n_eligible_pairs: int,
     top_n: int = 5,
 ) -> list[dict]:
-    """Top-N unmatched names per direction (R2.5). `direction_specs` maps a direction label
+    """Top-N unmatched names per direction. `direction_specs` maps a direction label
     to {key: set-of-unmatched-terms}; `weight_by_key` gives each key's pair count (None =
     each key is itself one pair). Counts = number of pairs in which the term appears
     unmatched.
@@ -4428,16 +4281,15 @@ def unit15_import_dependency_iou_over_time(
     min_pairs_per_year: int = UNIT15_MIN_PAIRS_PER_YEAR,
 ) -> None:
     """
-    Unit 15 (round 4): import-vs-dependency IoU over time. Conditional metric (pairs whose
-    repository has >=1 import AND >=1 pypi/conda/cran manifest dependency) as before, PLUS
-    (round-4 additions): (1) an unconditional companion -- same population minus the
-    both-views-present requirement, with single-view pairs entering as IoU=0 and
-    neither-view pairs excluded; (2) a three-band composition decomposition (no manifest /
-    manifest-no-overlap / manifest-with-overlap) per year among import-bearing pairs;
-    (3) a fixed-cohort robustness re-run (repos already manifest-eligible by
-    `UNIT15_FIXED_COHORT_YEAR`); (4) directional top-5 unmatched-name lists; (5) the year
-    n-floor for plotted lines drops 100 -> 50 (CSVs keep every year). Dependency names are
-    cleaned of residual comparator/junk characters (R2.3) before alignment.
+    Compute import-vs-dependency IoU over time. Builds: (1) the conditional metric (pairs
+    whose repository has >=1 import AND >=1 pypi/conda/cran manifest dependency); (2) an
+    unconditional companion -- same population minus the both-views-present requirement, with
+    single-view pairs entering as IoU=0 and neither-view pairs excluded; (3) a three-band
+    composition decomposition (no manifest / manifest-no-overlap / manifest-with-overlap) per
+    year among import-bearing pairs; (4) a fixed-cohort robustness re-run (repos already
+    manifest-eligible by `UNIT15_FIXED_COHORT_YEAR`); (5) directional top-5 unmatched-name
+    lists. Dependency names are cleaned of residual comparator/junk characters before
+    alignment.
     """
     evaplot.set_style("evaplot_rc")
     df = u.load_filtered_pairs(top_n_fields=10)
@@ -4477,8 +4329,8 @@ def unit15_import_dependency_iou_over_time(
     }
 
     # IoU is a repository-level property, so compute one alignment per unique repository and
-    # attach it to each of that repository's pairs (pairs re-weight repos by publication year).
-    # Unmatched import/dependency names ride along for the R2.5 directional top-5 lists.
+    # attach it to each of that repository's pairs (pairs re-weight repos by publication
+    # year). Unmatched import/dependency names ride along for the directional top-5 lists.
     iou_by_repo: dict[int, float] = {}
     unmatched_imports_by_repo: dict[int, set[str]] = {}
     unmatched_deps_by_repo: dict[int, set[str]] = {}
@@ -4521,7 +4373,7 @@ def unit15_import_dependency_iou_over_time(
         .filter(pl.col("document_publication_year") < current_year)
     )
 
-    # Unconditional companion (round 4): pairs whose repo has imports OR manifest deps; a
+    # Unconditional companion: pairs whose repo has imports OR manifest deps; a
     # single-view pair enters as IoU=0 (IoU on two sets, one empty, is 0); pairs with
     # neither view stay excluded (IoU undefined on two empty sets).
     single_view_pairs = (
@@ -4574,9 +4426,9 @@ def unit15_import_dependency_iou_over_time(
     )
     u.save_table(by_year, "unit15_import_dependency_iou_by_year", output_dir)
 
-    # ---- Fixed-cohort robustness re-run (round 4): hold the repos already
-    # manifest-eligible by the cohort year fixed, recompute the conditional trend within
-    # them -- separates real per-pair decline from manifest-adoption composition shift. ----
+    # ---- Fixed-cohort robustness re-run: hold the repos already manifest-eligible by the
+    # cohort year fixed, recompute the conditional trend within them -- separates real
+    # per-pair decline from manifest-adoption composition shift. ----
     repo_first_year = (
         eligible.group_by("repository_id")
         .agg(pl.min("document_publication_year").alias("first_year"))
@@ -4599,7 +4451,7 @@ def unit15_import_dependency_iou_over_time(
     )
     print(fixed_cohort_by_year.select(pl.exclude("cohort_definition")))
 
-    # ---- Composition decomposition (round 4): per year, among import-bearing pairs, the
+    # ---- Composition decomposition: per year, among import-bearing pairs, the
     # share with (i) no manifest deps, (ii) manifest deps but zero overlap with imports,
     # (iii) manifest deps with >=1 overlap. ----
     band_by_repo: dict[int, str] = {}
@@ -4678,7 +4530,7 @@ def unit15_import_dependency_iou_over_time(
     u.save_figure(fig_comp, "unit15_composition_decomposition", output_dir)
     plt.close(fig_comp)
 
-    # ---- Directional top-5 unmatched lists (R2.5, unit15's two directions) ----
+    # ---- Directional top-5 unmatched lists ----
     pair_counts_by_repo = dict(
         pair_iou.group_by("repository_id").agg(pl.len().alias("n")).iter_rows()
     )
@@ -4768,8 +4620,8 @@ def unit15_import_dependency_iou_over_time(
 @app.command()
 def unit16_mentions_coverage_by_year(output_dir: Path = OUTPUT_DIR) -> None:
     """
-    Unit 16 (review-response round, diagnostic): is the post-2022 mentions gap real, or an
-    rs-graph filtering artifact? Loads `document` and `document_software_mention` UNFILTERED
+    Diagnose whether the post-2022 mentions gap is real or an rs-graph filtering artifact.
+    Loads `document` and `document_software_mention` UNFILTERED
     (no confidence/year filters -- the question is about the raw extraction, not the analysis
     subset) and reports, per publication year: document count, documents with >=1 extracted
     mention, mention-row count, and % of documents with a mention. If coverage collapses at a
@@ -4838,17 +4690,17 @@ def unit16_mentions_coverage_by_year(output_dir: Path = OUTPUT_DIR) -> None:
 ###############################################################################
 # Unit 17 -- mentions-vs-imports and mentions-vs-dependencies alignment over time
 
-# Dropped 100 -> 50 in round 4 (applies to all IoU comparisons; CSVs keep every year).
+# Minimum pairs per year for plotted lines; CSVs keep every year.
 UNIT17_MIN_PAIRS_PER_YEAR = 50
-# Same mentions-extraction horizon as unit5's cap -- mention extraction is absent/partial
-# after this year, so later years would show a coverage artifact, not an alignment trend.
+# Same mentions-extraction horizon as the regression's cap -- mention extraction is
+# absent/partial after this year, so later years would show a coverage artifact, not an
+# alignment trend.
 UNIT17_YEAR_CAP = UNIT5_YEAR_CAP
 
-# Generic mention terms removed for the generic-filtered IoU variant (R2.4). Reviewable
-# constant: Eva's four starting terms plus platform/generic-noun terms from the round-3
-# review's unmatched-mentions data. Deliberately NOT listed: named software and languages
-# (matlab, samtools, python, r, bioconductor, jupyter) -- real referents whose non-matching
-# is the construct-mismatch signal, not noise. All names compared post-normalize_name.
+# Generic mention terms removed for the generic-filtered IoU variant. Deliberately NOT
+# listed: named software and languages (matlab, samtools, python, r, bioconductor,
+# jupyter) -- real referents whose non-matching is the construct-mismatch signal, not noise.
+# All names compared post-normalize_name.
 GENERIC_MENTION_STOPLIST: set[str] = {
     "code",
     "scripts",
@@ -4883,17 +4735,15 @@ def unit17_mentions_alignment_over_time(
     year_cap: int = UNIT17_YEAR_CAP,
 ) -> None:
     """
-    Unit 17 (round 4): mentions-vs-imports and mentions-vs-dependencies alignment over time.
-    Per (document, repository) pair with >=1 extracted mention and >=1 import (resp. >=1
-    pooled pypi/conda/cran manifest dependency), mentions are Hungarian-aligned against
-    imports (resp. dependencies), imports/deps as `items_a` (canonical);
-    IoU = |matched| / |union|. Round-4 additions: (1) every mentions-based IoU is reported
-    TWICE -- as-is, and with `GENERIC_MENTION_STOPLIST` terms removed from the mention sets
-    before alignment (R2.4; per-term removed counts saved alongside); (2) an unconditional
-    companion variant where single-view pairs (mentions but no imports/deps, or vice versa)
-    enter as IoU=0; (3) directional top-5 unmatched lists (R2.5, from the as-is variant);
-    (4) year n-floor 100 -> 50 for plotted lines; (5) dependency names cleaned (R2.3).
-    Capped at `year_cap` for the mentions-extraction horizon.
+    Compute mentions-vs-imports and mentions-vs-dependencies alignment over time. Per
+    (document, repository) pair with >=1 extracted mention and >=1 import (resp. >=1 pooled
+    pypi/conda/cran manifest dependency), mentions are Hungarian-aligned against imports
+    (resp. dependencies), imports/deps as `items_a` (canonical); IoU = |matched| / |union|.
+    Every mentions-based IoU is reported twice -- as-is, and with `GENERIC_MENTION_STOPLIST`
+    terms removed from the mention sets before alignment (per-term removed counts saved
+    alongside) -- plus an unconditional companion variant where single-view pairs enter as
+    IoU=0, and directional top-5 unmatched lists (from the as-is variant). Dependency names
+    are cleaned before alignment. Capped at `year_cap` for the mentions-extraction horizon.
     """
     evaplot.set_style("evaplot_rc")
     df = u.load_filtered_pairs(top_n_fields=10)
@@ -5182,8 +5032,7 @@ def unit17_mentions_alignment_over_time(
 ###############################################################################
 # Supplemental -- package-shaped vs. script-shaped repository diagnostic (R + Python)
 
-# Definitions on record (round 4, R5): deterministic full-population computations, no
-# sampling. The irreproducible round-2 "21% -> 5%" figures are superseded by this CSV.
+# Definitions on record: deterministic full-population computations, no sampling.
 R_PACKAGE_DEFINITION = (
     "R-primary repository is 'package-shaped' iff it has >=1 dependency row with "
     "ecosystem == 'cran' and manifest_paths == 'DESCRIPTION' (root-level); everything else "
@@ -5205,10 +5054,9 @@ PYTHON_PACKAGE_DEFINITION = (
 @app.command()
 def supplemental_package_vs_script_diagnostics(output_dir: Path = OUTPUT_DIR) -> None:
     """
-    Supplement (round 4, R5): package-shaped vs. script-shaped repository composition over
-    time, for R-primary and Python-primary repositories -- per-first-seen-publication-year
-    shares plus median commit counts per shape, saved as a definition-labeled CSV so the
-    paper never again cites composition numbers with no surviving computation behind them.
+    Compute package-shaped vs. script-shaped repository composition over time, for R-primary
+    and Python-primary repositories -- per-first-seen-publication-year shares plus median
+    commit counts per shape, saved as a definition-labeled CSV.
     """
     df = u.load_filtered_pairs(top_n_fields=10)
 

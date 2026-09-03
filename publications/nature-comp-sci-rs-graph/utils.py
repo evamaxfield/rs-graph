@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 
 """Shared loading, filtering, and plotting-support utilities for the Nature Computational
-Science `rs-graph` figures/tables. Every figure/table function in
-`main-figures-and-tables-rewrite.py` loads its data through `load_table` /
-`load_filtered_pairs` below rather than reading from a local database, per the paper's
-replication-package policy: every unit must be runnable standalone directly from the published
-HuggingFace dataset, with no dependency on a local SQLite checkout.
+Science `rs-graph` figures and tables. Every figure/table function loads its data through
+`load_table` / `load_filtered_pairs` below rather than a local database, so each command is
+runnable standalone directly from the published HuggingFace dataset.
 """
 
 from __future__ import annotations
@@ -82,12 +80,12 @@ def load_filtered_pairs(
     Load the standard, filtered article-repository pair base table used across (almost) every
     figure/table in this paper.
 
-    Filtering order (per the plan doc's general build instructions):
+    Filtering order:
       1. article-repository pair confidence >= `confidence_threshold`, or NULL.
       2. published after `min_year` (GitHub's launch year, 2008, by default).
       3. researcher-developer identity confidence >= `rdal_confidence_threshold`, only when
-         `apply_researcher_developer_filter=True` -- none of Figures 2/3/4 touch researcher/
-         developer-account identity, so this defaults to off and is provided for future units.
+         `apply_researcher_developer_filter=True` (off by default; most figures never touch
+         researcher/developer-account identity).
       4. Filtering is always done at the pair level first; entity-level subsets (repositories,
          documents) are always derived *from* the filtered pairs, never filtered directly.
 
@@ -248,7 +246,7 @@ def load_filtered_pairs(
 
 
 ###############################################################################
-# Dependency-name cleaning (round 4, R2.3)
+# Dependency-name cleaning
 
 # Ecosystems whose names may legitimately carry residual comparator/junk characters from
 # manifest parsing. GitHub-Actions/npm names legitimately contain `/` and `@`, so cleaning is
@@ -262,7 +260,7 @@ _DEP_NAME_TRUNCATE_PATTERN = r"[<>=!~;@,()\[\]{}#%*:/\\|$?\"'`].*$"
 def clean_dependency_names(deps: pl.DataFrame) -> pl.DataFrame:
     """
     Clean residual comparator/junk characters out of `software_name_normalized` for
-    pypi/conda/cran rows only (round 4, R2.3): strip a leading conda channel prefix
+    pypi/conda/cran rows only: strip a leading conda channel prefix
     (everything up to and including the last `::`), truncate at the first
     comparator/marker/junk character, and drop rows (in those ecosystems) whose cleaned name
     is empty or doesn't start with [a-z0-9]. Rows in other ecosystems pass through unchanged.
@@ -293,7 +291,8 @@ def clean_dependency_names(deps: pl.DataFrame) -> pl.DataFrame:
 
 
 ###############################################################################
-# Import-vs-mention long frame (shared by Figure 4, Table 1, and Unit 5's regression)
+# Import-vs-mention long frame (shared by Figure 4, Table 1, and the mention-predictors
+# regression)
 
 
 def _independent_matched_names(
@@ -328,14 +327,12 @@ def build_import_mention_pair_library_frame(
 ) -> pl.DataFrame:
     """
     Build the (document, repository, library) row-level frame that Figure 4, Table 1, and
-    Unit 5's logistic regression all ultimately derive from: for every article-repository pair
-    whose repository has >=1 extracted import, one row per unique imported library
+    the mention-predictors logistic regression all derive from: for every article-repository
+    pair whose repository has >=1 extracted import, one row per unique imported library
     (import-normalized name, always canonical -- never the mention name), with `is_mentioned`
-    set from the same per-pair, two-view Hungarian alignment
-    (`align_software_names(..., method="global_min_diff")`, imports as `items_a`) used
-    elsewhere in this replication package. Restricted to pairs whose repository has >=1 import,
-    matching Figure 4's denominator choice -- pairs with zero mentions correctly contribute
-    `is_mentioned=False` rows rather than being dropped or skipped.
+    set from the per-pair, two-view Hungarian alignment
+    (`align_software_names(..., method="global_min_diff")`, imports as `items_a`).
+    Pairs with zero mentions contribute `is_mentioned=False` rows rather than being dropped.
 
     `alignment="independent"` drops the per-pair one-to-one assignment: each import is scored
     against every mention name independently, so one mention name can satisfy several imports.
@@ -395,25 +392,16 @@ def build_import_mention_pair_library_frame(
 ###############################################################################
 # Modified FWCI / FWSI
 #
-# OpenAlex's `fwci` field is computed using a fixed citation window relative to a work's
-# publication date, not the work's full lifetime citation count. The manuscript's Methods
-# describe a "modified FWCI" that substitutes lifetime citations in the numerator instead.
-# We don't have OpenAlex's internal windowed-actual-citation figure stored anywhere in
-# rs-graph (only the final `fwci` ratio and lifetime `cited_by_count` are persisted), so a
-# true "same denominator, different numerator" reconstruction isn't possible from this data
-# alone. Instead we rebuild the whole ratio from scratch, using lifetime counts on both sides:
+# OpenAlex's `fwci` uses a fixed citation window; rs-graph only stores the final ratio and
+# lifetime `cited_by_count`, so the windowed figure can't be reconstructed. Instead the whole
+# ratio is rebuilt from scratch using lifetime counts on both sides:
 #
 #   modified_fwci = document_cited_by_count / mean(document_cited_by_count) within a
 #                   (field, publication year, doctype bucket) peer group
 #
-# This mirrors what OpenAlex's FWCI construction is doing conceptually (a work's citations
-# relative to its same-field/same-age/same-type peers) while using lifetime citation counts
-# consistently for the paper itself *and* its peer-group baseline, rather than mixing a
-# lifetime numerator with a windowed-baseline denominator we can't reconstruct. Modified FWSI
-# is built the same way, symmetrically, using repository stargazer counts and repository
-# creation year in place of citations and publication year, restricted to repositories at
-# least `min_age_years` old (so young repos with little time to accumulate stars aren't
-# compared against long-lived peers).
+# Modified FWSI is built the same way, symmetrically, using repository stargazer counts and
+# repository creation year, restricted to repositories at least `min_age_years` old (so young
+# repos with little time to accumulate stars aren't compared against long-lived peers).
 ###############################################################################
 
 
@@ -501,8 +489,12 @@ def compute_modified_fwsi(
 
     select_cols = list(
         dict.fromkeys(
-            ["repository_id", "repository_stargazers_count", "repository_creation_year"]
-            + list(peer_group_cols)
+            [
+                "repository_id",
+                "repository_stargazers_count",
+                "repository_creation_year",
+                *peer_group_cols,
+            ]
         )
     )
     repos = pairs_df.select(select_cols).unique(subset="repository_id", keep="first")
@@ -566,10 +558,8 @@ def shrink_ticks(ax, size: int = 8) -> None:
 
 
 # dark2[0]/dark2[1] -- the same teal-green / burnt-orange pair evaplot's `set_cat_palette`
-# hands Figures 2 and 3 when they slice to n=1/n=2. Anchoring Figure 4's multi-category
-# palette on the same two colors keeps the whole figure set in one visual family instead of
-# Figure 4 falling back to evaplot's full 8-hue dark2/vivid cycle (green/orange/purple/pink/
-# olive/mustard/brown/gray), which read as a different paper's color scheme.
+# hands Figures 2 and 3 at n=1/n=2; multi-category palettes are anchored on these two colors
+# so the whole figure set stays in one visual family.
 _FAMILY_GREEN = "#1b9e77"
 _FAMILY_ORANGE = "#d95f02"
 
@@ -581,32 +571,24 @@ def field_palette(n: int) -> list[str]:
     return list(sns.blend_palette([_FAMILY_GREEN, _FAMILY_ORANGE], n_colors=n))
 
 
-# A second, distinct 2-color qualitative pair -- reserved for binary contrasts that sit directly
-# beside a teal/orange-colored panel within the *same* figure, where reusing teal/orange would
-# let a reader pattern-match one binary's meaning onto an unrelated one three panels over (round-3
-# figure critique, priority item 2: Figure 3 Panel A's Before/After legend and Panel C's
-# Testing/Linting legend previously shared the exact same two colors). Not applied paper-wide --
-# the cross-figure reuse of teal/orange for other, non-adjacent binaries (article/preprint, Ours/
-# PwC) is a separate, more structural question the critique flagged as Eva's call, not auto-fixed
-# here.
+# A second, distinct 2-color qualitative pair -- for binary contrasts that sit directly beside
+# a teal/orange-colored panel within the same figure, so a reader can't pattern-match one
+# binary's meaning onto an unrelated one a few panels over.
 _CONTRAST_BLUE = "#3b6fb6"
 _CONTRAST_PURPLE = "#8456ce"
 SECONDARY_BINARY_PALETTE: list[str] = [_CONTRAST_BLUE, _CONTRAST_PURPLE]
 
 # A third, distinct 2-color qualitative pair -- for the article/preprint split in the Figure 3
-# supplemental, which sits alongside (not within) the main Figure 3 that already uses teal/orange
-# (Before/After, Panel A) and blue/purple (Testing/Linting, Panel C). Reusing either pair here
-# would recreate the same cross-panel color-collision problem those two were split apart to fix,
-# just one hop further out (round-4 figure critique, priority item 3).
+# supplemental, which sits alongside a main figure that already uses teal/orange (Panel A) and
+# blue/purple (Panel C).
 _CONTRAST_GOLD = "#c9a227"
 _CONTRAST_MAGENTA = "#c2438a"
 TERTIARY_BINARY_PALETTE: list[str] = [_CONTRAST_GOLD, _CONTRAST_MAGENTA]
 
 
 def style_legend(legend, fontsize: int = 8) -> None:
-    """Give a legend a consistent bordered-box look. Standardizes across the figure set --
-    some panels previously produced bare/unboxed legends (evaplot's `legend.frameon: False`
-    rcParam default) while others looked boxed, an inconsistency flagged in figure review.
+    """Give a legend a consistent bordered-box look across the figure set (evaplot's
+    `legend.frameon: False` rcParam default otherwise leaves some legends unboxed).
     """
     if legend is None:
         return
@@ -642,9 +624,8 @@ _FOOTNOTE_POSITIONS: dict[str, dict] = {
     # data (dense multi-line plots, tall bars) and an in-panel box would sit on top of a mark.
     "top center outside": {"x": 0.5, "y": 1.13, "va": "bottom", "ha": "center"},
     "bottom center outside": {"x": 0.5, "y": -0.22, "va": "top", "ha": "center"},
-    # Nudged further up/right than plain "upper right" -- for panels whose rightmost data label
-    # (e.g. an n= annotation) sits close enough to the in-panel box's bottom-left corner at print
-    # resolution to read as crowded (round-3 figure critique, priority item 5).
+    # Nudged further up/right than plain "upper right" -- for panels whose rightmost data
+    # label would otherwise crowd the in-panel box at print resolution.
     "upper right outside": {"x": 1.0, "y": 1.1, "va": "bottom", "ha": "right"},
 }
 
@@ -652,8 +633,7 @@ _FOOTNOTE_POSITIONS: dict[str, dict] = {
 def add_footnote(ax, text: str, loc: str = "lower left") -> None:
     """Add a standardized in-panel caveat/footnote annotation -- one consistent light-gray
     boxed-italic style used everywhere a panel needs to flag an edge case (partial years,
-    axis-range differences, taxonomy mismatches) instead of each panel inventing its own ad hoc
-    treatment (round-2 figure critique, cross-figure item 3).
+    axis-range differences, taxonomy mismatches).
     """
     pos = _FOOTNOTE_POSITIONS[loc]
     ax.text(
@@ -683,12 +663,10 @@ def cap_ylim_to_quantiles(
     pad_frac: float = 0.12,
     axis: Literal["x", "y"] = "y",
 ) -> tuple[float, float]:
-    """Cap an axes' limits to a data quantile range rather than the full min/max -- fixes
-    boxplot whisker compression, where a handful of long-tail whiskers stretch the axis so far
-    that the interquartile boxes (the actual signal) get squeezed into a thin unreadable band
-    near the bottom (round-2 figure critique, priority item 1). `axis="x"` applies the same cap
-    to the x-axis for horizontal boxplots. Returns the applied (lo, hi) so the caller can
-    report it in a footnote.
+    """Cap an axes' limits to a data quantile range rather than the full min/max, so a handful
+    of long-tail boxplot whiskers can't squeeze the interquartile boxes into an unreadable
+    band. `axis="x"` applies the cap to the x-axis for horizontal boxplots. Returns the
+    applied (lo, hi) so the caller can report it in a footnote.
     """
     lo = float(series.quantile(lower_q))
     hi = float(series.quantile(upper_q))
