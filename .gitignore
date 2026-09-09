@@ -175,3 +175,5 @@ used-software-extraction-errors.parquet
 rs-graph-v2-hf-upload*/
 high_confidence_multi_article_pairs.csv
 high_confidence_multi_repo_pairs.csv
+publications/nature-comp-sci-rs-graph/outputs/*
+publications/nature-comp-sci-rs-graph/supplemental/*.csv

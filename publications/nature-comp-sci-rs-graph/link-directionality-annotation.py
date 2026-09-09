@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import polars as pl
 import typer
-from data_utils import DATA_DIR, load_base_dataset
+import utils as u
 from statsmodels.stats.inter_rater import aggregate_raters, cohens_kappa, fleiss_kappa
 
 ################################################################################
+
+DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 ANNOTATORS = ["eva", "sarah", "anna"]
 ANNOTATION_COLUMNS = [
@@ -34,7 +39,7 @@ app = typer.Typer()
 @app.command()
 def create_annotation_set() -> None:
     # Load dataset with top 5 fields (5 + Other)
-    df = load_base_dataset(top_n_fields=5)
+    df = u.load_filtered_pairs(top_n_fields=5)
 
     # Filter to only rows with a predictive model confidence that isn't null
     df = df.filter(pl.col("predictive_model_confidence").is_not_null())

@@ -29,6 +29,8 @@ HF_DATASET = "sci-soft-collections/rs-graph-v2-full"
 THIS_DIR = Path(__file__).parent
 load_dotenv(str(THIS_DIR.parents[1] / ".env"))
 
+OUTPUT_DIR = THIS_DIR / "outputs"
+
 DEFAULT_CONFIDENCE_THRESHOLD = 0.9994
 DEFAULT_MIN_YEAR = 2008
 # Paper-local override of the repo-wide 0.9 identity-link convention -- this manuscript
@@ -44,6 +46,21 @@ SOURCE_DISPLAY_NAMES: dict[str, str] = {
     "snowball-sampling-discovery": "Mined",
 }
 
+# Dependency-manifest ecosystems considered part of each language bucket -- restricts
+# import-vs-dependency alignment to the manifests that belong to that language, rather than
+# e.g. matching an npm frontend-tooling dependency declared inside a Python repo.
+MANIFEST_ECOSYSTEMS_BY_LANGUAGE: dict[str, list[str]] = {
+    "Python": ["pypi", "conda"],
+    "R": ["cran"],
+}
+ALL_MANIFEST_ECOSYSTEMS: list[str] = sorted(
+    {e for ecosystems in MANIFEST_ECOSYSTEMS_BY_LANGUAGE.values() for e in ecosystems}
+)
+
+# Mention extraction is absent/partial after this publication year (see the
+# mentions-coverage diagnostic), so mention-dependent analyses cap at it.
+MENTION_EXTRACTION_YEAR_CAP = 2022
+
 ###############################################################################
 # Loading
 
@@ -55,6 +72,14 @@ def load_table(table: str) -> pl.DataFrame:
     df = pl.from_arrow(ds.data.table)
     assert isinstance(df, pl.DataFrame)
     return df
+
+
+def normalized_names_by_id(frame: pl.DataFrame, id_column: str) -> dict[int, list[str]]:
+    """Group non-null `software_name_normalized` values into a list per `id_column` value."""
+    return {
+        key[0]: grp.get_column("software_name_normalized").drop_nulls().to_list()
+        for key, grp in frame.group_by(id_column)
+    }
 
 
 def _bucket_document_type(col: str = "document_document_type") -> pl.Expr:
@@ -290,6 +315,40 @@ def clean_dependency_names(deps: pl.DataFrame) -> pl.DataFrame:
     return cleaned
 
 
+def clean_mention_names(mentions: pl.DataFrame) -> pl.DataFrame:
+    """
+    Clean residual punctuation out of mention `software_name_normalized` -- the mention-side
+    analog of `clean_dependency_names`: truncate at the first comparator/marker/junk
+    character (e.g. `mgcv()` -> `mgcv`), strip leading/trailing dots (e.g. `scipy.` ->
+    `scipy`), and drop rows whose cleaned name is empty or doesn't start with [a-z0-9].
+    """
+    n_before = mentions.height
+    n_changed_candidates = mentions.filter(
+        pl.col("software_name_normalized").str.contains(r"[^a-z0-9.+-]")
+        | pl.col("software_name_normalized").str.contains(r"^\.|\.$")
+    ).height
+
+    cleaned = mentions.with_columns(
+        pl.col("software_name_normalized")
+        .str.replace(_DEP_NAME_TRUNCATE_PATTERN, "")
+        .str.strip_chars(".")
+        .alias("software_name_normalized")
+    ).filter(pl.col("software_name_normalized").str.contains(r"^[a-z0-9]"))
+    print(
+        f"Mention-name cleaning: {n_changed_candidates:,} rows carried residual punctuation; "
+        f"{n_before - cleaned.height:,} rows dropped as empty/pure junk after cleaning; "
+        f"{cleaned.height:,} of {n_before:,} rows remain"
+    )
+    return cleaned
+
+
+def format_p_value(p: float) -> str:
+    """Format a p-value for a published table; below-float-underflow values print as a bound
+    rather than a literal 0.0.
+    """
+    return "< 1e-300" if p < 1e-300 else f"{p:.3g}"
+
+
 ###############################################################################
 # Import-vs-mention long frame (shared by Figure 4, Table 1, and the mention-predictors
 # regression)
@@ -344,14 +403,8 @@ def build_import_mention_pair_library_frame(
         f"{eligible.height:,} of {df.height:,} pairs have >=1 import"
     )
 
-    imports_by_repo: dict[int, list[str]] = {
-        rid[0]: grp.get_column("software_name_normalized").drop_nulls().to_list()
-        for rid, grp in imports.group_by("repository_id")
-    }
-    mentions_by_doc: dict[int, list[str]] = {
-        did[0]: grp.get_column("software_name_normalized").drop_nulls().to_list()
-        for did, grp in mentions.group_by("document_id")
-    }
+    imports_by_repo = normalized_names_by_id(imports, "repository_id")
+    mentions_by_doc = normalized_names_by_id(mentions, "document_id")
 
     rows = []
     for row in eligible.select("document_id", "repository_id").unique().iter_rows(named=True):
@@ -536,10 +589,12 @@ def compute_modified_fwsi(
 
 
 def save_figure(fig, stem: str, output_dir: Path) -> None:
-    """Save a figure as PNG, TIFF, and PDF to `output_dir` at 300 dpi."""
+    """Save a figure as PNG, TIFF (LZW-compressed), and PDF to `output_dir` at 300 dpi."""
     output_dir.mkdir(parents=True, exist_ok=True)
     for ext in ("png", "tiff", "pdf"):
-        fig.savefig(output_dir / f"{stem}.{ext}", dpi=300, bbox_inches="tight")
+        # LZW is lossless and cuts TIFF sizes ~5-10x.
+        extra = {"pil_kwargs": {"compression": "tiff_lzw"}} if ext == "tiff" else {}
+        fig.savefig(output_dir / f"{stem}.{ext}", dpi=300, bbox_inches="tight", **extra)
     print(f"Saved figure: {output_dir / stem} (.png/.tiff/.pdf)")
 
 
@@ -558,29 +613,47 @@ def shrink_ticks(ax, size: int = 8) -> None:
 
 
 # dark2[0]/dark2[1] -- the same teal-green / burnt-orange pair evaplot's `set_cat_palette`
-# hands Figures 2 and 3 at n=1/n=2; multi-category palettes are anchored on these two colors
-# so the whole figure set stays in one visual family.
+# hands general statistical comparisons at n=1/n=2; multi-category general palettes are
+# anchored on these two colors so those panels stay in one visual family.
 _FAMILY_GREEN = "#1b9e77"
 _FAMILY_ORANGE = "#d95f02"
 
 
-def field_palette(n: int) -> list[str]:
-    """Build an n-color categorical palette anchored on the same green/orange family used
-    throughout Figures 2 and 3, for figures (like Figure 4) that need more than two colors.
+def general_palette(n: int) -> list[str]:
+    """Build an n-color categorical palette anchored on the green/orange family used for
+    general statistical comparisons (tooling categories, licenses, manifest bands).
     """
     return list(sns.blend_palette([_FAMILY_GREEN, _FAMILY_ORANGE], n_colors=n))
 
 
-# A second, distinct 2-color qualitative pair -- for binary contrasts that sit directly beside
-# a teal/orange-colored panel within the same figure, so a reader can't pattern-match one
-# binary's meaning onto an unrelated one a few panels over.
-_CONTRAST_BLUE = "#3b6fb6"
-_CONTRAST_PURPLE = "#8456ce"
-SECONDARY_BINARY_PALETTE: list[str] = [_CONTRAST_BLUE, _CONTRAST_PURPLE]
+# One shared field-to-color assignment across every per-field figure: seaborn's colorblind
+# palette, assigned in global pair-count prevalence order, with "Other" always gray. These
+# colors are reserved for differentiating fields and nothing else.
+FIELD_OTHER_COLOR = "#bbbbbb"
 
-# A third, distinct 2-color qualitative pair -- for the article/preprint split in the Figure 3
-# supplemental, which sits alongside a main figure that already uses teal/orange (Panel A) and
-# blue/purple (Panel C).
+
+def field_color_map(fields: list[str]) -> dict[str, str]:
+    """Map field names (in global prevalence order) to the shared colorblind field palette;
+    "Other" maps to gray.
+    """
+    named = [f for f in fields if f != "Other"]
+    palette = sns.color_palette("colorblind", n_colors=len(named)).as_hex()
+    colors = dict(zip(named, palette, strict=True))
+    colors["Other"] = FIELD_OTHER_COLOR
+    return colors
+
+
+# One shared color per data view (mentions / imports / manifest dependencies), distinct from
+# both the field palette and the teal/orange general-comparison family.
+DATA_VIEW_COLORS: dict[str, str] = {
+    "mentions": "#c2438a",
+    "imports": "#3b6fb6",
+    "dependencies": "#8456ce",
+}
+
+# A distinct 2-color qualitative pair for the article/preprint split in the Figure 3
+# supplemental, so this unrelated binary isn't pattern-matched onto the teal/orange binaries
+# in the main figure.
 _CONTRAST_GOLD = "#c9a227"
 _CONTRAST_MAGENTA = "#c2438a"
 TERTIARY_BINARY_PALETTE: list[str] = [_CONTRAST_GOLD, _CONTRAST_MAGENTA]
@@ -615,44 +688,11 @@ def add_panel_label(ax, label: str) -> None:
     )
 
 
-_FOOTNOTE_POSITIONS: dict[str, dict] = {
-    "lower left": {"x": 0.02, "y": 0.02, "va": "bottom", "ha": "left"},
-    "upper left": {"x": 0.02, "y": 0.98, "va": "top", "ha": "left"},
-    "upper right": {"x": 0.98, "y": 0.98, "va": "top", "ha": "right"},
-    "lower right": {"x": 0.98, "y": 0.02, "va": "bottom", "ha": "right"},
-    # Outside the plotted data area entirely -- for panels where every corner is occupied by
-    # data (dense multi-line plots, tall bars) and an in-panel box would sit on top of a mark.
-    "top center outside": {"x": 0.5, "y": 1.13, "va": "bottom", "ha": "center"},
-    "bottom center outside": {"x": 0.5, "y": -0.22, "va": "top", "ha": "center"},
-    # Nudged further up/right than plain "upper right" -- for panels whose rightmost data
-    # label would otherwise crowd the in-panel box at print resolution.
-    "upper right outside": {"x": 1.0, "y": 1.1, "va": "bottom", "ha": "right"},
-}
-
-
-def add_footnote(ax, text: str, loc: str = "lower left") -> None:
-    """Add a standardized in-panel caveat/footnote annotation -- one consistent light-gray
-    boxed-italic style used everywhere a panel needs to flag an edge case (partial years,
-    axis-range differences, taxonomy mismatches).
+def print_caption_note(figure_stem: str, text: str) -> None:
+    """Print a caption-bound note (title or caveat) for a figure, for copying into the
+    manuscript -- in-figure titles and footnote boxes are not used; captions carry them.
     """
-    pos = _FOOTNOTE_POSITIONS[loc]
-    ax.text(
-        pos["x"],
-        pos["y"],
-        text,
-        transform=ax.transAxes,
-        fontsize=6.5,
-        style="italic",
-        va=pos["va"],
-        ha=pos["ha"],
-        bbox={
-            "boxstyle": "round,pad=0.3",
-            "facecolor": "#f2f2f2",
-            "edgecolor": "#999999",
-            "linewidth": 0.6,
-            "alpha": 0.9,
-        },
-    )
+    print(f"Caption ({figure_stem}): {text}")
 
 
 def cap_ylim_to_quantiles(

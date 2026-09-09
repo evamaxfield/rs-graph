@@ -36,9 +36,9 @@ from dotenv import load_dotenv
 from rapidfuzz import fuzz
 
 sys.path.insert(0, str(Path(__file__).parents[3]))
-from rs_graph.utils.identifier_normalization import normalize_name  # noqa: E402
-from rs_graph.utils.software_alignment import _solve_global_min_diff  # noqa: E402
-from rs_graph.utils.software_alternates import are_alternates  # noqa: E402
+from rs_graph.utils.identifier_normalization import normalize_name
+from rs_graph.utils.software_alignment import _solve_global_min_diff
+from rs_graph.utils.software_alternates import are_alternates
 
 DATASET_REPO = "sci-soft-collections/rs-graph-v2-full"
 RANDOM_SEED = 42
@@ -146,7 +146,9 @@ def main() -> None:
     print(f"After joining documents: {len(merged):,} pairs")
 
     merged = merged.with_columns(
-        pl.col("publication_date").str.to_date("%Y-%m-%d", strict=False).alias("pub_date_parsed")
+        pl.col("publication_date")
+        .str.to_date("%Y-%m-%d", strict=False)
+        .alias("pub_date_parsed")
     ).with_columns(pl.col("pub_date_parsed").dt.year().alias("pub_year"))
 
     merged = merged.filter(pl.col("pub_year") >= 2008)
@@ -159,7 +161,9 @@ def main() -> None:
     print(f"After filtering to confidence >=0.9994 or NULL: {len(merged):,} pairs")
 
     # ---- Restrict to pairs with >=1 import and >=1 mention ----
-    repo_ids_with_imports = set(repository_imports.get_column("repository_id").unique().to_list())
+    repo_ids_with_imports = set(
+        repository_imports.get_column("repository_id").unique().to_list()
+    )
     doc_ids_with_mentions = set(
         document_software_mentions.get_column("document_id").unique().to_list()
     )
@@ -264,12 +268,26 @@ def main() -> None:
                 print(f"{col}: {looser:g}->{stricter:g}: both empty")
                 continue
             keys_loose = (
-                set(zip(df_loose["link_id"], df_loose["normalized_item_one"], df_loose["normalized_item_two"], strict=False))
+                set(
+                    zip(
+                        df_loose["link_id"],
+                        df_loose["normalized_item_one"],
+                        df_loose["normalized_item_two"],
+                        strict=False,
+                    )
+                )
                 if len(df_loose) > 0
                 else set()
             )
             keys_strict = (
-                set(zip(df_strict["link_id"], df_strict["normalized_item_one"], df_strict["normalized_item_two"], strict=False))
+                set(
+                    zip(
+                        df_strict["link_id"],
+                        df_strict["normalized_item_one"],
+                        df_strict["normalized_item_two"],
+                        strict=False,
+                    )
+                )
                 if len(df_strict) > 0
                 else set()
             )
@@ -317,13 +335,19 @@ def main() -> None:
         annotated = df75.with_columns(
             pl.struct(["link_id", "normalized_item_one", "normalized_item_two"])
             .map_elements(
-                lambda s: (s["link_id"], s["normalized_item_one"], s["normalized_item_two"]) in keys_85,
+                lambda s: (
+                    (s["link_id"], s["normalized_item_one"], s["normalized_item_two"])
+                    in keys_85
+                ),
                 return_dtype=pl.Boolean,
             )
             .alias("clears_85"),
             pl.struct(["link_id", "normalized_item_one", "normalized_item_two"])
             .map_elements(
-                lambda s: (s["link_id"], s["normalized_item_one"], s["normalized_item_two"]) in keys_90,
+                lambda s: (
+                    (s["link_id"], s["normalized_item_one"], s["normalized_item_two"])
+                    in keys_90
+                ),
                 return_dtype=pl.Boolean,
             )
             .alias("clears_90"),
@@ -334,12 +358,18 @@ def main() -> None:
         n_dropped_by_85 = n75 - int(annotated["clears_85"].sum())
         n_dropped_by_90 = n75 - int(annotated["clears_90"].sum())
         n_dropped_75_to_85_only = n_dropped_by_85
-        n_dropped_85_to_90 = int(annotated["clears_85"].sum()) - int(annotated["clears_90"].sum())
+        n_dropped_85_to_90 = int(annotated["clears_85"].sum()) - int(
+            annotated["clears_90"].sum()
+        )
         print(f"\n[{col}]")
         print(f"  matches @75: {n75:,}")
-        print(f"  dropped between 75->85: {n_dropped_75_to_85_only:,} ({100 * n_dropped_75_to_85_only / n75:.1f}% of @75)")
+        print(
+            f"  dropped between 75->85: {n_dropped_75_to_85_only:,} ({100 * n_dropped_75_to_85_only / n75:.1f}% of @75)"
+        )
         print(f"  dropped between 85->90: {n_dropped_85_to_90:,}")
-        print(f"  total dropped 75->90: {n_dropped_by_90:,} ({100 * n_dropped_by_90 / n75:.1f}% of @75)")
+        print(
+            f"  total dropped 75->90: {n_dropped_by_90:,} ({100 * n_dropped_by_90 / n75:.1f}% of @75)"
+        )
 
     # ---- Raw vs normalized comparison, at each cutoff ----
     print("\n" + "=" * 78)
@@ -350,12 +380,26 @@ def main() -> None:
         df_raw = dfs["software_name"][cutoff]
         df_norm = dfs["software_name_normalized"][cutoff]
         keys_raw = (
-            set(zip(df_raw["link_id"], df_raw["normalized_item_one"], df_raw["normalized_item_two"], strict=False))
+            set(
+                zip(
+                    df_raw["link_id"],
+                    df_raw["normalized_item_one"],
+                    df_raw["normalized_item_two"],
+                    strict=False,
+                )
+            )
             if len(df_raw) > 0
             else set()
         )
         keys_norm = (
-            set(zip(df_norm["link_id"], df_norm["normalized_item_one"], df_norm["normalized_item_two"], strict=False))
+            set(
+                zip(
+                    df_norm["link_id"],
+                    df_norm["normalized_item_one"],
+                    df_norm["normalized_item_two"],
+                    strict=False,
+                )
+            )
             if len(df_norm) > 0
             else set()
         )
@@ -367,11 +411,23 @@ def main() -> None:
         )
         for k in only_raw:
             divergence_rows.append(
-                {"cutoff": cutoff, "present_in": "raw_only", "link_id": k[0], "norm_import": k[1], "norm_mention": k[2]}
+                {
+                    "cutoff": cutoff,
+                    "present_in": "raw_only",
+                    "link_id": k[0],
+                    "norm_import": k[1],
+                    "norm_mention": k[2],
+                }
             )
         for k in only_norm:
             divergence_rows.append(
-                {"cutoff": cutoff, "present_in": "normalized_only", "link_id": k[0], "norm_import": k[1], "norm_mention": k[2]}
+                {
+                    "cutoff": cutoff,
+                    "present_in": "normalized_only",
+                    "link_id": k[0],
+                    "norm_import": k[1],
+                    "norm_mention": k[2],
+                }
             )
 
     # ---- Known generic-word false-positive collisions: does raising the cutoff help? ----
@@ -385,8 +441,10 @@ def main() -> None:
             continue
         hits = df75.filter(
             pl.struct(["normalized_item_one", "normalized_item_two"]).map_elements(
-                lambda s: (s["normalized_item_one"], s["normalized_item_two"]) in watch_pairs
-                or (s["normalized_item_two"], s["normalized_item_one"]) in watch_pairs,
+                lambda s: (
+                    (s["normalized_item_one"], s["normalized_item_two"]) in watch_pairs
+                    or (s["normalized_item_two"], s["normalized_item_one"]) in watch_pairs
+                ),
                 return_dtype=pl.Boolean,
             )
         )
@@ -399,8 +457,12 @@ def main() -> None:
                 still = len(
                     dfc.filter(
                         pl.struct(["normalized_item_one", "normalized_item_two"]).map_elements(
-                            lambda s: (s["normalized_item_one"], s["normalized_item_two"]) in watch_pairs
-                            or (s["normalized_item_two"], s["normalized_item_one"]) in watch_pairs,
+                            lambda s: (
+                                (s["normalized_item_one"], s["normalized_item_two"])
+                                in watch_pairs
+                                or (s["normalized_item_two"], s["normalized_item_one"])
+                                in watch_pairs
+                            ),
                             return_dtype=pl.Boolean,
                         )
                     )
@@ -414,15 +476,19 @@ def main() -> None:
     if len(main_table) > 0:
         out_path = SUPPLEMENTAL_DIR / "cutoff-sensitive-pairs.csv"
         main_table.write_csv(out_path)
-        print(f"\nCutoff-sensitivity table (raw software_name, {len(main_table):,} rows @75, "
-              f"annotated with clears_85/clears_90) written to: {out_path}")
+        print(
+            f"\nCutoff-sensitivity table (raw software_name, {len(main_table):,} rows @75, "
+            f"annotated with clears_85/clears_90) written to: {out_path}"
+        )
 
     norm_table = cutoff_sensitivity_tables.get("software_name_normalized", pl.DataFrame())
     if len(norm_table) > 0:
         out_path_norm = SUPPLEMENTAL_DIR / "cutoff-sensitive-pairs-normalized.csv"
         norm_table.write_csv(out_path_norm)
-        print(f"Cutoff-sensitivity table (software_name_normalized, {len(norm_table):,} rows @75) "
-              f"written to: {out_path_norm}")
+        print(
+            f"Cutoff-sensitivity table (software_name_normalized, {len(norm_table):,} rows @75) "
+            f"written to: {out_path_norm}"
+        )
 
     div_df = pl.DataFrame(divergence_rows) if divergence_rows else pl.DataFrame()
     out_path_div = SUPPLEMENTAL_DIR / "raw-vs-normalized-divergence.csv"
@@ -433,7 +499,7 @@ def main() -> None:
     )
 
     print("\n" + "=" * 78)
-    print(f"TOP 30 CUTOFF-SENSITIVE PAIRS (raw software_name, present@75, sorted by score desc)")
+    print("TOP 30 CUTOFF-SENSITIVE PAIRS (raw software_name, present@75, sorted by score desc)")
     print("=" * 78)
     if len(main_table) > 0:
         top = main_table.head(30)

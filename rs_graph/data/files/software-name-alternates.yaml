@@ -193,6 +193,11 @@ pytorch3d: []
 # pass 1: a pythonqt import matched a declared `python` conda dependency).
 pythonqt: []
 
+# plyr and dplyr are distinct R packages (fuzz 89) and must never fuzzy-match each other.
+plyr: []
+
+dplyr: []
+
 # tensorflow-hub is a separate library from tensorflow and must never fuzzy-match it
 # (fuzz 87; round 5 pass 2: a "TensorFlow" mention matched a tensorflow_hub import).
 tensorflow-hub: []
