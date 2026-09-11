@@ -140,13 +140,17 @@ _PERMISSIVE_LICENSE_KEYWORDS: tuple[str, ...] = (
 # Panel data helpers
 
 
-def _top5_field_names(df: pl.DataFrame) -> list[str]:
-    """Top-5 unpruned field names by pair count."""
+FIELD_RHO_MIN_PAIRS = 10
+
+
+def _top_pruned_field_names(df: pl.DataFrame, n: int) -> list[str]:
+    """Top-`n` pruned field names by pair count, excluding the "Other" bucket."""
     return (
-        df.get_column("document_field_name")
+        df.filter(pl.col("document_field_name_pruned") != "Other")
+        .get_column("document_field_name_pruned")
         .value_counts(sort=True)
-        .head(5)
-        .get_column("document_field_name")
+        .head(n)
+        .get_column("document_field_name_pruned")
         .to_list()
     )
 
@@ -235,6 +239,67 @@ def _manifest_adoption_over_time(df: pl.DataFrame, deps: pl.DataFrame) -> pl.Dat
     return pl.concat(frames)
 
 
+PYTHON_SHARE_TOP_N_FIELDS = 5
+PYTHON_SHARE_OVERALL_LABEL = "Overall (all fields)"
+
+
+def _python_share_by_field_over_time(
+    df: pl.DataFrame, top_n_fields: int = PYTHON_SHARE_TOP_N_FIELDS
+) -> pl.DataFrame:
+    """Python's share of repositories over time, per field. One row per (series, year) giving
+    the % of that field's repositories whose primary language is Python, out of repositories
+    with any known primary language. Series are the top-`top_n_fields` pruned fields, "Other",
+    and a pooled all-fields line. Repo-year attribution and the per-year repository floor match
+    `_manifest_adoption_over_time`.
+    """
+    current_year = date.today().year
+    repo_year = (
+        df.select(
+            "repository_id",
+            "document_publication_year",
+            "repository_primary_language",
+            "document_field_name_pruned",
+        )
+        .unique(subset="repository_id", keep="first")
+        .filter(
+            (pl.col("document_publication_year") >= u.DEFAULT_MIN_YEAR)
+            & (pl.col("document_publication_year") < current_year)
+        )
+        .drop_nulls("repository_primary_language")
+    )
+    top_fields = _top_pruned_field_names(df, top_n_fields)
+    repo_year = repo_year.with_columns(
+        pl.when(pl.col("document_field_name_pruned").is_in(top_fields))
+        .then(pl.col("document_field_name_pruned"))
+        .otherwise(pl.lit("Other"))
+        .alias("field")
+    )
+
+    def series_frame(repos: pl.DataFrame, label: str) -> pl.DataFrame:
+        return (
+            repos.group_by("document_publication_year")
+            .agg(
+                pl.len().alias("total"),
+                (pl.col("repository_primary_language") == "Python")
+                .sum()
+                .alias("n_python_primary"),
+            )
+            .with_columns(
+                pl.lit(label).alias("series"),
+                (pl.col("n_python_primary") / pl.col("total") * 100).alias("pct_python"),
+            )
+            .filter(pl.col("total") >= MANIFEST_ADOPTION_MIN_REPOS_PER_YEAR)
+            .sort("document_publication_year")
+        )
+
+    frames = [series_frame(repo_year, PYTHON_SHARE_OVERALL_LABEL)]
+    for field in [*top_fields, "Other"]:
+        frames.append(series_frame(repo_year.filter(pl.col("field") == field), field))
+    return pl.concat(frames).select(
+        "series", "document_publication_year", "n_python_primary", "total", "pct_python"
+    )
+
+
 def _dependency_category_adoption(
     df: pl.DataFrame, deps: pl.DataFrame, group_col: str | None, with_year: bool
 ) -> pl.DataFrame:
@@ -313,17 +378,11 @@ def _spearman_with_ci(x: np.ndarray, y: np.ndarray) -> dict[str, float]:
 def _fwsi_vs_fwci_by_field(
     df: pl.DataFrame, fwci_docs: pl.DataFrame, fwsi_repos: pl.DataFrame
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
-    # Re-prune to top-5 + Other so the breakdown matches the manuscript's six named fields.
-    top5 = _top5_field_names(df)
-    field_map = (
-        df.select("document_id", "document_field_name")
-        .unique(subset="document_id", keep="first")
-        .with_columns(
-            pl.when(pl.col("document_field_name").is_in(top5))
-            .then(pl.col("document_field_name"))
-            .otherwise(pl.lit("Other"))
-            .alias("field6")
-        )
+    """Per-field Spearman rho between raw document FWCI and modified repository FWSI, at the
+    pair level, over every pruned field with at least `FIELD_RHO_MIN_PAIRS` pairs.
+    """
+    field_map = df.select("document_id", "document_field_name_pruned").unique(
+        subset="document_id", keep="first"
     )
 
     pair_level = (
@@ -332,13 +391,20 @@ def _fwsi_vs_fwci_by_field(
         .join(
             fwsi_repos.select("repository_id", "repository_modified_fwsi"), on="repository_id"
         )
-        .join(field_map.select("document_id", "field6"), on="document_id")
+        .join(field_map, on="document_id")
         .drop_nulls(["document_raw_fwci", "repository_modified_fwsi"])
+    )
+    print("\nFWSI-vs-FWCI pair counts per field, before the minimum-n floor:")
+    print(
+        pair_level.group_by("document_field_name_pruned")
+        .agg(pl.len().alias("n_pairs"))
+        .sort("n_pairs", descending=True)
     )
 
     rho_rows = []
-    for field, grp in pair_level.group_by("field6"):
-        if grp.height < 10:
+    for field, grp in pair_level.group_by("document_field_name_pruned"):
+        if grp.height < FIELD_RHO_MIN_PAIRS:
+            print(f"  Excluding {field[0]}: only {grp.height} pairs")
             continue
         rho_rows.append(
             {
@@ -355,25 +421,15 @@ def _fwsi_vs_fwci_by_field(
 
 def _stars_vs_citations_by_field(df: pl.DataFrame) -> pl.DataFrame:
     """Per-field Spearman rho between raw repository stargazer counts and raw document
-    citation counts, at the pair level, top-5 fields + Other, plus a pooled/overall row.
+    citation counts, at the pair level, over every pruned field, plus a pooled/overall row.
     """
-    top5 = _top5_field_names(df)
-    pair_level = (
-        df.select(
-            "document_id",
-            "repository_id",
-            "document_cited_by_count",
-            "repository_stargazers_count",
-            "document_field_name",
-        )
-        .with_columns(
-            pl.when(pl.col("document_field_name").is_in(top5))
-            .then(pl.col("document_field_name"))
-            .otherwise(pl.lit("Other"))
-            .alias("field6")
-        )
-        .drop_nulls(["document_cited_by_count", "repository_stargazers_count"])
-    )
+    pair_level = df.select(
+        "document_id",
+        "repository_id",
+        "document_cited_by_count",
+        "repository_stargazers_count",
+        "document_field_name_pruned",
+    ).drop_nulls(["document_cited_by_count", "repository_stargazers_count"])
     rows = [
         {
             "field": "All fields (pooled)",
@@ -383,8 +439,8 @@ def _stars_vs_citations_by_field(df: pl.DataFrame) -> pl.DataFrame:
             ),
         }
     ]
-    for field, grp in pair_level.group_by("field6"):
-        if grp.height < 10:
+    for field, grp in pair_level.group_by("document_field_name_pruned"):
+        if grp.height < FIELD_RHO_MIN_PAIRS:
             continue
         rows.append(
             {
@@ -455,7 +511,7 @@ def figure_3_software_development_characteristics(
 ) -> None:
     """
     Build Figure 3: software development characteristics, one consolidated 6-panel figure.
-    (A) dev activity duration, (B) dependency-manifest adoption over time, (C)
+    (A) dev activity duration, (B) Python's share of repositories over time by field, (C)
     dependency-category adoption over time, (D) raw-FWCI distribution, (E)
     raw-stars-vs-raw-citations Spearman rho by field as a horizontal forest plot with a
     pooled row, (F) license adoption over time (any / permissive / copyleft). Also produces
@@ -475,7 +531,9 @@ def figure_3_software_development_characteristics(
     fwsi_repos = u.compute_modified_fwsi(df)
 
     dev_duration = _dev_duration_frame(df)
+    # Manifest adoption is CSV-only now -- cited as prose, not plotted.
     manifest_adoption = _manifest_adoption_over_time(df, deps)
+    python_share = _python_share_by_field_over_time(df)
     category_by_year = _dependency_category_adoption(df, deps, group_col=None, with_year=True)
     category_by_domain = _dependency_category_adoption(
         df, deps, group_col="document_domain_name", with_year=False
@@ -487,18 +545,18 @@ def figure_3_software_development_characteristics(
     _pair_level_fwsi_fwci, rho_df = _fwsi_vs_fwci_by_field(df, fwci_docs, fwsi_repos)
 
     # Vanishingly small p-values print as a bound rather than a literal 0.0.
-    _format_p = pl.col("p_value").map_elements(u.format_p_value, return_dtype=pl.String)
+    format_p = pl.col("p_value").map_elements(u.format_p_value, return_dtype=pl.String)
 
     # FWSI-vs-FWCI rho is saved as CSV only; Panel E plots raw stars vs. raw citations.
     u.save_table(
-        rho_df.with_columns(_format_p), "figure3_fwsi_fwci_spearman_by_field", output_dir
+        rho_df.with_columns(format_p), "figure3_fwsi_fwci_spearman_by_field", output_dir
     )
     print("\nFWSI-vs-raw-FWCI Spearman rho by field (CSV only, not plotted):")
     print(rho_df)
 
     stars_rho_df = _stars_vs_citations_by_field(df)
     u.save_table(
-        stars_rho_df.with_columns(_format_p),
+        stars_rho_df.with_columns(format_p),
         "figure3_stars_citations_spearman_by_field",
         output_dir,
     )
@@ -512,6 +570,7 @@ def figure_3_software_development_characteristics(
 
     # Panel B/C data as labeled tables -- the manuscript cites exact adoption percentages.
     u.save_table(manifest_adoption, "figure3_manifest_adoption_by_year", output_dir)
+    u.save_table(python_share, "figure3_python_share_by_field_over_year", output_dir)
     current_year = date.today().year
     category_by_year_plotted = category_by_year.filter(
         pl.col("document_publication_year") < current_year
@@ -532,6 +591,16 @@ def figure_3_software_development_characteristics(
 
     # FWCI summary stats -- the paper's headline median and per-field medians.
     fwci_nonnull = fwci_docs.filter(pl.col("document_raw_fwci").is_not_null())
+    fwci_median_incl_zero = fwci_nonnull.get_column("document_raw_fwci").median()
+    fwci_median_excl_zero = (
+        fwci_nonnull.filter(pl.col("document_raw_fwci") > 0)
+        .get_column("document_raw_fwci")
+        .median()
+    )
+    fwci_median_plotted = fwci_dist.get_column("document_raw_fwci").median()
+    assert isinstance(fwci_median_incl_zero, float)
+    assert isinstance(fwci_median_excl_zero, float)
+    assert isinstance(fwci_median_plotted, float)
     fwci_summary = pl.DataFrame(
         {
             "statistic": [
@@ -543,13 +612,9 @@ def figure_3_software_development_characteristics(
                 "n_zero_fwci_documents_in_panel_d_zero_bar",
             ],
             "value": [
-                float(fwci_nonnull.get_column("document_raw_fwci").median()),
-                float(
-                    fwci_nonnull.filter(pl.col("document_raw_fwci") > 0)
-                    .get_column("document_raw_fwci")
-                    .median()
-                ),
-                float(fwci_dist.get_column("document_raw_fwci").median()),
+                fwci_median_incl_zero,
+                fwci_median_excl_zero,
+                fwci_median_plotted,
                 float(fwci_nonnull.height),
                 100 * fwci_nonnull.height / fwci_docs.height,
                 float(n_zero_fwci_dropped),
@@ -570,8 +635,8 @@ def figure_3_software_development_characteristics(
     print(fwci_by_field)
 
     # ---- 2x3 grid, six panels; sized so fonts stay legible at Nature's 183mm print width ----
-    fig = plt.figure(figsize=(13, 8))
-    gs = fig.add_gridspec(2, 6, hspace=0.45, wspace=1.3)
+    fig = plt.figure(figsize=(14, 8))
+    gs = fig.add_gridspec(2, 6, hspace=0.5, wspace=2.6)
     ax_a = fig.add_subplot(gs[0, 0:2])
     ax_b = fig.add_subplot(gs[0, 2:4])
     ax_c = fig.add_subplot(gs[0, 4:6])
@@ -603,25 +668,42 @@ def figure_3_software_development_characteristics(
     u.cap_ylim_to_quantiles(ax_a, dev_duration.to_pandas()["duration_years"], axis="x")
     u.shrink_ticks(ax_a, size=9)
 
-    # B: dependency manifest adoption over time -- pooled line plus Python/R ecosystem
-    # reference lines, with an n-floor for sparse early years.
-    sns.lineplot(
-        data=manifest_adoption.to_pandas(),
-        x="document_publication_year",
-        y="pct_repos",
-        hue="series",
-        style="series",
-        ax=ax_b,
-        marker="o",
-    )
+    # B: Python's share of repositories over time, one line per field plus a pooled line.
+    python_share_fields = [
+        s
+        for s in python_share.get_column("series").unique(maintain_order=True).to_list()
+        if s != PYTHON_SHARE_OVERALL_LABEL
+    ]
+    field_colors = u.field_color_map(python_share_fields)
+    for series_label in [*python_share_fields, PYTHON_SHARE_OVERALL_LABEL]:
+        plotted = python_share.filter(pl.col("series") == series_label)
+        is_overall = series_label == PYTHON_SHARE_OVERALL_LABEL
+        ax_b.plot(
+            plotted.get_column("document_publication_year").to_numpy(),
+            plotted.get_column("pct_python").to_numpy(),
+            marker="o",
+            markersize=3,
+            linewidth=2.2 if is_overall else 1.5,
+            linestyle="--" if is_overall else "-",
+            color="black" if is_overall else field_colors[series_label],
+            label="Overall" if is_overall else u.abbreviate_field(series_label),
+            zorder=3 if is_overall else 2,
+        )
     ax_b.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax_b.set_xlabel("Publication Year")
-    ax_b.set_ylabel("% of Repos with Manifest")
+    ax_b.set_ylabel("% of Repos Python-Primary")
     ax_b.set_ylim(0, 100)
-    u.style_legend(ax_b.legend(fontsize=8, title="", loc="upper left"), fontsize=8)
+    u.style_legend(
+        ax_b.legend(fontsize=6, title="", loc="upper left", ncol=2, columnspacing=0.8),
+        fontsize=6,
+    )
     u.print_caption_note(
         "figure3 Panel B",
-        f"Years with < {MANIFEST_ADOPTION_MIN_REPOS_PER_YEAR} repos in a series excluded",
+        f"Share of repositories with a known primary language whose primary language is "
+        f"Python, by first-seen publication year; top {PYTHON_SHARE_TOP_N_FIELDS} fields + "
+        f"Other + a pooled all-fields line; years with "
+        f"< {MANIFEST_ADOPTION_MIN_REPOS_PER_YEAR} repos in a series excluded. Abbreviated "
+        "field labels: " + u.field_abbreviation_caption(python_share_fields),
     )
     u.shrink_ticks(ax_b, size=9)
 
@@ -659,8 +741,11 @@ def figure_3_software_development_characteristics(
     # positive distribution so all documents stay visible. Chosen over log1p, which would
     # move FWCI=1 off the axis's natural reference point and break the field-avg line.
     pos = fwci_dist.get_column("document_raw_fwci")
-    bin_ratio = (float(pos.max()) / float(pos.min())) ** (1 / 25)
-    zero_x = float(pos.min()) / bin_ratio**2.5
+    pos_min, pos_max = pos.min(), pos.max()
+    assert isinstance(pos_min, float)
+    assert isinstance(pos_max, float)
+    bin_ratio = (pos_max / pos_min) ** (1 / 25)
+    zero_x = pos_min / bin_ratio**2.5
     ax_d.bar(
         zero_x,
         n_zero_fwci_dropped,
@@ -670,14 +755,13 @@ def figure_3_software_development_characteristics(
     )
     ax_d.set_xlim(left=zero_x / bin_ratio)
     # Median over every document with an FWCI, zeros included, matching the plotted data.
-    fwci_median = float(fwci_nonnull.get_column("document_raw_fwci").median())
     ax_d.axvline(1.0, color="black", linestyle="--", linewidth=1.5, label="Field avg.")
     ax_d.axvline(
-        fwci_median,
+        fwci_median_incl_zero,
         color="red",
         linestyle="-.",
         linewidth=1.5,
-        label=f"Median: {fwci_median:.2f}",
+        label=f"Median: {fwci_median_incl_zero:.2f}",
     )
     ax_d.set_xlabel("OpenAlex FWCI (log scale)")
     ax_d.set_ylabel("Count")
@@ -719,16 +803,21 @@ def figure_3_software_development_characteristics(
     ax_e.axvline(0, color="#bbbbbb", linewidth=0.8, linestyle=":", zorder=0)
     ax_e.set_yticks(ys)
     ax_e.set_yticklabels(
-        [f"{f} (n={n:,})" for f, n in zip(forest["field"], forest["n"], strict=True)]
+        [
+            f"{u.abbreviate_field(f)} (n={n:,})"
+            for f, n in zip(forest["field"], forest["n"], strict=True)
+        ]
     )
     ax_e.invert_yaxis()
     ax_e.set_ylim(len(forest) - 0.5, -0.5)
     ax_e.set_xlabel("Spearman rho (stars vs. citations)")
-    u.shrink_ticks(ax_e, size=8)
+    # Smaller than the other panels: the field+n y-tick labels are the longest text in the grid.
+    u.shrink_ticks(ax_e, size=7)
     u.print_caption_note(
         "figure3 Panel E",
-        "Raw stargazer and citation counts; dashed line = pooled rho. Top 5 fields + Other "
-        "(differs from the top-10 grouping used elsewhere)",
+        "Raw stargazer and citation counts; dashed line = pooled rho. Every pruned field "
+        "plus the Other bucket. Abbreviated field labels: "
+        + u.field_abbreviation_caption(forest["field"].tolist()),
     )
 
     # F: license adoption over time -- any / permissive / copyleft license share of repos by
@@ -777,8 +866,7 @@ def figure_3_software_development_characteristics(
     )
     # Pinned hue order so gold/magenta mean the same document type in both panels.
     doctype_hue_order = ["article", "preprint"]
-    # Gold/magenta pair -- distinct from the binaries used in the main Figure 3, so this
-    # unrelated article/preprint binary isn't pattern-matched onto either.
+    # Gold/magenta pair, distinct from the binary palettes used in the main Figure 3.
     sns.boxplot(
         data=dev_duration_split.to_pandas(),
         y="period",
@@ -938,7 +1026,7 @@ def fwsi_fwci_comparison_table(output_dir: Path = u.OUTPUT_DIR, top_n: int = 5) 
 ###############################################################################
 # Package-shaped vs. script-shaped repository diagnostic (R + Python)
 
-# Definitions on record: deterministic full-population computations, no sampling.
+# Package-shape definitions, saved verbatim into the diagnostic CSV.
 R_PACKAGE_DEFINITION = (
     "R-primary repository is 'package-shaped' iff it has >=1 dependency row with "
     "ecosystem == 'cran' and manifest_paths == 'DESCRIPTION' (root-level); everything else "

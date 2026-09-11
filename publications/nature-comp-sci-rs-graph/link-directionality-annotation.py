@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 from __future__ import annotations
 
@@ -38,6 +38,7 @@ app = typer.Typer()
 
 @app.command()
 def create_annotation_set() -> None:
+    """Sample pairs per field and write the agreement + per-annotator annotation CSVs."""
     # Load dataset with top 5 fields (5 + Other)
     df = u.load_filtered_pairs(top_n_fields=5)
 
@@ -118,10 +119,42 @@ def create_annotation_set() -> None:
         annotator_subset.write_csv(output_path)
 
 
+def _pairwise_kappa_str(va: list[str | None], vb: list[str | None]) -> str:
+    """Format Cohen's kappa (with N) for two annotators' labels, skipping unlabeled rows."""
+    valid = [(a, b) for a, b in zip(va, vb, strict=False) if a is not None and b is not None]
+    if len(valid) < 2:
+        return "N/A"
+    a_arr = np.array([v[0] for v in valid])
+    b_arr = np.array([v[1] for v in valid])
+    categories = sorted(set(a_arr) | set(b_arr))
+    cat_idx = {c: i for i, c in enumerate(categories)}
+    table = np.zeros((len(categories), len(categories)), dtype=int)
+    for a, b in zip(a_arr, b_arr, strict=False):
+        table[cat_idx[a], cat_idx[b]] += 1
+    kappa = cohens_kappa(table).kappa
+    kappa_str = f"{kappa:.3f}" if not np.isnan(kappa) else "N/A (trivially perfect)"
+    return f"{kappa_str}  (N={len(valid)})"
+
+
+def _fleiss_kappa_str(shared_rows: list[list[str]]) -> str:
+    """Format Fleiss' kappa (with N) for the rows every annotator labeled."""
+    if len(shared_rows) < 2:
+        return "N/A (insufficient shared non-null rows)"
+    # aggregate_raters expects an (N_subjects x N_raters) array of category indices
+    categories = sorted({v for row in shared_rows for v in row})
+    cat_idx = {c: j for j, c in enumerate(categories)}
+    ratings_matrix = np.array([[cat_idx[v] for v in row] for row in shared_rows])
+    table, _ = aggregate_raters(ratings_matrix)
+    fk = fleiss_kappa(table)
+    fk_str = f"{fk:.3f}" if not np.isnan(fk) else "N/A (trivially perfect)"
+    return f"{fk_str}  (N={len(shared_rows)})"
+
+
 @app.command()
 def compare_annotation_sets() -> None:
-    # Load all three annotated CSVs and inner-join on the shared row identifier.
-    # Sarah's file has one extra row vs. Eva/Anna; inner join keeps only shared rows.
+    """Report inter-rater agreement and disagreements across the annotated training sets."""
+    # Load all annotated CSVs
+    # Inner join on the shared row identifier keeps only rows present in all files
     dfs = {
         annotator: pl.read_csv(
             DATA_DIR / TRAINING_ANNOTATION_FILENAME_TEMPLATE.format(annotator=annotator)
@@ -171,49 +204,18 @@ def compare_annotation_sets() -> None:
         typer.echo("Pairwise Cohen's Kappa:")
         pairs = [("eva", "sarah"), ("eva", "anna"), ("sarah", "anna")]
         for name_a, name_b in pairs:
-            va = annotator_vals[name_a]
-            vb = annotator_vals[name_b]
-            valid = [
-                (a, b) for a, b in zip(va, vb, strict=False) if a is not None and b is not None
-            ]
-            if len(valid) < 2:
-                typer.echo(f"  {name_a} vs {name_b}: N/A")
-                continue
-            a_arr = np.array([v[0] for v in valid])
-            b_arr = np.array([v[1] for v in valid])
-            categories = sorted(set(a_arr) | set(b_arr))
-            cat_idx = {c: i for i, c in enumerate(categories)}
-            table = np.zeros((len(categories), len(categories)), dtype=int)
-            for a, b in zip(a_arr, b_arr, strict=False):
-                table[cat_idx[a], cat_idx[b]] += 1
-            kappa = cohens_kappa(table).kappa
-            kappa_str = f"{kappa:.3f}" if not np.isnan(kappa) else "N/A (trivially perfect)"
-            typer.echo(f"  {name_a} vs {name_b}: {kappa_str}  (N={len(valid)})")
+            kappa_str = _pairwise_kappa_str(annotator_vals[name_a], annotator_vals[name_b])
+            typer.echo(f"  {name_a} vs {name_b}: {kappa_str}")
 
         # --- Three-way Fleiss' kappa ---
-        shared_idxs = [
-            i
-            for i in range(len(doc_urls))
-            if all(annotator_vals[ann][i] is not None for ann in ANNOTATORS)
-        ]
-        if len(shared_idxs) >= 2:
-            # aggregate_raters expects an (N_subjects x N_raters) array of category indices.
-            categories = sorted(
-                {annotator_vals[ann][i] for ann in ANNOTATORS for i in shared_idxs}
-            )
-            cat_idx = {c: j for j, c in enumerate(categories)}
-            ratings_matrix = np.array(
-                [
-                    [cat_idx[annotator_vals[ann][i]] for ann in ANNOTATORS]  # type: ignore[index]
-                    for i in shared_idxs
-                ]
-            )
-            table, _ = aggregate_raters(ratings_matrix)
-            fk = fleiss_kappa(table)
-            fk_str = f"{fk:.3f}" if not np.isnan(fk) else "N/A (trivially perfect)"
-            typer.echo(f"Three-way Fleiss' Kappa: {fk_str}  (N={len(shared_idxs)})")
-        else:
-            typer.echo("Three-way Fleiss' Kappa: N/A (insufficient shared non-null rows)")
+        # Keep only rows every annotator labeled
+        shared_rows: list[list[str]] = []
+        for i in range(len(doc_urls)):
+            row_vals = [annotator_vals[ann][i] for ann in ANNOTATORS]
+            non_null = [v for v in row_vals if v is not None]
+            if len(non_null) == len(ANNOTATORS):
+                shared_rows.append(non_null)
+        typer.echo(f"Three-way Fleiss' Kappa: {_fleiss_kappa_str(shared_rows)}")
 
         # --- Disagreements ---
         disagreements = [

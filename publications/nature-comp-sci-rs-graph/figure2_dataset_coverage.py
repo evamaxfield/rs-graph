@@ -27,6 +27,7 @@ def _pwc_coverage_statistic(df: pl.DataFrame) -> dict[str, float]:
     pwc_ds = load_dataset("pwc-archive/links-between-paper-and-code")
     assert isinstance(pwc_ds, DatasetDict)
     pwc_df = pwc_ds["train"].to_polars()
+    assert isinstance(pwc_df, pl.DataFrame)
     pwc_official = pwc_df.filter(pl.col("is_official"))
     print(f"  PwC full: {len(pwc_df):,} rows | PwC official-only: {len(pwc_official):,} rows")
 
@@ -149,8 +150,8 @@ def figure_2_dataset_coverage(output_dir: Path = u.OUTPUT_DIR) -> None:
     u.add_panel_label(axes[0], "A")
     u.add_panel_label(axes[1], "B")
 
-    _palette2 = u.general_palette(2)
-    family_green, family_orange = _palette2[0], _palette2[1]
+    palette2 = u.general_palette(2)
+    family_green, family_orange = palette2[0], palette2[1]
     mined_tint = "#8fd4bc"  # lighter tint of the family green, for the mined segment
 
     # Panel A: grouped horizontal bars -- rs-graph (stacked seed+mined) vs. PwC per field.
@@ -192,7 +193,7 @@ def figure_2_dataset_coverage(output_dir: Path = u.OUTPUT_DIR) -> None:
         label="Papers with Code (verified subset)",
     )
     axes[0].set_yticks(y_pos)
-    axes[0].set_yticklabels(field_order)
+    axes[0].set_yticklabels([u.abbreviate_field(f) for f in field_order])
     axes[0].invert_yaxis()
     axes[0].set_xlabel("Article-Repository Pairs")
 
@@ -217,7 +218,14 @@ def figure_2_dataset_coverage(output_dir: Path = u.OUTPUT_DIR) -> None:
         counts = np.zeros(len(years))
         for row in year_field.filter(pl.col("field7") == fname).iter_rows(named=True):
             counts[year_index[row["document_publication_year"]]] = row["count"]
-        axes[1].bar(years, counts, bottom=bottoms, color=color, width=0.8, label=fname)
+        axes[1].bar(
+            years,
+            counts,
+            bottom=bottoms,
+            color=color,
+            width=0.8,
+            label=u.abbreviate_field(fname),
+        )
         bottoms += counts
     axes[1].set_xlabel("Publication Year")
     axes[1].set_ylabel("Article-Repository Pairs")
@@ -239,7 +247,7 @@ def figure_2_dataset_coverage(output_dir: Path = u.OUTPUT_DIR) -> None:
     axes[1].set_xticks([y for y in years if y % 2 == 0])
     handles_b, labels_b = axes[1].get_legend_handles_labels()
     handles_b2, labels_b2 = ax_b2.get_legend_handles_labels()
-    # Legend outside the axes: no in-panel pocket stays clear of data at every year.
+    # Legend outside the axes; every in-panel position collides with data in some year.
     leg_b = axes[1].legend(
         handles_b + handles_b2,
         labels_b + labels_b2,
@@ -255,6 +263,19 @@ def figure_2_dataset_coverage(output_dir: Path = u.OUTPUT_DIR) -> None:
     u.shrink_ticks(ax_b2, size=9)
     if partial_year_note:
         u.print_caption_note("figure2_dataset_coverage Panel B", partial_year_note)
+
+    panel_a_abbrevs = u.field_abbreviation_caption(field_order)
+    if panel_a_abbrevs:
+        u.print_caption_note(
+            "figure2_dataset_coverage Panel A",
+            "Abbreviated field labels: " + panel_a_abbrevs,
+        )
+    panel_b_abbrevs = u.field_abbreviation_caption(b_fields)
+    if panel_b_abbrevs:
+        u.print_caption_note(
+            "figure2_dataset_coverage Panel B",
+            "Abbreviated field labels: " + panel_b_abbrevs,
+        )
 
     evaplot.adjust_layout(fig, bottom=0.22)
     u.save_figure(fig, "figure2_dataset_coverage", output_dir)

@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from pathlib import Path
 
 import polars as pl
@@ -24,7 +26,10 @@ def _print_stats(label: str, count: int, total: int) -> None:
 
 @app.command()
 def main() -> None:
+    """Report match rates and link-directionality stats for the threshold annotation set."""
     df = pl.read_csv(ANNOTATION_CSV_PATH)
+
+    # Keep labeled, non-unclear rows at or above the pair-confidence threshold
 
     df = df.filter(
         pl.col("label").is_not_null()

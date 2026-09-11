@@ -1,27 +1,21 @@
+#!/usr/bin/env python
+
 """
-THROWAWAY diagnostic script — cutoff (75 vs 85 vs 90) and name-column
-(software_name vs software_name_normalized) sensitivity comparison for
+Diagnostic for cutoff (75 vs 85 vs 90) and name-column (software_name vs
+software_name_normalized) sensitivity of
 rs_graph.utils.software_alignment.align_software_names(method="global_min_diff").
+Not part of the paper pipeline.
 
-Not part of the paper pipeline. Uncommitted per standing instruction: never commit
-without an explicit ask.
-
-Pulls real article-repository pair data from HF `sci-soft-collections/rs-graph-v2-full`,
+Pulls article-repository pair data from HF `sci-soft-collections/rs-graph-v2-full`,
 applies the standard paper filters (confidence >=0.9994 or NULL, published after 2008),
-takes a random sample of pairs that have both >=1 import and >=1 mention, and for each
-pair runs the import-vs-mention alignment at cutoffs 75/85/90, using both the raw
-`software_name` column and the `software_name_normalized` column (populated via
-`normalize_name()`, see `rs_graph/utils/identifier_normalization.py`), to see:
-  1. how much the matched-pair set differs across cutoffs (75 vs 85 vs 90), and
-  2. how much the matched-pair set differs between raw and normalized names.
+samples pairs with both >=1 import and >=1 mention, and runs the import-vs-mention
+alignment at each cutoff using both name columns to measure:
+  1. how the matched-pair set differs across cutoffs, and
+  2. how the matched-pair set differs between raw and normalized names.
 
-Note on (2): `align_software_names` already runs every name it's given through
-`normalize_name()` internally before scoring (see `software_alignment.py`), and that
-function is idempotent (its transforms -- lowercasing, stripping hyphens/underscores/
-spaces/newlines -- are all no-ops on a string that's already had them applied). So in
-principle raw and normalized inputs should produce byte-identical similarity matrices
-and match sets. This script verifies that empirically against real data rather than
-assuming it.
+On (2): `align_software_names` runs every input through `normalize_name()` before
+scoring, and `normalize_name()` is idempotent, so raw and normalized inputs should
+produce identical match sets. This script verifies that empirically.
 """
 
 import os
@@ -53,11 +47,34 @@ load_dotenv(str(RS_GRAPH_REPO_ROOT / ".env"))
 
 
 def load_table(table: str) -> pl.DataFrame:
+    """Load a single rs-graph table from HuggingFace as a polars DataFrame."""
     ds = load_dataset(DATASET_REPO, table, split="train", token=os.environ.get("HF_TOKEN"))
     assert isinstance(ds, Dataset)
     df = pl.from_arrow(ds.data.table)
     assert isinstance(df, pl.DataFrame)
     return df
+
+
+def _match_keys(df: pl.DataFrame) -> set[tuple]:
+    """(link_id, normalized import, normalized mention) key set for a match table."""
+    if df.height == 0:
+        return set()
+    return set(df.select("link_id", "normalized_item_one", "normalized_item_two").iter_rows())
+
+
+def _count_watched_collisions(df: pl.DataFrame, watch_pairs: set[tuple[str, str]]) -> int:
+    """Count rows whose normalized (import, mention) names hit a watched generic-word pair."""
+    if df.height == 0:
+        return 0
+    return df.filter(
+        pl.struct(["normalized_item_one", "normalized_item_two"]).map_elements(
+            lambda s: (
+                (s["normalized_item_one"], s["normalized_item_two"]) in watch_pairs
+                or (s["normalized_item_two"], s["normalized_item_one"]) in watch_pairs
+            ),
+            return_dtype=pl.Boolean,
+        )
+    ).height
 
 
 def align_at_all_cutoffs(
@@ -69,11 +86,9 @@ def align_at_all_cutoffs(
     use_alternates: bool = True,
 ) -> dict[float, list[dict]]:
     """
-    Same math as align_software_names, but builds the fuzzy similarity matrix once
-    and thresholds it at every cutoff in `cutoffs`, instead of recomputing the matrix
-    once per cutoff. With 3 cutoffs x 2 name columns x 10k pairs, recomputing the
-    (rapidfuzz) matrix per cutoff would waste a real amount of time for no benefit,
-    since the matrix itself doesn't depend on the cutoff at all.
+    Run the same matching math as align_software_names, but build the fuzzy
+    similarity matrix once and threshold it at every cutoff in `cutoffs`,
+    since the matrix does not depend on the cutoff.
     """
     if not items_a or not items_b:
         return {c: [] for c in cutoffs}
@@ -109,7 +124,10 @@ def align_at_all_cutoffs(
     return out
 
 
-def main() -> None:
+def _load_and_filter_pairs() -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+    """Load the base tables and apply the standard paper filters; return the filtered pair
+    table plus the repository_import and document_software_mention tables.
+    """
     print("Loading base tables from HuggingFace...")
     documents = load_table("document")
     article_repo_links = load_table("document_repository_link")
@@ -120,9 +138,7 @@ def main() -> None:
     print(f"  repository_import: {len(repository_imports):,} rows")
     print(f"  document_software_mention: {len(document_software_mentions):,} rows")
 
-    # Confirm software_name_normalized actually exists on both source tables before
-    # assuming we can use it (per task instruction -- don't just assume the column
-    # is present on the HF dataset the way it's present on the SQLModel schema).
+    # Confirm both name columns exist on both source tables
     for col in NAME_COLUMNS:
         assert col in repository_imports.columns, f"{col!r} missing from repository_import"
         assert col in document_software_mentions.columns, (
@@ -174,32 +190,31 @@ def main() -> None:
     )
     print(f"After restricting to pairs with >=1 import and >=1 mention: {len(merged):,} pairs")
 
-    # ---- Sample ----
-    all_pairs = merged.select("document_repository_link_id", "document_id", "repository_id")
-    n_available = len(all_pairs)
-    sample_n = min(SAMPLE_SIZE, n_available)
-    rng = random.Random(RANDOM_SEED)
-    sample_idx = rng.sample(range(n_available), sample_n)
-    sample = all_pairs[sample_idx]
-    print(f"\nSampling {sample_n:,} of {n_available:,} eligible pairs (seed={RANDOM_SEED}).")
+    return merged, repository_imports, document_software_mentions
 
-    # Pre-index imports/mentions for fast per-pair lookup, once per name column
-    imports_by_repo_by_col = {
+
+def _names_by_id_per_col(frame: pl.DataFrame, id_col: str) -> dict[str, dict]:
+    """Pre-index non-null name lists per `id_col` value, once per name column."""
+    return {
         col: {
-            repo_id[0]: grp.get_column(col).drop_nulls().to_list()
-            for repo_id, grp in repository_imports.group_by("repository_id")
-        }
-        for col in NAME_COLUMNS
-    }
-    mentions_by_doc_by_col = {
-        col: {
-            doc_id[0]: grp.get_column(col).drop_nulls().to_list()
-            for doc_id, grp in document_software_mentions.group_by("document_id")
+            key[0]: grp.get_column(col).drop_nulls().to_list()
+            for key, grp in frame.group_by(id_col)
         }
         for col in NAME_COLUMNS
     }
 
-    # ---- Run alignment for every (name_column, cutoff) combination, per pair ----
+
+def _align_sample(
+    sample: pl.DataFrame,
+    repository_imports: pl.DataFrame,
+    document_software_mentions: pl.DataFrame,
+) -> dict[str, dict[float, pl.DataFrame]]:
+    """Run the import-vs-mention alignment for every (name column, cutoff) combination on
+    every sampled pair; return match tables keyed by name column then cutoff.
+    """
+    imports_by_repo_by_col = _names_by_id_per_col(repository_imports, "repository_id")
+    mentions_by_doc_by_col = _names_by_id_per_col(document_software_mentions, "document_id")
+
     # results[name_col][cutoff] -> list of match rows (dicts, with link/doc/repo ids)
     results: dict[str, dict[float, list[dict]]] = {
         col: {c: [] for c in CUTOFFS} for col in NAME_COLUMNS
@@ -211,9 +226,8 @@ def main() -> None:
         repo_id = row["repository_id"]
         link_id = row["document_repository_link_id"]
 
-        # Only count a pair as "tested" once (against the raw column's availability;
-        # the normalized column has the same row-presence by construction since it's
-        # derived from the same source rows).
+        # Count a pair as tested once; both name columns share row-presence
+        # since they derive from the same source rows
         raw_imports = imports_by_repo_by_col["software_name"].get(repo_id, [])
         raw_mentions = mentions_by_doc_by_col["software_name"].get(doc_id, [])
         if not raw_imports or not raw_mentions:
@@ -240,7 +254,7 @@ def main() -> None:
 
     print(f"Pairs actually tested (both imports and mentions present): {n_pairs_tested:,}")
 
-    dfs = {
+    return {
         col: {
             c: (pl.DataFrame(results[col][c]) if results[col][c] else pl.DataFrame())
             for c in CUTOFFS
@@ -248,7 +262,9 @@ def main() -> None:
         for col in NAME_COLUMNS
     }
 
-    # ---- Per-column, per-cutoff match counts ----
+
+def _report_match_counts(dfs: dict[str, dict[float, pl.DataFrame]]) -> None:
+    """Print per-column, per-cutoff match counts."""
     print("\n" + "=" * 78)
     print("MATCH COUNTS BY NAME COLUMN AND CUTOFF")
     print("=" * 78)
@@ -256,7 +272,9 @@ def main() -> None:
         counts = {c: len(dfs[col][c]) for c in CUTOFFS}
         print(f"{col}: " + ", ".join(f"cutoff={c:g} -> {n:,}" for c, n in counts.items()))
 
-    # ---- Sanity check: stricter cutoff should never add matches absent at a looser one ----
+
+def _report_monotonicity(dfs: dict[str, dict[float, pl.DataFrame]]) -> None:
+    """Check that a stricter cutoff never adds matches absent at a looser one."""
     print("\n" + "=" * 78)
     print("MONOTONICITY SANITY CHECK (stricter cutoff must be a subset of looser one)")
     print("=" * 78)
@@ -267,37 +285,19 @@ def main() -> None:
             if len(df_loose) == 0 and len(df_strict) == 0:
                 print(f"{col}: {looser:g}->{stricter:g}: both empty")
                 continue
-            keys_loose = (
-                set(
-                    zip(
-                        df_loose["link_id"],
-                        df_loose["normalized_item_one"],
-                        df_loose["normalized_item_two"],
-                        strict=False,
-                    )
-                )
-                if len(df_loose) > 0
-                else set()
-            )
-            keys_strict = (
-                set(
-                    zip(
-                        df_strict["link_id"],
-                        df_strict["normalized_item_one"],
-                        df_strict["normalized_item_two"],
-                        strict=False,
-                    )
-                )
-                if len(df_strict) > 0
-                else set()
-            )
-            n_new_at_strict = len(keys_strict - keys_loose)
+            n_new_at_strict = len(_match_keys(df_strict) - _match_keys(df_loose))
             print(
                 f"{col}: matches at {stricter:g} not present at {looser:g} "
                 f"(should be 0): {n_new_at_strict}"
             )
 
-    # ---- Cutoff sensitivity, per column: matches at 75 that don't survive to 85 / 90 ----
+
+def _report_cutoff_sensitivity(
+    dfs: dict[str, dict[float, pl.DataFrame]],
+) -> dict[str, pl.DataFrame]:
+    """Annotate each column's @75 matches with whether they clear 85/90 and print drop
+    counts; return the annotated tables per name column.
+    """
     print("\n" + "=" * 78)
     print("CUTOFF SENSITIVITY (matches present at 75, by whether they clear 85 / 90)")
     print("=" * 78)
@@ -308,45 +308,21 @@ def main() -> None:
         if len(df75) == 0:
             cutoff_sensitivity_tables[col] = pl.DataFrame()
             continue
-        keys_85 = (
-            set(
-                zip(
-                    dfs[col][85.0]["link_id"],
-                    dfs[col][85.0]["normalized_item_one"],
-                    dfs[col][85.0]["normalized_item_two"],
-                    strict=False,
-                )
-            )
-            if len(dfs[col][85.0]) > 0
-            else set()
-        )
-        keys_90 = (
-            set(
-                zip(
-                    dfs[col][90.0]["link_id"],
-                    dfs[col][90.0]["normalized_item_one"],
-                    dfs[col][90.0]["normalized_item_two"],
-                    strict=False,
-                )
-            )
-            if len(dfs[col][90.0]) > 0
-            else set()
-        )
+        keys_85 = _match_keys(dfs[col][85.0])
+        keys_90 = _match_keys(dfs[col][90.0])
         annotated = df75.with_columns(
             pl.struct(["link_id", "normalized_item_one", "normalized_item_two"])
             .map_elements(
-                lambda s: (
-                    (s["link_id"], s["normalized_item_one"], s["normalized_item_two"])
-                    in keys_85
+                lambda s, keys=keys_85: (
+                    (s["link_id"], s["normalized_item_one"], s["normalized_item_two"]) in keys
                 ),
                 return_dtype=pl.Boolean,
             )
             .alias("clears_85"),
             pl.struct(["link_id", "normalized_item_one", "normalized_item_two"])
             .map_elements(
-                lambda s: (
-                    (s["link_id"], s["normalized_item_one"], s["normalized_item_two"])
-                    in keys_90
+                lambda s, keys=keys_90: (
+                    (s["link_id"], s["normalized_item_one"], s["normalized_item_two"]) in keys
                 ),
                 return_dtype=pl.Boolean,
             )
@@ -357,21 +333,27 @@ def main() -> None:
         n75 = len(df75)
         n_dropped_by_85 = n75 - int(annotated["clears_85"].sum())
         n_dropped_by_90 = n75 - int(annotated["clears_90"].sum())
-        n_dropped_75_to_85_only = n_dropped_by_85
         n_dropped_85_to_90 = int(annotated["clears_85"].sum()) - int(
             annotated["clears_90"].sum()
         )
         print(f"\n[{col}]")
         print(f"  matches @75: {n75:,}")
         print(
-            f"  dropped between 75->85: {n_dropped_75_to_85_only:,} ({100 * n_dropped_75_to_85_only / n75:.1f}% of @75)"
+            f"  dropped between 75->85: {n_dropped_by_85:,} "
+            f"({100 * n_dropped_by_85 / n75:.1f}% of @75)"
         )
         print(f"  dropped between 85->90: {n_dropped_85_to_90:,}")
         print(
             f"  total dropped 75->90: {n_dropped_by_90:,} ({100 * n_dropped_by_90 / n75:.1f}% of @75)"
         )
 
-    # ---- Raw vs normalized comparison, at each cutoff ----
+    return cutoff_sensitivity_tables
+
+
+def _report_raw_vs_normalized(dfs: dict[str, dict[float, pl.DataFrame]]) -> list[dict]:
+    """Compare match sets between raw and normalized name columns at each cutoff; return the
+    divergence rows (expected empty, since alignment normalizes any input it's given).
+    """
     print("\n" + "=" * 78)
     print("RAW (software_name) vs NORMALIZED (software_name_normalized) COMPARISON")
     print("=" * 78)
@@ -379,97 +361,50 @@ def main() -> None:
     for cutoff in CUTOFFS:
         df_raw = dfs["software_name"][cutoff]
         df_norm = dfs["software_name_normalized"][cutoff]
-        keys_raw = (
-            set(
-                zip(
-                    df_raw["link_id"],
-                    df_raw["normalized_item_one"],
-                    df_raw["normalized_item_two"],
-                    strict=False,
-                )
-            )
-            if len(df_raw) > 0
-            else set()
-        )
-        keys_norm = (
-            set(
-                zip(
-                    df_norm["link_id"],
-                    df_norm["normalized_item_one"],
-                    df_norm["normalized_item_two"],
-                    strict=False,
-                )
-            )
-            if len(df_norm) > 0
-            else set()
-        )
+        keys_raw = _match_keys(df_raw)
+        keys_norm = _match_keys(df_norm)
         only_raw = keys_raw - keys_norm
         only_norm = keys_norm - keys_raw
         print(
             f"cutoff={cutoff:g}: raw matches={len(df_raw):,}, normalized matches={len(df_norm):,}, "
             f"present in raw only={len(only_raw)}, present in normalized only={len(only_norm)}"
         )
-        for k in only_raw:
-            divergence_rows.append(
+        for present_in, keys in [("raw_only", only_raw), ("normalized_only", only_norm)]:
+            divergence_rows.extend(
                 {
                     "cutoff": cutoff,
-                    "present_in": "raw_only",
+                    "present_in": present_in,
                     "link_id": k[0],
                     "norm_import": k[1],
                     "norm_mention": k[2],
                 }
-            )
-        for k in only_norm:
-            divergence_rows.append(
-                {
-                    "cutoff": cutoff,
-                    "present_in": "normalized_only",
-                    "link_id": k[0],
-                    "norm_import": k[1],
-                    "norm_mention": k[2],
-                }
+                for k in keys
             )
 
-    # ---- Known generic-word false-positive collisions: does raising the cutoff help? ----
+    return divergence_rows
+
+
+def _report_generic_collisions(dfs: dict[str, dict[float, pl.DataFrame]]) -> None:
+    """Report whether known generic-word false-positive collisions survive higher cutoffs."""
     print("\n" + "=" * 78)
-    print("KNOWN GENERIC-WORD COLLISIONS (from the prior 3,000-pair / cutoff=75-vs-90 round)")
+    print("KNOWN GENERIC-WORD COLLISIONS (does raising the cutoff remove them?)")
     print("=" * 78)
     watch_pairs = {("coda", "code"), ("core", "code"), ("packaging", "package")}
     for col in NAME_COLUMNS:
         df75 = dfs[col][75.0]
         if len(df75) == 0:
             continue
-        hits = df75.filter(
-            pl.struct(["normalized_item_one", "normalized_item_two"]).map_elements(
-                lambda s: (
-                    (s["normalized_item_one"], s["normalized_item_two"]) in watch_pairs
-                    or (s["normalized_item_two"], s["normalized_item_one"]) in watch_pairs
-                ),
-                return_dtype=pl.Boolean,
-            )
-        )
-        print(f"[{col}] occurrences of watched generic-word collisions @75: {len(hits):,}")
+        n_hits = _count_watched_collisions(df75, watch_pairs)
+        print(f"[{col}] occurrences of watched generic-word collisions @75: {n_hits:,}")
         for c in [85.0, 90.0]:
-            dfc = dfs[col][c]
-            if len(dfc) == 0:
-                still = 0
-            else:
-                still = len(
-                    dfc.filter(
-                        pl.struct(["normalized_item_one", "normalized_item_two"]).map_elements(
-                            lambda s: (
-                                (s["normalized_item_one"], s["normalized_item_two"])
-                                in watch_pairs
-                                or (s["normalized_item_two"], s["normalized_item_one"])
-                                in watch_pairs
-                            ),
-                            return_dtype=pl.Boolean,
-                        )
-                    )
-                )
+            still = _count_watched_collisions(dfs[col][c], watch_pairs)
             print(f"  still present @{c:g}: {still:,}")
 
-    # ---- Save outputs ----
+
+def _save_outputs(
+    cutoff_sensitivity_tables: dict[str, pl.DataFrame], divergence_rows: list[dict]
+) -> None:
+    """Write the cutoff-sensitivity and divergence tables to CSV."""
     SUPPLEMENTAL_DIR.mkdir(parents=True, exist_ok=True)
 
     main_table = cutoff_sensitivity_tables.get("software_name", pl.DataFrame())
@@ -498,6 +433,9 @@ def main() -> None:
         f"since align_software_names normalizes any input it's given) written to: {out_path_div}"
     )
 
+
+def _print_top_cutoff_sensitive(main_table: pl.DataFrame) -> None:
+    """Print the 30 highest-scoring @75 matches with their 85/90 survival flags."""
     print("\n" + "=" * 78)
     print("TOP 30 CUTOFF-SENSITIVE PAIRS (raw software_name, present@75, sorted by score desc)")
     print("=" * 78)
@@ -510,6 +448,29 @@ def main() -> None:
                 f"{r['item_one'][:27]:<28} {r['item_two'][:27]:<28} {r['score']:>7.2f} "
                 f"{'Y' if r['clears_85'] else 'N':>5} {'Y' if r['clears_90'] else 'N':>5}"
             )
+
+
+def main() -> None:
+    merged, repository_imports, document_software_mentions = _load_and_filter_pairs()
+
+    # Sample eligible pairs
+    all_pairs = merged.select("document_repository_link_id", "document_id", "repository_id")
+    n_available = len(all_pairs)
+    sample_n = min(SAMPLE_SIZE, n_available)
+    rng = random.Random(RANDOM_SEED)
+    sample_idx = rng.sample(range(n_available), sample_n)
+    sample = all_pairs[sample_idx]
+    print(f"\nSampling {sample_n:,} of {n_available:,} eligible pairs (seed={RANDOM_SEED}).")
+
+    dfs = _align_sample(sample, repository_imports, document_software_mentions)
+
+    _report_match_counts(dfs)
+    _report_monotonicity(dfs)
+    cutoff_sensitivity_tables = _report_cutoff_sensitivity(dfs)
+    divergence_rows = _report_raw_vs_normalized(dfs)
+    _report_generic_collisions(dfs)
+    _save_outputs(cutoff_sensitivity_tables, divergence_rows)
+    _print_top_cutoff_sensitive(cutoff_sensitivity_tables.get("software_name", pl.DataFrame()))
 
 
 if __name__ == "__main__":

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import random
 from collections import deque
+from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
 
 import evaplot
@@ -227,46 +229,577 @@ def _build_quadpartite_graph(
     node_idx: dict[tuple[str, int], int] = {}
     doc_fields = doc_fields or {}
 
-    def _add_node(node_type: str, node_id: int) -> int:
+    def _resolve_node(node_type: str, node_id: int, create: bool) -> int | None:
         key = (node_type, node_id)
-        if key not in node_idx:
-            payload = {"type": node_type, "id": node_id}
-            if node_type == "article":
-                payload["group"] = doc_fields.get(node_id, "Other")
-            node_idx[key] = graph.add_node(payload)
+        if key in node_idx:
+            return node_idx[key]
+        if not create:
+            return None
+        payload: dict[str, str | int] = {"type": node_type, "id": node_id}
+        if node_type == "article":
+            payload["group"] = doc_fields.get(node_id, "Other")
+        node_idx[key] = graph.add_node(payload)
         return node_idx[key]
 
-    for row in sampled_pairs.iter_rows(named=True):
-        doc_i = _add_node("article", row["document_id"])
-        repo_i = _add_node("repository", row["repository_id"])
-        if not graph.has_edge(doc_i, repo_i):
-            graph.add_edge(doc_i, repo_i, {"type": "article_repository_link"})
-
-    for row in doc_authors.iter_rows(named=True):
-        doc_i = node_idx.get(("article", row["document_id"]))
-        if doc_i is None:
-            continue
-        res_i = _add_node("researcher", row["researcher_id"])
-        if not graph.has_edge(doc_i, res_i):
-            graph.add_edge(doc_i, res_i, {"type": "authored_by"})
-
-    for row in repo_devs.iter_rows(named=True):
-        repo_i = node_idx.get(("repository", row["repository_id"]))
-        if repo_i is None:
-            continue
-        dev_i = _add_node("developer", row["developer_account_id"])
-        if not graph.has_edge(repo_i, dev_i):
-            graph.add_edge(repo_i, dev_i, {"type": "contributed_to"})
-
-    for row in identity_edges.iter_rows(named=True):
-        res_i = node_idx.get(("researcher", row["researcher_id"]))
-        dev_i = node_idx.get(("developer", row["developer_account_id"]))
-        if res_i is None or dev_i is None:
-            continue
-        if not graph.has_edge(res_i, dev_i):
-            graph.add_edge(res_i, dev_i, {"type": "identity"})
+    # (frame, (source type, source column, create source), (target ditto), edge type);
+    # existing-only endpoints (create=False) skip rows whose entity was never sampled.
+    edge_specs: list[tuple[pl.DataFrame, tuple[str, str, bool], tuple[str, str, bool], str]] = [
+        (
+            sampled_pairs,
+            ("article", "document_id", True),
+            ("repository", "repository_id", True),
+            "article_repository_link",
+        ),
+        (
+            doc_authors,
+            ("article", "document_id", False),
+            ("researcher", "researcher_id", True),
+            "authored_by",
+        ),
+        (
+            repo_devs,
+            ("repository", "repository_id", False),
+            ("developer", "developer_account_id", True),
+            "contributed_to",
+        ),
+        (
+            identity_edges,
+            ("researcher", "researcher_id", False),
+            ("developer", "developer_account_id", False),
+            "identity",
+        ),
+    ]
+    for frame, (src_type, src_col, create_src), (
+        tgt_type,
+        tgt_col,
+        create_tgt,
+    ), etype in edge_specs:
+        for row in frame.iter_rows(named=True):
+            src_i = _resolve_node(src_type, row[src_col], create_src)
+            if src_i is None:
+                continue
+            tgt_i = _resolve_node(tgt_type, row[tgt_col], create_tgt)
+            if tgt_i is None:
+                continue
+            if not graph.has_edge(src_i, tgt_i):
+                graph.add_edge(src_i, tgt_i, {"type": etype})
 
     return graph
+
+
+###############################################################################
+# Snowball sampling
+
+
+@dataclass
+class _SnowballLookups:
+    """Adjacency lookups over the filtered pairs, keyed for the snowball walk."""
+
+    pair_doc: dict[int, int]
+    pair_repo: dict[int, int]
+    doc_authors_ordered: dict[int, list[int]]
+    repo_devs_ordered: dict[int, list[int]]
+    researcher_pairs: dict[int, list[int]]
+    developer_pairs: dict[int, list[int]]
+    identity_r2d: dict[int, list[int]]
+    identity_d2r: dict[int, list[int]]
+    identity_links: list[tuple[int, int]]
+
+
+def _ordered_membership(
+    frame: pl.DataFrame, key_col: str, value_col: str, allowed_keys: dict[int, list[int]]
+) -> dict[int, list[int]]:
+    """Group `value_col` values per `key_col`, keeping frame row order, for allowed keys."""
+    membership: dict[int, list[int]] = {}
+    for key, value in frame.select(key_col, value_col).iter_rows():
+        if key in allowed_keys:
+            membership.setdefault(key, []).append(value)
+    return membership
+
+
+def _entity_pair_reach(
+    membership: dict[int, list[int]], pairs_by_key: dict[int, list[int]]
+) -> dict[int, list[int]]:
+    """Invert membership into pairs reachable per entity."""
+    reach: dict[int, list[int]] = {}
+    for key, entities in membership.items():
+        for entity_id in entities:
+            reach.setdefault(entity_id, []).extend(pairs_by_key[key])
+    return reach
+
+
+def _build_snowball_lookups(
+    pair_frame: pl.DataFrame,
+    document_contributors: pl.DataFrame,
+    repository_contributors: pl.DataFrame,
+    rdal: pl.DataFrame,
+) -> _SnowballLookups:
+    """Build every adjacency lookup the snowball walk needs from the raw frames."""
+    pair_doc: dict[int, int] = {}
+    pair_repo: dict[int, int] = {}
+    doc_pairs: dict[int, list[int]] = {}
+    repo_pairs: dict[int, list[int]] = {}
+    for pid, doc_id, repo_id in pair_frame.iter_rows():
+        pair_doc[pid] = doc_id
+        pair_repo[pid] = repo_id
+        doc_pairs.setdefault(doc_id, []).append(pid)
+        repo_pairs.setdefault(repo_id, []).append(pid)
+
+    doc_authors_ordered = _ordered_membership(
+        document_contributors, "document_id", "researcher_id", doc_pairs
+    )
+    repo_devs_ordered = _ordered_membership(
+        repository_contributors, "repository_id", "developer_account_id", repo_pairs
+    )
+    researcher_pairs = _entity_pair_reach(doc_authors_ordered, doc_pairs)
+    developer_pairs = _entity_pair_reach(repo_devs_ordered, repo_pairs)
+
+    identity_r2d: dict[int, list[int]] = {}
+    identity_d2r: dict[int, list[int]] = {}
+    identity_links: list[tuple[int, int]] = []
+    for researcher_id, dev_id in (
+        rdal.select("researcher_id", "developer_account_id")
+        .unique(maintain_order=True)
+        .iter_rows()
+    ):
+        identity_r2d.setdefault(researcher_id, []).append(dev_id)
+        identity_d2r.setdefault(dev_id, []).append(researcher_id)
+        identity_links.append((researcher_id, dev_id))
+
+    return _SnowballLookups(
+        pair_doc=pair_doc,
+        pair_repo=pair_repo,
+        doc_authors_ordered=doc_authors_ordered,
+        repo_devs_ordered=repo_devs_ordered,
+        researcher_pairs=researcher_pairs,
+        developer_pairs=developer_pairs,
+        identity_r2d=identity_r2d,
+        identity_d2r=identity_d2r,
+        identity_links=identity_links,
+    )
+
+
+def _select_anchors(
+    lookups: _SnowballLookups,
+    n_top_hub_anchors: int,
+    n_random_hub_anchors: int,
+    min_anchor_pair_degree: int,
+    rng: random.Random,
+) -> list[tuple[int, int]]:
+    """Rank identity links by pair-degree; top hubs first, then a shuffled qualifying tail."""
+    degree_by_link = [
+        (
+            len(lookups.researcher_pairs.get(r, [])) + len(lookups.developer_pairs.get(d, [])),
+            r,
+            d,
+        )
+        for r, d in lookups.identity_links
+    ]
+    degree_by_link.sort(key=lambda t: (-t[0], t[1], t[2]))
+    top_anchors = [(r, d) for _deg, r, d in degree_by_link[:n_top_hub_anchors]]
+    tail_candidates = [
+        (r, d)
+        for deg, r, d in degree_by_link[n_top_hub_anchors:]
+        if deg >= min_anchor_pair_degree
+    ]
+    rng.shuffle(tail_candidates)
+    print(
+        f"Anchors: {len(top_anchors)} top hubs (max pair-degree "
+        f"{degree_by_link[0][0] if degree_by_link else 0:,}) + "
+        f"{min(n_random_hub_anchors, len(tail_candidates)):,} stratified random of "
+        f"{len(tail_candidates):,} identities with pair-degree >= {min_anchor_pair_degree} "
+        "(remainder held as reserve)."
+    )
+    return top_anchors + tail_candidates  # planned anchors first; rest is the reserve
+
+
+def _capped_entities(
+    ordered: list[int], identity_map: dict[int, list[int]], cap: int
+) -> list[int]:
+    """First `cap` entities plus any identity-linked ones, so the cap never severs
+    identity edges.
+    """
+    kept = list(ordered[:cap])
+    kept += [e for e in ordered[cap:] if e in identity_map]
+    return list(dict.fromkeys(kept))
+
+
+def _pair_expansions(pid: int, lookups: _SnowballLookups, cap: int) -> Iterator[list[int]]:
+    """Yield the candidate-pair lists one popped pair contributes: per capped author, that
+    author's pairs then each identity-linked developer's pairs; then likewise per capped
+    developer.
+    """
+    for researcher_id in _capped_entities(
+        lookups.doc_authors_ordered.get(lookups.pair_doc[pid], []), lookups.identity_r2d, cap
+    ):
+        yield lookups.researcher_pairs.get(researcher_id, [])
+        for dev_id in lookups.identity_r2d.get(researcher_id, []):
+            yield lookups.developer_pairs.get(dev_id, [])
+    for dev_id in _capped_entities(
+        lookups.repo_devs_ordered.get(lookups.pair_repo[pid], []), lookups.identity_d2r, cap
+    ):
+        yield lookups.developer_pairs.get(dev_id, [])
+        for researcher_id in lookups.identity_d2r.get(dev_id, []):
+            yield lookups.researcher_pairs.get(researcher_id, [])
+
+
+def _admit_pairs(
+    candidate_pairs: list[int],
+    sampled: set[int],
+    frontier: deque[int],
+    budget: int,
+    max_pairs_per_entity: int,
+    rng: random.Random,
+) -> None:
+    """Admit up to `max_pairs_per_entity` unseen candidates (seeded subsample) into the
+    sample and frontier, stopping at the budget.
+    """
+    new = [p for p in dict.fromkeys(candidate_pairs) if p not in sampled]
+    if len(new) > max_pairs_per_entity:
+        new = rng.sample(new, max_pairs_per_entity)
+    for p in new:
+        if len(sampled) >= budget:
+            return
+        sampled.add(p)
+        frontier.append(p)
+
+
+def _snowball_sample(
+    lookups: _SnowballLookups,
+    anchor_queue: list[tuple[int, int]],
+    n_planned_anchors: int,
+    budget: int,
+    max_pairs_per_entity: int,
+    max_contributors_per_side: int,
+    rng: random.Random,
+) -> tuple[set[int], int]:
+    """BFS over pairs mediated by entities; returns the sampled pair ids and the number of
+    anchors used.
+    """
+    sampled: set[int] = set()
+    frontier: deque[int] = deque()
+
+    def _add_pairs(candidate_pairs: list[int]) -> None:
+        _admit_pairs(candidate_pairs, sampled, frontier, budget, max_pairs_per_entity, rng)
+
+    # Seed all planned anchors' pairs up front so the sample spans every anchor neighborhood
+    # rather than exhausting the budget on the first hub's BFS; the remaining tail is a
+    # reserve drawn only if the frontier empties below budget.
+    n_anchors_used = 0
+    for anchor_r, anchor_d in anchor_queue[:n_planned_anchors]:
+        if len(sampled) >= budget:
+            break
+        n_anchors_used += 1
+        _add_pairs(lookups.researcher_pairs.get(anchor_r, []))
+        _add_pairs(lookups.developer_pairs.get(anchor_d, []))
+    anchor_queue = anchor_queue[n_anchors_used:]
+
+    while len(sampled) < budget:
+        if not frontier:
+            if not anchor_queue:
+                break
+            anchor_r, anchor_d = anchor_queue.pop(0)
+            n_anchors_used += 1
+            _add_pairs(lookups.researcher_pairs.get(anchor_r, []))
+            if len(sampled) >= budget:
+                break
+            _add_pairs(lookups.developer_pairs.get(anchor_d, []))
+            continue
+        pid = frontier.popleft()
+        for candidate_pairs in _pair_expansions(pid, lookups, max_contributors_per_side):
+            _add_pairs(candidate_pairs)
+            if len(sampled) >= budget:
+                break
+
+    return sampled, n_anchors_used
+
+
+def _sampled_entity_frames(
+    sampled_pairs: pl.DataFrame, lookups: _SnowballLookups, cap: int
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Authorship and contribution frames for the sampled pairs, with the same
+    cap-plus-always-include-identity rule the walk used.
+    """
+    author_rows = [
+        (doc_id, researcher_id)
+        for doc_id in sampled_pairs.get_column("document_id")
+        .unique(maintain_order=True)
+        .to_list()
+        for researcher_id in _capped_entities(
+            lookups.doc_authors_ordered.get(doc_id, []), lookups.identity_r2d, cap
+        )
+    ]
+    dev_rows = [
+        (repo_id, dev_id)
+        for repo_id in sampled_pairs.get_column("repository_id")
+        .unique(maintain_order=True)
+        .to_list()
+        for dev_id in _capped_entities(
+            lookups.repo_devs_ordered.get(repo_id, []), lookups.identity_d2r, cap
+        )
+    ]
+    doc_authors = pl.DataFrame(
+        {
+            "document_id": [r[0] for r in author_rows],
+            "researcher_id": [r[1] for r in author_rows],
+        }
+    )
+    repo_devs = pl.DataFrame(
+        {
+            "repository_id": [r[0] for r in dev_rows],
+            "developer_account_id": [r[1] for r in dev_rows],
+        }
+    )
+    return doc_authors, repo_devs
+
+
+###############################################################################
+# Drawing
+
+
+def _edge_segments(
+    graph: rx.PyGraph, positions: dict[int, tuple[float, float]], etype: str
+) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """Position segments for every edge of one type."""
+    return [
+        (positions[src], positions[tgt])
+        for edge_idx in graph.edge_indices()
+        if graph.get_edge_data_by_index(edge_idx)["type"] == etype
+        for src, tgt in [graph.get_edge_endpoints_by_index(edge_idx)]
+    ]
+
+
+def _node_positions_by_type(
+    graph: rx.PyGraph, positions: dict[int, tuple[float, float]], ntype: str
+) -> tuple[list[float], list[float]]:
+    """X and y coordinate lists for every node of one type."""
+    xs: list[float] = []
+    ys: list[float] = []
+    for node_i in graph.node_indices():
+        if graph[node_i]["type"] == ntype:
+            x, y = positions[node_i]
+            xs.append(x)
+            ys.append(y)
+    return xs, ys
+
+
+def _marker_handle(
+    marker: str, color: str, label: str, hollow: bool = False, size: int = 7
+) -> mlines.Line2D:
+    """Legend handle for a node marker."""
+    return mlines.Line2D(
+        [],
+        [],
+        marker=marker,
+        color="none",
+        markerfacecolor="none" if hollow else color,
+        markeredgecolor=color,
+        linestyle="None",
+        markersize=size,
+        label=label,
+    )
+
+
+def _draw_quadpartite_network(
+    graph: rx.PyGraph,
+    positions: dict[int, tuple[float, float]],
+    canvas_width: float,
+    canvas_height: float,
+    caption: str,
+    output_dir: Path,
+    field_order: list[str],
+    stem: str = "figure1_quadpartite_network",
+) -> None:
+    """Draw and save one Figure 1 render: only articles carry color (by field, matching
+    Figure 2 Panel B's palette); repositories/researchers/developers are grey outline-only
+    shapes; all edges uniform grey differentiated by alpha/linewidth; LineCollections and
+    scatters rasterized so the PDF stays small and fast to open.
+    """
+    # Shared field-to-color assignment used by every per-field figure.
+    field_colors = u.field_color_map([*field_order, "Other"])
+    # Repositories get their own light, non-grey color -- muted sky blue, colorblind-safe and
+    # unused by any of the six field colors; people nodes stay very light transparent grey.
+    repo_color = "#56B4E9"
+    people_grey = "#cccccc"
+
+    # Uniform grey edges: edge type is differentiated only by alpha/linewidth, never by hue.
+    edge_grey = "#999999"
+    edge_style = {
+        "authored_by": {"color": edge_grey, "lw": 0.25, "ls": "-", "zorder": 1, "alpha": 0.06},
+        "contributed_to": {
+            "color": edge_grey,
+            "lw": 0.25,
+            "ls": "-",
+            "zorder": 1,
+            "alpha": 0.06,
+        },
+        "article_repository_link": {
+            "color": edge_grey,
+            "lw": 0.5,
+            "ls": "-",
+            "zorder": 2,
+            "alpha": 0.15,
+        },
+        "identity": {"color": edge_grey, "lw": 0.7, "ls": "-", "zorder": 3, "alpha": 0.15},
+    }
+    marker_size = 3.5
+    people_marker_size = 2.5
+    node_alpha = 0.5
+    marker_lw = 0.25
+
+    ref_canvas_extent = 143.2  # canvas width measured at the 2,000-seed-pair calibration run
+    canvas_extent = max(canvas_width, canvas_height)
+    figsize_in = min(22.0, max(14.0, 14.0 * canvas_extent / ref_canvas_extent))
+
+    fig, ax = plt.subplots(figsize=(figsize_in, figsize_in))
+
+    for etype, style in edge_style.items():
+        segments = _edge_segments(graph, positions, etype)
+        if not segments:
+            continue
+        ax.add_collection(
+            LineCollection(
+                segments,
+                colors=style["color"],
+                linewidths=style["lw"],
+                linestyles=style["ls"],
+                zorder=style["zorder"],
+                alpha=style["alpha"],
+                rasterized=True,
+            )
+        )
+    ax.autoscale_view()
+
+    # Colored, filled article nodes (grouped by field) -- the only color-encoded node type.
+    xs_by_group: dict[str, list[float]] = {}
+    ys_by_group: dict[str, list[float]] = {}
+    for node_i in graph.node_indices():
+        nd = graph[node_i]
+        if nd["type"] != "article":
+            continue
+        group = nd.get("group", "Other")
+        x, y = positions[node_i]
+        xs_by_group.setdefault(group, []).append(x)
+        ys_by_group.setdefault(group, []).append(y)
+    for group, xs in xs_by_group.items():
+        ax.scatter(
+            xs,
+            ys_by_group[group],
+            c=field_colors.get(group, u.FIELD_OTHER_COLOR),
+            marker="o",
+            s=marker_size,
+            alpha=node_alpha,
+            edgecolors="none",
+            linewidths=marker_lw,
+            zorder=4,
+            rasterized=True,
+        )
+
+    # Outline-only shapes for everything else: repositories in their own light blue at
+    # article-node size; people-nodes stay smallest, very light, and transparent.
+    for ntype, marker, edge_color, size, alpha in [
+        ("repository", "s", repo_color, marker_size, node_alpha),
+        ("researcher", "D", people_grey, people_marker_size, 0.3),
+        ("developer", "^", people_grey, people_marker_size, 0.3),
+    ]:
+        xs, ys = _node_positions_by_type(graph, positions, ntype)
+        if not xs:
+            continue
+        ax.scatter(
+            xs,
+            ys,
+            facecolors="none",
+            edgecolors=edge_color,
+            marker=marker,
+            s=size,
+            alpha=alpha,
+            linewidths=marker_lw,
+            zorder=4,
+            rasterized=True,
+        )
+
+    legend_handles = [
+        _marker_handle("o", field_colors[f], f"Article: {f}") for f in [*field_order, "Other"]
+    ]
+    legend_handles += [
+        _marker_handle("s", repo_color, "Repository", hollow=True),
+        _marker_handle("D", people_grey, "Researcher (author)", hollow=True),
+        _marker_handle("^", people_grey, "Developer account", hollow=True),
+        mlines.Line2D([], [], color=edge_grey, lw=1.2, label="Authorship / contribution"),
+        mlines.Line2D([], [], color=edge_grey, lw=1.5, label="Article-repository link"),
+        mlines.Line2D([], [], color=edge_grey, lw=1.8, label="Researcher-developer identity"),
+    ]
+
+    legend = ax.legend(
+        handles=legend_handles,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.08),
+        ncol=4,
+        fontsize=12,
+    )
+    u.style_legend(legend, fontsize=12)
+
+    ax.set_axis_off()
+    ax.set_aspect("equal")
+    u.print_caption_note(stem, caption)
+
+    u.save_figure(fig, stem, output_dir)
+    plt.close(fig)
+
+
+def _render_layouts(
+    graph: rx.PyGraph,
+    layout: str,
+    seed: int,
+    caption_base: str,
+    output_dir: Path,
+    field_order: list[str],
+) -> None:
+    """Compute the requested layout(s) and draw a figure per layout. Spring is the primary
+    output; ForceAtlas2 is an additional variant; any other `layout` value keeps the
+    per-component packed layout available.
+    """
+    if layout in ("both", "spring", "forceatlas2"):
+        print("\nComputing global spring layout...")
+        positions, canvas_width, canvas_height = _global_spring_layout(graph, seed=seed)
+        if layout in ("both", "spring"):
+            _draw_quadpartite_network(
+                graph,
+                positions,
+                canvas_width,
+                canvas_height,
+                caption_base,
+                output_dir,
+                field_order,
+                stem="figure1_quadpartite_network",
+            )
+        if layout in ("both", "forceatlas2"):
+            print("\nComputing ForceAtlas2 layout (warm-started from spring positions)...")
+            fa2_positions = _forceatlas2_positions(graph, positions, seed=seed)
+            xs = [p[0] for p in fa2_positions.values()]
+            ys = [p[1] for p in fa2_positions.values()]
+            _draw_quadpartite_network(
+                graph,
+                fa2_positions,
+                max(xs),
+                max(ys),
+                caption_base,
+                output_dir,
+                field_order,
+                stem="figure1_quadpartite_network_forceatlas2",
+            )
+    else:
+        positions, canvas_width, canvas_height = _pack_components_layout(graph, seed=seed)
+        _draw_quadpartite_network(
+            graph,
+            positions,
+            canvas_width,
+            canvas_height,
+            caption_base,
+            output_dir,
+            field_order,
+            stem="figure1_quadpartite_network",
+        )
 
 
 ###############################################################################
@@ -291,8 +824,8 @@ def figure_1_quadpartite_network(
     Panels 2/3 of Figure 1 (the growth-model and workflow diagrams) are hand-made images and
     out of scope here.
 
-    Sampling: SNOWBALL from well-linked identity hubs, rather than a uniform-random pair
-    sample (two randomly sampled pairs are bridged only if both happen to be drawn AND share
+    Sampling: snowball from well-linked identity hubs, rather than a uniform-random pair
+    sample (two randomly sampled pairs are bridged only if both happen to be drawn and share
     an entity, which is rare, so random samples look artificially fragmented). Design:
 
       - Anchors: the top `n_top_hub_anchors` identity links (researcher, developer) by
@@ -300,7 +833,7 @@ def figure_1_quadpartite_network(
         uniformly sampled identities with pair-degree >= `min_anchor_pair_degree` (seeded) --
         the stratified tail keeps the figure from over-representing anomalous mega-hubs.
       - Growth: BFS over pairs, mediated by entities. Each popped pair contributes up to
-        `max_contributors_per_side` authors/contributors PLUS, always, any identity-linked
+        `max_contributors_per_side` authors/contributors plus, always, any identity-linked
         author/contributor (a hard cap alone would sever identity edges whenever the linked
         person isn't among the first contributor rows). Each collected entity (and its
         identity counterpart) contributes up to `max_pairs_per_entity` new pairs (seeded
@@ -328,184 +861,46 @@ def figure_1_quadpartite_network(
         f"{len(rdal):,} remain after confidence >= {rdal_confidence_threshold} filter."
     )
 
-    # ---- Lookup structures for the snowball walk ----
     pair_frame = pairs.select(
         pl.col("document_repository_link_id").alias("pair_id"), "document_id", "repository_id"
     )
-    pair_doc: dict[int, int] = {}
-    pair_repo: dict[int, int] = {}
-    doc_pairs: dict[int, list[int]] = {}
-    repo_pairs: dict[int, list[int]] = {}
-    for pid, doc_id, repo_id in pair_frame.iter_rows():
-        pair_doc[pid] = doc_id
-        pair_repo[pid] = repo_id
-        doc_pairs.setdefault(doc_id, []).append(pid)
-        repo_pairs.setdefault(repo_id, []).append(pid)
-
-    doc_authors_ordered: dict[int, list[int]] = {}
-    for doc_id, researcher_id in document_contributors.select(
-        "document_id", "researcher_id"
-    ).iter_rows():
-        if doc_id in doc_pairs:
-            doc_authors_ordered.setdefault(doc_id, []).append(researcher_id)
-    repo_devs_ordered: dict[int, list[int]] = {}
-    for repo_id, dev_id in repository_contributors.select(
-        "repository_id", "developer_account_id"
-    ).iter_rows():
-        if repo_id in repo_pairs:
-            repo_devs_ordered.setdefault(repo_id, []).append(dev_id)
-
-    researcher_pairs: dict[int, list[int]] = {}
-    for doc_id, authors in doc_authors_ordered.items():
-        for researcher_id in authors:
-            researcher_pairs.setdefault(researcher_id, []).extend(doc_pairs[doc_id])
-    developer_pairs: dict[int, list[int]] = {}
-    for repo_id, devs in repo_devs_ordered.items():
-        for dev_id in devs:
-            developer_pairs.setdefault(dev_id, []).extend(repo_pairs[repo_id])
-
-    identity_r2d: dict[int, list[int]] = {}
-    identity_d2r: dict[int, list[int]] = {}
-    identity_links: list[tuple[int, int]] = []
-    for researcher_id, dev_id in (
-        rdal.select("researcher_id", "developer_account_id").unique().iter_rows()
-    ):
-        identity_r2d.setdefault(researcher_id, []).append(dev_id)
-        identity_d2r.setdefault(dev_id, []).append(researcher_id)
-        identity_links.append((researcher_id, dev_id))
-
-    # ---- Hub selection: pair-degree per identity link, stratified anchors ----
-    degree_by_link = [
-        (
-            len(researcher_pairs.get(r, [])) + len(developer_pairs.get(d, [])),
-            r,
-            d,
-        )
-        for r, d in identity_links
-    ]
-    degree_by_link.sort(key=lambda t: (-t[0], t[1], t[2]))
-    top_anchors = [(r, d) for _deg, r, d in degree_by_link[:n_top_hub_anchors]]
-    tail_candidates = [
-        (r, d)
-        for deg, r, d in degree_by_link[n_top_hub_anchors:]
-        if deg >= min_anchor_pair_degree
-    ]
-    rng.shuffle(tail_candidates)
-    anchor_queue = top_anchors + tail_candidates  # first 25+75 planned; rest is the reserve
-    print(
-        f"Anchors: {len(top_anchors)} top hubs (max pair-degree "
-        f"{degree_by_link[0][0] if degree_by_link else 0:,}) + "
-        f"{min(n_random_hub_anchors, len(tail_candidates)):,} stratified random of "
-        f"{len(tail_candidates):,} identities with pair-degree >= {min_anchor_pair_degree} "
-        "(remainder held as reserve)."
+    lookups = _build_snowball_lookups(
+        pair_frame, document_contributors, repository_contributors, rdal
+    )
+    anchor_queue = _select_anchors(
+        lookups, n_top_hub_anchors, n_random_hub_anchors, min_anchor_pair_degree, rng
     )
 
-    # ---- Snowball BFS over pairs ----
-    budget = min(n_pairs, len(pair_doc))
-    sampled: set[int] = set()
-    frontier: deque[int] = deque()
-
-    def _add_pairs(candidate_pairs: list[int]) -> None:
-        new = [p for p in dict.fromkeys(candidate_pairs) if p not in sampled]
-        if len(new) > max_pairs_per_entity:
-            new = rng.sample(new, max_pairs_per_entity)
-        for p in new:
-            if len(sampled) >= budget:
-                return
-            sampled.add(p)
-            frontier.append(p)
-
-    def _collect_entities(ordered: list[int], identity_map: dict[int, list[int]]) -> list[int]:
-        # Cap at max_contributors_per_side, but always include identity-linked entities so
-        # the cap never severs identity edges.
-        kept = list(ordered[:max_contributors_per_side])
-        kept += [e for e in ordered[max_contributors_per_side:] if e in identity_map]
-        return list(dict.fromkeys(kept))
-
-    # Seed ALL planned anchors' pairs up front so the sample spans every anchor neighborhood
-    # rather than exhausting the budget on the first hub's BFS; the remaining tail is a
-    # reserve drawn only if the frontier empties below budget.
-    n_anchors_used = 0
-    for anchor_r, anchor_d in anchor_queue[: n_top_hub_anchors + n_random_hub_anchors]:
-        if len(sampled) >= budget:
-            break
-        n_anchors_used += 1
-        _add_pairs(researcher_pairs.get(anchor_r, []))
-        _add_pairs(developer_pairs.get(anchor_d, []))
-    anchor_queue = anchor_queue[n_anchors_used:]
-
-    while len(sampled) < budget:
-        if not frontier:
-            if not anchor_queue:
-                break
-            anchor_r, anchor_d = anchor_queue.pop(0)
-            n_anchors_used += 1
-            _add_pairs(researcher_pairs.get(anchor_r, []))
-            if len(sampled) >= budget:
-                break
-            _add_pairs(developer_pairs.get(anchor_d, []))
-            continue
-        pid = frontier.popleft()
-        authors = _collect_entities(doc_authors_ordered.get(pair_doc[pid], []), identity_r2d)
-        devs = _collect_entities(repo_devs_ordered.get(pair_repo[pid], []), identity_d2r)
-        for researcher_id in authors:
-            _add_pairs(researcher_pairs.get(researcher_id, []))
-            if len(sampled) >= budget:
-                break
-            for dev_id in identity_r2d.get(researcher_id, []):
-                _add_pairs(developer_pairs.get(dev_id, []))
-                if len(sampled) >= budget:
-                    break
-        if len(sampled) >= budget:
-            break
-        for dev_id in devs:
-            _add_pairs(developer_pairs.get(dev_id, []))
-            if len(sampled) >= budget:
-                break
-            for researcher_id in identity_d2r.get(dev_id, []):
-                _add_pairs(researcher_pairs.get(researcher_id, []))
-                if len(sampled) >= budget:
-                    break
+    budget = min(n_pairs, len(lookups.pair_doc))
+    sampled, n_anchors_used = _snowball_sample(
+        lookups,
+        anchor_queue,
+        n_top_hub_anchors + n_random_hub_anchors,
+        budget,
+        max_pairs_per_entity,
+        max_contributors_per_side,
+        rng,
+    )
 
     n_snowball = len(sampled)
     n_topup = 0
     if n_snowball < budget:
-        remainder = [p for p in pair_doc if p not in sampled]
+        remainder = [p for p in lookups.pair_doc if p not in sampled]
         topup = rng.sample(remainder, min(budget - n_snowball, len(remainder)))
         sampled.update(topup)
         n_topup = len(topup)
     print(
         f"\nSnowball sample: {n_snowball:,} pairs from {n_anchors_used:,} anchors"
         + (f" + {n_topup:,} uniform-random top-up pairs" if n_topup else "")
-        + f" = {len(sampled):,} of {len(pair_doc):,} filtered pairs."
+        + f" = {len(sampled):,} of {len(lookups.pair_doc):,} filtered pairs."
     )
 
     sampled_pairs = pair_frame.filter(pl.col("pair_id").is_in(sampled)).rename(
         {"pair_id": "document_repository_link_id"}
     )
 
-    # ---- Entity frames for graph construction (same cap + always-include-identity rule) ----
-    author_rows: list[tuple[int, int]] = []
-    for doc_id in sampled_pairs.get_column("document_id").unique().to_list():
-        for researcher_id in _collect_entities(
-            doc_authors_ordered.get(doc_id, []), identity_r2d
-        ):
-            author_rows.append((doc_id, researcher_id))
-    dev_rows: list[tuple[int, int]] = []
-    for repo_id in sampled_pairs.get_column("repository_id").unique().to_list():
-        for dev_id in _collect_entities(repo_devs_ordered.get(repo_id, []), identity_d2r):
-            dev_rows.append((repo_id, dev_id))
-    doc_authors = pl.DataFrame(
-        {
-            "document_id": [r[0] for r in author_rows],
-            "researcher_id": [r[1] for r in author_rows],
-        }
-    )
-    repo_devs = pl.DataFrame(
-        {
-            "repository_id": [r[0] for r in dev_rows],
-            "developer_account_id": [r[1] for r in dev_rows],
-        }
+    doc_authors, repo_devs = _sampled_entity_frames(
+        sampled_pairs, lookups, max_contributors_per_side
     )
     print(
         f"Entity rows (cap {max_contributors_per_side} + always-include-identity-linked): "
@@ -590,219 +985,4 @@ def figure_1_quadpartite_network(
         f"{pct_pairs_in_largest:.1f}% of pairs)"
     )
 
-    # Spring is the primary output; ForceAtlas2 is an additional variant; "packed" keeps the
-    # per-component layout available.
-    if layout in ("both", "spring", "forceatlas2"):
-        print("\nComputing global spring layout...")
-        positions, canvas_width, canvas_height = _global_spring_layout(graph, seed=random_seed)
-        if layout in ("both", "spring"):
-            _draw_quadpartite_network(
-                graph,
-                positions,
-                canvas_width,
-                canvas_height,
-                caption_base,
-                output_dir,
-                fig1_fields,
-                stem="figure1_quadpartite_network",
-            )
-        if layout in ("both", "forceatlas2"):
-            print("\nComputing ForceAtlas2 layout (warm-started from spring positions)...")
-            fa2_positions = _forceatlas2_positions(graph, positions, seed=random_seed)
-            xs = [p[0] for p in fa2_positions.values()]
-            ys = [p[1] for p in fa2_positions.values()]
-            _draw_quadpartite_network(
-                graph,
-                fa2_positions,
-                max(xs),
-                max(ys),
-                caption_base,
-                output_dir,
-                fig1_fields,
-                stem="figure1_quadpartite_network_forceatlas2",
-            )
-    else:
-        positions, canvas_width, canvas_height = _pack_components_layout(
-            graph, seed=random_seed
-        )
-        _draw_quadpartite_network(
-            graph,
-            positions,
-            canvas_width,
-            canvas_height,
-            caption_base,
-            output_dir,
-            fig1_fields,
-            stem="figure1_quadpartite_network",
-        )
-
-
-def _draw_quadpartite_network(
-    graph: rx.PyGraph,
-    positions: dict[int, tuple[float, float]],
-    canvas_width: float,
-    canvas_height: float,
-    caption: str,
-    output_dir: Path,
-    field_order: list[str],
-    stem: str = "figure1_quadpartite_network",
-) -> None:
-    """Draw and save one Figure 1 render: only articles carry color (by field, matching
-    Figure 2 Panel B's palette); repositories/researchers/developers are grey outline-only
-    shapes; all edges uniform grey differentiated by alpha/linewidth; LineCollections and
-    scatters rasterized so the PDF stays small and fast to open.
-    """
-    # Shared field-to-color assignment used by every per-field figure.
-    field_colors = u.field_color_map([*field_order, "Other"])
-    # Repositories get their own light, non-grey color -- muted sky blue, colorblind-safe and
-    # unused by any of the six field colors; people nodes stay very light transparent grey.
-    repo_color = "#56B4E9"
-    people_grey = "#cccccc"
-
-    # Uniform grey edges: edge type is differentiated only by alpha/linewidth, never by hue.
-    edge_grey = "#999999"
-    edge_style = {
-        "authored_by": {"color": edge_grey, "lw": 0.25, "ls": "-", "zorder": 1, "alpha": 0.06},
-        "contributed_to": {
-            "color": edge_grey,
-            "lw": 0.25,
-            "ls": "-",
-            "zorder": 1,
-            "alpha": 0.06,
-        },
-        "article_repository_link": {
-            "color": edge_grey,
-            "lw": 0.5,
-            "ls": "-",
-            "zorder": 2,
-            "alpha": 0.15,
-        },
-        "identity": {"color": edge_grey, "lw": 0.7, "ls": "-", "zorder": 3, "alpha": 0.15},
-    }
-    marker_size = 3.5
-    people_marker_size = 2.5
-    node_alpha = 0.5
-    marker_lw = 0.25
-
-    ref_canvas_extent = 143.2  # canvas width measured at the 2,000-seed-pair calibration run
-    canvas_extent = max(canvas_width, canvas_height)
-    figsize_in = min(22.0, max(14.0, 14.0 * canvas_extent / ref_canvas_extent))
-
-    fig, ax = plt.subplots(figsize=(figsize_in, figsize_in))
-
-    for etype, style in edge_style.items():
-        segments = [
-            (positions[src], positions[tgt])
-            for edge_idx in graph.edge_indices()
-            if graph.get_edge_data_by_index(edge_idx)["type"] == etype
-            for src, tgt in [graph.get_edge_endpoints_by_index(edge_idx)]
-        ]
-        if not segments:
-            continue
-        ax.add_collection(
-            LineCollection(
-                segments,
-                colors=style["color"],
-                linewidths=style["lw"],
-                linestyles=style["ls"],
-                zorder=style["zorder"],
-                alpha=style["alpha"],
-                rasterized=True,
-            )
-        )
-    ax.autoscale_view()
-
-    # Colored, filled article nodes (grouped by field) -- the only color-encoded node type.
-    xs_by_group: dict[str, list[float]] = {}
-    ys_by_group: dict[str, list[float]] = {}
-    for node_i in graph.node_indices():
-        nd = graph[node_i]
-        if nd["type"] != "article":
-            continue
-        group = nd.get("group", "Other")
-        x, y = positions[node_i]
-        xs_by_group.setdefault(group, []).append(x)
-        ys_by_group.setdefault(group, []).append(y)
-    for group, xs in xs_by_group.items():
-        ax.scatter(
-            xs,
-            ys_by_group[group],
-            c=field_colors.get(group, "#bbbbbb"),
-            marker="o",
-            s=marker_size,
-            alpha=node_alpha,
-            edgecolors="none",
-            linewidths=marker_lw,
-            zorder=4,
-            rasterized=True,
-        )
-
-    # Outline-only shapes for everything else: repositories in their own light blue at
-    # article-node size; people-nodes stay smallest, very light, and transparent.
-    for ntype, marker, edge_color, size, alpha in [
-        ("repository", "s", repo_color, marker_size, node_alpha),
-        ("researcher", "D", people_grey, people_marker_size, 0.3),
-        ("developer", "^", people_grey, people_marker_size, 0.3),
-    ]:
-        xs, ys = [], []
-        for node_i in graph.node_indices():
-            nd = graph[node_i]
-            if nd["type"] == ntype:
-                x, y = positions[node_i]
-                xs.append(x)
-                ys.append(y)
-        if not xs:
-            continue
-        ax.scatter(
-            xs,
-            ys,
-            facecolors="none",
-            edgecolors=edge_color,
-            marker=marker,
-            s=size,
-            alpha=alpha,
-            linewidths=marker_lw,
-            zorder=4,
-            rasterized=True,
-        )
-
-    def _marker_handle(marker, color, label, hollow=False, size=7):
-        return mlines.Line2D(
-            [],
-            [],
-            marker=marker,
-            color="none",
-            markerfacecolor="none" if hollow else color,
-            markeredgecolor=color,
-            linestyle="None",
-            markersize=size,
-            label=label,
-        )
-
-    legend_handles = [
-        _marker_handle("o", field_colors[f], f"Article: {f}") for f in [*field_order, "Other"]
-    ]
-    legend_handles += [
-        _marker_handle("s", repo_color, "Repository", hollow=True),
-        _marker_handle("D", people_grey, "Researcher (author)", hollow=True),
-        _marker_handle("^", people_grey, "Developer account", hollow=True),
-        mlines.Line2D([], [], color=edge_grey, lw=1.2, label="Authorship / contribution"),
-        mlines.Line2D([], [], color=edge_grey, lw=1.5, label="Article-repository link"),
-        mlines.Line2D([], [], color=edge_grey, lw=1.8, label="Researcher-developer identity"),
-    ]
-
-    legend = ax.legend(
-        handles=legend_handles,
-        loc="upper center",
-        bbox_to_anchor=(0.5, 1.08),
-        ncol=4,
-        fontsize=12,
-    )
-    u.style_legend(legend, fontsize=12)
-
-    ax.set_axis_off()
-    ax.set_aspect("equal")
-    u.print_caption_note(stem, caption)
-
-    u.save_figure(fig, stem, output_dir)
-    plt.close(fig)
+    _render_layouts(graph, layout, random_seed, caption_base, output_dir, fig1_fields)

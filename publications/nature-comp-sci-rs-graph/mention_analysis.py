@@ -11,11 +11,13 @@ from pathlib import Path
 import evaplot
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import polars as pl
 import seaborn as sns
 import statsmodels.formula.api as smf
 import utils as u
 from scipy.stats import norm, pearsonr
+from statsmodels.discrete.discrete_model import BinaryResultsWrapper
 from statsmodels.stats.sandwich_covariance import cov_cluster_2groups
 
 from rs_graph.utils.software_alignment import align_software_names
@@ -23,9 +25,7 @@ from rs_graph.utils.software_alignment import align_software_names
 ###############################################################################
 # Figure 4 -- software mention rate by field, over time
 
-# A lower floor lets single-digit-n field-year cells through, producing single-year
-# percentage spikes that are statistical noise; 30 pushes every plotted field's effective
-# start year to where cell sizes make the rate stable, without a hard-coded cutoff year.
+# Minimum pairs per field-year cell; smaller cells produce noisy single-year rate spikes.
 MIN_PAIRS_PER_CELL = 30
 
 
@@ -34,12 +34,14 @@ def figure_4_mention_rate_by_field_and_year(
     cutoff: float = 85.0,
     min_pairs_per_cell: int = MIN_PAIRS_PER_CELL,
     top_n_fields_plotted: int = 6,
+    year_cap: int = u.MENTION_EXTRACTION_YEAR_CAP,
 ) -> None:
-    """
-    Build Figure 4: rate at which imported software is also explicitly mentioned in the
+    """Build Figure 4: rate at which imported software is also explicitly mentioned in the
     paper's text, by field and publication year. Uses
     `align_software_names(method="global_min_diff")` per document-repository pair (two views
     at a time: imports vs. mentions), with the import name always taken as canonical.
+    Plotted years and summary stats cap at `year_cap`, the last publication year with full
+    mention-extraction coverage.
     """
     evaplot.set_style("evaplot_rc")
     df = u.load_filtered_pairs(top_n_fields=10)
@@ -52,7 +54,7 @@ def figure_4_mention_rate_by_field_and_year(
     mentions = u.clean_mention_names(mentions)
 
     # Only the import name is ever canonical -- align per pair with imports as items_a.
-    repo_with_import = set(imports.get_column("repository_id").unique().to_list())
+    repo_with_import = set(imports.get_column("repository_id").to_list())
     eligible = df.filter(pl.col("repository_id").is_in(repo_with_import))
     print(
         f"After restricting to pairs whose repository has >=1 import: "
@@ -117,37 +119,14 @@ def figure_4_mention_rate_by_field_and_year(
     )
     u.save_table(field_year_agg, "figure4_mention_rate_by_field_year_full", output_dir)
 
-    # Mention extraction lags the most recent publication years: zero or sharply depressed
-    # rates despite large import volume signal partially-populated extraction, not a real
-    # behavioral shift. Walk backward from the most recent year, dropping any year whose
-    # overall rate falls below 40% of the next-older year's rate, until the series stabilizes.
-    yearly_totals = (
-        field_year_agg.group_by("document_publication_year")
-        .agg(pl.sum("matched_imports").alias("matched"), pl.sum("total_imports").alias("total"))
-        .with_columns((pl.col("matched") / pl.col("total")).alias("rate"))
-        .sort("document_publication_year", descending=True)
+    # `year_cap` is the last fully covered publication year for mention extraction (see
+    # mentions_coverage_by_year); cap the plotted years and every mention-rate summary at it.
+    n_before_cap = field_year_agg.height
+    field_year_agg = field_year_agg.filter(pl.col("document_publication_year") <= year_cap)
+    print(
+        f"\nApplying mentions-extraction year cap (<= {year_cap}): "
+        f"{field_year_agg.height:,} of {n_before_cap:,} field-year cells remain"
     )
-    yearly_rows = yearly_totals.to_dicts()
-    stale_years: list[int] = []
-    idx = 0
-    while idx < len(yearly_rows) and yearly_rows[idx]["matched"] == 0:
-        stale_years.append(yearly_rows[idx]["document_publication_year"])
-        idx += 1
-    while idx < len(yearly_rows) - 1:
-        this_rate = yearly_rows[idx]["rate"]
-        prior_rate = yearly_rows[idx + 1]["rate"]
-        if prior_rate > 0 and this_rate < 0.4 * prior_rate:
-            stale_years.append(yearly_rows[idx]["document_publication_year"])
-            idx += 1
-        else:
-            break
-    max_plot_year = yearly_rows[idx]["document_publication_year"]
-    if stale_years:
-        print(
-            f"\nYears {sorted(stale_years)} dropped (zero or sharply depressed mention rates; "
-            f"extraction not caught up). Capping the plotted year range at {max_plot_year}."
-        )
-    field_year_agg = field_year_agg.filter(pl.col("document_publication_year") <= max_plot_year)
 
     n_before_floor = field_year_agg.height
     plotted = field_year_agg.filter(pl.col("n_pairs") >= min_pairs_per_cell)
@@ -164,9 +143,8 @@ def figure_4_mention_rate_by_field_and_year(
         .get_column("document_field_name_pruned")
         .to_list()
     )
-    # Plotted fields are decided by this figure's own eligible-pair counts, but the order
-    # (legend, line style/marker assignment) follows Figure 2 Panel A's global prevalence
-    # order for continuity across the figure set.
+    # Field selection uses this figure's own eligible-pair counts; ordering follows the
+    # global prevalence order used by the other per-field figures.
     canonical_field_order = (
         df.get_column("document_field_name_pruned")
         .value_counts(sort=True)
@@ -178,9 +156,8 @@ def figure_4_mention_rate_by_field_and_year(
     plotted = plotted.filter(pl.col("document_field_name_pruned").is_in(top_fields))
     u.save_table(plotted, "figure4_mention_rate_by_field_year_plotted", output_dir)
 
-    # Summary stats respect the same stale-year cap as the plotted figure -- post-cap years
-    # have structurally-zero mentions and would depress every rate below.
-    pair_rates_capped = pair_rates.filter(pl.col("document_publication_year") <= max_plot_year)
+    # Summary stats use the same year cap as the plotted figure.
+    pair_rates_capped = pair_rates.filter(pl.col("document_publication_year") <= year_cap)
     overall_rate = (
         100
         * pair_rates_capped.get_column("n_matched_imports").sum()
@@ -188,10 +165,10 @@ def figure_4_mention_rate_by_field_and_year(
     )
     print(
         f"\nOverall software mention rate across eligible pairs "
-        f"(<= {max_plot_year}): {overall_rate:.1f}%"
+        f"(<= {year_cap}): {overall_rate:.1f}%"
     )
 
-    # Per-field aggregate rates (post stale-year cap) -- the paper's per-field percentages.
+    # Per-field aggregate rates (post year cap).
     field_overall = (
         field_year_agg.group_by("document_field_name_pruned")
         .agg(
@@ -207,12 +184,11 @@ def figure_4_mention_rate_by_field_and_year(
         .sort("mention_rate_pct", descending=True)
     )
     u.save_table(field_overall, "figure4_mention_rate_by_field_overall", output_dir)
-    print("\nOverall mention rate by field (post stale-year cap):")
+    print("\nOverall mention rate by field (post year cap):")
     print(field_overall)
 
-    # Headline summary stats. Every rate is reported twice: over ALL pairs with >=1 import
-    # (the figure's denominator), and CONDITIONAL on the document having >=1 extracted
-    # mention -- the two denominators differ by ~4x.
+    # Each rate is reported over all pairs with >=1 import and conditional on the document
+    # having >=1 extracted mention.
     with_mention = pair_rates_capped.filter(pl.col("has_any_mention"))
 
     def _rate(frame: pl.DataFrame, lang: str | None = None) -> float:
@@ -242,7 +218,7 @@ def figure_4_mention_rate_by_field_and_year(
                 "r_mention_rate_pct_conditional_on_any_mention",
                 "pct_pairs_zero_mentioned_conditional_on_any_mention",
                 "n_pairs_with_any_mention",
-                "max_plot_year_after_stale_cap",
+                "mention_extraction_year_cap",
             ],
             "value": [
                 overall_rate,
@@ -255,14 +231,14 @@ def figure_4_mention_rate_by_field_and_year(
                 _rate(with_mention, "R"),
                 _pct_zero(with_mention),
                 float(with_mention.height),
-                float(max_plot_year),
+                float(year_cap),
             ],
         }
     )
     u.save_table(summary, "figure4_mention_rate_summary", output_dir)
     print(summary)
 
-    # Per-field conditional rates (same stale-year cap as the plotted figure).
+    # Per-field conditional rates (same year cap as the plotted figure).
     field_overall_conditional = (
         with_mention.group_by("document_field_name_pruned")
         .agg(
@@ -286,18 +262,25 @@ def figure_4_mention_rate_by_field_and_year(
     print(field_overall_conditional)
 
     fig, ax = plt.subplots(figsize=(9, 5))
-    # Shared field-to-color assignment used by every per-field figure; `style=` additionally
-    # gives every field a distinct marker + dash pattern.
+    # Shared field-to-color assignment across per-field figures; `style=` adds distinct
+    # markers and dash patterns.
     field_color_lookup = u.field_color_map(canonical_field_order)
     field_colors = [field_color_lookup[f] for f in top_fields]
+    # Short labels only in the legend; the saved tables keep full field names.
+    plot_df = plotted.with_columns(
+        pl.col("document_field_name_pruned")
+        .replace(u.FIELD_DISPLAY_ABBREVIATIONS)
+        .alias("field_display")
+    ).to_pandas()
+    top_fields_display = [u.abbreviate_field(f) for f in top_fields]
     sns.lineplot(
-        data=plotted.to_pandas(),
+        data=plot_df,
         x="document_publication_year",
         y="mention_rate_pct",
-        hue="document_field_name_pruned",
-        hue_order=top_fields,
-        style="document_field_name_pruned",
-        style_order=top_fields,
+        hue="field_display",
+        hue_order=top_fields_display,
+        style="field_display",
+        style_order=top_fields_display,
         palette=field_colors,
         markers=True,
         dashes=True,
@@ -305,7 +288,7 @@ def figure_4_mention_rate_by_field_and_year(
     )
     ax.set_xlabel("Publication Year")
     ax.set_ylabel("Software Mention Rate (%)")
-    # Legend outside the axes: no pocket inside stays clear of data at every plotted year.
+    # Legend outside the axes to stay clear of the data.
     leg = ax.legend(
         title="",
         loc="center left",
@@ -316,19 +299,14 @@ def figure_4_mention_rate_by_field_and_year(
         borderaxespad=0.6,
     )
     u.style_legend(leg, fontsize=8)
-    if stale_years:
-        u.print_caption_note(
-            "figure4_mention_rate_by_field_and_year",
-            f"Years after {max_plot_year} excluded: mention extraction hasn't caught up to "
-            "these publication years yet (see Methods)",
-        )
     u.print_caption_note(
         "figure4_mention_rate_by_field_and_year",
         "Year-cap rationale: SoftCite-2025 mention-extraction coverage is stable through "
         "April 2023, degrades over May-June 2023, and is exactly zero from July 2023 onward, "
-        "so mention-based analyses are capped at 2022 -- the last fully covered publication "
-        "year -- giving mentions the fairest representation by using only reliably extracted "
-        "years, just as imports and dependencies each use their own full reliable range",
+        f"so mention-based analyses are capped at {year_cap} -- the last fully covered "
+        "publication year -- giving mentions the fairest representation by using only "
+        "reliably extracted years, just as imports and dependencies each use their own full "
+        "reliable range. Abbreviated field labels: " + u.field_abbreviation_caption(top_fields),
     )
 
     evaplot.adjust_layout(fig)
@@ -385,9 +363,7 @@ def _remove_rare_and_generic_software(
     min_count: int = RARE_SOFTWARE_MIN_COUNT,
     trace: list[dict] | None = None,
 ) -> pl.DataFrame:
-    """Exclude libraries with usage count < `min_count` plus a small generic-name exclude
-    list.
-    """
+    """Exclude generic-named libraries and libraries with usage count < `min_count`."""
     n_before = df.height
     df = df.filter(~pl.col("library_name_normalized").is_in(GENERIC_SOFTWARE_NAME_EXCLUDE))
     print(
@@ -450,21 +426,22 @@ def _trim_extreme_usage_pairs(
     return df
 
 
-def _fit_and_cluster(formula: str, data, doc_groups: np.ndarray, lib_groups: np.ndarray):
-    """Fit a logit model, then replace its covariance with the two-way (document x library)
-    cluster-robust covariance (Cameron-Gelbach-Miller estimator) via
-    `statsmodels.stats.sandwich_covariance.cov_cluster_2groups` -- fit first, then swap in
-    the two-way covariance for SEs/p-values/CIs rather than passing a `cov_type=` to `.fit()`.
+def _fit_and_cluster(
+    formula: str, data: pd.DataFrame, doc_groups: np.ndarray, lib_groups: np.ndarray
+) -> tuple[BinaryResultsWrapper, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Fit a logit model, then swap in the two-way (document x library) cluster-robust
+    covariance (Cameron-Gelbach-Miller) for SEs, p-values, and CIs.
     """
     model = smf.logit(formula, data=data).fit(disp=0, maxiter=1000)
     cov_both, _cov_doc, _cov_lib = cov_cluster_2groups(
         model, doc_groups, lib_groups, use_correction=True
     )
+    params = model.params.to_numpy()
     se = np.sqrt(np.diag(cov_both))
-    z = model.params.to_numpy() / se
+    z = params / se
     pvals = 2 * (1 - norm.cdf(np.abs(z)))
-    ci_lo = model.params.to_numpy() - 1.96 * se
-    ci_hi = model.params.to_numpy() + 1.96 * se
+    ci_lo = params - 1.96 * se
+    ci_hi = params + 1.96 * se
     return model, se, pvals, ci_lo, ci_hi
 
 
@@ -499,8 +476,8 @@ def _prepare_regression_features(
     )
 
     # ---- Popularity: log cumulative imports through the paper's own publication year ----
-    # Popularity-at-time-of-publication, not lifetime popularity -- lifetime popularity uses
-    # post-publication information to explain the paper's own behavior.
+    # Popularity at time of publication; lifetime popularity would use post-publication
+    # information.
     per_lib_year = (
         long_df.group_by(["library_name_normalized", "document_publication_year"])
         .agg(pl.len().alias("n_in_year"))
@@ -526,8 +503,8 @@ def _prepare_regression_features(
     )
 
     # ---- Field-variable collapse: top-N most common fields + "Other" catch-all ----
-    # Computed on unique documents (doc_meta), not the long frame -- the long frame has many
-    # rows per document, which would over-weight prolific-import documents in the ranking.
+    # Ranked on unique documents, not the long frame, to avoid over-weighting
+    # prolific-import documents.
     top_fields = (
         doc_meta.get_column("document_field_name")
         .value_counts(sort=True)
@@ -561,11 +538,10 @@ def predictors_of_software_mentioning(
     top_n_fields_for_control: int = TOP_N_FIELDS_FOR_CONTROL,
     year_cap: int = u.MENTION_EXTRACTION_YEAR_CAP,
 ) -> None:
-    """
-    Fit logistic regressions modeling whether an imported library is explicitly mentioned.
-    Rows are at the (document, library) level -- the "why" companion to Figure 4's
-    "how often." Age = years since a library's first-ever corpus appearance; popularity = log
-    cumulative imports through the paper's own publication year. Fits four specifications
+    """Fit logistic regressions modeling whether an imported library is explicitly mentioned.
+    Rows are at the (document, library) level. Age = years since a library's first-ever
+    corpus appearance; popularity = log cumulative imports through the paper's own
+    publication year. Fits four specifications
     (age_only, popularity_only, raw, controlled) with two-way (document x library)
     cluster-robust SEs, across a labeled grid of variants.
 
@@ -590,11 +566,11 @@ def predictors_of_software_mentioning(
     print(f"  document_software_mention: {len(mentions):,} rows")
     mentions = u.clean_mention_names(mentions)
 
-    docs_with_mention = set(mentions.get_column("document_id").unique().to_list())
+    docs_with_mention = set(mentions.get_column("document_id").to_list())
 
     trace: list[dict] = []
     _trace_filter_step(trace, "standard_filtered_pairs", df)
-    repo_with_import = set(imports.get_column("repository_id").unique().to_list())
+    repo_with_import = set(imports.get_column("repository_id").to_list())
     _trace_filter_step(
         trace,
         "pairs_with_gte1_import",
@@ -637,8 +613,8 @@ def predictors_of_software_mentioning(
 
     summary_rows = []
     for alignment in ("grouped_hungarian", "independent"):
-        # Trace only the first (original) alignment's chain -- the second follows the same
-        # filters and would just duplicate the counts with slightly different is_mentioned.
+        # Trace only the grouped_hungarian chain; the independent variant follows the same
+        # filters and would duplicate the counts.
         variant_trace = trace if alignment == "grouped_hungarian" else None
         long_df = u.build_import_mention_pair_library_frame(
             df, imports, mentions, cutoff=cutoff, alignment=alignment
@@ -668,8 +644,8 @@ def predictors_of_software_mentioning(
                     f"({grid_df.height:,} rows before per-spec drop_nulls) ==="
                 )
                 for name, (formula, key_predictors, spec_cols) in specs.items():
-                    # Per-spec drop_nulls: only the columns this spec actually uses, so
-                    # simpler specs keep more data.
+                    # Drop nulls only on the columns this spec uses, so simpler specs
+                    # keep more data.
                     model_df = (
                         grid_df.select(
                             "is_mentioned",
@@ -701,8 +677,8 @@ def predictors_of_software_mentioning(
                             f"Pearson r(age_years, log_cumulative_imports) = {corr_r:.4f}, "
                             f"p = {corr_p:.2e}"
                         )
-                    # `cov_cluster_2groups` needs plain numeric group arrays -- library names
-                    # are integer-coded (factorized) purely for this clustering step.
+                    # `cov_cluster_2groups` needs numeric group arrays; integer-code
+                    # library names for clustering only.
                     doc_groups = regression_pd["document_id"].to_numpy()
                     lib_groups = (
                         regression_pd["library_name_normalized"]
@@ -714,7 +690,7 @@ def predictors_of_software_mentioning(
                     )
                     print(f"[{name}] N={int(model.nobs):,}")
                     for predictor in key_predictors:
-                        idx = list(model.params.index).index(predictor)
+                        idx = model.params.index.get_loc(predictor)
                         coef = model.params.iloc[idx]
                         odds_pct_per_unit = (np.exp(coef) - 1) * 100
                         print(
@@ -758,14 +734,13 @@ def predictors_of_software_mentioning(
 
 
 def mentions_coverage_by_year(output_dir: Path = u.OUTPUT_DIR) -> None:
-    """
-    Diagnose whether the post-2022 mentions gap is real or an rs-graph filtering artifact.
-    Loads `document` and `document_software_mention` UNFILTERED
-    (no confidence/year filters -- the question is about the raw extraction, not the analysis
-    subset) and reports, per publication year: document count, documents with >=1 extracted
-    mention, mention-row count, and % of documents with a mention. If coverage collapses at a
-    hard year in the unfiltered table, the gap is an upstream SoftCite-2025 extraction-horizon
-    cutoff, not an rs-graph join artifact -- the verdict is printed and written to the CSV.
+    """Diagnose whether the post-2022 mentions gap is real or an rs-graph filtering artifact.
+    Loads `document` and `document_software_mention` with no confidence/year filters and
+    reports, per publication year: document count, documents with >=1 extracted mention,
+    mention-row count, and % of documents with a mention. A hard coverage drop-off past the
+    last fully covered year in the unfiltered table indicates an upstream SoftCite-2025
+    extraction-horizon cutoff rather than an rs-graph join artifact; the verdict is printed
+    and written to the CSV.
     """
     print("Loading document and document_software_mention (UNFILTERED) from HuggingFace...")
     documents = u.load_table("document")
@@ -802,7 +777,7 @@ def mentions_coverage_by_year(output_dir: Path = u.OUTPUT_DIR) -> None:
     )
 
     # Verdict: find the last year with meaningful coverage (>= 20% of the peak coverage rate
-    # among years with >= 1,000 documents), then check whether later years collapse to ~zero.
+    # among years with >= 1,000 documents), then check whether later years drop to ~zero.
     substantive = by_year.filter(pl.col("n_documents") >= 1000)
     peak_pct = float(substantive.get_column("pct_docs_with_mention").max())
     covered_years = substantive.filter(
@@ -811,11 +786,12 @@ def mentions_coverage_by_year(output_dir: Path = u.OUTPUT_DIR) -> None:
     last_covered_year = int(covered_years.max())
     post = substantive.filter(pl.col("publication_year") > last_covered_year)
     verdict = (
-        f"Coverage collapses after {last_covered_year} in the UNFILTERED mention table -- "
-        "consistent with an upstream SoftCite-2025 extraction-horizon cutoff, not an "
-        "rs-graph filtering artifact."
+        f"Coverage drops sharply after {last_covered_year} in the UNFILTERED mention table "
+        "-- consistent with an upstream SoftCite-2025 extraction-horizon cutoff, not an "
+        f"rs-graph filtering artifact; mention-based analyses cap at "
+        f"{u.MENTION_EXTRACTION_YEAR_CAP}, the last fully covered publication year."
         if post.height == 0 or post.get_column("pct_docs_with_mention").max() < 0.2 * peak_pct
-        else "No hard coverage collapse detected -- investigate rs-graph joins."
+        else "No hard coverage drop-off detected -- investigate rs-graph joins."
     )
     by_year = by_year.with_columns(pl.lit(verdict).alias("verdict"))
 

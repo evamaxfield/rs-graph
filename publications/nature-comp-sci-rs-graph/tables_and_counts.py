@@ -7,6 +7,7 @@ coverage counts.
 
 from __future__ import annotations
 
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import polars as pl
@@ -41,98 +42,38 @@ def _load_links_with_source_names() -> pl.DataFrame:
 
 
 ###############################################################################
-# Table 1 -- top software by mentions / imports / dependents
+# Table 1: top software by mentions / imports / dependents
 
 
-def table1_top_software_by_usage(
-    output_dir: Path = u.OUTPUT_DIR,
-    cutoff: float = 85.0,
-    top_n_per_ecosystem: int = TABLE1_TOP_N_PER_ECOSYSTEM,
-) -> None:
+def _count_imports(
+    imports_by_repo: dict[int, list[str]],
+    repo_ecosystem: dict[int, str],
+) -> Counter[tuple[str, str]]:
     """
-    Build Table 1: one row per software, anchored on the import-normalized software name,
-    split by ecosystem (Python / R) and ranked within each by import count. Dependency count
-    comes from a second, separate import-vs-dependency Hungarian alignment -- same tool,
-    cutoff, and two-views-at-a-time constraint as Figure 4's import-vs-mention pass, never
-    combined into one three-way alignment. Mention count reuses Figure 4's per-pair
-    import-vs-mention alignment logic, aggregated per software instead of per field/year.
+    Count eligible repositories importing each software, keyed by (name, ecosystem):
+    the same normalized name can appear as an import in both a Python-primary and an
+    R-primary repository, and the table is split by ecosystem.
     """
-    df = u.load_filtered_pairs(top_n_fields=10)
-
-    print(
-        "\nLoading repository_import, repository_dependency, document_software_mention from "
-        "HuggingFace..."
-    )
-    imports = u.load_table("repository_import")
-    deps = u.load_table("repository_dependency")
-    mentions = u.load_table("document_software_mention")
-    print(f"  repository_import: {len(imports):,} rows")
-    print(f"  repository_dependency: {len(deps):,} rows")
-    print(f"  document_software_mention: {len(mentions):,} rows")
-    deps = u.clean_dependency_names(deps)
-    mentions = u.clean_mention_names(mentions)
-
-    # ---- Restrict to Python/R ecosystem repositories ----
-    # `repository_primary_language` is GitHub's byte-count-based language classification.
-    # "Jupyter Notebook"-classified repos are likely Python-ecosystem in practice, but are
-    # excluded rather than assumed -- the count is reported below.
-    n_before_lang = df.n_unique("repository_id")
-    lang_df = df.filter(pl.col("repository_primary_language").is_in(["Python", "R"]))
-    n_after_lang = lang_df.n_unique("repository_id")
-    n_jupyter = df.filter(pl.col("repository_primary_language") == "Jupyter Notebook").n_unique(
-        "repository_id"
-    )
-    print(
-        f"\nRestricting to repositories with primary_language in {{Python, R}}: "
-        f"{n_after_lang:,} of {n_before_lang:,} repositories remain "
-        f"({n_jupyter:,} additional 'Jupyter Notebook'-primary repos excluded -- likely "
-        "Python-heavy in practice but not assumed here)"
-    )
-
-    repo_ecosystem: dict[int, str] = dict(
-        lang_df.select("repository_id", "repository_primary_language")
-        .unique(subset="repository_id")
-        .iter_rows()
-    )
-
-    repo_with_import = set(imports.get_column("repository_id").unique().to_list())
-    eligible_repo_ids = set(repo_ecosystem.keys()) & repo_with_import
-    print(
-        f"Of those, {len(eligible_repo_ids):,} repositories have >=1 extracted import and are "
-        "eligible for this table."
-    )
-
-    imports_by_repo = u.normalized_names_by_id(
-        imports.filter(pl.col("repository_id").is_in(eligible_repo_ids)), "repository_id"
-    )
-    mentions_by_doc = u.normalized_names_by_id(mentions, "document_id")
-    # Pre-grouped per ecosystem's own manifest ecosystems, so the per-repo loop below never
-    # has to re-filter the (multi-million-row) full deps table.
-    deps_by_repo_by_ecosystem: dict[str, dict[int, list[str]]] = {
-        eco: u.normalized_names_by_id(
-            deps.filter(
-                pl.col("repository_id").is_in(eligible_repo_ids)
-                & pl.col("ecosystem").is_in(dep_ecosystems)
-            ),
-            "repository_id",
-        )
-        for eco, dep_ecosystems in u.MANIFEST_ECOSYSTEMS_BY_LANGUAGE.items()
-    }
-
-    # ---- Import counts: # of eligible repos importing each canonical name ----
-    # Keyed by (name, ecosystem), not bare name -- the same normalized name can legitimately
-    # appear as an import in both a Python-primary and an R-primary repository, and this
-    # table is explicitly split by ecosystem, so counts must never merge across ecosystems.
-    import_counts: dict[tuple[str, str], int] = {}
+    counts: Counter[tuple[str, str]] = Counter()
     for repo_id, names in imports_by_repo.items():
         eco = repo_ecosystem[repo_id]
-        for name in set(names):
-            key = (name, eco)
-            import_counts[key] = import_counts.get(key, 0) + 1
+        counts.update((name, eco) for name in set(names))
+    return counts
 
-    # ---- Dependency counts: second, separate import-vs-dependency alignment, per repo ----
-    dependency_counts: dict[tuple[str, str], int] = {}
-    n_repo_dep_aligned = 0
+
+def _count_aligned_dependencies(
+    imports_by_repo: dict[int, list[str]],
+    deps_by_repo_by_ecosystem: dict[str, dict[int, list[str]]],
+    repo_ecosystem: dict[int, str],
+    cutoff: float,
+) -> tuple[Counter[tuple[str, str]], int]:
+    """
+    Per-repo import-vs-dependency alignment: count declaring repositories per
+    (name, ecosystem). Also returns how many repositories had both imports and
+    manifest dependencies and therefore ran the alignment.
+    """
+    counts: Counter[tuple[str, str]] = Counter()
+    n_repos_aligned = 0
     for repo_id, import_names in imports_by_repo.items():
         eco = repo_ecosystem[repo_id]
         dep_names = deps_by_repo_by_ecosystem[eco].get(repo_id, [])
@@ -146,29 +87,26 @@ def table1_top_software_by_usage(
             cutoff=cutoff,
             method="global_min_diff",
         )
-        n_repo_dep_aligned += 1
-        for name in {m.normalized_item_one for m in matches}:
-            key = (name, eco)
-            dependency_counts[key] = dependency_counts.get(key, 0) + 1
-    print(
-        f"\nImport-vs-dependency alignment ran on {n_repo_dep_aligned:,} repositories with both "
-        "imports and manifest dependencies in their ecosystem."
-    )
+        n_repos_aligned += 1
+        counts.update((name, eco) for name in {m.normalized_item_one for m in matches})
+    return counts, n_repos_aligned
 
-    # ---- Mention counts: per-pair import-vs-mention alignment, aggregated per software ----
-    mention_doc_sets: dict[tuple[str, str], set[int]] = {}
+
+def _count_aligned_mentions(
+    eligible_pairs: pl.DataFrame,
+    imports_by_repo: dict[int, list[str]],
+    mentions_by_doc: dict[int, list[str]],
+    repo_ecosystem: dict[int, str],
+    cutoff: float,
+) -> tuple[dict[tuple[str, str], int], int]:
+    """
+    Per-pair import-vs-mention alignment: count mentioning documents per
+    (name, ecosystem). Also returns how many distinct mentioned-software names never
+    matched any import.
+    """
+    mention_doc_sets: defaultdict[tuple[str, str], set[int]] = defaultdict(set)
     all_mention_names_seen: set[str] = set()
     matched_mention_names: set[str] = set()
-    # Mention extraction is absent/partial after the cap year, so mention counts only
-    # consider pairs published at or before it (imports/dependencies stay uncapped).
-    eligible_pairs = (
-        df.filter(
-            pl.col("repository_id").is_in(eligible_repo_ids)
-            & (pl.col("document_publication_year") <= u.MENTION_EXTRACTION_YEAR_CAP)
-        )
-        .select("document_id", "repository_id")
-        .unique()
-    )
     for row in eligible_pairs.iter_rows(named=True):
         repo_id, doc_id = row["repository_id"], row["document_id"]
         eco = repo_ecosystem[repo_id]
@@ -188,11 +126,111 @@ def table1_top_software_by_usage(
             method="global_min_diff",
         )
         for m in matches:
-            mention_doc_sets.setdefault((m.normalized_item_one, eco), set()).add(doc_id)
+            mention_doc_sets[(m.normalized_item_one, eco)].add(doc_id)
             matched_mention_names.add(m.normalized_item_two)
     mention_counts = {k: len(v) for k, v in mention_doc_sets.items()}
-
     n_unmatched_mentions = len(all_mention_names_seen - matched_mention_names)
+    return mention_counts, n_unmatched_mentions
+
+
+def table1_top_software_by_usage(
+    output_dir: Path = u.OUTPUT_DIR,
+    cutoff: float = 85.0,
+    top_n_per_ecosystem: int = TABLE1_TOP_N_PER_ECOSYSTEM,
+) -> None:
+    """
+    Build Table 1: one row per software, anchored on the import-normalized software name,
+    split by ecosystem (Python / R) and ranked within each by import count. Dependency
+    count comes from a separate per-repository import-vs-dependency alignment. Mention
+    count reuses Figure 4's per-pair import-vs-mention alignment, aggregated per software
+    instead of per field/year. Both alignments use the same tool and cutoff and always
+    align two views at a time, never a three-way alignment.
+    """
+    df = u.load_filtered_pairs(top_n_fields=10)
+
+    print(
+        "\nLoading repository_import, repository_dependency, document_software_mention from "
+        "HuggingFace..."
+    )
+    imports = u.load_table("repository_import")
+    deps = u.load_table("repository_dependency")
+    mentions = u.load_table("document_software_mention")
+    print(f"  repository_import: {len(imports):,} rows")
+    print(f"  repository_dependency: {len(deps):,} rows")
+    print(f"  document_software_mention: {len(mentions):,} rows")
+    deps = u.clean_dependency_names(deps)
+    mentions = u.clean_mention_names(mentions)
+
+    # ---- Restrict to Python/R ecosystem repositories ----
+    # `repository_primary_language` is GitHub's byte-count-based language classification.
+    # "Jupyter Notebook"-classified repos are likely Python-ecosystem but are excluded
+    # rather than assumed; the count is reported below.
+    n_before_lang = df.n_unique("repository_id")
+    lang_df = df.filter(pl.col("repository_primary_language").is_in(["Python", "R"]))
+    n_after_lang = lang_df.n_unique("repository_id")
+    n_jupyter = df.filter(pl.col("repository_primary_language") == "Jupyter Notebook").n_unique(
+        "repository_id"
+    )
+    print(
+        f"\nRestricting to repositories with primary_language in {{Python, R}}: "
+        f"{n_after_lang:,} of {n_before_lang:,} repositories remain "
+        f"({n_jupyter:,} additional 'Jupyter Notebook'-primary repos excluded -- likely "
+        "Python-heavy in practice but not assumed here)"
+    )
+
+    repo_ecosystem: dict[int, str] = dict(
+        lang_df.select("repository_id", "repository_primary_language")
+        .unique(subset="repository_id")
+        .iter_rows()
+    )
+
+    repo_with_import = set(imports.get_column("repository_id"))
+    eligible_repo_ids = set(repo_ecosystem) & repo_with_import
+    print(
+        f"Of those, {len(eligible_repo_ids):,} repositories have >=1 extracted import and are "
+        "eligible for this table."
+    )
+
+    imports_by_repo = u.normalized_names_by_id(
+        imports.filter(pl.col("repository_id").is_in(eligible_repo_ids)), "repository_id"
+    )
+    mentions_by_doc = u.normalized_names_by_id(mentions, "document_id")
+    # Pre-group deps per language ecosystem so the per-repo alignment never re-filters
+    # the multi-million-row full deps table.
+    deps_by_repo_by_ecosystem: dict[str, dict[int, list[str]]] = {
+        eco: u.normalized_names_by_id(
+            deps.filter(
+                pl.col("repository_id").is_in(eligible_repo_ids)
+                & pl.col("ecosystem").is_in(dep_ecosystems)
+            ),
+            "repository_id",
+        )
+        for eco, dep_ecosystems in u.MANIFEST_ECOSYSTEMS_BY_LANGUAGE.items()
+    }
+
+    # ---- Count imports, aligned dependencies, and aligned mentions per software ----
+    import_counts = _count_imports(imports_by_repo, repo_ecosystem)
+    dependency_counts, n_repo_dep_aligned = _count_aligned_dependencies(
+        imports_by_repo, deps_by_repo_by_ecosystem, repo_ecosystem, cutoff
+    )
+    print(
+        f"\nImport-vs-dependency alignment ran on {n_repo_dep_aligned:,} repositories with both "
+        "imports and manifest dependencies in their ecosystem."
+    )
+
+    # Mention extraction is absent/partial after the cap year, so mention counts only
+    # consider pairs published at or before it (imports/dependencies stay uncapped).
+    eligible_pairs = (
+        df.filter(
+            pl.col("repository_id").is_in(eligible_repo_ids)
+            & (pl.col("document_publication_year") <= u.MENTION_EXTRACTION_YEAR_CAP)
+        )
+        .select("document_id", "repository_id")
+        .unique()
+    )
+    mention_counts, n_unmatched_mentions = _count_aligned_mentions(
+        eligible_pairs, imports_by_repo, mentions_by_doc, repo_ecosystem, cutoff
+    )
     print(
         f"\n{n_unmatched_mentions:,} distinct mentioned-software names never matched any "
         f"import at cutoff={cutoff} (software mentioned but never imported cannot appear in "
@@ -251,10 +289,11 @@ def table1_top_software_by_usage(
     u.print_caption_note(
         "table1_top_software_by_usage",
         f"Mention counts include only articles published through "
-        f"{u.MENTION_EXTRACTION_YEAR_CAP}: SoftCite-2025 mention-extraction coverage "
-        "collapses after that year (normal rates through May 2023, then exactly 0% from "
-        "July 2023 onward), so the cap gives mentions their fairest representation while "
-        "imports and dependencies each use their own full reliable range",
+        f"{u.MENTION_EXTRACTION_YEAR_CAP}, the last fully covered publication year: "
+        "SoftCite-2025 mention-extraction coverage is normal through May 2023, then drops "
+        "sharply (exactly 0% from July 2023 onward), so the cap gives mentions their "
+        "fairest representation while imports and dependencies each use their own full "
+        "reliable range",
     )
 
 
@@ -264,11 +303,11 @@ def table1_top_software_by_usage(
 
 def median_repository_contributor_count(output_dir: Path = u.OUTPUT_DIR) -> None:
     """
-    Fill line 33's `X%` placeholder -- "The median scientific repository has only a single
-    contributor (X%)...". Filters at the pair level first (standard filters), derives the
+    Fill line 33's `X%` placeholder ("The median scientific repository has only a single
+    contributor (X%)..."). Filters at the pair level first (standard filters), derives the
     surviving repository set, then computes per-repository contributor counts from
-    `repository_contributor` (repositories with no `repository_contributor` rows at all count
-    as 0 contributors, not dropped).
+    `repository_contributor`. Repositories with no `repository_contributor` rows at all
+    count as 0 contributors rather than being dropped.
     """
     df = u.load_filtered_pairs()
     filtered_repo_ids = df.get_column("repository_id").unique()
@@ -380,9 +419,9 @@ def median_repository_contributor_count(output_dir: Path = u.OUTPUT_DIR) -> None
 def mining_rounds_table(output_dir: Path = u.OUTPUT_DIR) -> None:
     """
     Fill Table X (line 237) and line 254's `X` placeholder. Two halves:
-      (a) new article-repository pairs per source/iteration -- a group-by on
+      (a) new article-repository pairs per source/iteration: a group-by on
           `document_repository_link`'s (dataset_source_id, iteration).
-      (b) new researcher-developer-account identity links per iteration -- a structural join
+      (b) new researcher-developer-account identity links per iteration: a structural join
           (not timestamp-based) attributing each identity link to the earliest iteration
           whose document-repository pair could have produced it.
     The combined table's "Seed" row is broken down by original seed source in indented
@@ -391,7 +430,7 @@ def mining_rounds_table(output_dir: Path = u.OUTPUT_DIR) -> None:
     print("Loading document_repository_link, dataset_source from HuggingFace...")
     raw_links = _load_links_with_source_names()
 
-    # ---- (a) New article-repository pairs per source/iteration -- simple group-by ----
+    # ---- (a) New article-repository pairs per source/iteration: simple group-by ----
     links_with_bucket = raw_links.with_columns(
         pl.col("iteration").fill_null(-1).alias("iteration_bucket")
     )
@@ -429,10 +468,11 @@ def mining_rounds_table(output_dir: Path = u.OUTPUT_DIR) -> None:
         f"{extended_mining_total:,}"
     )
 
-    # ---- Same group-by, restricted to the standard-filtered pairs table. The raw group-by
-    # counts every candidate row regardless of confidence; most predicted (non-seed) rows do
-    # NOT meet 0.9994, so raw per-iteration counts overstate what's retained. The filtered
-    # version is what "new pairs added to the dataset" in Table X and line 254 means.
+    # ---- Same group-by, restricted to the standard-filtered pairs table ----
+    # The raw group-by counts every candidate row regardless of confidence; most predicted
+    # (non-seed) rows fall below 0.9994, so raw per-iteration counts overstate what is
+    # retained. The filtered version matches "new pairs added to the dataset" in Table X
+    # and line 254.
     filtered_pairs_for_iteration = u.load_filtered_pairs()
     pairs_by_iteration_filtered = (
         filtered_pairs_for_iteration.with_columns(
@@ -465,6 +505,7 @@ def mining_rounds_table(output_dir: Path = u.OUTPUT_DIR) -> None:
         f"Line 254 placeholder fill, RETAINED (Extended Mining Round, iterations 4+5): "
         f"{extended_mining_total_filtered:,}"
     )
+
     # ---- (b) New researcher-developer-account identity links per iteration ----
     print(
         "\nLoading researcher_developer_account_link, document_contributor, "
@@ -600,13 +641,6 @@ def mining_rounds_table(output_dir: Path = u.OUTPUT_DIR) -> None:
 
     # Per-source breakdown of the Seed total, indented under the "Seed" group-header row.
     # Identity attribution is not source-scoped, so identity columns stay blank on sub-rows.
-    seed_source_display = {
-        "joss": "JOSS",
-        "plos": "PLOS",
-        "pwc": "Papers with Code",
-        "softcite_2025": "SoftCite 2025",
-        "softwarex": "SoftwareX",
-    }
     seed_by_source = (
         filtered_pairs_for_iteration.filter(
             pl.col("link_processing_iteration").is_null()
@@ -617,7 +651,8 @@ def mining_rounds_table(output_dir: Path = u.OUTPUT_DIR) -> None:
         .sort("new_pairs", descending=True)
         .select(
             (
-                pl.lit("  ") + pl.col("dataset_source_name").replace_strict(seed_source_display)
+                pl.lit("  ")
+                + pl.col("dataset_source_name").replace_strict(u.SOURCE_DISPLAY_NAMES)
             ).alias("round"),
             pl.col("new_pairs").cast(pl.Int64),
             pl.lit(None, dtype=pl.Int64).alias("cumulative_pairs"),
@@ -655,9 +690,9 @@ def data_coverage_counts(output_dir: Path = u.OUTPUT_DIR) -> None:
     deps = u.clean_dependency_names(deps)
     deps_pr = deps.filter(pl.col("ecosystem").is_in(u.ALL_MANIFEST_ECOSYSTEMS))
 
-    repo_with_import = set(imports.get_column("repository_id").unique().to_list())
-    repo_with_dep = set(deps_pr.get_column("repository_id").unique().to_list())
-    doc_with_mention = set(mentions.get_column("document_id").unique().to_list())
+    repo_with_import = set(imports.get_column("repository_id"))
+    repo_with_dep = set(deps_pr.get_column("repository_id"))
+    doc_with_mention = set(mentions.get_column("document_id"))
 
     # Mention extraction is absent/partial after the cap year, so mention presence only
     # counts for pairs published at or before it.
@@ -732,8 +767,9 @@ def data_coverage_counts(output_dir: Path = u.OUTPUT_DIR) -> None:
     u.print_caption_note(
         "data_coverage_counts",
         f"Mention-related counts include only articles published through "
-        f"{u.MENTION_EXTRACTION_YEAR_CAP}: SoftCite-2025 mention-extraction coverage "
-        "collapses after that year (normal rates through May 2023, then exactly 0% from "
-        "July 2023 onward), so the cap gives mentions their fairest representation while "
-        "imports and dependencies each use their own full reliable range",
+        f"{u.MENTION_EXTRACTION_YEAR_CAP}, the last fully covered publication year: "
+        "SoftCite-2025 mention-extraction coverage is normal through May 2023, then drops "
+        "sharply (exactly 0% from July 2023 onward), so the cap gives mentions their "
+        "fairest representation while imports and dependencies each use their own full "
+        "reliable range",
     )

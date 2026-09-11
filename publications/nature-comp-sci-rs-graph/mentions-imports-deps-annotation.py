@@ -1,16 +1,23 @@
+#!/usr/bin/env python
+
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 import polars as pl
 import typer
 from datasets import Dataset, load_dataset
+from dotenv import load_dotenv
 
 ###############################################################################
 
 app = typer.Typer()
 
+HF_DATASET = "sci-soft-collections/rs-graph-v2-full"
+
 THIS_FILE_PATH = Path(__file__).resolve()
 THIS_DIR = THIS_FILE_PATH.parent
+load_dotenv(str(THIS_DIR.parents[1] / ".env"))
 
 ANNOTATION_OUTPUT_PATH = THIS_DIR / "mentions-imports-deps-annotation.xlsx"
 
@@ -18,7 +25,7 @@ RANDOM_SEED = 42
 SAMPLE_SIZE = 100
 RARE_THRESHOLD = 3
 
-# Generic terms excluded from mentions (mirrors attribution-of-software.py)
+# Generic terms excluded from mentions
 MENTION_EXCLUDE_NORMALIZED: set[str] = {
     "code",
     "latex",
@@ -36,18 +43,39 @@ MENTION_EXCLUDE_NORMALIZED: set[str] = {
 ###############################################################################
 
 
-# Helper to load a table as a polars DataFrame (zero-copy via Arrow)
 def load_table(table: str) -> pl.DataFrame:
-    ds = load_dataset("evamxb/rs-graph-v2-full", table, split="train")
+    """Load a single rs-graph table from HuggingFace as a polars DataFrame."""
+    ds = load_dataset(HF_DATASET, table, split="train", token=os.environ.get("HF_TOKEN"))
     assert isinstance(ds, Dataset)
     df = pl.from_arrow(ds.data.table)
     assert isinstance(df, pl.DataFrame)
     return df
 
 
+def _filter_min_count(df: pl.DataFrame, col: str, threshold: int) -> pl.DataFrame:
+    """Keep rows whose `col` value appears at least `threshold` times."""
+    frequent_values = (
+        df.group_by(col)
+        .agg(pl.len().alias("count"))
+        .filter(pl.col("count") >= threshold)
+        .get_column(col)
+        .to_list()
+    )
+    return df.filter(pl.col(col).is_in(frequent_values))
+
+
+def _set_diff_expr(col_a: str, col_b: str) -> pl.Expr:
+    """Sorted semicolon-joined names present in the `col_a` list but not the `col_b` list."""
+    return pl.struct([col_a, col_b]).map_elements(
+        lambda x: ";".join(sorted(set(x[col_a] or []) - set(x[col_b] or []))),
+        return_dtype=pl.String,
+    )
+
+
 def _load_our_dataset(
     top_n_fields: int = 5,
 ) -> pl.DataFrame:
+    """Load and filter the article-repository pair table with document and repository metadata."""
     # Load all pair info
     documents = load_table("document")
     article_repo_links = load_table("document_repository_link")
@@ -189,18 +217,18 @@ def _load_our_dataset(
 
 def _remove_extremely_rare_software_usage(
     usage_df: pl.DataFrame,
-    usage_type: str,
     software_col: str = "software_name_normalized",
     rare_usage_threshold: int = 3,
     compute_ecosystem_prefix: bool = False,
     use_ecosystem_from_data: bool = False,
     exclude_generic_mentions: bool = False,
 ) -> pl.DataFrame:
+    """Drop rows whose software name appears fewer than `rare_usage_threshold` times,
+    optionally prefixing names with their ecosystem ("py:", "r:") first.
+    """
     if compute_ecosystem_prefix:
-        # Create column called "ecosystem_normalized_software_name"
-        # Which prepends "py:", "r:", "mixed:" to the "software_name_normalized" column
-        # based on the "file_paths" column
-        # The "file_paths" column is a semi-colon separated list of file paths
+        # Derive the ecosystem from the file extensions in the semicolon-separated
+        # "file_paths" column, then prefix the software name with it
 
         # Pre-construct the py and r checks
         check_for_py = (
@@ -243,15 +271,14 @@ def _remove_extremely_rare_software_usage(
             )
         )
 
-        # Set software_col to the new ecosystem normalized column for the rest of the function
+        # Use the ecosystem-prefixed column for the rest of the function
         software_col = f"ecosystem_{software_col}"
 
         # Drop "mixed" and "other" ecosystems
         usage_df = usage_df.filter(pl.col("ecosystem").is_in(["py", "r"]))
 
     elif use_ecosystem_from_data:
-        # There is an "ecosystem" column in the data already
-        # Use it to prefix the software name
+        # Prefix the software name with the existing "ecosystem" column
         usage_df = usage_df.with_columns(
             (pl.col("ecosystem") + pl.lit(":") + pl.col(software_col)).alias(
                 f"ecosystem_{software_col}"
@@ -260,23 +287,11 @@ def _remove_extremely_rare_software_usage(
         software_col = f"ecosystem_{software_col}"
 
     elif exclude_generic_mentions:
-        # Exclude rows where the software_col is in the MENTION_EXCLUDE_NORMALIZED set
+        # Drop generic terms like "code" or "software"
         usage_df = usage_df.filter(~pl.col(software_col).is_in(MENTION_EXCLUDE_NORMALIZED))
 
-    # Count usage
-    usage_counts = usage_df.group_by(software_col).agg(pl.len().alias("usage_count"))
-
-    # Filter to only usage that were imported at least 3 times
-    non_rare_imports = (
-        usage_counts.filter(pl.col("usage_count") >= rare_usage_threshold)
-        .get_column(software_col)
-        .to_list()
-    )
-
-    # Filter usage_df to only non-rare usage
-    usage_df = usage_df.filter(pl.col(software_col).is_in(non_rare_imports))
-
-    return usage_df
+    # Keep only software used at least rare_usage_threshold times
+    return _filter_min_count(usage_df, software_col, rare_usage_threshold)
 
 
 @dataclass
@@ -293,6 +308,7 @@ def _add_has_imports_dependencies_mentions_cols(
     repository_dependencies: pl.DataFrame,
     document_software_mentions: pl.DataFrame,
 ) -> MetadataAndSoftwareUsageDataFrames:
+    """Attach has_imports / has_dependencies / has_software_mentions flags to the pair table."""
     # Get the subset of each that have a repository_id or document_id in the merged set
     repository_imports = repository_imports.join(
         pair_metadata.select(
@@ -322,10 +338,7 @@ def _add_has_imports_dependencies_mentions_cols(
         how="inner",
     )
 
-    # Create three summary tables:
-    # 1. "has_imports_df": document-repository pairs that have at least one repository import
-    # 2. "has_dependencies_df": document-repository pairs that have at least one repository dependency
-    # 3. "has_software_mentions_df": document-repository pairs that have at least one document software mention
+    # Flag pairs with at least one import / dependency / software mention
     has_imports_df = repository_imports.group_by("document_repository_link_id").agg(
         has_imports=pl.lit(True),
     )
@@ -366,80 +379,45 @@ def _add_has_imports_dependencies_mentions_cols(
     )
 
 
+def _link_ids_above_99th_percentile(usage_df: pl.DataFrame) -> set[int]:
+    """Link ids whose per-pair usage-row count exceeds the 99th percentile count."""
+    counts = usage_df.group_by("document_repository_link_id").agg(usage_count=pl.len())
+    threshold = counts.get_column("usage_count").quantile(0.99)
+    return set(
+        counts.filter(pl.col("usage_count") > threshold)
+        .get_column("document_repository_link_id")
+        .to_list()
+    )
+
+
 def _remove_pairs_with_extreme_software_usage(
     pair_metadata: pl.DataFrame,
     repository_imports: pl.DataFrame,
     repository_dependencies: pl.DataFrame,
     document_software_mentions: pl.DataFrame,
 ) -> MetadataAndSoftwareUsageDataFrames:
-    # Get the threshold value for 99th percentile of number of imports, dependencies, and mentions
-    imports_threshold = (
-        repository_imports.group_by("document_repository_link_id")
-        .agg(imports_count=pl.len())
-        .get_column("imports_count")
-        .quantile(0.99)
-    )
-    dependencies_threshold = (
-        repository_dependencies.group_by("document_repository_link_id")
-        .agg(dependencies_count=pl.len())
-        .get_column("dependencies_count")
-        .quantile(0.99)
-    )
-    mentions_threshold = (
-        document_software_mentions.group_by("document_repository_link_id")
-        .agg(mentions_count=pl.len())
-        .get_column("mentions_count")
-        .quantile(0.99)
-    )
-
-    # Get any document_repository_link_ids that have imports, dependencies, or mentions above these thresholds
-    extreme_imports_ids = (
-        repository_imports.group_by("document_repository_link_id")
-        .agg(imports_count=pl.len())
-        .filter(pl.col("imports_count") > imports_threshold)
-        .get_column("document_repository_link_id")
-        .to_list()
-    )
-    extreme_dependencies_ids = (
-        repository_dependencies.group_by("document_repository_link_id")
-        .agg(dependencies_count=pl.len())
-        .filter(pl.col("dependencies_count") > dependencies_threshold)
-        .get_column("document_repository_link_id")
-        .to_list()
-    )
-    extreme_mentions_ids = (
-        document_software_mentions.group_by("document_repository_link_id")
-        .agg(mentions_count=pl.len())
-        .filter(pl.col("mentions_count") > mentions_threshold)
-        .get_column("document_repository_link_id")
-        .to_list()
-    )
-
-    # Join these lists together to get all extreme usage ids
+    # Get link ids with imports, dependencies, or mentions above the 99th percentile count
     extreme_usage_ids = (
-        set(extreme_imports_ids) | set(extreme_dependencies_ids) | set(extreme_mentions_ids)
+        _link_ids_above_99th_percentile(repository_imports)
+        | _link_ids_above_99th_percentile(repository_dependencies)
+        | _link_ids_above_99th_percentile(document_software_mentions)
     )
 
-    # Filter the pair_metadata to remove these extreme usage ids
+    # Remove extreme usage pairs from pair_metadata
     pair_metadata = pair_metadata.filter(
         ~pl.col("document_repository_link_id").is_in(extreme_usage_ids)
     )
 
-    # Filter the repository_imports, repository_dependencies, and document_software_mentions to only the remaining pairs
+    # Filter each usage table to only the remaining pairs
+    remaining_link_ids = pair_metadata.get_column("document_repository_link_id").to_list()
     repository_imports = repository_imports.filter(
-        pl.col("document_repository_link_id").is_in(
-            pair_metadata.get_column("document_repository_link_id").to_list()
-        )
+        pl.col("document_repository_link_id").is_in(remaining_link_ids)
     )
     repository_dependencies = repository_dependencies.filter(
-        pl.col("document_repository_link_id").is_in(
-            pair_metadata.get_column("document_repository_link_id").to_list()
-        )
+        pl.col("document_repository_link_id").is_in(remaining_link_ids)
     )
     document_software_mentions = document_software_mentions.filter(
-        pl.col("document_repository_link_id").is_in(
-            pair_metadata.get_column("document_repository_link_id").to_list()
-        )
+        pl.col("document_repository_link_id").is_in(remaining_link_ids)
     )
 
     return MetadataAndSoftwareUsageDataFrames(
@@ -463,32 +441,23 @@ def main() -> None:
     repository_dependencies = load_table("repository_dependency")
     document_software_mentions = load_table("document_software_mention")
 
-    # Remove extremely rare software (mirrors attribution-of-software.py)
+    # Remove extremely rare software
     repository_imports = _remove_extremely_rare_software_usage(
         repository_imports,
-        usage_type="imports",
         software_col="software_name_normalized",
         rare_usage_threshold=RARE_THRESHOLD,
         compute_ecosystem_prefix=True,
-        use_ecosystem_from_data=False,
-        exclude_generic_mentions=False,
     )
     repository_dependencies = _remove_extremely_rare_software_usage(
         repository_dependencies,
-        usage_type="dependencies",
         software_col="software_name_normalized",
         rare_usage_threshold=RARE_THRESHOLD,
-        compute_ecosystem_prefix=False,
         use_ecosystem_from_data=True,
-        exclude_generic_mentions=False,
     )
     document_software_mentions = _remove_extremely_rare_software_usage(
         document_software_mentions,
-        usage_type="mentions",
         software_col="software_name_normalized",
         rare_usage_threshold=RARE_THRESHOLD,
-        compute_ecosystem_prefix=False,
-        use_ecosystem_from_data=False,
         exclude_generic_mentions=True,
     )
 
@@ -517,23 +486,11 @@ def main() -> None:
     document_software_mentions = non_extreme_pairs_result.document_software_mentions
 
     # Re-apply rare threshold on the analysis subset
-    repository_imports = repository_imports.filter(
-        pl.col("ecosystem_software_name_normalized").is_in(
-            repository_imports.group_by("ecosystem_software_name_normalized")
-            .agg(pl.len().alias("count"))
-            .filter(pl.col("count") >= RARE_THRESHOLD)
-            .get_column("ecosystem_software_name_normalized")
-            .to_list()
-        )
+    repository_imports = _filter_min_count(
+        repository_imports, "ecosystem_software_name_normalized", RARE_THRESHOLD
     )
-    document_software_mentions = document_software_mentions.filter(
-        pl.col("software_name_normalized").is_in(
-            document_software_mentions.group_by("software_name_normalized")
-            .agg(pl.len().alias("count"))
-            .filter(pl.col("count") >= RARE_THRESHOLD)
-            .get_column("software_name_normalized")
-            .to_list()
-        )
+    document_software_mentions = _filter_min_count(
+        document_software_mentions, "software_name_normalized", RARE_THRESHOLD
     )
 
     complete_cases = pair_metadata.filter(
@@ -542,10 +499,8 @@ def main() -> None:
     print(f"Total pairs: {len(pair_metadata)}")
     print(f"Complete cases: {len(complete_cases)}")
 
-    # -------------------------------------------------------------------------
     # Aggregate software names for complete-case pairs only
-    # Collect unique names into lists; strings and set diffs are derived below.
-    # -------------------------------------------------------------------------
+    # Collect unique names into lists, then derive display strings and set diffs
     complete_link_ids = complete_cases.get_column("document_repository_link_id").to_list()
 
     mentions_agg = (
@@ -614,60 +569,28 @@ def main() -> None:
             .list.join(";")
             .alias("dependencies_software_normalized"),
             # Set differences of normalized names (items in A not present in B)
-            pl.struct(["_mentioned_norm", "_imported_norm"])
-            .map_elements(
-                lambda x: ";".join(
-                    sorted(set(x["_mentioned_norm"] or []) - set(x["_imported_norm"] or []))
-                ),
-                return_dtype=pl.String,
-            )
-            .alias("mentions_not_in_imports_normalized"),
-            pl.struct(["_imported_norm", "_mentioned_norm"])
-            .map_elements(
-                lambda x: ";".join(
-                    sorted(set(x["_imported_norm"] or []) - set(x["_mentioned_norm"] or []))
-                ),
-                return_dtype=pl.String,
-            )
-            .alias("imports_not_in_mentions_normalized"),
-            pl.struct(["_mentioned_norm", "_dependencies_norm"])
-            .map_elements(
-                lambda x: ";".join(
-                    sorted(set(x["_mentioned_norm"] or []) - set(x["_dependencies_norm"] or []))
-                ),
-                return_dtype=pl.String,
-            )
-            .alias("mentions_not_in_dependencies_normalized"),
-            pl.struct(["_dependencies_norm", "_mentioned_norm"])
-            .map_elements(
-                lambda x: ";".join(
-                    sorted(set(x["_dependencies_norm"] or []) - set(x["_mentioned_norm"] or []))
-                ),
-                return_dtype=pl.String,
-            )
-            .alias("dependencies_not_in_mentions_normalized"),
-            pl.struct(["_imported_norm", "_dependencies_norm"])
-            .map_elements(
-                lambda x: ";".join(
-                    sorted(set(x["_imported_norm"] or []) - set(x["_dependencies_norm"] or []))
-                ),
-                return_dtype=pl.String,
-            )
-            .alias("imports_not_in_dependencies_normalized"),
-            pl.struct(["_dependencies_norm", "_imported_norm"])
-            .map_elements(
-                lambda x: ";".join(
-                    sorted(set(x["_dependencies_norm"] or []) - set(x["_imported_norm"] or []))
-                ),
-                return_dtype=pl.String,
-            )
-            .alias("dependencies_not_in_imports_normalized"),
+            _set_diff_expr("_mentioned_norm", "_imported_norm").alias(
+                "mentions_not_in_imports_normalized"
+            ),
+            _set_diff_expr("_imported_norm", "_mentioned_norm").alias(
+                "imports_not_in_mentions_normalized"
+            ),
+            _set_diff_expr("_mentioned_norm", "_dependencies_norm").alias(
+                "mentions_not_in_dependencies_normalized"
+            ),
+            _set_diff_expr("_dependencies_norm", "_mentioned_norm").alias(
+                "dependencies_not_in_mentions_normalized"
+            ),
+            _set_diff_expr("_imported_norm", "_dependencies_norm").alias(
+                "imports_not_in_dependencies_normalized"
+            ),
+            _set_diff_expr("_dependencies_norm", "_imported_norm").alias(
+                "dependencies_not_in_imports_normalized"
+            ),
         )
     )
 
-    # -------------------------------------------------------------------------
-    # Sample and write annotation CSV
-    # -------------------------------------------------------------------------
+    # Sample and write annotation file
     sample = complete_cases.sample(n=SAMPLE_SIZE, seed=RANDOM_SEED, shuffle=True)
 
     sample = sample.with_columns(
@@ -676,36 +599,34 @@ def main() -> None:
         pl.lit(None).cast(pl.String).alias("imports_dependencies_differences_notes"),
         pl.lit(None).cast(pl.String).alias("notes"),
     ).select(
-        [
-            pl.col("document_id"),
-            pl.col("document_doi"),
-            pl.col("document_doi_url"),
-            pl.col("document_title"),
-            pl.col("document_field_name"),
-            pl.col("document_domain_name"),
-            pl.col("repository_id"),
-            pl.col("repository_url"),
-            pl.col("repository_primary_language"),
-            pl.col("mentioned_count"),
-            pl.col("imported_count"),
-            pl.col("dependencies_count"),
-            pl.col("mentioned_software_raw"),
-            pl.col("mentioned_software_normalized"),
-            pl.col("imported_software_raw"),
-            pl.col("imported_software_normalized"),
-            pl.col("dependencies_software_raw"),
-            pl.col("dependencies_software_normalized"),
-            pl.col("mentions_not_in_imports_normalized"),
-            pl.col("imports_not_in_mentions_normalized"),
-            pl.col("mentions_not_in_dependencies_normalized"),
-            pl.col("dependencies_not_in_mentions_normalized"),
-            pl.col("imports_not_in_dependencies_normalized"),
-            pl.col("dependencies_not_in_imports_normalized"),
-            pl.col("mentions_imports_differences_notes"),
-            pl.col("mentions_dependencies_differences_notes"),
-            pl.col("imports_dependencies_differences_notes"),
-            pl.col("notes"),
-        ]
+        "document_id",
+        "document_doi",
+        "document_doi_url",
+        "document_title",
+        "document_field_name",
+        "document_domain_name",
+        "repository_id",
+        "repository_url",
+        "repository_primary_language",
+        "mentioned_count",
+        "imported_count",
+        "dependencies_count",
+        "mentioned_software_raw",
+        "mentioned_software_normalized",
+        "imported_software_raw",
+        "imported_software_normalized",
+        "dependencies_software_raw",
+        "dependencies_software_normalized",
+        "mentions_not_in_imports_normalized",
+        "imports_not_in_mentions_normalized",
+        "mentions_not_in_dependencies_normalized",
+        "dependencies_not_in_mentions_normalized",
+        "imports_not_in_dependencies_normalized",
+        "dependencies_not_in_imports_normalized",
+        "mentions_imports_differences_notes",
+        "mentions_dependencies_differences_notes",
+        "imports_dependencies_differences_notes",
+        "notes",
     )
 
     print(f"Writing {len(sample)} rows to {ANNOTATION_OUTPUT_PATH}")

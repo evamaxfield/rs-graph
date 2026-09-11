@@ -11,12 +11,16 @@ from __future__ import annotations
 import os
 from datetime import date
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
+import pandas as pd
 import polars as pl
 import seaborn as sns
 from datasets import Dataset, load_dataset
 from dotenv import load_dotenv
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
+from matplotlib.legend import Legend
 from rapidfuzz import fuzz
 
 from rs_graph.utils.software_alignment import align_software_names
@@ -33,8 +37,8 @@ OUTPUT_DIR = THIS_DIR / "outputs"
 
 DEFAULT_CONFIDENCE_THRESHOLD = 0.9994
 DEFAULT_MIN_YEAR = 2008
-# Paper-local override of the repo-wide 0.9 identity-link convention -- this manuscript
-# states/uses 0.97 throughout (Methods, following Brown, Slaughter & Weber).
+# Researcher-developer identity-link confidence -- this manuscript uses 0.97 throughout
+# (Methods, following Brown, Slaughter & Weber).
 DEFAULT_RDAL_CONFIDENCE_THRESHOLD = 0.97
 
 SOURCE_DISPLAY_NAMES: dict[str, str] = {
@@ -60,6 +64,51 @@ ALL_MANIFEST_ECOSYSTEMS: list[str] = sorted(
 # Mention extraction is absent/partial after this publication year (see the
 # mentions-coverage diagnostic), so mention-dependent analyses cap at it.
 MENTION_EXTRACTION_YEAR_CAP = 2022
+
+# Short display labels for OpenAlex field names. Full names run long enough to overflow legend
+# boxes and axis margins; captions still unpack the full name. Covers every pruned field name
+# used in this paper plus the remaining OpenAlex fields.
+FIELD_DISPLAY_ABBREVIATIONS: dict[str, str] = {
+    "Agricultural and Biological Sciences": "Agri. & Bio. Sci.",
+    "Arts and Humanities": "Arts & Hum.",
+    "Biochemistry, Genetics and Molecular Biology": "Biochem.",
+    "Business, Management and Accounting": "Business",
+    "Chemical Engineering": "Chem. Eng.",
+    "Chemistry": "Chemistry",
+    "Computer Science": "Comp. Sci.",
+    "Decision Sciences": "Decision Sci.",
+    "Earth and Planetary Sciences": "Earth & Planet. Sci.",
+    "Economics, Econometrics and Finance": "Economics",
+    "Energy": "Energy",
+    "Engineering": "Engineering",
+    "Environmental Science": "Environ. Sci.",
+    "Health Professions": "Health Prof.",
+    "Immunology and Microbiology": "Immunol. & Micro.",
+    "Materials Science": "Materials Sci.",
+    "Mathematics": "Math.",
+    "Medicine": "Medicine",
+    "Neuroscience": "Neurosci.",
+    "Nursing": "Nursing",
+    "Pharmacology, Toxicology and Pharmaceutics": "Pharmacology",
+    "Physics and Astronomy": "Physics & Astro.",
+    "Psychology": "Psychology",
+    "Social Sciences": "Social Sci.",
+    "Veterinary": "Veterinary",
+    "Dentistry": "Dentistry",
+    "Other": "Other",
+}
+
+
+def abbreviate_field(name: str) -> str:
+    """Short display label for a field name; unmapped names pass through unchanged."""
+    return FIELD_DISPLAY_ABBREVIATIONS.get(name, name)
+
+
+def field_abbreviation_caption(fields: list[str]) -> str:
+    """Caption fragment unpacking every abbreviated label used in a figure."""
+    pairs = [f"{abbreviate_field(f)} = {f}" for f in fields if abbreviate_field(f) != f]
+    return "; ".join(pairs)
+
 
 ###############################################################################
 # Loading
@@ -111,9 +160,9 @@ def load_filtered_pairs(
       3. researcher-developer identity confidence >= `rdal_confidence_threshold`, only when
          `apply_researcher_developer_filter=True` (off by default; most figures never touch
          researcher/developer-account identity).
-      4. Filtering is always done at the pair level first; entity-level subsets (repositories,
-         documents) are always derived *from* the filtered pairs, never filtered directly.
 
+    Filtering is always done at the pair level; entity-level subsets (repositories,
+    documents) are derived *from* the filtered pairs, never filtered directly.
     Every step prints how much data was filtered and how much remains.
     """
     print(f"Loading base tables from HuggingFace ({HF_DATASET})...")
@@ -165,13 +214,11 @@ def load_filtered_pairs(
     # ---- Join in document/repository/topic metadata ----
     merged = (
         pairs.join(
-            documents.select(*[pl.col(c).alias(f"document_{c}") for c in documents.columns]),
+            documents.select(pl.all().name.prefix("document_")),
             on="document_id",
         )
         .join(
-            repositories.select(
-                *[pl.col(c).alias(f"repository_{c}") for c in repositories.columns]
-            ),
+            repositories.select(pl.all().name.prefix("repository_")),
             on="repository_id",
         )
         .join(document_top_topics, on="document_id", how="left")
@@ -340,13 +387,6 @@ def clean_mention_names(mentions: pl.DataFrame) -> pl.DataFrame:
         f"{cleaned.height:,} of {n_before:,} rows remain"
     )
     return cleaned
-
-
-def format_p_value(p: float) -> str:
-    """Format a p-value for a published table; below-float-underflow values print as a bound
-    rather than a literal 0.0.
-    """
-    return "< 1e-300" if p < 1e-300 else f"{p:.3g}"
 
 
 ###############################################################################
@@ -588,12 +628,14 @@ def compute_modified_fwsi(
 # Plotting support
 
 
-def save_figure(fig, stem: str, output_dir: Path) -> None:
+def save_figure(fig: Figure, stem: str, output_dir: Path) -> None:
     """Save a figure as PNG, TIFF (LZW-compressed), and PDF to `output_dir` at 300 dpi."""
     output_dir.mkdir(parents=True, exist_ok=True)
     for ext in ("png", "tiff", "pdf"):
         # LZW is lossless and cuts TIFF sizes ~5-10x.
-        extra = {"pil_kwargs": {"compression": "tiff_lzw"}} if ext == "tiff" else {}
+        extra: dict[str, Any] = (
+            {"pil_kwargs": {"compression": "tiff_lzw"}} if ext == "tiff" else {}
+        )
         fig.savefig(output_dir / f"{stem}.{ext}", dpi=300, bbox_inches="tight", **extra)
     print(f"Saved figure: {output_dir / stem} (.png/.tiff/.pdf)")
 
@@ -605,7 +647,14 @@ def save_table(df: pl.DataFrame, stem: str, output_dir: Path) -> None:
     print(f"Saved table: {output_dir / stem}.csv ({df.height:,} rows)")
 
 
-def shrink_ticks(ax, size: int = 8) -> None:
+def format_p_value(p: float) -> str:
+    """Format a p-value for a published table; below-float-underflow values print as a bound
+    rather than a literal 0.0.
+    """
+    return "< 1e-300" if p < 1e-300 else f"{p:.3g}"
+
+
+def shrink_ticks(ax: Axes, size: int = 8) -> None:
     """Shrink tick label font size -- evaplot's default 15pt tick labels are too large for
     multi-panel figures with long categorical labels (field/domain names).
     """
@@ -619,7 +668,7 @@ _FAMILY_GREEN = "#1b9e77"
 _FAMILY_ORANGE = "#d95f02"
 
 
-def general_palette(n: int) -> list[str]:
+def general_palette(n: int) -> list[tuple[float, float, float]]:
     """Build an n-color categorical palette anchored on the green/orange family used for
     general statistical comparisons (tooling categories, licenses, manifest bands).
     """
@@ -659,7 +708,7 @@ _CONTRAST_MAGENTA = "#c2438a"
 TERTIARY_BINARY_PALETTE: list[str] = [_CONTRAST_GOLD, _CONTRAST_MAGENTA]
 
 
-def style_legend(legend, fontsize: int = 8) -> None:
+def style_legend(legend: Legend | None, fontsize: int = 8) -> None:
     """Give a legend a consistent bordered-box look across the figure set (evaplot's
     `legend.frameon: False` rcParam default otherwise leaves some legends unboxed).
     """
@@ -674,7 +723,7 @@ def style_legend(legend, fontsize: int = 8) -> None:
         text.set_fontsize(fontsize)
 
 
-def add_panel_label(ax, label: str) -> None:
+def add_panel_label(ax: Axes, label: str) -> None:
     """Add a bold panel label (A, B, C...) to the upper-left corner of an axes."""
     ax.text(
         -0.12,
@@ -696,8 +745,8 @@ def print_caption_note(figure_stem: str, text: str) -> None:
 
 
 def cap_ylim_to_quantiles(
-    ax,
-    series,
+    ax: Axes,
+    series: pd.Series,
     lower_q: float = 0.02,
     upper_q: float = 0.98,
     pad_frac: float = 0.12,

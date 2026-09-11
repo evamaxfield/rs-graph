@@ -69,42 +69,49 @@ def _plot_date_delta_panel(
     return stats
 
 
+def _one_to_one(df: pl.DataFrame) -> pl.DataFrame:
+    """Strict one-to-one linking: drop every row whose document_id or repository_id is
+    duplicated within `df` (same dedup as the snowball-sampling prep notebook).
+    """
+    return df.unique(subset="document_id", keep="none").unique(
+        subset="repository_id", keep="none"
+    )
+
+
 def date_delta_figure(output_dir: Path = u.OUTPUT_DIR) -> None:
     """
-    Build line 229's date-delta figure -- justifies the 90th/10th-percentile
+    Build the date-delta figure justifying the 10th/90th-percentile
     repository-creation-vs-publication-date inclusion window used elsewhere in the pipeline.
-    Uses strict one-to-one linking, matching
-    `notebooks/snowball-sampling-discovery-prep.ipynb`'s dedup (drop every document linked to
-    more than one repository and every repository linked to more than one document), which
-    isolates the clearest paper-to-repo match at little coverage cost. Mined pairs appear
-    only as a sixth panel on the by-source supplemental; the pooled figure and its
-    window-defining percentiles stay seed-only (mined pairs were selected *through* the
-    window, so pooling them would be circular). The by-document-type supplemental is also
-    seed-only.
+
+    Uses strict one-to-one linking (drop every document linked to more than one repository
+    and every repository linked to more than one document), matching the dedup in
+    `notebooks/snowball-sampling-discovery-prep.ipynb`, applied once over the whole filtered
+    population (seed and mined together). The pooled figure and its window-defining
+    percentiles use seed pairs only -- mined pairs were selected *through* the window, so
+    pooling them would be circular. Mined pairs appear only as a sixth panel on the
+    by-source supplemental; the by-document-type supplemental is also seed-only.
     """
     evaplot.set_style("evaplot_rc")
     df = u.load_filtered_pairs(top_n_fields=10)
 
     # ---- Strict one-to-one linking (same dedup as the snowball-sampling prep notebook) ----
     n_before_dedup = df.height
-    df = df.unique(subset="document_id", keep="none").unique(
-        subset="repository_id", keep="none"
-    )
+    df = _one_to_one(df)
     print(
         f"One-to-one dedup (drop all rows with a duplicated document_id, then all rows with "
-        f"a duplicated repository_id): {df.height:,} of {n_before_dedup:,} pairs remain"
+        f"a duplicated repository_id): {df.height:,} of {n_before_dedup:,} filtered pairs "
+        f"remain"
     )
 
-    n_all = df.height
+    # ---- Split seed from mined for the per-source / mined breakdown ----
     mined_df = df.filter(pl.col("link_processing_iteration").is_not_null())
     df = df.filter(pl.col("link_processing_iteration").is_null())
     print(
         f"Seed pairs (link_processing_iteration IS NULL): {df.height:,}; "
-        f"mined pairs (sixth supplemental panel only): {mined_df.height:,} "
-        f"of {n_all:,} one-to-one pairs"
+        f"mined pairs (sixth supplemental panel only): {mined_df.height:,}"
     )
 
-    _delta_expr = (
+    delta_expr = (
         (
             pl.col("document_publication_date_parsed").cast(pl.Datetime)
             - pl.col("repository_creation_datetime_parsed")
@@ -112,8 +119,8 @@ def date_delta_figure(output_dir: Path = u.OUTPUT_DIR) -> None:
         .dt.total_days()
         .alias("publication_date_creation_date_diff")
     )
-    df = df.with_columns(_delta_expr)
-    mined_df = mined_df.with_columns(_delta_expr)
+    df = df.with_columns(delta_expr)
+    mined_df = mined_df.with_columns(delta_expr)
     n_before = df.height
     df = df.drop_nulls(subset=["publication_date_creation_date_diff"])
     mined_df = mined_df.drop_nulls(subset=["publication_date_creation_date_diff"])
@@ -216,13 +223,11 @@ def date_delta_figure(output_dir: Path = u.OUTPUT_DIR) -> None:
 
 
 ###############################################################################
-# Co-authorship network (fresh rebuild)
+# Co-authorship network
 #
-# The manuscript's Results text cites component statistics originally sourced from the
-# docs-site's `web/data-prep/queries/coauthorship_network.py` pipeline; those numbers must be
-# rebuilt inside this replication package before being cited. The docs-site pipeline is
-# reference only for what the computation needs to do (edge-construction rule, author-count
-# bound).
+# Rebuilds the component statistics cited in the manuscript's Results text. The docs-site
+# pipeline (`web/data-prep/queries/coauthorship_network.py`) defines the edge-construction
+# rule and author-count bound reproduced here.
 
 
 def coauthorship_network(
@@ -241,11 +246,10 @@ def coauthorship_network(
     `min_authors`-`max_authors` listed authors before generating all-pairs edges within a
     document -- without this bound, large-consortium papers would each contribute up to
     C(n_authors, 2) edges of combinatorial noise. Single-author-only isolates (degree 0)
-    are excluded from the node population before component statistics, matching the
-    manuscript's existing convention.
+    are excluded from the node population before component statistics.
 
-    The researcher-developer identity-link confidence filter is deliberately NOT applied:
-    it constrains researcher<->developer identity, and co-authorship is a purely
+    The researcher-developer identity-link confidence filter is not applied here: it
+    constrains researcher<->developer identity, and co-authorship is a purely
     researcher<->researcher relationship, so there are no identities in scope for it.
     """
     pairs = u.load_filtered_pairs()
@@ -276,10 +280,8 @@ def coauthorship_network(
         pl.col("n_authors").is_between(min_authors, max_authors)
     ).select("document_id")
     n_docs_before_bound = authors.get_column("document_id").n_unique()
-    # The author-count bound caps combinatorial all-pairs EDGE generation -- it must not also
-    # shrink the node set. `authors` (unbounded) still holds every researcher with an
-    # authorship row on a filtered document; degree-0 isolates are excluded later, before
-    # component statistics.
+    # The bound caps edge generation only -- the node set stays unbounded (`authors`);
+    # degree-0 isolates are excluded later, before component statistics.
     bounded_authors = authors.join(qualifying_docs, on="document_id", how="inner")
     print(
         f"After bounding to {min_authors}-{max_authors} listed authors/document (caps "
@@ -301,16 +303,14 @@ def coauthorship_network(
     print(f"Co-authorship edges (unique researcher pairs): {len(edges):,}")
 
     node_ids = authors.get_column("researcher_id").unique().to_list()
-    graph: rx.PyGraph = rx.PyGraph()
-    index_by_researcher: dict[int, int] = {}
-    for researcher_id in node_ids:
-        index_by_researcher[researcher_id] = graph.add_node(researcher_id)
-    for row in edges.iter_rows(named=True):
-        graph.add_edge(
-            index_by_researcher[row["researcher_id"]],
-            index_by_researcher[row["researcher_id_b"]],
-            row["n_shared_docs"],
-        )
+    graph = rx.PyGraph()
+    index_by_researcher = dict(zip(node_ids, graph.add_nodes_from(node_ids), strict=True))
+    graph.add_edges_from(
+        [
+            (index_by_researcher[researcher_id], index_by_researcher[researcher_id_b], weight)
+            for researcher_id, researcher_id_b, weight in edges.iter_rows()
+        ]
+    )
 
     n_nodes_with_isolates = graph.num_nodes()
     n_edges = graph.num_edges()
@@ -371,16 +371,15 @@ def coauthorship_network(
         "edge; single-author-only researchers (degree 0) are excluded from the node "
         "population.",
     )
-    print("\n--- Co-authorship network statistics (fresh rebuild) ---")
+    print("\n--- Co-authorship network statistics ---")
     print(f"Connected components: {n_components:,}")
     print(f"Largest component: {largest_size:,} researchers ({largest_pct:.1f}%)")
     print(f"Next-largest component: {next_largest_size:,} researchers")
     print(
-        "Manuscript currently cites: 11,568 components / 91% in largest component / "
-        "46 in next-largest (docs-site pipeline numbers -- not to be cited per "
-        "replication-package policy; comparison only)."
+        "Docs-site pipeline reference (comparison only): 11,568 components / "
+        "91% in largest component / 46 in next-largest."
     )
-    print("---------------------------------------------------------\n")
+    print("----------------------------------------\n")
 
 
 ###############################################################################
@@ -389,13 +388,12 @@ def coauthorship_network(
 
 def network_entity_edge_counts(output_dir: Path = u.OUTPUT_DIR) -> None:
     """
-    Fill the manuscript's full-network paragraph (line 29) -- article, repository,
-    researcher, and developer-account node counts, plus authorship, contribution,
-    article-repository-link, and researcher-developer identity edge counts. Entities are
-    derived from the standard-filtered pairs (pair-level filtering first); identity-link
-    counts are reported at both the >=0.9 and the manuscript-Methods-stated >=0.97
-    thresholds, restricted to identities whose researcher and developer account both appear
-    in the network.
+    Compute the manuscript's full-network counts -- article, repository, researcher, and
+    developer-account node counts, plus authorship, contribution, article-repository-link,
+    and researcher-developer identity edge counts. Entities are derived from the
+    standard-filtered pairs (pair-level filtering first); identity-link counts are reported
+    unfiltered and at both the >=0.9 and >=0.97 confidence thresholds, restricted to
+    identities whose researcher and developer account both appear in the network.
     """
     pairs = u.load_filtered_pairs()
     n_links = pairs.height
@@ -428,15 +426,20 @@ def network_entity_edge_counts(output_dir: Path = u.OUTPUT_DIR) -> None:
         pl.col("researcher_id").is_in(researcher_ids.implode())
         & pl.col("developer_account_id").is_in(developer_ids.implode())
     )
+    # Unfiltered baseline: every in-network identity link, at any confidence.
     identity_counts = {
+        "n_identity_links_unfiltered": int(
+            in_network_rdal.select("researcher_id", "developer_account_id").unique().height
+        )
+    }
+    identity_counts |= {
         f"n_identity_links_confidence_gte_{thr}": int(
             in_network_rdal.filter(pl.col("predictive_model_confidence") >= thr)
             .select("researcher_id", "developer_account_id")
             .unique()
             .height
         )
-        # Both thresholds: 0.9 (the repo-wide convention) and 0.97 (the paper-local
-        # default) -- kept as two columns so either can be cited.
+        # 0.9 is the repo-wide convention; 0.97 is the threshold stated in Methods.
         for thr in (0.9, 0.97)
     }
 
@@ -462,7 +465,7 @@ def network_entity_edge_counts(output_dir: Path = u.OUTPUT_DIR) -> None:
         output_dir,
     )
 
-    print("\n--- Full-network entity/edge counts (line 29) ---")
+    print("\n--- Full-network entity/edge counts ---")
     for k, v in summary.items():
         print(f"  {k}: {v:,}")
-    print("-------------------------------------------------\n")
+    print("---------------------------------------\n")

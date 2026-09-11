@@ -22,10 +22,9 @@ from rs_graph.utils.software_alignment import align_software_names
 # Minimum pairs per year for plotted lines; CSVs keep every year.
 IOU_MIN_PAIRS_PER_YEAR = 50
 
-# Generic mention terms removed for the generic-filtered IoU variant. Deliberately NOT
-# listed: named software and languages (matlab, samtools, python, r, bioconductor,
-# jupyter) -- real referents whose non-matching is the construct-mismatch signal, not noise.
-# All names compared post-normalize_name.
+# Generic mention terms removed for the generic-filtered IoU variant. Named software and
+# languages (matlab, samtools, python, r, bioconductor, jupyter) are intentionally kept:
+# their non-matching is signal, not noise. All names compared post-normalize_name.
 GENERIC_MENTION_STOPLIST: set[str] = {
     "code",
     "scripts",
@@ -53,8 +52,8 @@ GENERIC_MENTION_STOPLIST: set[str] = {
 
 
 def _top5_unmatched_rows(
-    direction_specs: list[tuple[str, dict]],
-    weight_by_key: dict | None,
+    direction_specs: list[tuple[str, dict[int, set[str]]]],
+    weight_by_key: dict[int, int] | None,
     n_eligible_pairs: int,
     top_n: int = 5,
 ) -> list[dict]:
@@ -404,6 +403,172 @@ def import_dependency_iou_over_time(
 # Mentions-vs-imports and mentions-vs-dependencies alignment over time
 
 
+def _mentions_pair_iou_frames(
+    df: pl.DataFrame,
+    repo_names: dict[int, list[str]],
+    mentions_by_doc: dict[int, list[str]],
+    source_b_label: str,
+    cutoff: float,
+) -> tuple[
+    pl.DataFrame, pl.DataFrame, dict[str, int], dict[int, set[str]], dict[int, set[str]]
+]:
+    """Per-pair mentions-vs-`source_b_label` alignment. Returns the conditional pair frame
+    (as-is + generic-filtered IoU per pair), the zero-pad frame of single-view pairs for the
+    unconditional variant, per-term stoplist-removed counts, and per-pair unmatched mention /
+    unmatched item sets (keyed by pair index).
+    """
+    eligible = df.filter(
+        pl.col("repository_id").is_in(set(repo_names))
+        & pl.col("document_id").is_in(set(mentions_by_doc))
+    )
+    print(
+        f"\nmentions-vs-{source_b_label}: {eligible.height:,} of {df.height:,} pairs have "
+        f">=1 extracted mention and >=1 {source_b_label}"
+    )
+    removed_counts: dict[str, int] = {}
+    unmatched_mentions: dict[int, set[str]] = {}
+    unmatched_items: dict[int, set[str]] = {}
+    rows = []
+    for pair_idx, row in enumerate(
+        eligible.select("document_id", "repository_id", "document_publication_year")
+        .unique(subset=["document_id", "repository_id"])
+        .iter_rows(named=True)
+    ):
+        pair_b = repo_names[row["repository_id"]]
+        pair_mentions = mentions_by_doc[row["document_id"]]
+        matches = align_software_names(
+            items_a=pair_b,
+            items_b=pair_mentions,
+            source_a=source_b_label,
+            source_b="mention",
+            cutoff=cutoff,
+            method="global_min_diff",
+        )
+        matched_items = {m.normalized_item_one for m in matches}
+        matched_mentions = {m.normalized_item_two for m in matches}
+        unique_b = set(pair_b)
+        unique_mentions = set(pair_mentions)
+        n_matched = len(matched_items)
+        union_size = len(unique_b) + len(unique_mentions) - n_matched
+        iou_as_is = n_matched / union_size if union_size else float("nan")
+        unmatched_mentions[pair_idx] = unique_mentions - matched_mentions
+        unmatched_items[pair_idx] = unique_b - matched_items
+
+        # Generic-filtered variant: same pair, stoplist terms removed from the mention
+        # set before alignment. A pair whose mentions are all generic stays in the
+        # population with IoU=0 (eligibility is defined on the raw mention set).
+        generic_here = unique_mentions & GENERIC_MENTION_STOPLIST
+        for term in generic_here:
+            removed_counts[term] = removed_counts.get(term, 0) + 1
+        if generic_here:
+            filtered_mentions = [m for m in pair_mentions if m not in GENERIC_MENTION_STOPLIST]
+            if filtered_mentions:
+                f_matches = align_software_names(
+                    items_a=pair_b,
+                    items_b=filtered_mentions,
+                    source_a=source_b_label,
+                    source_b="mention",
+                    cutoff=cutoff,
+                    method="global_min_diff",
+                )
+                f_matched = len({m.normalized_item_one for m in f_matches})
+                f_union = len(unique_b) + len(set(filtered_mentions)) - f_matched
+                iou_filtered = f_matched / f_union if f_union else float("nan")
+            else:
+                iou_filtered = 0.0
+        else:
+            iou_filtered = iou_as_is
+        rows.append(
+            {
+                "document_publication_year": row["document_publication_year"],
+                "iou_as_is": iou_as_is,
+                "iou_generic_filtered": iou_filtered,
+            }
+        )
+
+    # Unconditional zero-pads: repo has the b-side view but the document has no extracted
+    # mention, or the document has mentions but the repo lacks the b-side view.
+    zero_pad = (
+        df.filter(
+            (
+                pl.col("repository_id").is_in(set(repo_names))
+                & ~pl.col("document_id").is_in(set(mentions_by_doc))
+            )
+            | (
+                pl.col("document_id").is_in(set(mentions_by_doc))
+                & ~pl.col("repository_id").is_in(set(repo_names))
+            )
+        )
+        .select("document_id", "repository_id", "document_publication_year")
+        .unique(subset=["document_id", "repository_id"])
+        .select(
+            pl.col("document_publication_year").cast(pl.Int64),
+            pl.lit(0.0).alias("iou_as_is"),
+            pl.lit(0.0).alias("iou_generic_filtered"),
+        )
+    )
+    print(f"  unconditional companion adds {zero_pad.height:,} single-view pairs as IoU=0")
+    return pl.DataFrame(rows), zero_pad, removed_counts, unmatched_mentions, unmatched_items
+
+
+def _plot_mentions_alignment_figure(
+    by_year: pl.DataFrame,
+    output_dir: Path,
+    min_pairs_per_year: int,
+    year_cap: int,
+) -> None:
+    """Conditional-variant mean-IoU lines, both comparisons, as-is (solid) vs.
+    generic-filtered (dashed). Medians are ~0 everywhere (most pairs mention none of their
+    imports/deps), so the mean carries the trend signal; medians/IQR stay in the CSV.
+    """
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    # Shared data-view colors -- imports and dependencies keep one hue each across figures.
+    colors = [u.DATA_VIEW_COLORS["imports"], u.DATA_VIEW_COLORS["dependencies"]]
+    labels = {
+        "mentions_vs_imports": "Mentions vs. imports",
+        "mentions_vs_dependencies": "Mentions vs. manifest dependencies",
+    }
+    for (comparison, label), color in zip(labels.items(), colors[: len(labels)], strict=True):
+        for mention_filter, ls, marker, suffix in [
+            ("as_is", "-", "o", "as-is"),
+            ("generic_filtered", "--", "s", "generic terms filtered"),
+        ]:
+            plotted = by_year.filter(
+                (pl.col("comparison") == comparison)
+                & (pl.col("variant") == "conditional")
+                & (pl.col("mention_filter") == mention_filter)
+                & (pl.col("n_pairs") >= min_pairs_per_year)
+            )
+            ax.plot(
+                plotted.get_column("document_publication_year").to_numpy(),
+                plotted.get_column("mean_iou").to_numpy(),
+                marker=marker,
+                markersize=4,
+                color=color,
+                linewidth=1.6,
+                linestyle=ls,
+                label=f"{label} (mean, {suffix})",
+            )
+    ax.set_xlabel("Publication Year")
+    ax.set_ylabel("Mentions Alignment IoU (mean)")
+    max_mean_iou = (
+        by_year.filter(pl.col("variant") == "conditional").get_column("mean_iou").max()
+    )
+    assert isinstance(max_mean_iou, float)
+    ax.set_ylim(0, max(0.05, 1.4 * max_mean_iou))
+    u.style_legend(ax.legend(fontsize=8, loc="upper left"), fontsize=8)
+    u.print_caption_note(
+        "mentions_alignment_over_time",
+        f"Pairs with >=1 extracted mention only (conditional); years after {year_cap} "
+        f"(mentions-extraction horizon) and years with < {min_pairs_per_year} pairs "
+        "excluded; medians (~0 throughout) in the CSV",
+    )
+    u.shrink_ticks(ax, size=9)
+    evaplot.adjust_layout(fig)
+    u.save_figure(fig, "mentions_alignment_over_time", output_dir)
+    plt.close(fig)
+
+
 def mentions_alignment_over_time(
     output_dir: Path = u.OUTPUT_DIR,
     cutoff: float = 85.0,
@@ -440,131 +605,29 @@ def mentions_alignment_over_time(
     df = df.filter(pl.col("document_publication_year") <= year_cap)
 
     stoplist_removed_rows: list[dict] = []
-    unmatched_specs: list[tuple[str, dict]] = []
-
-    def _pair_iou_frame(
-        repo_names: dict[int, list[str]], source_b_label: str, comparison: str
-    ) -> tuple[pl.DataFrame, pl.DataFrame]:
-        """Return (conditional pair frame with as-is + generic-filtered IoU, zero-pad frame
-        of single-view pairs for the unconditional variant).
-        """
-        eligible = df.filter(
-            pl.col("repository_id").is_in(set(repo_names))
-            & pl.col("document_id").is_in(set(mentions_by_doc))
+    unmatched_specs: list[tuple[str, dict[int, set[str]]]] = []
+    frames: dict[str, tuple[pl.DataFrame, pl.DataFrame]] = {}
+    for comparison, repo_names, source_b_label in [
+        ("mentions_vs_imports", imports_by_repo, "import"),
+        ("mentions_vs_dependencies", deps_by_repo, "dependency"),
+    ]:
+        cond_frame, zero_pad, removed_counts, unmatched_mentions, unmatched_items = (
+            _mentions_pair_iou_frames(df, repo_names, mentions_by_doc, source_b_label, cutoff)
         )
-        print(
-            f"\nmentions-vs-{source_b_label}: {eligible.height:,} of {df.height:,} pairs have "
-            f">=1 extracted mention and >=1 {source_b_label}"
+        frames[comparison] = (cond_frame, zero_pad)
+        stoplist_removed_rows.extend(
+            {
+                "comparison": comparison,
+                "term": term,
+                "n_pairs_with_term_removed": n,
+                "n_eligible_pairs": cond_frame.height,
+            }
+            for term, n in removed_counts.items()
         )
-        removed_counts: dict[str, int] = {}
-        unmatched_mentions: dict[int, set[str]] = {}
-        unmatched_items: dict[int, set[str]] = {}
-        rows = []
-        for pair_idx, row in enumerate(
-            eligible.select("document_id", "repository_id", "document_publication_year")
-            .unique(subset=["document_id", "repository_id"])
-            .iter_rows(named=True)
-        ):
-            pair_b = repo_names[row["repository_id"]]
-            pair_mentions = mentions_by_doc[row["document_id"]]
-            matches = align_software_names(
-                items_a=pair_b,
-                items_b=pair_mentions,
-                source_a=source_b_label,
-                source_b="mention",
-                cutoff=cutoff,
-                method="global_min_diff",
-            )
-            matched_items = {m.normalized_item_one for m in matches}
-            matched_mentions = {m.normalized_item_two for m in matches}
-            unique_b = set(pair_b)
-            unique_mentions = set(pair_mentions)
-            n_matched = len(matched_items)
-            union_size = len(unique_b) + len(unique_mentions) - n_matched
-            iou_as_is = n_matched / union_size if union_size else float("nan")
-            unmatched_mentions[pair_idx] = unique_mentions - matched_mentions
-            unmatched_items[pair_idx] = unique_b - matched_items
-
-            # Generic-filtered variant: same pair, stoplist terms removed from the mention
-            # set before alignment. A pair whose mentions are all generic stays in the
-            # population with IoU=0 (eligibility is defined on the raw mention set).
-            generic_here = unique_mentions & GENERIC_MENTION_STOPLIST
-            for term in generic_here:
-                removed_counts[term] = removed_counts.get(term, 0) + 1
-            if generic_here:
-                filtered_mentions = [
-                    m for m in pair_mentions if m not in GENERIC_MENTION_STOPLIST
-                ]
-                if filtered_mentions:
-                    f_matches = align_software_names(
-                        items_a=pair_b,
-                        items_b=filtered_mentions,
-                        source_a=source_b_label,
-                        source_b="mention",
-                        cutoff=cutoff,
-                        method="global_min_diff",
-                    )
-                    f_matched = len({m.normalized_item_one for m in f_matches})
-                    f_union = len(unique_b) + len(set(filtered_mentions)) - f_matched
-                    iou_filtered = f_matched / f_union if f_union else float("nan")
-                else:
-                    iou_filtered = 0.0
-            else:
-                iou_filtered = iou_as_is
-            rows.append(
-                {
-                    "document_publication_year": row["document_publication_year"],
-                    "iou_as_is": iou_as_is,
-                    "iou_generic_filtered": iou_filtered,
-                }
-            )
-
-        for term, n in removed_counts.items():
-            stoplist_removed_rows.append(
-                {
-                    "comparison": comparison,
-                    "term": term,
-                    "n_pairs_with_term_removed": n,
-                    "n_eligible_pairs": len(rows),
-                }
-            )
         unmatched_specs.append(
             (f"mentions_not_matched_to_{source_b_label}s", unmatched_mentions)
         )
         unmatched_specs.append((f"{source_b_label}s_not_matched_to_mentions", unmatched_items))
-
-        # Unconditional zero-pads: repo has the b-side view but the document has no extracted
-        # mention, or the document has mentions but the repo lacks the b-side view.
-        zero_pad = (
-            df.filter(
-                (
-                    pl.col("repository_id").is_in(set(repo_names))
-                    & ~pl.col("document_id").is_in(set(mentions_by_doc))
-                )
-                | (
-                    pl.col("document_id").is_in(set(mentions_by_doc))
-                    & ~pl.col("repository_id").is_in(set(repo_names))
-                )
-            )
-            .select("document_id", "repository_id", "document_publication_year")
-            .unique(subset=["document_id", "repository_id"])
-            .select(
-                pl.col("document_publication_year").cast(pl.Int64),
-                pl.lit(0.0).alias("iou_as_is"),
-                pl.lit(0.0).alias("iou_generic_filtered"),
-            )
-        )
-        print(f"  unconditional companion adds {zero_pad.height:,} single-view pairs as IoU=0")
-        return pl.DataFrame(rows), zero_pad
-
-    frames: dict[str, tuple[pl.DataFrame, pl.DataFrame]] = {
-        "mentions_vs_imports": _pair_iou_frame(
-            imports_by_repo, "import", "mentions_vs_imports"
-        ),
-        "mentions_vs_dependencies": _pair_iou_frame(
-            deps_by_repo, "dependency", "mentions_vs_dependencies"
-        ),
-    }
 
     if stoplist_removed_rows:
         u.save_table(
@@ -641,51 +704,4 @@ def mentions_alignment_over_time(
     print("\nPer-pair IoU-vs-year Spearman trends:")
     print(trend)
 
-    # ---- Figure: conditional variant, both comparisons, as-is (solid) vs. generic-filtered
-    # (dashed) mean lines. Medians are ~0 everywhere (most pairs mention none of their
-    # imports/deps), so the mean carries the trend signal; medians/IQR stay in the CSV. ----
-    fig, ax = plt.subplots(figsize=(9, 5.5))
-    # Shared data-view colors -- imports and dependencies keep one hue each across figures.
-    colors = [u.DATA_VIEW_COLORS["imports"], u.DATA_VIEW_COLORS["dependencies"]]
-    labels = {
-        "mentions_vs_imports": "Mentions vs. imports",
-        "mentions_vs_dependencies": "Mentions vs. manifest dependencies",
-    }
-    for (comparison, label), color in zip(labels.items(), colors[: len(labels)], strict=True):
-        for mention_filter, ls, marker, suffix in [
-            ("as_is", "-", "o", "as-is"),
-            ("generic_filtered", "--", "s", "generic terms filtered"),
-        ]:
-            plotted = by_year.filter(
-                (pl.col("comparison") == comparison)
-                & (pl.col("variant") == "conditional")
-                & (pl.col("mention_filter") == mention_filter)
-                & (pl.col("n_pairs") >= min_pairs_per_year)
-            )
-            ax.plot(
-                plotted.get_column("document_publication_year").to_numpy(),
-                plotted.get_column("mean_iou").to_numpy(),
-                marker=marker,
-                markersize=4,
-                color=color,
-                linewidth=1.6,
-                linestyle=ls,
-                label=f"{label} (mean, {suffix})",
-            )
-    ax.set_xlabel("Publication Year")
-    ax.set_ylabel("Mentions Alignment IoU (mean)")
-    y_hi = 1.4 * float(
-        by_year.filter(pl.col("variant") == "conditional").get_column("mean_iou").max()
-    )
-    ax.set_ylim(0, max(0.05, y_hi))
-    u.style_legend(ax.legend(fontsize=8, loc="upper left"), fontsize=8)
-    u.print_caption_note(
-        "mentions_alignment_over_time",
-        f"Pairs with >=1 extracted mention only (conditional); years after {year_cap} "
-        f"(mentions-extraction horizon) and years with < {min_pairs_per_year} pairs "
-        "excluded; medians (~0 throughout) in the CSV",
-    )
-    u.shrink_ticks(ax, size=9)
-    evaplot.adjust_layout(fig)
-    u.save_figure(fig, "mentions_alignment_over_time", output_dir)
-    plt.close(fig)
+    _plot_mentions_alignment_figure(by_year, output_dir, min_pairs_per_year, year_cap)

@@ -43,9 +43,7 @@ CLASSIFICATION_MODELS_TABLE: list[dict] = [
         "stated_recall": 0.950,
         "stated_f1": 0.944,
         "metric_prefix": None,  # flat precision/recall/f1 keys, not macro_/binary_-prefixed
-        # The paper cites the published Brown/Slaughter/Weber figures; the sci-soft-models
-        # artifact currently reports higher numbers. The gap is recorded as a flagged note,
-        # not treated as a table error.
+        # Cited value is the published figure; the artifact's saved eval differs (see note).
         "known_discrepancy_note": (
             "Cited value = published Brown/Slaughter/Weber figures; the sci-soft-models "
             "artifact's current saved eval differs (see 'actual'). Known discrepancy -- "
@@ -64,6 +62,128 @@ CLASSIFICATION_MODELS_TABLE: list[dict] = [
 ]
 
 MISMATCH_TOLERANCE = 0.005
+
+
+def _verify_stated_metrics(entry: dict) -> tuple[dict | None, bool]:
+    """QA one model's manuscript-stated metrics against its saved eval results. Returns the
+    model's "full test set" summary row (None when results.json is missing) and whether any
+    metric mismatched.
+    """
+    results_path: Path = entry["results_path"]
+    print(f"{entry['name']}")
+    print(f"  Reading: {results_path}")
+    if not results_path.exists():
+        print("  MISSING -- results.json not found at this path, cannot verify.\n")
+        return None, True
+
+    results = json.loads(results_path.read_text())
+    prefix = entry["metric_prefix"]
+    if prefix is None:
+        actual_precision = results["precision"]
+        actual_recall = results["recall"]
+        actual_f1 = results["f1"]
+    else:
+        actual_precision = results[f"{prefix}_precision"]
+        actual_recall = results[f"{prefix}_recall"]
+        actual_f1 = results[f"{prefix}_f1"]
+
+    summary_row = {
+        "model": entry["name"],
+        "subset": "full test set",
+        "precision": round(actual_precision, 3),
+        "recall": round(actual_recall, 3),
+        "f1": round(actual_f1, 3),
+    }
+
+    any_mismatch = False
+    discrepancy_note = entry.get("known_discrepancy_note", "")
+    for label, stated, actual in [
+        ("Precision", entry["stated_precision"], actual_precision),
+        ("Recall", entry["stated_recall"], actual_recall),
+        ("F1", entry["stated_f1"], actual_f1),
+    ]:
+        delta = actual - stated
+        if abs(delta) <= MISMATCH_TOLERANCE:
+            status = "OK"
+        elif discrepancy_note:
+            # Known discrepancy: flagged, but not counted as a mismatch.
+            status = "FLAGGED_KNOWN_DISCREPANCY"
+        else:
+            status = "MISMATCH"
+            any_mismatch = True
+        print(
+            f"  {label}: manuscript states {stated:.3f}, actual is {actual:.4f} "
+            f"(delta {delta:+.4f}) -- {status}"
+        )
+    print()
+    return summary_row, any_mismatch
+
+
+def _metric_for_value(frame: pl.DataFrame, key_col: str, key: str, metric_col: str) -> float:
+    """Single metric value for the eval frame row whose `key_col` equals `key`."""
+    return float(frame.filter(pl.col(key_col) == key).get_column(metric_col).item())
+
+
+def _armm_detail_specs(
+    field_eval: pl.DataFrame,
+    period_eval: pl.DataFrame,
+    source_eval: pl.DataFrame,
+    readme_perf: pl.DataFrame,
+) -> list[tuple[str, str, float, float]]:
+    """(detail group, metric label, manuscript-stated value, actual value) rows for the
+    ARMM detail verification (manuscript lines 207-211).
+    """
+    field_f1 = field_eval.get_column("macro_f1")
+    field_min = field_eval.sort("macro_f1").row(0, named=True)
+    period_f1 = period_eval.get_column("macro_f1")
+    period_min = period_eval.sort("macro_f1").row(0, named=True)
+    field_f1_mean, field_f1_sd = field_f1.mean(), field_f1.std()
+    period_f1_mean, period_f1_sd = period_f1.mean(), period_f1.std()
+    assert isinstance(field_f1_mean, float) and isinstance(field_f1_sd, float)
+    assert isinstance(period_f1_mean, float) and isinstance(period_f1_sd, float)
+
+    def _source_binary_f1(source_name: str) -> float:
+        return _metric_for_value(source_eval, "feature_value", source_name, "binary_f1")
+
+    def _readme_bin_f1(bin_name: str) -> float:
+        return _metric_for_value(
+            readme_perf, "repository_readme_length_bin", bin_name, "macro_f1"
+        )
+
+    return [
+        ("per_field", "mean macro F1 across fields", 0.972, field_f1_mean),
+        ("per_field", "SD macro F1 across fields", 0.010, field_f1_sd),
+        (
+            "per_field",
+            f"lowest field macro F1 ({field_min['feature_value']})",
+            0.951,
+            float(field_min["macro_f1"]),
+        ),
+        ("per_period", "mean macro F1 across periods", 0.968, period_f1_mean),
+        ("per_period", "SD macro F1 across periods", 0.012, period_f1_sd),
+        (
+            "per_period",
+            f"lowest period macro F1 ({period_min['feature_value']})",
+            0.950,
+            float(period_min["macro_f1"]),
+        ),
+        ("per_source", "SoftCite-2025 binary F1", 0.968, _source_binary_f1("softcite_2025")),
+        ("per_source", "JOSS binary F1", 0.998, _source_binary_f1("joss")),
+        (
+            "per_source",
+            "same-author-different-article hard-negative binary F1",
+            0.964,
+            _source_binary_f1("same-author-different-article-negative"),
+        ),
+        (
+            "per_source",
+            "same-contributor-different-repo hard-negative binary F1",
+            0.966,
+            _source_binary_f1("same-contributor-different-repo-negative"),
+        ),
+        ("readme_length", "1601-3200 chars macro F1", 0.979, _readme_bin_f1("1601-3200")),
+        ("readme_length", "<=100 chars macro F1", 0.957, _readme_bin_f1("<=100")),
+    ]
 
 
 def _armm_breakdown_rows(specs: list[tuple[pl.DataFrame, str, str, str]]) -> list[dict]:
@@ -95,55 +215,11 @@ def classification_models_table_verification(output_dir: Path = u.OUTPUT_DIR) ->
     any_mismatch = False
     summary_rows = []
     for entry in CLASSIFICATION_MODELS_TABLE:
-        results_path: Path = entry["results_path"]
-        print(f"{entry['name']}")
-        print(f"  Reading: {results_path}")
-        if not results_path.exists():
-            print("  MISSING -- results.json not found at this path, cannot verify.\n")
+        summary_row, entry_mismatch = _verify_stated_metrics(entry)
+        if summary_row is not None:
+            summary_rows.append(summary_row)
+        if entry_mismatch:
             any_mismatch = True
-            continue
-
-        results = json.loads(results_path.read_text())
-        prefix = entry["metric_prefix"]
-        if prefix is None:
-            actual_precision = results["precision"]
-            actual_recall = results["recall"]
-            actual_f1 = results["f1"]
-        else:
-            actual_precision = results[f"{prefix}_precision"]
-            actual_recall = results[f"{prefix}_recall"]
-            actual_f1 = results[f"{prefix}_f1"]
-
-        summary_rows.append(
-            {
-                "model": entry["name"],
-                "subset": "full test set",
-                "precision": round(actual_precision, 3),
-                "recall": round(actual_recall, 3),
-                "f1": round(actual_f1, 3),
-            }
-        )
-
-        discrepancy_note = entry.get("known_discrepancy_note", "")
-        for label, stated, actual in [
-            ("Precision", entry["stated_precision"], actual_precision),
-            ("Recall", entry["stated_recall"], actual_recall),
-            ("F1", entry["stated_f1"], actual_f1),
-        ]:
-            delta = actual - stated
-            if abs(delta) <= MISMATCH_TOLERANCE:
-                status = "OK"
-            elif discrepancy_note:
-                # Known, decided discrepancy: recorded/flagged, but not a table error.
-                status = "FLAGGED_KNOWN_DISCREPANCY"
-            else:
-                status = "MISMATCH"
-                any_mismatch = True
-            print(
-                f"  {label}: manuscript states {stated:.3f}, actual is {actual:.4f} "
-                f"(delta {delta:+.4f}) -- {status}"
-            )
-        print()
 
     # ---- ARMM detail verification (manuscript lines 207-211): per-field, per-period,
     # per-source, and README-length numbers. ----
@@ -152,75 +228,11 @@ def classification_models_table_verification(output_dir: Path = u.OUTPUT_DIR) ->
         load_single_feature_eval,
     )
 
-    detail_specs: list[tuple[str, str, float, float]] = []
-
     field_eval = load_single_feature_eval("document_topic_primary_field_pruned")
-    field_f1 = field_eval.get_column("macro_f1")
-    field_min = field_eval.sort("macro_f1").row(0, named=True)
-    detail_specs += [
-        ("per_field", "mean macro F1 across fields", 0.972, float(field_f1.mean())),
-        ("per_field", "SD macro F1 across fields", 0.010, float(field_f1.std())),
-        (
-            "per_field",
-            f"lowest field macro F1 ({field_min['feature_value']})",
-            0.951,
-            float(field_min["macro_f1"]),
-        ),
-    ]
-
     period_eval = load_single_feature_eval("document_publication_date_bin")
-    period_f1 = period_eval.get_column("macro_f1")
-    period_min = period_eval.sort("macro_f1").row(0, named=True)
-    detail_specs += [
-        ("per_period", "mean macro F1 across periods", 0.968, float(period_f1.mean())),
-        ("per_period", "SD macro F1 across periods", 0.012, float(period_f1.std())),
-        (
-            "per_period",
-            f"lowest period macro F1 ({period_min['feature_value']})",
-            0.950,
-            float(period_min["macro_f1"]),
-        ),
-    ]
-
     source_eval = load_single_feature_eval("dataset_source_name")
-
-    def _source_binary_f1(source_name: str) -> float:
-        return float(
-            source_eval.filter(pl.col("feature_value") == source_name)
-            .get_column("binary_f1")
-            .item()
-        )
-
-    detail_specs += [
-        ("per_source", "SoftCite-2025 binary F1", 0.968, _source_binary_f1("softcite_2025")),
-        ("per_source", "JOSS binary F1", 0.998, _source_binary_f1("joss")),
-        (
-            "per_source",
-            "same-author-different-article hard-negative binary F1",
-            0.964,
-            _source_binary_f1("same-author-different-article-negative"),
-        ),
-        (
-            "per_source",
-            "same-contributor-different-repo hard-negative binary F1",
-            0.966,
-            _source_binary_f1("same-contributor-different-repo-negative"),
-        ),
-    ]
-
     readme_perf = load_performance_by_readme_length()
-
-    def _readme_bin_f1(bin_name: str) -> float:
-        return float(
-            readme_perf.filter(pl.col("repository_readme_length_bin") == bin_name)
-            .get_column("macro_f1")
-            .item()
-        )
-
-    detail_specs += [
-        ("readme_length", "1601-3200 chars macro F1", 0.979, _readme_bin_f1("1601-3200")),
-        ("readme_length", "<=100 chars macro F1", 0.957, _readme_bin_f1("<=100")),
-    ]
+    detail_specs = _armm_detail_specs(field_eval, period_eval, source_eval, readme_perf)
 
     print("ARMM detail verification (lines 207-211):")
     for detail_group, metric, stated, actual in detail_specs:
@@ -278,9 +290,9 @@ def armm_model_diagnostics(output_dir: Path = u.OUTPUT_DIR) -> None:
 
       - the pooled confusion matrix (line 207, `Blues` cmap by standard convention);
       - per-field confusion matrices for the top-8 fields + the held-out "Other"/"Unknown"
-        buckets (line 207's promised figure), each panel annotated with n and macro F1;
-      - the performance-by-README-length figure (line ~211's placeholder), from
-        sci-soft-models' `load_performance_by_readme_length` accessor.
+        buckets (line 207), each panel annotated with n and macro F1;
+      - the performance-by-README-length figure (line ~211), from sci-soft-models'
+        `load_performance_by_readme_length` accessor.
     """
     from sci_soft_models.binary_article_repo_em import (
         load_final_model_test_predictions,
@@ -354,7 +366,7 @@ def armm_model_diagnostics(output_dir: Path = u.OUTPUT_DIR) -> None:
     u.save_figure(fig_ff, "armm_confusion_matrix_by_field", output_dir)
     plt.close(fig_ff)
 
-    # ---- Performance by README length (line ~211's placeholder figure) ----
+    # ---- Performance by README length (line ~211) ----
     readme_perf = load_performance_by_readme_length()
     bin_order = ["<=100", "101-200", "201-400", "401-800", "801-1600", "1601-3200", ">3200"]
     readme_perf = (
