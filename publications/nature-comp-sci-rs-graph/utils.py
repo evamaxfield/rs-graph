@@ -483,18 +483,16 @@ def build_import_mention_pair_library_frame(
 
 
 ###############################################################################
-# Modified FWCI / FWSI
+# FWCI / FWSI
 #
-# OpenAlex's `fwci` uses a fixed citation window; rs-graph only stores the final ratio and
-# lifetime `cited_by_count`, so the windowed figure can't be reconstructed. Instead the whole
-# ratio is rebuilt from scratch using lifetime counts on both sides:
+# Article-side impact uses OpenAlex's own pre-computed FWCI (`raw_fwci_docs`). Repository-side
+# impact has no OpenAlex analogue, so modified FWSI is built from scratch:
 #
-#   modified_fwci = document_cited_by_count / mean(document_cited_by_count) within a
-#                   (field, publication year, doctype bucket) peer group
+#   modified_fwsi = repository_stargazers_count / mean(repository_stargazers_count) within a
+#                   (field, repository creation year, doctype bucket) peer group
 #
-# Modified FWSI is built the same way, symmetrically, using repository stargazer counts and
-# repository creation year, restricted to repositories at least `min_age_years` old (so young
-# repos with little time to accumulate stars aren't compared against long-lived peers).
+# restricted to repositories at least `min_age_years` old (so young repos with little time to
+# accumulate stars aren't compared against long-lived peers).
 ###############################################################################
 
 
@@ -517,46 +515,6 @@ def raw_fwci_docs(pairs_df: pl.DataFrame) -> pl.DataFrame:
         f"Raw OpenAlex FWCI: {n_nonnull:,} of {docs.height:,} unique documents have a "
         f"non-null fwci ({100 * n_nonnull / docs.height:.1f}%)"
     )
-    return docs
-
-
-def compute_modified_fwci(
-    pairs_df: pl.DataFrame,
-    peer_group_cols: tuple[str, str, str] = (
-        "document_field_name_pruned",
-        "document_publication_year",
-        "document_type_bucket",
-    ),
-) -> pl.DataFrame:
-    """
-    Compute modified FWCI (lifetime citations / peer-group mean lifetime citations) at the
-    document level. Returns a document-level frame (one row per document_id) with a new
-    `document_modified_fwci` column, ready to be joined back onto a pairs frame.
-    """
-    docs = pairs_df.select(
-        "document_id",
-        "document_cited_by_count",
-        *peer_group_cols,
-    ).unique(subset="document_id", keep="first")
-
-    peer_means = docs.group_by(list(peer_group_cols)).agg(
-        pl.mean("document_cited_by_count").alias("_peer_group_mean_citations"),
-        pl.len().alias("_peer_group_n"),
-    )
-
-    docs = docs.join(peer_means, on=list(peer_group_cols), how="left").with_columns(
-        pl.when(pl.col("_peer_group_mean_citations") > 0)
-        .then(pl.col("document_cited_by_count") / pl.col("_peer_group_mean_citations"))
-        .otherwise(None)
-        .alias("document_modified_fwci")
-    )
-
-    print(
-        f"Computed modified FWCI for {docs.height:,} documents across "
-        f"{peer_means.height:,} peer groups "
-        f"(grouping on {list(peer_group_cols)})"
-    )
-
     return docs
 
 

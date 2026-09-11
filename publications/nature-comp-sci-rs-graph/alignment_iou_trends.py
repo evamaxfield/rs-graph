@@ -705,3 +705,115 @@ def mentions_alignment_over_time(
     print(trend)
 
     _plot_mentions_alignment_figure(by_year, output_dir, min_pairs_per_year, year_cap)
+
+
+###############################################################################
+# Top software per view (own lists, independent of any cross-view alignment)
+
+TOP_SOFTWARE_PER_VIEW_N = 10
+RARE_SOFTWARE_MIN_PAIRS = 3
+PAIR_USAGE_TRIM_QUANTILE = 0.99
+
+
+def _trim_and_count_view(
+    view_frame: pl.DataFrame,
+    view_label: str,
+    top_n: int,
+    min_pairs: int = RARE_SOFTWARE_MIN_PAIRS,
+    trim_quantile: float = PAIR_USAGE_TRIM_QUANTILE,
+) -> pl.DataFrame:
+    """Rank a view's software names by the number of pairs each appears in. `view_frame` is a
+    long (document_id, repository_id, software_name_normalized) frame, one row per pair-name.
+    Cleaning mirrors the mention-predictors regression: drop entire pairs whose per-pair
+    unique-name count exceeds the `trim_quantile` percentile, then drop names appearing in
+    fewer than `min_pairs` pairs.
+    """
+    pair_counts = view_frame.group_by(["document_id", "repository_id"]).agg(
+        pl.len().alias("n_names")
+    )
+    threshold = pair_counts.get_column("n_names").quantile(trim_quantile)
+    extreme_pairs = pair_counts.filter(pl.col("n_names") > threshold).select(
+        "document_id", "repository_id"
+    )
+    trimmed = view_frame.join(extreme_pairs, on=["document_id", "repository_id"], how="anti")
+    n_eligible_pairs = trimmed.select("document_id", "repository_id").unique().height
+    print(
+        f"{view_label}: trimmed {extreme_pairs.height:,} pairs above the "
+        f"p{trim_quantile * 100:.0f} per-pair name count ({threshold:.0f}); "
+        f"{n_eligible_pairs:,} pairs remain"
+    )
+    return (
+        trimmed.group_by("software_name_normalized")
+        .agg(pl.len().alias("n_pairs"))
+        .filter(pl.col("n_pairs") >= min_pairs)
+        .sort(["n_pairs", "software_name_normalized"], descending=[True, False])
+        .head(top_n)
+        .with_columns(
+            pl.lit(view_label).alias("view"),
+            pl.int_range(1, pl.len() + 1).alias("rank"),
+            pl.lit(n_eligible_pairs).alias("n_eligible_pairs"),
+        )
+        .select("view", "rank", "software_name_normalized", "n_pairs", "n_eligible_pairs")
+    )
+
+
+def top_software_by_view(
+    output_dir: Path = u.OUTPUT_DIR,
+    top_n: int = TOP_SOFTWARE_PER_VIEW_N,
+    year_cap: int = u.MENTION_EXTRACTION_YEAR_CAP,
+) -> None:
+    """
+    Rank each data view's own most common software, independent of any cross-view alignment:
+    top mentioned software (as-is and with `GENERIC_MENTION_STOPLIST` terms removed), top
+    imported software, and top depended-upon (pypi/conda/cran manifest) software. Counts are
+    the number of standard-filtered (document, repository) pairs the name appears in for that
+    view; mention counts are capped at `year_cap` for the mentions-extraction horizon.
+    Name cleaning matches the rest of the paper (dependency/mention cleaning, per-pair
+    usage-count outlier trimming, rare-name floor).
+    """
+    df = u.load_filtered_pairs(top_n_fields=10)
+
+    print("\nLoading imports/dependencies/mentions from HuggingFace...")
+    imports = u.load_table("repository_import")
+    deps = u.load_table("repository_dependency")
+    mentions = u.load_table("document_software_mention")
+    deps = u.clean_dependency_names(deps)
+    mentions = u.clean_mention_names(mentions)
+    deps_pr = deps.filter(pl.col("ecosystem").is_in(u.ALL_MANIFEST_ECOSYSTEMS))
+
+    pair_pool = df.select("document_id", "repository_id").unique(
+        subset=["document_id", "repository_id"]
+    )
+    mention_pair_pool = (
+        df.filter(pl.col("document_publication_year") <= year_cap)
+        .select("document_id", "repository_id")
+        .unique(subset=["document_id", "repository_id"])
+    )
+
+    import_long = pair_pool.join(
+        imports.select("repository_id", "software_name_normalized").unique(),
+        on="repository_id",
+    )
+    dep_long = pair_pool.join(
+        deps_pr.select("repository_id", "software_name_normalized").unique(),
+        on="repository_id",
+    )
+    mention_long = mention_pair_pool.join(
+        mentions.select("document_id", "software_name_normalized").unique(),
+        on="document_id",
+    )
+    mention_long_filtered = mention_long.filter(
+        ~pl.col("software_name_normalized").is_in(GENERIC_MENTION_STOPLIST)
+    )
+
+    top_frames = [
+        _trim_and_count_view(mention_long, "mentions_as_is", top_n),
+        _trim_and_count_view(mention_long_filtered, "mentions_stoplist_filtered", top_n),
+        _trim_and_count_view(import_long, "imports", top_n),
+        _trim_and_count_view(dep_long, "dependencies", top_n),
+    ]
+    top_table = pl.concat(top_frames)
+    u.save_table(top_table, "top_software_by_view", output_dir)
+    print("\nTop software per view (own lists):")
+    for frame in top_frames:
+        print(frame)

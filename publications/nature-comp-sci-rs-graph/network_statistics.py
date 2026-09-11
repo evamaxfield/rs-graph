@@ -391,9 +391,12 @@ def network_entity_edge_counts(output_dir: Path = u.OUTPUT_DIR) -> None:
     Compute the manuscript's full-network counts -- article, repository, researcher, and
     developer-account node counts, plus authorship, contribution, article-repository-link,
     and researcher-developer identity edge counts. Entities are derived from the
-    standard-filtered pairs (pair-level filtering first); identity-link counts are reported
-    unfiltered and at both the >=0.9 and >=0.97 confidence thresholds, restricted to
-    identities whose researcher and developer account both appear in the network.
+    standard-filtered pairs (pair-level filtering first). Identity-link counts use the
+    connection definition (same rule as `mining_rounds_table`'s iteration attribution): an
+    identity counts only if at least one retained article-repository pair directly connects
+    the researcher (as an author of the article) to the developer account (as a contributor
+    to the repository). Counts are reported unfiltered and at both the >=0.9 and >=0.97
+    confidence thresholds.
     """
     pairs = u.load_filtered_pairs()
     n_links = pairs.height
@@ -420,27 +423,38 @@ def network_entity_edge_counts(output_dir: Path = u.OUTPUT_DIR) -> None:
     n_researchers = authorship.n_unique("researcher_id")
     n_developer_accounts = contribution.n_unique("developer_account_id")
 
-    researcher_ids = authorship.get_column("researcher_id").unique()
-    developer_ids = contribution.get_column("developer_account_id").unique()
-    in_network_rdal = rdal.filter(
-        pl.col("researcher_id").is_in(researcher_ids.implode())
-        & pl.col("developer_account_id").is_in(developer_ids.implode())
+    # Connection definition: the (researcher, developer account) pairs directly connected
+    # through a retained article-repository pair -- the researcher authored the article and
+    # the developer account contributed to that same pair's repository.
+    pair_pool = pairs.select("document_id", "repository_id").unique()
+    connected_rd = (
+        authorship.join(pair_pool, on="document_id")
+        .join(contribution, on="repository_id")
+        .select("researcher_id", "developer_account_id")
+        .unique()
     )
-    # Unfiltered baseline: every in-network identity link, at any confidence.
-    identity_counts = {
-        "n_identity_links_unfiltered": int(
-            in_network_rdal.select("researcher_id", "developer_account_id").unique().height
+    print(
+        f"Researcher-developer pairs connected through a retained article-repository pair: "
+        f"{connected_rd.height:,}"
+    )
+
+    def _connected_identity_count(threshold: float | None) -> int:
+        candidates = (
+            rdal
+            if threshold is None
+            else rdal.filter(pl.col("predictive_model_confidence") >= threshold)
         )
-    }
-    identity_counts |= {
-        f"n_identity_links_confidence_gte_{thr}": int(
-            in_network_rdal.filter(pl.col("predictive_model_confidence") >= thr)
-            .select("researcher_id", "developer_account_id")
+        return (
+            candidates.select("researcher_id", "developer_account_id")
             .unique()
+            .join(connected_rd, on=["researcher_id", "developer_account_id"], how="semi")
             .height
         )
-        # 0.9 is the repo-wide convention; 0.97 is the threshold stated in Methods.
-        for thr in (0.9, 0.97)
+
+    identity_counts = {
+        # Unfiltered baseline: every connected identity link, at any confidence.
+        "n_identity_links_connected_unfiltered": _connected_identity_count(None),
+        "n_identity_links_connected_confidence_gte_0.97": _connected_identity_count(0.97),
     }
 
     summary = {

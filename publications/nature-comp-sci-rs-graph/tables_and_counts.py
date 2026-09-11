@@ -237,20 +237,31 @@ def table1_top_software_by_usage(
         "this import-anchored table)."
     )
 
+    # Ratio denominator: importing repositories restricted to the <=2022 pair population,
+    # matching the mention numerator's coverage horizon; the displayed import counts stay
+    # full-corpus.
+    capped_repo_ids = set(eligible_pairs.get_column("repository_id").to_list())
+    import_counts_capped = _count_imports(
+        {rid: names for rid, names in imports_by_repo.items() if rid in capped_repo_ids},
+        repo_ecosystem,
+    )
+
     # ---- Assemble table ----
     rows = [
         {
             "ecosystem": eco,
             "software_name": name,
             "import_count": n_import,
+            "import_count_capped_2022": import_counts_capped.get((name, eco), 0),
             "dependency_count": dependency_counts.get((name, eco), 0),
             "mention_count": mention_counts.get((name, eco), 0),
         }
         for (name, eco), n_import in import_counts.items()
     ]
     table = pl.DataFrame(rows).with_columns(
-        (1000 * pl.col("mention_count") / pl.col("import_count"))
-        .round(1)
+        pl.when(pl.col("import_count_capped_2022") > 0)
+        .then((1000 * pl.col("mention_count") / pl.col("import_count_capped_2022")).round(1))
+        .otherwise(None)
         .alias("mentions_per_1000_imports")
     )
 
@@ -293,7 +304,9 @@ def table1_top_software_by_usage(
         "SoftCite-2025 mention-extraction coverage is normal through May 2023, then drops "
         "sharply (exactly 0% from July 2023 onward), so the cap gives mentions their "
         "fairest representation while imports and dependencies each use their own full "
-        "reliable range",
+        "reliable range. The mentions-per-1,000-imports ratio restricts its importing-"
+        "repository denominator to the same <=2022 population as the mention numerator; "
+        "the count columns describe the full corpus",
     )
 
 

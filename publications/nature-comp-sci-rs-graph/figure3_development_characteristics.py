@@ -203,9 +203,16 @@ def _manifest_adoption_over_time(df: pl.DataFrame, deps: pl.DataFrame) -> pl.Dat
             & (pl.col("document_publication_year") < current_year)
         )
     )
-    # Pooled series (any manifest, all repos) plus Python/R ecosystem reference series.
+    # Pooled series (all repos, Python/R manifests only -- pypi/conda/cran, matching the
+    # manuscript's Python/R analysis scope) plus Python/R ecosystem reference series.
     series_specs: list[tuple[str, pl.DataFrame, pl.DataFrame]] = [
-        ("All repositories", year_repo, deps.select("repository_id").unique())
+        (
+            "All repositories",
+            year_repo,
+            deps.filter(pl.col("ecosystem").is_in(u.ALL_MANIFEST_ECOSYSTEMS))
+            .select("repository_id")
+            .unique(),
+        )
     ]
     for eco, dep_ecosystems in u.MANIFEST_ECOSYSTEMS_BY_LANGUAGE.items():
         series_specs.append(
@@ -525,8 +532,7 @@ def figure_3_software_development_characteristics(
     print(f"  repository_dependency: {len(deps):,} rows")
     deps = u.clean_dependency_names(deps)
 
-    # Raw OpenAlex FWCI everywhere FWCI appears; modified (in-sample) FWCI stays available in
-    # utils but is not on the paper path.
+    # Raw OpenAlex FWCI everywhere FWCI appears.
     fwci_docs = u.raw_fwci_docs(df)
     fwsi_repos = u.compute_modified_fwsi(df)
 

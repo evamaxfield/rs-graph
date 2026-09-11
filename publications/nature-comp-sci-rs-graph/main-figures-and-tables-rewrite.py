@@ -17,6 +17,7 @@ import typer
 from alignment_iou_trends import (
     import_dependency_iou_over_time,
     mentions_alignment_over_time,
+    top_software_by_view,
 )
 from armm_verification import (
     armm_model_diagnostics,
@@ -68,6 +69,7 @@ app.command()(network_entity_edge_counts)
 app.command()(import_dependency_iou_over_time)
 app.command()(mentions_coverage_by_year)
 app.command()(mentions_alignment_over_time)
+app.command()(top_software_by_view)
 app.command()(supplemental_manifest_file_adoption)
 app.command()(supplemental_package_vs_script_diagnostics)
 app.command()(data_coverage_counts)
