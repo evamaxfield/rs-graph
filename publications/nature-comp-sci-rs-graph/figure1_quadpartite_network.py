@@ -7,7 +7,7 @@ researchers, and developer accounts.
 from __future__ import annotations
 
 import random
-from collections import deque
+from collections import Counter, deque
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -379,14 +379,30 @@ def _build_snowball_lookups(
     )
 
 
+def _identity_link_field(
+    lookups: _SnowballLookups, r: int, d: int, pair_field: dict[int, str]
+) -> str | None:
+    """Modal article field over the pairs reachable through either side of an identity link."""
+    fields = Counter(
+        pair_field[p]
+        for p in lookups.researcher_pairs.get(r, []) + lookups.developer_pairs.get(d, [])
+    )
+    return fields.most_common(1)[0][0] if fields else None
+
+
 def _select_anchors(
     lookups: _SnowballLookups,
-    n_top_hub_anchors: int,
-    n_random_hub_anchors: int,
+    pair_field: dict[int, str],
+    strata: list[str],
+    n_top_hub_anchors_per_field: int,
+    n_random_hub_anchors_per_field: int,
     min_anchor_pair_degree: int,
     rng: random.Random,
-) -> list[tuple[int, int]]:
-    """Rank identity links by pair-degree; top hubs first, then a shuffled qualifying tail."""
+) -> tuple[list[tuple[int, int]], int]:
+    """Field-stratified anchors: per stratum, the top identity links by pair-degree plus a
+    seeded random draw of the qualifying rest; the remaining qualifying links (shuffled) form
+    the reserve. Returns (anchor queue, number of planned anchors).
+    """
     degree_by_link = [
         (
             len(lookups.researcher_pairs.get(r, [])) + len(lookups.developer_pairs.get(d, [])),
@@ -396,21 +412,38 @@ def _select_anchors(
         for r, d in lookups.identity_links
     ]
     degree_by_link.sort(key=lambda t: (-t[0], t[1], t[2]))
-    top_anchors = [(r, d) for _deg, r, d in degree_by_link[:n_top_hub_anchors]]
-    tail_candidates = [
-        (r, d)
-        for deg, r, d in degree_by_link[n_top_hub_anchors:]
-        if deg >= min_anchor_pair_degree
-    ]
-    rng.shuffle(tail_candidates)
+    by_stratum: dict[str, list[tuple[int, int]]] = {s: [] for s in strata}
+    for deg, r, d in degree_by_link:
+        if deg < min_anchor_pair_degree:
+            continue
+        field = _identity_link_field(lookups, r, d, pair_field)
+        if field in by_stratum:
+            by_stratum[field].append((r, d))
+
+    top_anchors: list[tuple[int, int]] = []
+    random_anchors: list[tuple[int, int]] = []
+    reserve: list[tuple[int, int]] = []
+    for stratum in strata:
+        links = by_stratum[stratum]
+        top_anchors += links[:n_top_hub_anchors_per_field]
+        rest = links[n_top_hub_anchors_per_field:]
+        rng.shuffle(rest)
+        random_anchors += rest[:n_random_hub_anchors_per_field]
+        reserve += rest[n_random_hub_anchors_per_field:]
+        print(
+            f"  Anchor stratum {stratum}: {len(links):,} identities with pair-degree >= "
+            f"{min_anchor_pair_degree}; {len(links[:n_top_hub_anchors_per_field])} top hubs + "
+            f"{len(rest[:n_random_hub_anchors_per_field])} random."
+        )
+    rng.shuffle(random_anchors)
+    rng.shuffle(reserve)
+    planned = top_anchors + random_anchors
     print(
-        f"Anchors: {len(top_anchors)} top hubs (max pair-degree "
-        f"{degree_by_link[0][0] if degree_by_link else 0:,}) + "
-        f"{min(n_random_hub_anchors, len(tail_candidates)):,} stratified random of "
-        f"{len(tail_candidates):,} identities with pair-degree >= {min_anchor_pair_degree} "
-        "(remainder held as reserve)."
+        f"Anchors: {len(planned)} planned across {len(strata)} field strata "
+        f"({len(top_anchors)} top hubs + {len(random_anchors)} random); "
+        f"{len(reserve):,} held as reserve."
     )
-    return top_anchors + tail_candidates  # planned anchors first; rest is the reserve
+    return planned + reserve, len(planned)
 
 
 def _capped_entities(
@@ -450,9 +483,13 @@ def _admit_pairs(
     budget: int,
     max_pairs_per_entity: int,
     rng: random.Random,
+    pair_field: dict[int, str],
+    admitted_per_field: Counter[str],
+    max_pairs_per_field: int,
 ) -> None:
     """Admit up to `max_pairs_per_entity` unseen candidates (seeded subsample) into the
-    sample and frontier, stopping at the budget.
+    sample and frontier, stopping at the budget; candidates whose article field already holds
+    `max_pairs_per_field` sampled pairs are skipped so no field can dominate the sample.
     """
     new = [p for p in dict.fromkeys(candidate_pairs) if p not in sampled]
     if len(new) > max_pairs_per_entity:
@@ -460,8 +497,11 @@ def _admit_pairs(
     for p in new:
         if len(sampled) >= budget:
             return
+        if admitted_per_field[pair_field[p]] >= max_pairs_per_field:
+            continue
         sampled.add(p)
         frontier.append(p)
+        admitted_per_field[pair_field[p]] += 1
 
 
 def _snowball_sample(
@@ -472,15 +512,28 @@ def _snowball_sample(
     max_pairs_per_entity: int,
     max_contributors_per_side: int,
     rng: random.Random,
+    pair_field: dict[int, str],
+    max_pairs_per_field: int,
 ) -> tuple[set[int], int]:
     """BFS over pairs mediated by entities; returns the sampled pair ids and the number of
     anchors used.
     """
     sampled: set[int] = set()
     frontier: deque[int] = deque()
+    admitted_per_field: Counter[str] = Counter()
 
     def _add_pairs(candidate_pairs: list[int]) -> None:
-        _admit_pairs(candidate_pairs, sampled, frontier, budget, max_pairs_per_entity, rng)
+        _admit_pairs(
+            candidate_pairs,
+            sampled,
+            frontier,
+            budget,
+            max_pairs_per_entity,
+            rng,
+            pair_field,
+            admitted_per_field,
+            max_pairs_per_field,
+        )
 
     # Seed all planned anchors' pairs up front so the sample spans every anchor neighborhood
     # rather than exhausting the budget on the first hub's BFS; the remaining tail is a
@@ -642,10 +695,14 @@ def _draw_quadpartite_network(
         },
         "identity": {"color": edge_grey, "lw": 0.7, "ls": "-", "zorder": 3, "alpha": 0.15},
     }
-    marker_size = 3.5
-    people_marker_size = 2.5
-    node_alpha = 0.5
-    marker_lw = 0.25
+    # Marker area grows as the node count shrinks (calibrated at the ~59k-node, 10,000-pair
+    # render where 3.5pt^2 was legible), capped so a small sample doesn't turn into blobs.
+    n_nodes = len(graph.node_indices())
+    size_scale = min(10.0, max(1.0, 59_000 / max(n_nodes, 1)))
+    marker_size = 3.5 * size_scale
+    people_marker_size = 2.5 * size_scale
+    node_alpha = 0.5 if size_scale < 2 else 0.75
+    marker_lw = 0.25 if size_scale < 2 else 0.6
 
     ref_canvas_extent = 143.2  # canvas width measured at the 2,000-seed-pair calibration run
     canvas_extent = max(canvas_width, canvas_height)
@@ -664,7 +721,7 @@ def _draw_quadpartite_network(
                 linewidths=style["lw"],
                 linestyles=style["ls"],
                 zorder=style["zorder"],
-                alpha=style["alpha"],
+                alpha=min(1.0, style["alpha"] * (1.0 if size_scale < 2 else 2.5)),
                 rasterized=True,
             )
         )
@@ -808,36 +865,43 @@ def _render_layouts(
 
 def figure_1_quadpartite_network(
     output_dir: Path = u.OUTPUT_DIR,
-    n_pairs: int = 10000,
-    n_top_hub_anchors: int = 25,
-    n_random_hub_anchors: int = 75,
+    n_pairs: int = 1000,
+    n_top_hub_anchors_per_field: int = 2,
+    n_random_hub_anchors_per_field: int = 3,
     min_anchor_pair_degree: int = 3,
-    max_pairs_per_entity: int = 10,
+    max_pairs_per_entity: int = 6,
     max_contributors_per_side: int = 2,
+    field_share_cap: float = 0.18,
     rdal_confidence_threshold: float = 0.97,
     random_seed: int = 42,
     layout: str = "both",
 ) -> None:
     """
-    Build Figure 1, panel 1: the quad-partite network -- articles, repositories, researchers
+    Build Figure 1, panel A: the quad-partite network -- articles, repositories, researchers
     (authors), and developer accounts (contributors) -- rendered together with rustworkx.
-    Panels 2/3 of Figure 1 (the growth-model and workflow diagrams) are hand-made images and
-    out of scope here.
+    The workflow diagram (Figure 1, panel B) is a hand-made image and out of scope here.
 
-    Sampling: snowball from well-linked identity hubs, rather than a uniform-random pair
-    sample (two randomly sampled pairs are bridged only if both happen to be drawn and share
-    an entity, which is rare, so random samples look artificially fragmented). Design:
+    Sampling: field-stratified snowball from well-linked identity hubs, rather than a
+    uniform-random pair sample (two randomly sampled pairs are bridged only if both happen to
+    be drawn and share an entity, which is rare, so random samples look artificially
+    fragmented). Design:
 
-      - Anchors: the top `n_top_hub_anchors` identity links (researcher, developer) by
-        pair-degree (pairs reachable through either side), plus `n_random_hub_anchors`
-        uniformly sampled identities with pair-degree >= `min_anchor_pair_degree` (seeded) --
-        the stratified tail keeps the figure from over-representing anomalous mega-hubs.
+      - Strata: the six most common article fields plus a pooled "Other" (the same grouping
+        that colors the article nodes). Each identity link (researcher, developer) is
+        assigned the modal field of the pairs reachable through either side.
+      - Anchors: per stratum, the top `n_top_hub_anchors_per_field` identity links by
+        pair-degree plus `n_random_hub_anchors_per_field` seeded-random identities with
+        pair-degree >= `min_anchor_pair_degree`; the random tail keeps the figure from
+        over-representing anomalous mega-hubs, and the per-field split keeps the
+        Computer-Science hubs (by far the largest) from seeding the whole sample.
       - Growth: BFS over pairs, mediated by entities. Each popped pair contributes up to
         `max_contributors_per_side` authors/contributors plus, always, any identity-linked
         author/contributor (a hard cap alone would sever identity edges whenever the linked
         person isn't among the first contributor rows). Each collected entity (and its
         identity counterpart) contributes up to `max_pairs_per_entity` new pairs (seeded
-        subsample), which keeps hubs from dominating.
+        subsample), which keeps hubs from dominating. No stratum may exceed
+        `field_share_cap` of the `n_pairs` budget: once a field is full, its pairs are
+        skipped and the walk continues through the other fields' pairs.
       - Stop the instant the `n_pairs` budget fills; if all anchors exhaust below budget, top
         up with uniform-random pairs and report the top-up count.
 
@@ -861,25 +925,58 @@ def figure_1_quadpartite_network(
         f"{len(rdal):,} remain after confidence >= {rdal_confidence_threshold} filter."
     )
 
+    # ---- Field strata: top 6 fields + Other. Used both to stratify the sample and to color
+    # the article nodes (the only color-encoded node type). ----
+    fig1_fields = (
+        pairs.get_column("document_field_name_pruned")
+        .value_counts(sort=True)
+        .filter(pl.col("document_field_name_pruned") != "Other")
+        .head(6)
+        .get_column("document_field_name_pruned")
+        .to_list()
+    )
+    strata = [*fig1_fields, "Other"]
+    doc_fields = {
+        did: (f if f in fig1_fields else "Other")
+        for did, f in pairs.select("document_id", "document_field_name_pruned")
+        .unique(subset="document_id")
+        .iter_rows()
+    }
+
     pair_frame = pairs.select(
         pl.col("document_repository_link_id").alias("pair_id"), "document_id", "repository_id"
     )
     lookups = _build_snowball_lookups(
         pair_frame, document_contributors, repository_contributors, rdal
     )
-    anchor_queue = _select_anchors(
-        lookups, n_top_hub_anchors, n_random_hub_anchors, min_anchor_pair_degree, rng
+    pair_field = {pid: doc_fields[doc_id] for pid, doc_id in lookups.pair_doc.items()}
+    population_mix = Counter(pair_field.values())
+    print(
+        "Filtered-population field mix: "
+        + ", ".join(f"{f} {100 * population_mix[f] / len(pair_field):.1f}%" for f in strata)
+    )
+    anchor_queue, n_planned_anchors = _select_anchors(
+        lookups,
+        pair_field,
+        strata,
+        n_top_hub_anchors_per_field,
+        n_random_hub_anchors_per_field,
+        min_anchor_pair_degree,
+        rng,
     )
 
     budget = min(n_pairs, len(lookups.pair_doc))
+    max_pairs_per_field = int(field_share_cap * budget)
     sampled, n_anchors_used = _snowball_sample(
         lookups,
         anchor_queue,
-        n_top_hub_anchors + n_random_hub_anchors,
+        n_planned_anchors,
         budget,
         max_pairs_per_entity,
         max_contributors_per_side,
         rng,
+        pair_field,
+        max_pairs_per_field,
     )
 
     n_snowball = len(sampled)
@@ -892,7 +989,15 @@ def figure_1_quadpartite_network(
     print(
         f"\nSnowball sample: {n_snowball:,} pairs from {n_anchors_used:,} anchors"
         + (f" + {n_topup:,} uniform-random top-up pairs" if n_topup else "")
-        + f" = {len(sampled):,} of {len(lookups.pair_doc):,} filtered pairs."
+        + f" = {len(sampled):,} of {len(lookups.pair_doc):,} filtered pairs "
+        f"(per-field cap {max_pairs_per_field:,} pairs)."
+    )
+    sample_mix = Counter(pair_field[p] for p in sampled)
+    print(
+        "Sampled field mix: "
+        + ", ".join(
+            f"{f} {sample_mix[f]:,} ({100 * sample_mix[f] / len(sampled):.1f}%)" for f in strata
+        )
     )
 
     sampled_pairs = pair_frame.filter(pl.col("pair_id").is_in(sampled)).rename(
@@ -918,22 +1023,6 @@ def figure_1_quadpartite_network(
         f"(both endpoints present in the sampled graph)."
     )
 
-    # ---- Node color-encoding metadata: only articles carry color, by field (top 6 +
-    # Other); all other node types are grey outline-only shapes. ----
-    fig1_fields = (
-        pairs.get_column("document_field_name_pruned")
-        .value_counts(sort=True)
-        .filter(pl.col("document_field_name_pruned") != "Other")
-        .head(6)
-        .get_column("document_field_name_pruned")
-        .to_list()
-    )
-    doc_fields = {
-        did: (f if f in fig1_fields else "Other")
-        for did, f in pairs.select("document_id", "document_field_name_pruned")
-        .unique(subset="document_id")
-        .iter_rows()
-    }
     graph = _build_quadpartite_graph(
         sampled_pairs,
         doc_authors,
@@ -979,8 +1068,23 @@ def figure_1_quadpartite_network(
         "nodes."
     )
 
+    drawn_mix = Counter(
+        graph[node_i]["group"]
+        for node_i in graph.node_indices()
+        if graph[node_i]["type"] == "article"
+    )
+    n_drawn_articles = sum(drawn_mix.values())
+    print(
+        "Drawn-component article field mix: "
+        + ", ".join(
+            f"{f} {drawn_mix[f]:,} ({100 * drawn_mix[f] / n_drawn_articles:.1f}%)"
+            for f in strata
+        )
+    )
+
     caption_base = (
-        f"Snowball-sampled quad-partite network (n={len(sampled):,} article-repository pairs; "
+        f"Field-stratified snowball sample of the quad-partite network (n={len(sampled):,} "
+        f"article-repository pairs, at most {field_share_cap:.0%} per field stratum; "
         f"{len(comp_sizes):,} connected components existed, only the largest is drawn = "
         f"{pct_pairs_in_largest:.1f}% of pairs)"
     )

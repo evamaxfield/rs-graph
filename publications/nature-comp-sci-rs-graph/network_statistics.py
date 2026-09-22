@@ -19,16 +19,21 @@ import utils as u
 ###############################################################################
 # Date-delta figure (repository creation vs. publication date)
 
+# The candidate-pair window the mining pipeline actually ran with: the 10th and 90th
+# percentiles of (publication date - repository creation date), in days, over the one-to-one
+# seed pairs at the time mining began. Hardcoded rather than recomputed so the figure shows
+# the deployed bounds, not a slightly different re-estimate over the final dataset.
+MINING_WINDOW_P10_DAYS = -73.0
+MINING_WINDOW_P90_DAYS = 556.0
+
 
 def _date_delta_percentiles(diffs: pl.Series) -> dict[str, float]:
-    """Median + 1st/5th/10th/90th/95th/99th percentiles (days) of a date-delta series."""
+    """Median + 1st/10th/90th/99th percentiles (days) of a date-delta series."""
     return {
         "median": float(diffs.median()),
         "p1": float(diffs.quantile(0.01)),
-        "p5": float(diffs.quantile(0.05)),
         "p10": float(diffs.quantile(0.10)),
         "p90": float(diffs.quantile(0.90)),
-        "p95": float(diffs.quantile(0.95)),
         "p99": float(diffs.quantile(0.99)),
     }
 
@@ -37,8 +42,9 @@ def _plot_date_delta_panel(
     ax, diffs: pl.Series, title: str | None = None, legend: bool = True
 ) -> dict[str, float]:
     """Histogram of a date-delta series, clipped to the 1st/99th percentile for readability,
-    with vertical marker lines at the median and the window-defining 10th/90th percentiles
-    (p5/p95 stay in the percentile CSV, not plotted).
+    with vertical marker lines at the panel's median and at the deployed mining window
+    (`MINING_WINDOW_P10_DAYS` / `MINING_WINDOW_P90_DAYS`, the same on every panel). The
+    panel's own recomputed 10th/90th percentiles go to the percentile CSV only.
     """
     stats = _date_delta_percentiles(diffs)
     clipped = diffs.filter((diffs >= stats["p1"]) & (diffs <= stats["p99"]))
@@ -51,13 +57,16 @@ def _plot_date_delta_panel(
         label=f"Median ({stats['median']:.0f}d)",
     )
     ax.axvline(
-        stats["p10"],
+        MINING_WINDOW_P10_DAYS,
         color="blue",
         linestyle="--",
         linewidth=1.2,
-        label=f"10th/90th pct. ({stats['p10']:.0f}/{stats['p90']:.0f}d)",
+        label=(
+            f"Mining window: seed 10th/90th pct. "
+            f"({MINING_WINDOW_P10_DAYS:.0f}/{MINING_WINDOW_P90_DAYS:.0f}d)"
+        ),
     )
-    ax.axvline(stats["p90"], color="blue", linestyle="--", linewidth=1.2)
+    ax.axvline(MINING_WINDOW_P90_DAYS, color="blue", linestyle="--", linewidth=1.2)
     if title:
         ax.set_title(title, fontsize=10)
     ax.set_xlabel("Days")
@@ -135,6 +144,17 @@ def date_delta_figure(output_dir: Path = u.OUTPUT_DIR) -> None:
     fig, ax = plt.subplots(figsize=(8, 5.5))
     pooled_stats = _plot_date_delta_panel(ax, all_diffs, legend=True)
     ax.set_xlabel("Publication Date - Repository Creation Date (Days)")
+    u.print_caption_note(
+        "date_delta_pooled",
+        "Distribution of the difference between article publication date and repository "
+        f"creation date over the {df.height:,} one-to-one seed article-repository pairs, "
+        "clipped to the 1st-99th percentiles for display. Negative values indicate that the "
+        "repository was created after the article was published. The solid line marks the "
+        f"median ({pooled_stats['median']:.0f} days); the dashed lines mark the candidate-pair "
+        "filtering window applied before ARMM inference, the 10th and 90th percentiles of "
+        f"the seed-only dataset at the time mining began ({MINING_WINDOW_P10_DAYS:.0f} and "
+        f"{MINING_WINDOW_P90_DAYS:.0f} days).",
+    )
     evaplot.adjust_layout(fig)
     u.save_figure(fig, "date_delta_pooled", output_dir)
     plt.close(fig)
@@ -143,8 +163,10 @@ def date_delta_figure(output_dir: Path = u.OUTPUT_DIR) -> None:
     for k, v in pooled_stats.items():
         print(f"  {k}: {v:.1f}")
     print(
-        "Reference (notebook `snowball-sampling-discovery-prep.ipynb`): 90th=556.0, 10th=-73.0. "
-        f"This run: 90th={pooled_stats['p90']:.1f}, 10th={pooled_stats['p10']:.1f}."
+        f"Deployed mining window (hardcoded, seed-only at mining start): "
+        f"10th={MINING_WINDOW_P10_DAYS:.0f}, 90th={MINING_WINDOW_P90_DAYS:.0f}. "
+        f"Recomputed on this run's seed pairs: 10th={pooled_stats['p10']:.1f}, "
+        f"90th={pooled_stats['p90']:.1f}."
     )
 
     percentile_rows = [{"breakdown": "pooled", "group": "all", "n": df.height, **pooled_stats}]
@@ -225,15 +247,15 @@ def date_delta_figure(output_dir: Path = u.OUTPUT_DIR) -> None:
 ###############################################################################
 # Co-authorship network
 #
-# Rebuilds the component statistics cited in the manuscript's Results text. The docs-site
-# pipeline (`web/data-prep/queries/coauthorship_network.py`) defines the edge-construction
-# rule and author-count bound reproduced here.
+# Rebuilds the component statistics cited in the manuscript's Results text. The edge rule
+# follows the docs-site pipeline (`web/data-prep/queries/coauthorship_network.py`) but, unlike
+# it, applies no upper author-count bound by default.
 
 
 def coauthorship_network(
     output_dir: Path = u.OUTPUT_DIR,
     min_authors: int = 2,
-    max_authors: int = 12,
+    max_authors: int | None = None,
 ) -> None:
     """
     Compute co-authorship network statistics -- connected component count, largest
@@ -242,11 +264,13 @@ def coauthorship_network(
 
     Edge-construction rule: nodes are researchers; one undirected edge per co-authoring
     researcher pair (not one edge per shared document), weighted by the number of documents
-    that pair co-authored together (`n_shared_docs`). Documents are bounded to
-    `min_authors`-`max_authors` listed authors before generating all-pairs edges within a
-    document -- without this bound, large-consortium papers would each contribute up to
-    C(n_authors, 2) edges of combinatorial noise. Single-author-only isolates (degree 0)
-    are excluded from the node population before component statistics.
+    that pair co-authored together (`n_shared_docs`). Every document with at least
+    `min_authors` listed authors contributes all C(n_authors, 2) within-document pairs as
+    edges. `max_authors` optionally caps the author count per document (None, the default,
+    applies no cap); the earlier cap of 12 dropped ~113k authors of large-consortium papers
+    from the network entirely, so it is off. Researchers with no co-authorship edge (degree
+    0) -- single-author-only researchers once the cap is off -- are excluded from the node
+    population before component statistics.
 
     The researcher-developer identity-link confidence filter is not applied here: it
     constrains researcher<->developer identity, and co-authorship is a purely
@@ -276,16 +300,17 @@ def coauthorship_network(
     )
 
     author_counts = authors.group_by("document_id").agg(n_authors=pl.len())
-    qualifying_docs = author_counts.filter(
-        pl.col("n_authors").is_between(min_authors, max_authors)
-    ).select("document_id")
+    qualifying = pl.col("n_authors") >= min_authors
+    if max_authors is not None:
+        qualifying = qualifying & (pl.col("n_authors") <= max_authors)
+    qualifying_docs = author_counts.filter(qualifying).select("document_id")
     n_docs_before_bound = authors.get_column("document_id").n_unique()
-    # The bound caps edge generation only -- the node set stays unbounded (`authors`);
+    # The bound affects edge generation only -- the node set stays unbounded (`authors`);
     # degree-0 isolates are excluded later, before component statistics.
     bounded_authors = authors.join(qualifying_docs, on="document_id", how="inner")
+    bound_label = f">= {min_authors}" if max_authors is None else f"{min_authors}-{max_authors}"
     print(
-        f"After bounding to {min_authors}-{max_authors} listed authors/document (caps "
-        f"combinatorial all-pairs edge generation for large-consortium papers): "
+        f"After bounding to {bound_label} listed authors/document: "
         f"{bounded_authors.get_column('document_id').n_unique():,} of {n_docs_before_bound:,} "
         f"documents remain, {len(bounded_authors):,} authorship rows, "
         f"{bounded_authors.get_column('researcher_id').n_unique():,} unique researchers "
@@ -319,12 +344,12 @@ def coauthorship_network(
         f"{n_nodes_with_isolates:,} researcher nodes, {n_edges:,} edges"
     )
 
-    # Exclude single-author-only isolates (degree 0) before computing components.
+    # Exclude researchers with no co-authorship edge (degree 0) before computing components.
     isolates = [idx for idx in graph.node_indices() if graph.degree(idx) == 0]
     graph.remove_nodes_from(isolates)
     n_nodes = graph.num_nodes()
     print(
-        f"Excluded {len(isolates):,} single-author-only isolates (degree 0); "
+        f"Excluded {len(isolates):,} isolates with no co-authorship edge (degree 0); "
         f"{n_nodes:,} researcher nodes remain"
     )
 
@@ -345,6 +370,8 @@ def coauthorship_network(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     summary = {
+        "min_authors": min_authors,
+        "max_authors": max_authors,
         "n_researchers_before_isolate_exclusion": n_nodes_with_isolates,
         "n_isolates_excluded": len(isolates),
         "n_researcher_nodes": n_nodes,
@@ -354,11 +381,15 @@ def coauthorship_network(
         "largest_component_pct": round(largest_pct, 1),
         "next_largest_component_size": next_largest_size,
         "manuscript_currently_cites": {
-            "n_connected_components": 11568,
-            "largest_component_pct": 91,
-            "next_largest_component_size": 46,
-            "source": "web/data-prep/queries/coauthorship_network.py (docs-site pipeline, "
-            "not to be cited per replication-package policy -- comparison only)",
+            "n_isolates_excluded": 116639,
+            "n_researcher_nodes": 517144,
+            "n_coauthorship_edges": 2361845,
+            "n_connected_components": 10669,
+            "largest_component_size": 469242,
+            "largest_component_pct": 90.7,
+            "next_largest_component_size": 47,
+            "source": "latest-rs-graph-paper.md Coverage paragraph + FOOTNOTE 4 as of "
+            "2026-09-19, computed with the retired 2-12 author bound -- comparison only",
         },
     }
     with open(output_dir / "coauthorship_network_summary.json", "w") as f:
@@ -368,7 +399,7 @@ def coauthorship_network(
     u.print_caption_note(
         "coauthorship_network",
         "Component statistics are computed over researchers with at least one co-authorship "
-        "edge; single-author-only researchers (degree 0) are excluded from the node "
+        "edge; researchers with no co-authorship edge (degree 0) are excluded from the node "
         "population.",
     )
     print("\n--- Co-authorship network statistics ---")
@@ -376,8 +407,8 @@ def coauthorship_network(
     print(f"Largest component: {largest_size:,} researchers ({largest_pct:.1f}%)")
     print(f"Next-largest component: {next_largest_size:,} researchers")
     print(
-        "Docs-site pipeline reference (comparison only): 11,568 components / "
-        "91% in largest component / 46 in next-largest."
+        "Manuscript currently cites (2-12 author bound, comparison only): 10,669 components / "
+        "469,242 (90.7%) in largest component / 47 in next-largest."
     )
     print("----------------------------------------\n")
 

@@ -65,6 +65,36 @@ ALL_MANIFEST_ECOSYSTEMS: list[str] = sorted(
 # mentions-coverage diagnostic), so mention-dependent analyses cap at it.
 MENTION_EXTRACTION_YEAR_CAP = 2022
 
+# Generic software-name terms shared by every mention-based analysis (alignment tables,
+# top-software-by-view, and the mention-predictors regression). Named software and languages
+# (matlab, samtools, python, r, bioconductor, jupyter) are intentionally kept: their
+# non-matching is signal, not noise. All names compared post-normalize_name.
+GENERIC_SOFTWARE_NAME_STOPLIST: set[str] = {
+    "code",
+    "codes",
+    "scripts",
+    "script",
+    "latex",
+    "software",
+    "github",
+    "gitlab",
+    "bitbucket",
+    "library",
+    "libraries",
+    "package",
+    "packages",
+    "tool",
+    "tools",
+    "toolbox",
+    "pipeline",
+    "workflow",
+    "api",
+    "database",
+    "website",
+    "server",
+    "notebook",
+}
+
 # Short display labels for OpenAlex field names. Full names run long enough to overflow legend
 # boxes and axis margins; captions still unpack the full name. Covers every pruned field name
 # used in this paper plus the remaining OpenAlex fields.

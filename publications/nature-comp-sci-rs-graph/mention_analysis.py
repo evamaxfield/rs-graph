@@ -7,6 +7,7 @@ mention-predictors logistic regression, and the mentions-extraction coverage dia
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import evaplot
 import matplotlib.pyplot as plt
@@ -35,6 +36,7 @@ def figure_4_mention_rate_by_field_and_year(
     min_pairs_per_cell: int = MIN_PAIRS_PER_CELL,
     top_n_fields_plotted: int = 6,
     year_cap: int = u.MENTION_EXTRACTION_YEAR_CAP,
+    denominator: Literal["conditional", "unconditional"] = "conditional",
 ) -> None:
     """Build Figure 4: rate at which imported software is also explicitly mentioned in the
     paper's text, by field and publication year. Uses
@@ -42,6 +44,11 @@ def figure_4_mention_rate_by_field_and_year(
     at a time: imports vs. mentions), with the import name always taken as canonical.
     Plotted years and summary stats cap at `year_cap`, the last publication year with full
     mention-extraction coverage.
+
+    Every saved table carries both denominators side by side: `unconditional` (all pairs
+    whose repository has >=1 import) and `conditional` (pairs whose article also has >=1
+    extracted mention). `denominator` picks which one the figure plots and which pair count
+    the `min_pairs_per_cell` floor applies to.
     """
     evaplot.set_style("evaplot_rc")
     df = u.load_filtered_pairs(top_n_fields=10)
@@ -103,19 +110,34 @@ def figure_4_mention_rate_by_field_and_year(
     pair_rates = pl.DataFrame(rows)
     print(f"\nProcessed {pair_rates.height:,} pairs with >=1 import through alignment.")
 
-    field_year_agg = (
-        pair_rates.group_by(["document_field_name_pruned", "document_publication_year"])
-        .agg(
-            pl.len().alias("n_pairs"),
-            pl.sum("n_total_imports").alias("total_imports"),
-            pl.sum("n_matched_imports").alias("matched_imports"),
-        )
-        .with_columns(
-            (100 * pl.col("matched_imports") / pl.col("total_imports")).alias(
-                "mention_rate_pct"
+    # Both denominators in one table; matched imports are identical under both, since only
+    # a pair with >=1 mention can match anything.
+    def _agg_both_denominators(frame: pl.DataFrame, by: list[str]) -> pl.DataFrame:
+        return (
+            frame.group_by(by)
+            .agg(
+                pl.len().alias("n_pairs"),
+                pl.sum("n_total_imports").alias("total_imports"),
+                pl.col("has_any_mention").sum().alias("n_pairs_conditional"),
+                pl.col("n_total_imports")
+                .filter(pl.col("has_any_mention"))
+                .sum()
+                .alias("total_imports_conditional"),
+                pl.sum("n_matched_imports").alias("matched_imports"),
             )
+            .with_columns(
+                (100 * pl.col("matched_imports") / pl.col("total_imports")).alias(
+                    "mention_rate_pct"
+                ),
+                (100 * pl.col("matched_imports") / pl.col("total_imports_conditional")).alias(
+                    "mention_rate_pct_conditional"
+                ),
+            )
+            .sort(by)
         )
-        .sort(["document_field_name_pruned", "document_publication_year"])
+
+    field_year_agg = _agg_both_denominators(
+        pair_rates, ["document_field_name_pruned", "document_publication_year"]
     )
     u.save_table(field_year_agg, "figure4_mention_rate_by_field_year_full", output_dir)
 
@@ -128,10 +150,25 @@ def figure_4_mention_rate_by_field_and_year(
         f"{field_year_agg.height:,} of {n_before_cap:,} field-year cells remain"
     )
 
+    # Pooled series over every field category (all ten, "Other" included), no per-cell floor.
+    pooled_by_year = _agg_both_denominators(
+        pair_rates.filter(pl.col("document_publication_year") <= year_cap),
+        ["document_publication_year"],
+    )
+    u.save_table(pooled_by_year, "figure4_mention_rate_pooled_by_year", output_dir)
+    print("\nPooled mention rate by year, all fields (both denominators):")
+    print(pooled_by_year)
+
+    count_col = "n_pairs" if denominator == "unconditional" else "n_pairs_conditional"
+    rate_col = (
+        "mention_rate_pct" if denominator == "unconditional" else "mention_rate_pct_conditional"
+    )
     n_before_floor = field_year_agg.height
-    plotted = field_year_agg.filter(pl.col("n_pairs") >= min_pairs_per_cell)
+    plotted = field_year_agg.filter(pl.col(count_col) >= min_pairs_per_cell).with_columns(
+        pl.lit(denominator).alias("plotted_denominator")
+    )
     print(
-        f"Applying minimum-observation floor (n_pairs >= {min_pairs_per_cell} per "
+        f"Applying minimum-observation floor ({count_col} >= {min_pairs_per_cell} per "
         f"field-year cell): {plotted.height:,} of {n_before_floor:,} cells remain"
     )
 
@@ -168,21 +205,10 @@ def figure_4_mention_rate_by_field_and_year(
         f"(<= {year_cap}): {overall_rate:.1f}%"
     )
 
-    # Per-field aggregate rates (post year cap).
-    field_overall = (
-        field_year_agg.group_by("document_field_name_pruned")
-        .agg(
-            pl.sum("n_pairs").alias("n_pairs"),
-            pl.sum("total_imports").alias("total_imports"),
-            pl.sum("matched_imports").alias("matched_imports"),
-        )
-        .with_columns(
-            (100 * pl.col("matched_imports") / pl.col("total_imports")).alias(
-                "mention_rate_pct"
-            )
-        )
-        .sort("mention_rate_pct", descending=True)
-    )
+    # Per-field aggregate rates (post year cap), both denominators side by side.
+    field_overall = _agg_both_denominators(
+        pair_rates_capped, ["document_field_name_pruned"]
+    ).sort("mention_rate_pct", descending=True)
     u.save_table(field_overall, "figure4_mention_rate_by_field_overall", output_dir)
     print("\nOverall mention rate by field (post year cap):")
     print(field_overall)
@@ -238,21 +264,15 @@ def figure_4_mention_rate_by_field_and_year(
     u.save_table(summary, "figure4_mention_rate_summary", output_dir)
     print(summary)
 
-    # Per-field conditional rates (same year cap as the plotted figure).
-    field_overall_conditional = (
-        with_mention.group_by("document_field_name_pruned")
-        .agg(
-            pl.len().alias("n_pairs_with_any_mention"),
-            pl.sum("n_total_imports").alias("total_imports"),
-            pl.sum("n_matched_imports").alias("matched_imports"),
-        )
-        .with_columns(
-            (100 * pl.col("matched_imports") / pl.col("total_imports")).alias(
-                "mention_rate_pct_conditional"
-            )
-        )
-        .sort("mention_rate_pct_conditional", descending=True)
-    )
+    # Per-field conditional rates (same year cap as the plotted figure), sorted on the
+    # conditional rate -- a view of `field_overall` kept for the Results ranking sentence.
+    field_overall_conditional = field_overall.select(
+        "document_field_name_pruned",
+        pl.col("n_pairs_conditional").alias("n_pairs_with_any_mention"),
+        pl.col("total_imports_conditional").alias("total_imports"),
+        "matched_imports",
+        "mention_rate_pct_conditional",
+    ).sort("mention_rate_pct_conditional", descending=True)
     u.save_table(
         field_overall_conditional,
         "figure4_mention_rate_by_field_overall_conditional",
@@ -276,7 +296,7 @@ def figure_4_mention_rate_by_field_and_year(
     sns.lineplot(
         data=plot_df,
         x="document_publication_year",
-        y="mention_rate_pct",
+        y=rate_col,
         hue="field_display",
         hue_order=top_fields_display,
         style="field_display",
@@ -299,10 +319,29 @@ def figure_4_mention_rate_by_field_and_year(
         borderaxespad=0.6,
     )
     u.style_legend(leg, fontsize=8)
+    first_plotted_years = (
+        plotted.group_by("document_field_name_pruned")
+        .agg(pl.min("document_publication_year").alias("first_year"))
+        .sort("document_field_name_pruned")
+    )
+    first_year_note = "; ".join(
+        f"{row['document_field_name_pruned']} from {row['first_year']}"
+        for row in first_plotted_years.iter_rows(named=True)
+    )
+    denominator_note = (
+        "every pair whose repository has >=1 extracted import (articles with no extracted "
+        "mention count as mentioning none of their imports)"
+        if denominator == "unconditional"
+        else "pairs whose repository has >=1 extracted import AND whose article has >=1 "
+        "extracted software mention"
+    )
     u.print_caption_note(
         "figure4_mention_rate_by_field_and_year",
+        f"Denominator: {denominator} -- rates are import-weighted over {denominator_note}. "
+        f"Field-year cells with fewer than {min_pairs_per_cell} such pairs are omitted, so "
+        f"fields enter the plot in different years: {first_year_note}. "
         "Year-cap rationale: SoftCite-2025 mention-extraction coverage is stable through "
-        "April 2023, degrades over May-June 2023, and is exactly zero from July 2023 onward, "
+        "April 2023, degrades over May-June 2023, and is near zero from July 2023 onward, "
         f"so mention-based analyses are capped at {year_cap} -- the last fully covered "
         "publication year -- giving mentions the fairest representation by using only "
         "reliably extracted years, just as imports and dependencies each use their own full "
@@ -318,20 +357,6 @@ def figure_4_mention_rate_by_field_and_year(
 # Predictors of software mentioning (logistic regression)
 
 RARE_SOFTWARE_MIN_COUNT = 3
-# Generic software names excluded from the regression population.
-GENERIC_SOFTWARE_NAME_EXCLUDE: set[str] = {
-    "code",
-    "latex",
-    "script",
-    "scripts",
-    "codes",
-    "library",
-    "libraries",
-    "package",
-    "packages",
-    "api",
-    "software",
-}
 TOP_N_FIELDS_FOR_CONTROL = 5
 
 
@@ -363,11 +388,13 @@ def _remove_rare_and_generic_software(
     min_count: int = RARE_SOFTWARE_MIN_COUNT,
     trace: list[dict] | None = None,
 ) -> pl.DataFrame:
-    """Exclude generic-named libraries and libraries with usage count < `min_count`."""
+    """Exclude generic-named libraries (the shared `u.GENERIC_SOFTWARE_NAME_STOPLIST`) and
+    libraries with usage count < `min_count`.
+    """
     n_before = df.height
-    df = df.filter(~pl.col("library_name_normalized").is_in(GENERIC_SOFTWARE_NAME_EXCLUDE))
+    df = df.filter(~pl.col("library_name_normalized").is_in(u.GENERIC_SOFTWARE_NAME_STOPLIST))
     print(
-        f"Excluding generic software names {sorted(GENERIC_SOFTWARE_NAME_EXCLUDE)}: "
+        f"Excluding generic software names {sorted(u.GENERIC_SOFTWARE_NAME_STOPLIST)}: "
         f"{df.height:,} of {n_before:,} rows remain"
     )
     _trace_filter_step(trace, "after_generic_name_exclusion", df)

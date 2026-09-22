@@ -6,7 +6,6 @@ imports/dependencies.
 
 from __future__ import annotations
 
-from datetime import date
 from pathlib import Path
 
 import evaplot
@@ -21,34 +20,6 @@ from rs_graph.utils.software_alignment import align_software_names
 
 # Minimum pairs per year for plotted lines; CSVs keep every year.
 IOU_MIN_PAIRS_PER_YEAR = 50
-
-# Generic mention terms removed for the generic-filtered IoU variant. Named software and
-# languages (matlab, samtools, python, r, bioconductor, jupyter) are intentionally kept:
-# their non-matching is signal, not noise. All names compared post-normalize_name.
-GENERIC_MENTION_STOPLIST: set[str] = {
-    "code",
-    "scripts",
-    "script",
-    "latex",
-    "software",
-    "github",
-    "gitlab",
-    "bitbucket",
-    "library",
-    "libraries",
-    "package",
-    "packages",
-    "tool",
-    "tools",
-    "toolbox",
-    "pipeline",
-    "workflow",
-    "api",
-    "database",
-    "website",
-    "server",
-    "notebook",
-}
 
 
 def _top5_unmatched_rows(
@@ -100,6 +71,28 @@ def _iou_agg_by_year(frame: pl.DataFrame, iou_col: str = "iou") -> pl.DataFrame:
     )
 
 
+def _iou_trend_summary(plotted: pl.DataFrame, plotted_uncond: pl.DataFrame) -> pl.DataFrame:
+    """Spearman of annual mean IoU vs. year over the plotted (n-floor) years, per variant."""
+    trend_rows = []
+    for variant, frame in [("conditional", plotted), ("unconditional", plotted_uncond)]:
+        years_arr = frame.get_column("document_publication_year").to_numpy()
+        rho, pval = spearmanr(years_arr, frame.get_column("mean_iou").to_numpy())
+        trend_rows.append(
+            {
+                "variant": variant,
+                "first_year": int(years_arr.min()),
+                "last_year": int(years_arr.max()),
+                "n_years": frame.height,
+                "n_pairs": int(frame.get_column("n_pairs").sum()),
+                "first_year_mean_iou": float(frame.get_column("mean_iou")[0]),
+                "last_year_mean_iou": float(frame.get_column("mean_iou")[-1]),
+                "spearman_rho_mean_iou_vs_year": float(rho),
+                "p_value": u.format_p_value(float(pval)),
+            }
+        )
+    return pl.DataFrame(trend_rows)
+
+
 ###############################################################################
 # Import-vs-dependency IoU over time
 
@@ -108,6 +101,8 @@ def import_dependency_iou_over_time(
     output_dir: Path = u.OUTPUT_DIR,
     cutoff: float = 85.0,
     min_pairs_per_year: int = IOU_MIN_PAIRS_PER_YEAR,
+    year_cap: int = u.MENTION_EXTRACTION_YEAR_CAP,
+    all_manifest_ecosystems: bool = False,
 ) -> None:
     """
     Compute import-vs-dependency IoU over time. Builds: (1) the conditional metric (pairs
@@ -115,11 +110,18 @@ def import_dependency_iou_over_time(
     unconditional companion -- same population minus the both-views-present requirement, with
     single-view pairs entering as IoU=0 and neither-view pairs excluded; (3) a three-band
     composition decomposition (no manifest / manifest-no-overlap / manifest-with-overlap) per
-    year among import-bearing pairs; (4) directional top-5 unmatched-name lists. Dependency
-    names are cleaned of residual comparator/junk characters before alignment.
+    year among import-bearing pairs; (4) directional top-5 unmatched-name lists; (5) Spearman
+    trends of annual mean IoU vs. year over years with >= `min_pairs_per_year` pairs.
+    Dependency names are cleaned of residual comparator/junk characters before alignment.
+    Capped at `year_cap` so every cross-view comparison shares one publication-year window.
+    `all_manifest_ecosystems=True` is a diagnostic variant that keeps every manifest
+    ecosystem (npm, GitHub Actions, docker, ...) instead of pypi/conda/cran only; its outputs
+    carry an `_all_ecosystems` suffix.
     """
     evaplot.set_style("evaplot_rc")
     df = u.load_filtered_pairs(top_n_fields=10)
+    df = df.filter(pl.col("document_publication_year") <= year_cap)
+    print(f"After capping at publication year <= {year_cap}: {df.height:,} pairs remain")
 
     print("\nLoading repository_import and repository_dependency from HuggingFace...")
     imports = u.load_table("repository_import")
@@ -128,14 +130,21 @@ def import_dependency_iou_over_time(
     print(f"  repository_dependency: {len(deps):,} rows")
     deps = u.clean_dependency_names(deps)
 
-    deps_pr = deps.filter(pl.col("ecosystem").is_in(u.ALL_MANIFEST_ECOSYSTEMS))
+    if all_manifest_ecosystems:
+        deps_pr = deps
+        ecosystems_label = "any-ecosystem"
+        stem_suffix = "_all_ecosystems"
+    else:
+        deps_pr = deps.filter(pl.col("ecosystem").is_in(u.ALL_MANIFEST_ECOSYSTEMS))
+        ecosystems_label = "/".join(u.ALL_MANIFEST_ECOSYSTEMS)
+        stem_suffix = ""
     repo_with_import = set(imports.get_column("repository_id").unique().to_list())
     repo_with_dep = set(deps_pr.get_column("repository_id").unique().to_list())
     both_view_repos = repo_with_import & repo_with_dep
     either_view_repos = repo_with_import | repo_with_dep
     eligible = df.filter(pl.col("repository_id").is_in(both_view_repos))
     print(
-        f"Pairs whose repository has >=1 import AND >=1 {u.ALL_MANIFEST_ECOSYSTEMS} "
+        f"Pairs whose repository has >=1 import AND >=1 {ecosystems_label} "
         f"dependency: {eligible.height:,} of {df.height:,}"
     )
 
@@ -175,7 +184,6 @@ def import_dependency_iou_over_time(
         unmatched_deps_by_repo[repo_id] = unique_deps - matched_deps
     print(f"Aligned imports vs. dependencies for {len(iou_by_repo):,} repositories.")
 
-    current_year = date.today().year
     pair_iou = (
         eligible.select(
             "document_id",
@@ -188,7 +196,6 @@ def import_dependency_iou_over_time(
             pl.col("repository_id").replace_strict(iou_by_repo, default=None).alias("iou")
         )
         .drop_nulls("iou")
-        .filter(pl.col("document_publication_year") < current_year)
     )
 
     # Unconditional companion: pairs whose repo has imports OR manifest deps; a
@@ -204,7 +211,6 @@ def import_dependency_iou_over_time(
         )
         .unique(subset=["document_id", "repository_id"])
         .with_columns(pl.lit(0.0).alias("iou"))
-        .filter(pl.col("document_publication_year") < current_year)
     )
     pair_iou_unconditional = pl.concat([pair_iou, single_view_pairs])
     print(
@@ -233,7 +239,7 @@ def import_dependency_iou_over_time(
             _agg_labeled(pair_iou_unconditional, "pooled", "unconditional"),
         ]
     )
-    u.save_table(by_year, "import_dependency_iou_by_year", output_dir)
+    u.save_table(by_year, f"import_dependency_iou_by_year{stem_suffix}", output_dir)
 
     # ---- Composition decomposition: per year, among import-bearing pairs, the share with
     # (i) no manifest deps, (ii) manifest deps but zero overlap with imports, (iii) manifest
@@ -250,7 +256,6 @@ def import_dependency_iou_over_time(
         df.filter(pl.col("repository_id").is_in(repo_with_import))
         .select("document_id", "repository_id", "document_publication_year")
         .unique(subset=["document_id", "repository_id"])
-        .filter(pl.col("document_publication_year") < current_year)
         .with_columns(
             pl.col("repository_id")
             .replace_strict(band_by_repo, default="no_manifest")
@@ -268,7 +273,11 @@ def import_dependency_iou_over_time(
     ).with_columns(
         (100 * pl.col("n_pairs") / pl.col("n_pairs_year_total")).alias("pct_of_pairs")
     )
-    u.save_table(composition, "import_dependency_composition_decomposition_by_year", output_dir)
+    u.save_table(
+        composition,
+        f"import_dependency_composition_decomposition_by_year{stem_suffix}",
+        output_dir,
+    )
 
     band_order = ["no_manifest", "manifest_no_overlap", "manifest_with_overlap"]
     band_labels = {
@@ -304,13 +313,15 @@ def import_dependency_iou_over_time(
     )
     u.style_legend(leg_comp)
     u.print_caption_note(
-        "import_dependency_composition_decomposition",
-        f"Years with < {min_pairs_per_year} import-bearing pairs and the current partial "
-        "year excluded",
+        f"import_dependency_composition_decomposition{stem_suffix}",
+        f"Years with < {min_pairs_per_year} import-bearing pairs and years after {year_cap} "
+        "excluded",
     )
     u.shrink_ticks(ax_comp, size=9)
     evaplot.adjust_layout(fig_comp)
-    u.save_figure(fig_comp, "import_dependency_composition_decomposition", output_dir)
+    u.save_figure(
+        fig_comp, f"import_dependency_composition_decomposition{stem_suffix}", output_dir
+    )
     plt.close(fig_comp)
 
     # ---- Directional top-5 unmatched lists ----
@@ -327,7 +338,7 @@ def import_dependency_iou_over_time(
     )
     u.save_table(
         pl.DataFrame(unmatched_rows),
-        "import_dependency_unmatched_top5_by_direction",
+        f"import_dependency_unmatched_top5_by_direction{stem_suffix}",
         output_dir,
     )
 
@@ -343,6 +354,11 @@ def import_dependency_iou_over_time(
         & (pl.col("variant") == "unconditional")
         & (pl.col("n_pairs") >= min_pairs_per_year)
     )
+
+    trend = _iou_trend_summary(plotted, plotted_uncond)
+    u.save_table(trend, f"import_dependency_iou_trend_summary{stem_suffix}", output_dir)
+    print("\nAnnual-mean IoU vs. year Spearman trends (n-floor years):")
+    print(trend)
 
     fig, ax = plt.subplots(figsize=(9, 5.5))
     years = plotted.get_column("document_publication_year").to_numpy()
@@ -389,13 +405,12 @@ def import_dependency_iou_over_time(
     ax.set_ylim(0, 1)
     u.style_legend(ax.legend(fontsize=8, loc="upper left"), fontsize=8)
     u.print_caption_note(
-        "import_dependency_iou_over_time",
-        f"Years with < {min_pairs_per_year} eligible pairs and the current partial year "
-        "excluded",
+        f"import_dependency_iou_over_time{stem_suffix}",
+        f"Years with < {min_pairs_per_year} eligible pairs and years after {year_cap} excluded",
     )
     u.shrink_ticks(ax, size=9)
     evaplot.adjust_layout(fig)
-    u.save_figure(fig, "import_dependency_iou_over_time", output_dir)
+    u.save_figure(fig, f"import_dependency_iou_over_time{stem_suffix}", output_dir)
     plt.close(fig)
 
 
@@ -457,11 +472,13 @@ def _mentions_pair_iou_frames(
         # Generic-filtered variant: same pair, stoplist terms removed from the mention
         # set before alignment. A pair whose mentions are all generic stays in the
         # population with IoU=0 (eligibility is defined on the raw mention set).
-        generic_here = unique_mentions & GENERIC_MENTION_STOPLIST
+        generic_here = unique_mentions & u.GENERIC_SOFTWARE_NAME_STOPLIST
         for term in generic_here:
             removed_counts[term] = removed_counts.get(term, 0) + 1
         if generic_here:
-            filtered_mentions = [m for m in pair_mentions if m not in GENERIC_MENTION_STOPLIST]
+            filtered_mentions = [
+                m for m in pair_mentions if m not in u.GENERIC_SOFTWARE_NAME_STOPLIST
+            ]
             if filtered_mentions:
                 f_matches = align_software_names(
                     items_a=pair_b,
@@ -580,7 +597,7 @@ def mentions_alignment_over_time(
     (document, repository) pair with >=1 extracted mention and >=1 import (resp. >=1 pooled
     pypi/conda/cran manifest dependency), mentions are Hungarian-aligned against imports
     (resp. dependencies), imports/deps as `items_a` (canonical); IoU = |matched| / |union|.
-    Every mentions-based IoU is reported twice -- as-is, and with `GENERIC_MENTION_STOPLIST`
+    Every mentions-based IoU is reported twice -- as-is, and with `u.GENERIC_SOFTWARE_NAME_STOPLIST`
     terms removed from the mention sets before alignment (per-term removed counts saved
     alongside) -- plus an unconditional companion variant where single-view pairs enter as
     IoU=0, and directional top-5 unmatched lists (from the as-is variant). Dependency names
@@ -708,6 +725,151 @@ def mentions_alignment_over_time(
 
 
 ###############################################################################
+# Dependency mention rate (the manifest-side analogue of the Figure 4 import mention rate)
+
+
+def _pair_mention_rate_rows(
+    eligible: pl.DataFrame,
+    names_by_repo: dict[int, list[str]],
+    mentions_by_doc: dict[int, list[str]],
+    source_a: str,
+    cutoff: float,
+) -> pl.DataFrame:
+    """Per-pair alignment of a repository-side view (`source_a`) against the document's
+    mentions, view names as `items_a` (canonical). One row per pair with the view's unique
+    name count and how many of those names a mention matched.
+    """
+    rows = []
+    for row in eligible.select(
+        "document_id", "repository_id", "repository_primary_language"
+    ).iter_rows(named=True):
+        pair_names = names_by_repo.get(row["repository_id"], [])
+        if not pair_names:
+            continue
+        pair_mentions = mentions_by_doc.get(row["document_id"], [])
+        matches = align_software_names(
+            items_a=pair_names,
+            items_b=pair_mentions,
+            source_a=source_a,
+            source_b="mention",
+            cutoff=cutoff,
+            method="global_min_diff",
+        )
+        rows.append(
+            {
+                "document_id": row["document_id"],
+                "repository_id": row["repository_id"],
+                "repository_primary_language": row["repository_primary_language"],
+                "has_any_mention": bool(pair_mentions),
+                "n_total": len(set(pair_names)),
+                "n_matched": len({m.normalized_item_one for m in matches}),
+            }
+        )
+    return pl.DataFrame(rows)
+
+
+def _mention_rate_summary_rows(pair_rates: pl.DataFrame, view: str, population: str) -> list:
+    """Pooled mention rate (sum matched / sum total), Python/R split, and share of pairs with
+    zero matched names -- over all pairs and conditional on >=1 extracted mention, matching
+    the Figure 4 summary statistics.
+    """
+
+    def _rate(frame: pl.DataFrame, lang: str | None = None) -> float:
+        sub = (
+            frame
+            if lang is None
+            else frame.filter(pl.col("repository_primary_language") == lang)
+        )
+        total = sub.get_column("n_total").sum()
+        return 100 * sub.get_column("n_matched").sum() / total if total else float("nan")
+
+    def _pct_zero(frame: pl.DataFrame) -> float:
+        return 100 * frame.filter(pl.col("n_matched") == 0).height / frame.height
+
+    rows = []
+    for denominator, frame in [
+        ("all_pairs_with_view", pair_rates),
+        ("conditional_on_any_mention", pair_rates.filter(pl.col("has_any_mention"))),
+    ]:
+        rows.append(
+            {
+                "view": view,
+                "population": population,
+                "denominator": denominator,
+                "n_pairs": frame.height,
+                "mention_rate_pct": _rate(frame),
+                "python_mention_rate_pct": _rate(frame, "Python"),
+                "r_mention_rate_pct": _rate(frame, "R"),
+                "pct_pairs_zero_mentioned": _pct_zero(frame),
+            }
+        )
+    return rows
+
+
+def dependency_mention_rate(
+    output_dir: Path = u.OUTPUT_DIR,
+    cutoff: float = 85.0,
+    year_cap: int = u.MENTION_EXTRACTION_YEAR_CAP,
+) -> None:
+    """
+    Compute the dependency mention rate: the share of a repository's declared pypi/conda/cran
+    manifest dependencies that are also mentioned in the linked article, built exactly like
+    the Figure 4 import mention rate (per-pair Hungarian alignment, dependencies as
+    `items_a`, pooled rate = matched / total) on pairs whose repository has >=1 such
+    dependency, capped at `year_cap`. Reported over all such pairs and conditional on the
+    document carrying >=1 extracted mention. For a like-for-like comparison, both the import
+    and the dependency rate are also reported on the pairs whose repository carries both
+    views.
+    """
+    df = u.load_filtered_pairs(top_n_fields=10)
+    df = df.filter(pl.col("document_publication_year") <= year_cap)
+    print(f"After capping at publication year <= {year_cap}: {df.height:,} pairs remain")
+
+    print("\nLoading imports/dependencies/mentions from HuggingFace...")
+    imports = u.load_table("repository_import")
+    deps = u.load_table("repository_dependency")
+    mentions = u.load_table("document_software_mention")
+    deps = u.clean_dependency_names(deps)
+    mentions = u.clean_mention_names(mentions)
+    deps_pr = deps.filter(pl.col("ecosystem").is_in(u.ALL_MANIFEST_ECOSYSTEMS))
+
+    imports_by_repo = u.normalized_names_by_id(imports, "repository_id")
+    deps_by_repo = u.normalized_names_by_id(deps_pr, "repository_id")
+    mentions_by_doc = u.normalized_names_by_id(mentions, "document_id")
+
+    with_dep = df.filter(pl.col("repository_id").is_in(set(deps_by_repo)))
+    print(
+        f"Pairs whose repository has >=1 {'/'.join(u.ALL_MANIFEST_ECOSYSTEMS)} dependency: "
+        f"{with_dep.height:,} of {df.height:,}"
+    )
+    dep_rates = _pair_mention_rate_rows(
+        with_dep, deps_by_repo, mentions_by_doc, "dependency", cutoff
+    )
+    summary_rows = _mention_rate_summary_rows(
+        dep_rates, "dependencies", "pairs_with_dependencies"
+    )
+
+    both = with_dep.filter(pl.col("repository_id").is_in(set(imports_by_repo)))
+    print(f"Pairs whose repository has both imports and dependencies: {both.height:,}")
+    dep_rates_both = dep_rates.join(
+        both.select("document_id", "repository_id").unique(),
+        on=["document_id", "repository_id"],
+    )
+    import_rates_both = _pair_mention_rate_rows(
+        both, imports_by_repo, mentions_by_doc, "import", cutoff
+    )
+    summary_rows += _mention_rate_summary_rows(
+        dep_rates_both, "dependencies", "pairs_with_both"
+    )
+    summary_rows += _mention_rate_summary_rows(import_rates_both, "imports", "pairs_with_both")
+
+    summary = pl.DataFrame(summary_rows).with_columns(pl.lit(year_cap).alias("year_cap"))
+    u.save_table(summary, "dependency_mention_rate_summary", output_dir)
+    print("\nDependency mention rate summary:")
+    print(summary)
+
+
+###############################################################################
 # Top software per view (own lists, independent of any cross-view alignment)
 
 TOP_SOFTWARE_PER_VIEW_N = 10
@@ -764,12 +926,12 @@ def top_software_by_view(
 ) -> None:
     """
     Rank each data view's own most common software, independent of any cross-view alignment:
-    top mentioned software (as-is and with `GENERIC_MENTION_STOPLIST` terms removed), top
-    imported software, and top depended-upon (pypi/conda/cran manifest) software. Counts are
-    the number of standard-filtered (document, repository) pairs the name appears in for that
-    view; mention counts are capped at `year_cap` for the mentions-extraction horizon.
-    Name cleaning matches the rest of the paper (dependency/mention cleaning, per-pair
-    usage-count outlier trimming, rare-name floor).
+    top mentioned software (as-is and with `u.GENERIC_SOFTWARE_NAME_STOPLIST` terms removed),
+    top imported software, and top depended-upon (pypi/conda/cran manifest) software. Counts
+    are the number of standard-filtered (document, repository) pairs the name appears in for
+    that view; every view is capped at `year_cap` so the three populations share one
+    publication-year window. Name cleaning matches the rest of the paper (dependency/mention
+    cleaning, per-pair usage-count outlier trimming, rare-name floor).
     """
     df = u.load_filtered_pairs(top_n_fields=10)
 
@@ -781,14 +943,12 @@ def top_software_by_view(
     mentions = u.clean_mention_names(mentions)
     deps_pr = deps.filter(pl.col("ecosystem").is_in(u.ALL_MANIFEST_ECOSYSTEMS))
 
-    pair_pool = df.select("document_id", "repository_id").unique(
-        subset=["document_id", "repository_id"]
-    )
-    mention_pair_pool = (
+    pair_pool = (
         df.filter(pl.col("document_publication_year") <= year_cap)
         .select("document_id", "repository_id")
         .unique(subset=["document_id", "repository_id"])
     )
+    print(f"Pairs published <= {year_cap} (shared pool for every view): {pair_pool.height:,}")
 
     import_long = pair_pool.join(
         imports.select("repository_id", "software_name_normalized").unique(),
@@ -798,12 +958,12 @@ def top_software_by_view(
         deps_pr.select("repository_id", "software_name_normalized").unique(),
         on="repository_id",
     )
-    mention_long = mention_pair_pool.join(
+    mention_long = pair_pool.join(
         mentions.select("document_id", "software_name_normalized").unique(),
         on="document_id",
     )
     mention_long_filtered = mention_long.filter(
-        ~pl.col("software_name_normalized").is_in(GENERIC_MENTION_STOPLIST)
+        ~pl.col("software_name_normalized").is_in(u.GENERIC_SOFTWARE_NAME_STOPLIST)
     )
 
     top_frames = [

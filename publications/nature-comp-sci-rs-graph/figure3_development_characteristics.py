@@ -103,7 +103,7 @@ _DEPENDENCY_CATEGORIES: dict[str, set[str]] = {
 MANIFEST_ADOPTION_MIN_REPOS_PER_YEAR = 100
 LICENSE_ADOPTION_MIN_REPOS_PER_YEAR = 100
 
-# License-category keyword lists for Panel F.
+# License-category keyword lists for Panel D.
 # Matched against GitHub's license display names as stored in `repository_license`; checked
 # copyleft-first so share-alike CC variants never fall through to the permissive CC match.
 _COPYLEFT_LICENSE_KEYWORDS: tuple[str, ...] = (
@@ -354,14 +354,14 @@ def _dependency_category_adoption(
 
 
 def _fwci_distribution_frame(fwci_docs: pl.DataFrame) -> tuple[pl.DataFrame, int]:
-    """Panel D's positive-FWCI frame plus the zero-FWCI count (drawn as its own bar)."""
+    """Panel E's positive-FWCI frame plus the zero-FWCI count (drawn as its own bar)."""
     n_before_zero_filter = fwci_docs.filter(pl.col("document_raw_fwci").is_not_null()).height
     d = fwci_docs.filter(
         pl.col("document_raw_fwci").is_not_null() & (pl.col("document_raw_fwci") > 0)
     )
     n_zero_citation = n_before_zero_filter - d.height
     print(
-        f"Figure 3 Panel D: {n_zero_citation:,} zero-FWCI documents (OpenAlex FWCI = 0.0) "
+        f"Figure 3 Panel E: {n_zero_citation:,} zero-FWCI documents (OpenAlex FWCI = 0.0) "
         "drawn as a dedicated bar left of the log-scale distribution"
     )
     p99 = d.get_column("document_raw_fwci").quantile(0.99)
@@ -519,13 +519,16 @@ def figure_3_software_development_characteristics(
     """
     Build Figure 3: software development characteristics, one consolidated 6-panel figure.
     (A) dev activity duration, (B) Python's share of repositories over time by field, (C)
-    dependency-category adoption over time, (D) raw-FWCI distribution, (E)
-    raw-stars-vs-raw-citations Spearman rho by field as a horizontal forest plot with a
-    pooled row, (F) license adoption over time (any / permissive / copyleft). Also produces
-    the article-vs-preprint supplemental split from the same computations.
+    dependency-category adoption over time, (D) license adoption over time (any /
+    permissive / copyleft), (E) raw-FWCI distribution, (F) raw-stars-vs-raw-citations
+    Spearman rho by field as a horizontal forest plot with a pooled row. Also produces the
+    article-vs-preprint supplemental split from the same computations.
     """
     evaplot.set_style("evaplot_rc")
-    df = u.load_filtered_pairs(top_n_fields=10)
+    # Stable year sort so every keep="first" dedup below attributes the earliest publication.
+    df = u.load_filtered_pairs(top_n_fields=10).sort(
+        "document_publication_year", maintain_order=True
+    )
 
     print("\nLoading repository_dependency from HuggingFace...")
     deps = u.load_table("repository_dependency")
@@ -553,7 +556,7 @@ def figure_3_software_development_characteristics(
     # Vanishingly small p-values print as a bound rather than a literal 0.0.
     format_p = pl.col("p_value").map_elements(u.format_p_value, return_dtype=pl.String)
 
-    # FWSI-vs-FWCI rho is saved as CSV only; Panel E plots raw stars vs. raw citations.
+    # FWSI-vs-FWCI rho is saved as CSV only; Panel F plots raw stars vs. raw citations.
     u.save_table(
         rho_df.with_columns(format_p), "figure3_fwsi_fwci_spearman_by_field", output_dir
     )
@@ -566,12 +569,12 @@ def figure_3_software_development_characteristics(
         "figure3_stars_citations_spearman_by_field",
         output_dir,
     )
-    print("\nRaw-stars-vs-raw-citations Spearman rho by field (Panel E):")
+    print("\nRaw-stars-vs-raw-citations Spearman rho by field (Panel F):")
     print(stars_rho_df)
 
     license_adoption = _license_adoption_over_time(df)
     u.save_table(license_adoption, "figure3_license_adoption_by_year", output_dir)
-    print("\nLicense adoption by year (Panel F):")
+    print("\nLicense adoption by year (Panel D):")
     print(license_adoption)
 
     # Panel B/C data as labeled tables -- the manuscript cites exact adoption percentages.
@@ -738,10 +741,43 @@ def figure_3_software_development_characteristics(
     u.style_legend(ax_c.legend(fontsize=8, title="", loc="upper left"), fontsize=8)
     u.shrink_ticks(ax_c, size=9)
 
-    # D: raw OpenAlex FWCI distribution. bins=25: seaborn's log-scale "auto" rule produced
+    # D: license adoption over time -- any / permissive / copyleft license share of repos by
+    # first-seen publication year.
+    license_plotted = license_adoption.filter(
+        pl.col("n_repos") >= LICENSE_ADOPTION_MIN_REPOS_PER_YEAR
+    )
+    lic_colors = u.general_palette(3)
+    for col, label, color, ls in [
+        ("pct_any_license", "Any license", lic_colors[0], "-"),
+        ("pct_permissive", "Permissive", lic_colors[1], "--"),
+        ("pct_copyleft", "Copyleft", lic_colors[2], "-."),
+    ]:
+        ax_d.plot(
+            license_plotted.get_column("document_publication_year").to_numpy(),
+            license_plotted.get_column(col).to_numpy(),
+            marker="o",
+            markersize=3.5,
+            linewidth=1.6,
+            linestyle=ls,
+            color=color,
+            label=label,
+        )
+    ax_d.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax_d.set_xlabel("Publication Year")
+    ax_d.set_ylabel("% of Repos")
+    ax_d.set_ylim(0, 100)
+    u.style_legend(ax_d.legend(fontsize=8, title="", loc="upper right"), fontsize=8)
+    u.print_caption_note(
+        "figure3 Panel D",
+        f"Years with < {LICENSE_ADOPTION_MIN_REPOS_PER_YEAR} repos excluded; unclassifiable "
+        "licenses (e.g. GitHub's 'Other') count toward 'Any license' only",
+    )
+    u.shrink_ticks(ax_d, size=9)
+
+    # E: raw OpenAlex FWCI distribution. bins=25: seaborn's log-scale "auto" rule produced
     # jagged bin-to-bin noise unrelated to real signal.
     sns.histplot(
-        data=fwci_dist.to_pandas(), x="document_raw_fwci", ax=ax_d, log_scale=True, bins=25
+        data=fwci_dist.to_pandas(), x="document_raw_fwci", ax=ax_e, log_scale=True, bins=25
     )
     # Zero-FWCI docs can't sit on a log axis; drawn as a detached bar left of the
     # positive distribution so all documents stay visible. Chosen over log1p, which would
@@ -752,35 +788,35 @@ def figure_3_software_development_characteristics(
     assert isinstance(pos_max, float)
     bin_ratio = (pos_max / pos_min) ** (1 / 25)
     zero_x = pos_min / bin_ratio**2.5
-    ax_d.bar(
+    ax_e.bar(
         zero_x,
         n_zero_fwci_dropped,
         width=zero_x * (bin_ratio - 1),
         color=u.general_palette(2)[1],
         label=f"FWCI = 0 (n={n_zero_fwci_dropped:,})",
     )
-    ax_d.set_xlim(left=zero_x / bin_ratio)
+    ax_e.set_xlim(left=zero_x / bin_ratio)
     # Median over every document with an FWCI, zeros included, matching the plotted data.
-    ax_d.axvline(1.0, color="black", linestyle="--", linewidth=1.5, label="Field avg.")
-    ax_d.axvline(
+    ax_e.axvline(1.0, color="black", linestyle="--", linewidth=1.5, label="Field avg.")
+    ax_e.axvline(
         fwci_median_incl_zero,
         color="red",
         linestyle="-.",
         linewidth=1.5,
         label=f"Median: {fwci_median_incl_zero:.2f}",
     )
-    ax_d.set_xlabel("OpenAlex FWCI (log scale)")
-    ax_d.set_ylabel("Count")
-    # Upper left keeps the legend clear of Panel E's long y-tick labels.
-    u.style_legend(ax_d.legend(fontsize=8, loc="upper left"))
-    u.shrink_ticks(ax_d, size=9)
+    ax_e.set_xlabel("OpenAlex FWCI (log scale)")
+    ax_e.set_ylabel("Count")
+    # Upper left keeps the legend clear of Panel F's long y-tick labels.
+    u.style_legend(ax_e.legend(fontsize=8, loc="upper left"))
+    u.shrink_ticks(ax_e, size=9)
     u.print_caption_note(
-        "figure3 Panel D",
+        "figure3 Panel E",
         f"Zero-FWCI documents (n={n_zero_fwci_dropped:,}) drawn as the detached bar left of "
         "the log axis; median includes them",
     )
 
-    # E: raw-stars-vs-raw-citations Spearman rho by field -- horizontal forest plot with the
+    # F: raw-stars-vs-raw-citations Spearman rho by field -- horizontal forest plot with the
     # pooled rho as the top row and a reference line at its value.
     pooled_row = stars_rho_df.filter(pl.col("field") == "All fields (pooled)")
     field_rows = stars_rho_df.filter(pl.col("field") != "All fields (pooled)").sort(
@@ -791,7 +827,7 @@ def figure_3_software_development_characteristics(
     ys = np.arange(len(forest))
     xerr_lo = (forest["rho"] - forest["rho_ci_lo"]).to_numpy()
     xerr_hi = (forest["rho_ci_hi"] - forest["rho"]).to_numpy()
-    ax_e.errorbar(
+    ax_f.errorbar(
         x=forest["rho"],
         y=ys,
         xerr=[xerr_lo, xerr_hi],
@@ -805,59 +841,26 @@ def figure_3_software_development_characteristics(
         markeredgewidth=0.6,
     )
     pooled_rho = float(pooled_row.get_column("rho")[0])
-    ax_e.axvline(pooled_rho, color="#888888", linewidth=0.9, linestyle="--", zorder=0)
-    ax_e.axvline(0, color="#bbbbbb", linewidth=0.8, linestyle=":", zorder=0)
-    ax_e.set_yticks(ys)
-    ax_e.set_yticklabels(
+    ax_f.axvline(pooled_rho, color="#888888", linewidth=0.9, linestyle="--", zorder=0)
+    ax_f.axvline(0, color="#bbbbbb", linewidth=0.8, linestyle=":", zorder=0)
+    ax_f.set_yticks(ys)
+    ax_f.set_yticklabels(
         [
             f"{u.abbreviate_field(f)} (n={n:,})"
             for f, n in zip(forest["field"], forest["n"], strict=True)
         ]
     )
-    ax_e.invert_yaxis()
-    ax_e.set_ylim(len(forest) - 0.5, -0.5)
-    ax_e.set_xlabel("Spearman rho (stars vs. citations)")
+    ax_f.invert_yaxis()
+    ax_f.set_ylim(len(forest) - 0.5, -0.5)
+    ax_f.set_xlabel("Spearman rho (stars vs. citations)")
     # Smaller than the other panels: the field+n y-tick labels are the longest text in the grid.
-    u.shrink_ticks(ax_e, size=7)
+    u.shrink_ticks(ax_f, size=7)
     u.print_caption_note(
-        "figure3 Panel E",
+        "figure3 Panel F",
         "Raw stargazer and citation counts; dashed line = pooled rho. Every pruned field "
         "plus the Other bucket. Abbreviated field labels: "
         + u.field_abbreviation_caption(forest["field"].tolist()),
     )
-
-    # F: license adoption over time -- any / permissive / copyleft license share of repos by
-    # first-seen publication year.
-    license_plotted = license_adoption.filter(
-        pl.col("n_repos") >= LICENSE_ADOPTION_MIN_REPOS_PER_YEAR
-    )
-    lic_colors = u.general_palette(3)
-    for col, label, color, ls in [
-        ("pct_any_license", "Any license", lic_colors[0], "-"),
-        ("pct_permissive", "Permissive", lic_colors[1], "--"),
-        ("pct_copyleft", "Copyleft", lic_colors[2], "-."),
-    ]:
-        ax_f.plot(
-            license_plotted.get_column("document_publication_year").to_numpy(),
-            license_plotted.get_column(col).to_numpy(),
-            marker="o",
-            markersize=3.5,
-            linewidth=1.6,
-            linestyle=ls,
-            color=color,
-            label=label,
-        )
-    ax_f.xaxis.set_major_locator(MaxNLocator(integer=True))
-    ax_f.set_xlabel("Publication Year")
-    ax_f.set_ylabel("% of Repos")
-    ax_f.set_ylim(0, 100)
-    u.style_legend(ax_f.legend(fontsize=8, title="", loc="upper right"), fontsize=8)
-    u.print_caption_note(
-        "figure3 Panel F",
-        f"Years with < {LICENSE_ADOPTION_MIN_REPOS_PER_YEAR} repos excluded; unclassifiable "
-        "licenses (e.g. GitHub's 'Other') count toward 'Any license' only",
-    )
-    u.shrink_ticks(ax_f, size=9)
 
     u.save_figure(fig, "figure3_software_development_characteristics", output_dir)
     plt.close(fig)
@@ -949,7 +952,10 @@ def fwsi_fwci_comparison_table(output_dir: Path = u.OUTPUT_DIR, top_n: int = 5) 
     carrying both metrics -- surfaces articles with high citation impact but low repository
     recognition, and the reverse.
     """
-    df = u.load_filtered_pairs(top_n_fields=10)
+    # Same stable year sort as Figure 3 so FWSI peer groups come from the earliest pair.
+    df = u.load_filtered_pairs(top_n_fields=10).sort(
+        "document_publication_year", maintain_order=True
+    )
     fwci_docs = u.raw_fwci_docs(df)
     fwsi_repos = u.compute_modified_fwsi(df)
 

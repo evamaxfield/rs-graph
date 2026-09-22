@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import typer
 from alignment_iou_trends import (
+    dependency_mention_rate,
     import_dependency_iou_over_time,
     mentions_alignment_over_time,
     top_software_by_view,
@@ -70,6 +71,7 @@ app.command()(import_dependency_iou_over_time)
 app.command()(mentions_coverage_by_year)
 app.command()(mentions_alignment_over_time)
 app.command()(top_software_by_view)
+app.command()(dependency_mention_rate)
 app.command()(supplemental_manifest_file_adoption)
 app.command()(supplemental_package_vs_script_diagnostics)
 app.command()(data_coverage_counts)

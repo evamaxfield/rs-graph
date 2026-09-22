@@ -137,6 +137,7 @@ def table1_top_software_by_usage(
     output_dir: Path = u.OUTPUT_DIR,
     cutoff: float = 85.0,
     top_n_per_ecosystem: int = TABLE1_TOP_N_PER_ECOSYSTEM,
+    year_cap: int = u.MENTION_EXTRACTION_YEAR_CAP,
 ) -> None:
     """
     Build Table 1: one row per software, anchored on the import-normalized software name,
@@ -144,9 +145,12 @@ def table1_top_software_by_usage(
     count comes from a separate per-repository import-vs-dependency alignment. Mention
     count reuses Figure 4's per-pair import-vs-mention alignment, aggregated per software
     instead of per field/year. Both alignments use the same tool and cutoff and always
-    align two views at a time, never a three-way alignment.
+    align two views at a time, never a three-way alignment. Every column is computed on
+    pairs published at or before `year_cap`, so all three views share one window.
     """
     df = u.load_filtered_pairs(top_n_fields=10)
+    df = df.filter(pl.col("document_publication_year") <= year_cap)
+    print(f"After capping at publication year <= {year_cap}: {df.height:,} pairs remain")
 
     print(
         "\nLoading repository_import, repository_dependency, document_software_mention from "
@@ -218,13 +222,8 @@ def table1_top_software_by_usage(
         "imports and manifest dependencies in their ecosystem."
     )
 
-    # Mention extraction is absent/partial after the cap year, so mention counts only
-    # consider pairs published at or before it (imports/dependencies stay uncapped).
     eligible_pairs = (
-        df.filter(
-            pl.col("repository_id").is_in(eligible_repo_ids)
-            & (pl.col("document_publication_year") <= u.MENTION_EXTRACTION_YEAR_CAP)
-        )
+        df.filter(pl.col("repository_id").is_in(eligible_repo_ids))
         .select("document_id", "repository_id")
         .unique()
     )
@@ -237,30 +236,20 @@ def table1_top_software_by_usage(
         "this import-anchored table)."
     )
 
-    # Ratio denominator: importing repositories restricted to the <=2022 pair population,
-    # matching the mention numerator's coverage horizon; the displayed import counts stay
-    # full-corpus.
-    capped_repo_ids = set(eligible_pairs.get_column("repository_id").to_list())
-    import_counts_capped = _count_imports(
-        {rid: names for rid, names in imports_by_repo.items() if rid in capped_repo_ids},
-        repo_ecosystem,
-    )
-
     # ---- Assemble table ----
     rows = [
         {
             "ecosystem": eco,
             "software_name": name,
             "import_count": n_import,
-            "import_count_capped_2022": import_counts_capped.get((name, eco), 0),
             "dependency_count": dependency_counts.get((name, eco), 0),
             "mention_count": mention_counts.get((name, eco), 0),
         }
         for (name, eco), n_import in import_counts.items()
     ]
     table = pl.DataFrame(rows).with_columns(
-        pl.when(pl.col("import_count_capped_2022") > 0)
-        .then((1000 * pl.col("mention_count") / pl.col("import_count_capped_2022")).round(1))
+        pl.when(pl.col("import_count") > 0)
+        .then((1000 * pl.col("mention_count") / pl.col("import_count")).round(1))
         .otherwise(None)
         .alias("mentions_per_1000_imports")
     )
@@ -299,14 +288,11 @@ def table1_top_software_by_usage(
     u.save_table(final_table, "table1_top_software_by_usage", output_dir)
     u.print_caption_note(
         "table1_top_software_by_usage",
-        f"Mention counts include only articles published through "
-        f"{u.MENTION_EXTRACTION_YEAR_CAP}, the last fully covered publication year: "
-        "SoftCite-2025 mention-extraction coverage is normal through May 2023, then drops "
-        "sharply (exactly 0% from July 2023 onward), so the cap gives mentions their "
-        "fairest representation while imports and dependencies each use their own full "
-        "reliable range. The mentions-per-1,000-imports ratio restricts its importing-"
-        "repository denominator to the same <=2022 population as the mention numerator; "
-        "the count columns describe the full corpus",
+        f"All columns count only article-repository pairs published through {year_cap}, "
+        "the last fully covered mention-extraction publication year: SoftCite-2025 coverage "
+        "is normal through May 2023, then drops sharply (exactly 0% from July 2023 onward). "
+        "Importing, declaring, and mentioning counts and the mentions-per-1,000-imports "
+        "ratio therefore all describe the same <=year-cap population",
     )
 
 
