@@ -247,9 +247,9 @@ def date_delta_figure(output_dir: Path = u.OUTPUT_DIR) -> None:
 ###############################################################################
 # Co-authorship network
 #
-# Rebuilds the component statistics cited in the manuscript's Results text. The edge rule
-# follows the docs-site pipeline (`web/data-prep/queries/coauthorship_network.py`) but, unlike
-# it, applies no upper author-count bound by default.
+# Rebuilds the co-authorship component statistics. The edge rule follows the docs-site
+# pipeline (`web/data-prep/queries/coauthorship_network.py`) but, unlike it, applies no upper
+# author-count bound by default.
 
 
 def coauthorship_network(
@@ -259,8 +259,7 @@ def coauthorship_network(
 ) -> None:
     """
     Compute co-authorship network statistics -- connected component count, largest
-    component's size/percentage, and the next-largest component's size (the three numbers the
-    manuscript cites).
+    component's size/percentage, and the next-largest component's size.
 
     Edge-construction rule: nodes are researchers; one undirected edge per co-authoring
     researcher pair (not one edge per shared document), weighted by the number of documents
@@ -380,17 +379,6 @@ def coauthorship_network(
         "largest_component_size": largest_size,
         "largest_component_pct": round(largest_pct, 1),
         "next_largest_component_size": next_largest_size,
-        "manuscript_currently_cites": {
-            "n_isolates_excluded": 116639,
-            "n_researcher_nodes": 517144,
-            "n_coauthorship_edges": 2361845,
-            "n_connected_components": 10669,
-            "largest_component_size": 469242,
-            "largest_component_pct": 90.7,
-            "next_largest_component_size": 47,
-            "source": "latest-rs-graph-paper.md Coverage paragraph + FOOTNOTE 4 as of "
-            "2026-09-19, computed with the retired 2-12 author bound -- comparison only",
-        },
     }
     with open(output_dir / "coauthorship_network_summary.json", "w") as f:
         json.dump(summary, f, indent=2)
@@ -419,7 +407,7 @@ def coauthorship_network(
 
 def network_entity_edge_counts(output_dir: Path = u.OUTPUT_DIR) -> None:
     """
-    Compute the manuscript's full-network counts -- article, repository, researcher, and
+    Compute the full-network counts -- article, repository, researcher, and
     developer-account node counts, plus authorship, contribution, article-repository-link,
     and researcher-developer identity edge counts. Entities are derived from the
     standard-filtered pairs (pair-level filtering first). Identity-link counts use the

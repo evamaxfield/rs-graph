@@ -930,7 +930,7 @@ def top_software_by_view(
     top imported software, and top depended-upon (pypi/conda/cran manifest) software. Counts
     are the number of standard-filtered (document, repository) pairs the name appears in for
     that view; every view is capped at `year_cap` so the three populations share one
-    publication-year window. Name cleaning matches the rest of the paper (dependency/mention
+    publication-year window. Name cleaning matches the rest of this analysis (dependency/mention
     cleaning, per-pair usage-count outlier trimming, rare-name floor).
     """
     df = u.load_filtered_pairs(top_n_fields=10)

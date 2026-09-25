@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 
 """
-Nature Computational Science `rs-graph` manuscript -- figures and tables.
+`rs-graph` analysis -- figures and tables.
 
 Thin CLI shell: every command lives in a topic module in this directory and is registered
 here. Every command loads directly from HuggingFace
 (`sci-soft-collections/rs-graph-v2-full`), applies the standard filters itself, and is
 runnable standalone -- no dependency on a local SQLite checkout. Builds Figures 1-4,
-Table 1, the mention-predictors logistic regression, and the supporting statistics/tables
-cited in the manuscript text.
+Table 1, the mention-predictors logistic regression, and the supporting statistics/tables.
 """
 
 from __future__ import annotations

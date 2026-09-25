@@ -37,8 +37,8 @@ OUTPUT_DIR = THIS_DIR / "outputs"
 
 DEFAULT_CONFIDENCE_THRESHOLD = 0.9994
 DEFAULT_MIN_YEAR = 2008
-# Researcher-developer identity-link confidence -- this manuscript uses 0.97 throughout
-# (Methods, following Brown, Slaughter & Weber).
+# Researcher-developer identity-link confidence threshold, used throughout (following
+# Brown, Slaughter & Weber).
 DEFAULT_RDAL_CONFIDENCE_THRESHOLD = 0.97
 
 SOURCE_DISPLAY_NAMES: dict[str, str] = {
@@ -97,7 +97,7 @@ GENERIC_SOFTWARE_NAME_STOPLIST: set[str] = {
 
 # Short display labels for OpenAlex field names. Full names run long enough to overflow legend
 # boxes and axis margins; captions still unpack the full name. Covers every pruned field name
-# used in this paper plus the remaining OpenAlex fields.
+# used in this analysis plus the remaining OpenAlex fields.
 FIELD_DISPLAY_ABBREVIATIONS: dict[str, str] = {
     "Agricultural and Biological Sciences": "Agri. & Bio. Sci.",
     "Arts and Humanities": "Arts & Hum.",
@@ -182,7 +182,7 @@ def load_filtered_pairs(
 ) -> pl.DataFrame:
     """
     Load the standard, filtered article-repository pair base table used across (almost) every
-    figure/table in this paper.
+    figure/table in this analysis.
 
     Filtering order:
       1. article-repository pair confidence >= `confidence_threshold`, or NULL.
@@ -726,8 +726,8 @@ def add_panel_label(ax: Axes, label: str) -> None:
 
 
 def print_caption_note(figure_stem: str, text: str) -> None:
-    """Print a caption-bound note (title or caveat) for a figure, for copying into the
-    manuscript -- in-figure titles and footnote boxes are not used; captions carry them.
+    """Print a caption-bound note (title or caveat) for a figure, for use as caption text --
+    in-figure titles and footnote boxes are not used; captions carry them.
     """
     print(f"Caption ({figure_stem}): {text}")
 

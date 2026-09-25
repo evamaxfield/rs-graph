@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """Figure 2: dataset coverage by field and publication year, plus the PwC coverage and
-summary statistics cited in the manuscript.
+summary statistics.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from datasets import DatasetDict, load_dataset
 
 def _pwc_coverage_statistic(df: pl.DataFrame) -> dict[str, float]:
     """Compute rs-graph's coverage of PwC's official paper-code links and the "% increase
-    over the verified, accessible PwC subset" statistic (line 23).
+    over the verified, accessible PwC subset" statistic.
     """
     print("\nLoading pwc-archive/links-between-paper-and-code from HuggingFace...")
     pwc_ds = load_dataset("pwc-archive/links-between-paper-and-code")
@@ -42,7 +42,7 @@ def _pwc_coverage_statistic(df: pl.DataFrame) -> dict[str, float]:
         f"paper-repository links."
     )
     print(
-        f"Line 23 fill: {len(df):,} filtered pairs is a {increase_pct:.0f}% increase over the "
+        f"{len(df):,} filtered pairs is a {increase_pct:.0f}% increase over the "
         f"verified, accessible PwC subset ({len(our_pwc_pairs):,} pairs)."
     )
     print("-------------------------------\n")
@@ -60,8 +60,7 @@ def figure_2_dataset_coverage(output_dir: Path = u.OUTPUT_DIR) -> None:
     Build Figure 2: dataset coverage. (A) pair counts by field -- rs-graph, stacked seed vs.
     mined, beside the verified PwC subset; (B) pair counts per publication year stacked by
     top-6 fields + Other, with the mined share of each year's pairs overlaid on a secondary
-    axis. Also saves the field-proportion table (line 23's percentages) and a seed-source x
-    field supplement table.
+    axis. Also saves the field-proportion table and a seed-source x field supplement table.
     """
     evaplot.set_style("evaplot_rc")
     df = u.load_filtered_pairs(top_n_fields=10)
@@ -283,7 +282,7 @@ def figure_2_dataset_coverage(output_dir: Path = u.OUTPUT_DIR) -> None:
 
     # ---- Standalone PwC coverage statistic + summary stats ----
     pwc_stats = _pwc_coverage_statistic(df)
-    # Field counts for line 23's "spans more than 20 fields" claim -- unpruned field taxonomy.
+    # Field counts for the "spans more than 20 fields" claim -- unpruned field taxonomy.
     n_distinct_fields = df.get_column("document_field_name").drop_nulls().n_unique()
     print(f"Distinct (unpruned) OpenAlex fields represented: {n_distinct_fields}")
     summary_stats = pl.DataFrame(

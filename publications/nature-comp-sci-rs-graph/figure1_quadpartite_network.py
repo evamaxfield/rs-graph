@@ -906,7 +906,7 @@ def figure_1_quadpartite_network(
         up with uniform-random pairs and report the top-up count.
 
     Confidence filters: pair confidence >= 0.9994 or NULL (standard); identity links at
-    >= `rdal_confidence_threshold` (default 0.97, the paper's stated threshold).
+    >= `rdal_confidence_threshold` (default 0.97, the dataset-wide threshold).
     """
     evaplot.set_style("evaplot_rc")
     rng = random.Random(random_seed)

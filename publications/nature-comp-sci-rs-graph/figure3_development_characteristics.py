@@ -203,8 +203,8 @@ def _manifest_adoption_over_time(df: pl.DataFrame, deps: pl.DataFrame) -> pl.Dat
             & (pl.col("document_publication_year") < current_year)
         )
     )
-    # Pooled series (all repos, Python/R manifests only -- pypi/conda/cran, matching the
-    # manuscript's Python/R analysis scope) plus Python/R ecosystem reference series.
+    # Pooled series (all repos, Python/R manifests only -- pypi/conda/cran, matching this
+    # analysis's Python/R scope) plus Python/R ecosystem reference series.
     series_specs: list[tuple[str, pl.DataFrame, pl.DataFrame]] = [
         (
             "All repositories",
@@ -577,7 +577,7 @@ def figure_3_software_development_characteristics(
     print("\nLicense adoption by year (Panel D):")
     print(license_adoption)
 
-    # Panel B/C data as labeled tables -- the manuscript cites exact adoption percentages.
+    # Panel B/C data as labeled tables, with exact adoption percentages.
     u.save_table(manifest_adoption, "figure3_manifest_adoption_by_year", output_dir)
     u.save_table(python_share, "figure3_python_share_by_field_over_year", output_dir)
     current_year = date.today().year
@@ -598,7 +598,7 @@ def figure_3_software_development_characteristics(
         output_dir,
     )
 
-    # FWCI summary stats -- the paper's headline median and per-field medians.
+    # FWCI summary stats -- headline median and per-field medians.
     fwci_nonnull = fwci_docs.filter(pl.col("document_raw_fwci").is_not_null())
     fwci_median_incl_zero = fwci_nonnull.get_column("document_raw_fwci").median()
     fwci_median_excl_zero = (

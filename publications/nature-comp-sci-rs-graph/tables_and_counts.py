@@ -302,9 +302,10 @@ def table1_top_software_by_usage(
 
 def median_repository_contributor_count(output_dir: Path = u.OUTPUT_DIR) -> None:
     """
-    Fill line 33's `X%` placeholder ("The median scientific repository has only a single
-    contributor (X%)..."). Filters at the pair level first (standard filters), derives the
-    surviving repository set, then computes per-repository contributor counts from
+    Compute the percentage of repositories with a single contributor ("The median scientific
+    repository has only a single contributor (X%)..."). Filters at the pair level first
+    (standard filters), derives the surviving repository set, then computes per-repository
+    contributor counts from
     `repository_contributor`. Repositories with no `repository_contributor` rows at all
     count as 0 contributors rather than being dropped.
     """
@@ -348,10 +349,10 @@ def median_repository_contributor_count(output_dir: Path = u.OUTPUT_DIR) -> None
         f"Repositories with exactly one contributor: {n_single:,} of {repos_frame.height:,} "
         f"({pct_single:.1f}%)"
     )
-    print(f"Line 33 placeholder fill: X = {pct_single:.1f}%")
+    print(f"Single-contributor repository percentage: {pct_single:.1f}%")
     print("---------------------------------------------\n")
 
-    # ---- Repository development characteristics (line 33's medians + FOOTNOTE 3's tables) ----
+    # ---- Repository development characteristics ----
     # Commit/development metrics are repo-level (dedup to first-seen pair);
     # publication-relative deltas are pair-level.
     pair_char = df.with_columns(
@@ -407,7 +408,7 @@ def median_repository_contributor_count(output_dir: Path = u.OUTPUT_DIR) -> None
             )
     char_summary = pl.DataFrame(summary_rows)
     u.save_table(char_summary, "repository_characteristics_summary", output_dir)
-    print("Repository development characteristics (line 33 / FOOTNOTE 3):")
+    print("Repository development characteristics:")
     print(char_summary.filter(pl.col("document_type") == "all"))
 
 
@@ -417,7 +418,7 @@ def median_repository_contributor_count(output_dir: Path = u.OUTPUT_DIR) -> None
 
 def mining_rounds_table(output_dir: Path = u.OUTPUT_DIR) -> None:
     """
-    Fill Table X (line 237) and line 254's `X` placeholder. Two halves:
+    Build the mining-rounds table. Two halves:
       (a) new article-repository pairs per source/iteration: a group-by on
           `document_repository_link`'s (dataset_source_id, iteration).
       (b) new researcher-developer-account identity links per iteration: a structural join
@@ -463,15 +464,13 @@ def mining_rounds_table(output_dir: Path = u.OUTPUT_DIR) -> None:
         f"\nTotal new pairs across all mining iterations (1-5), RAW candidates: {mining_rounds_total:,}"
     )
     print(
-        f"Line 254 placeholder fill, RAW candidates (Extended Mining Round, iterations 4+5): "
-        f"{extended_mining_total:,}"
+        f"Extended Mining Round (iterations 4+5) RAW candidate total: {extended_mining_total:,}"
     )
 
     # ---- Same group-by, restricted to the standard-filtered pairs table ----
     # The raw group-by counts every candidate row regardless of confidence; most predicted
     # (non-seed) rows fall below 0.9994, so raw per-iteration counts overstate what is
-    # retained. The filtered version matches "new pairs added to the dataset" in Table X
-    # and line 254.
+    # retained. The filtered version matches "new pairs added to the dataset".
     filtered_pairs_for_iteration = u.load_filtered_pairs()
     pairs_by_iteration_filtered = (
         filtered_pairs_for_iteration.with_columns(
@@ -501,7 +500,7 @@ def mining_rounds_table(output_dir: Path = u.OUTPUT_DIR) -> None:
         f"{mining_rounds_total_filtered:,}"
     )
     print(
-        f"Line 254 placeholder fill, RETAINED (Extended Mining Round, iterations 4+5): "
+        f"Extended Mining Round (iterations 4+5) RETAINED total: "
         f"{extended_mining_total_filtered:,}"
     )
 
@@ -598,7 +597,7 @@ def mining_rounds_table(output_dir: Path = u.OUTPUT_DIR) -> None:
     )
 
     print(
-        "--- Combined mining-rounds table (Table X), using RETAINED (standard-filtered) pair "
+        "--- Combined mining-rounds table, using RETAINED (standard-filtered) pair "
         "counts -- this is the version that matches 'new pairs added to the dataset' ---"
     )
     # Iterations above 4 merge into a single "5" bucket; -1 is the seed ingestion.
