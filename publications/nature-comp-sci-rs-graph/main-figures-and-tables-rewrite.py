@@ -24,12 +24,16 @@ from armm_verification import (
     classification_models_table_verification,
 )
 from figure1_quadpartite_network import figure_1_quadpartite_network
-from figure2_dataset_coverage import figure_2_dataset_coverage
+from figure2_dataset_coverage import (
+    candidate_figure2c_mined_share_by_field,
+    figure_2_dataset_coverage,
+)
 from figure3_development_characteristics import (
     figure_3_software_development_characteristics,
     fwsi_fwci_comparison_table,
     supplemental_manifest_file_adoption,
     supplemental_package_vs_script_diagnostics,
+    tooling_composition_by_seed_source_diagnostic,
 )
 from mention_analysis import (
     figure_4_mention_rate_by_field_and_year,
@@ -40,6 +44,7 @@ from network_statistics import (
     coauthorship_network,
     date_delta_figure,
     network_entity_edge_counts,
+    seed_vs_full_network_comparison,
 )
 from tables_and_counts import (
     data_coverage_counts,
@@ -54,6 +59,7 @@ app = typer.Typer()
 
 app.command()(figure_1_quadpartite_network)
 app.command()(figure_2_dataset_coverage)
+app.command()(candidate_figure2c_mined_share_by_field)
 app.command()(figure_3_software_development_characteristics)
 app.command()(fwsi_fwci_comparison_table)
 app.command()(figure_4_mention_rate_by_field_and_year)
@@ -65,6 +71,7 @@ app.command()(armm_model_diagnostics)
 app.command()(date_delta_figure)
 app.command()(mining_rounds_table)
 app.command()(coauthorship_network)
+app.command()(seed_vs_full_network_comparison)
 app.command()(network_entity_edge_counts)
 app.command()(import_dependency_iou_over_time)
 app.command()(mentions_coverage_by_year)
@@ -73,6 +80,7 @@ app.command()(top_software_by_view)
 app.command()(dependency_mention_rate)
 app.command()(supplemental_manifest_file_adoption)
 app.command()(supplemental_package_vs_script_diagnostics)
+app.command()(tooling_composition_by_seed_source_diagnostic)
 app.command()(data_coverage_counts)
 
 ###############################################################################

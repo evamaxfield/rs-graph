@@ -402,6 +402,174 @@ def coauthorship_network(
 
 
 ###############################################################################
+# Seed-only vs. full (seed + mined) network comparison
+#
+# Tests what mining does to two things: co-authorship connectivity (a structure mining does
+# not traverse) and identity reach (the structure mining actually walks).
+
+
+def _coauthorship_component_stats(
+    pairs: pl.DataFrame,
+    document_contributors: pl.DataFrame,
+    min_authors: int = 2,
+    max_authors: int | None = None,
+) -> dict[str, float]:
+    """Co-authorship component stats for one pairs frame -- same edge-construction rule as
+    `coauthorship_network` (one weighted edge per co-authoring researcher pair, isolates
+    excluded before computing components), factored out so it can be run over both the
+    seed-only and full pair populations without reloading data twice.
+    """
+    filtered_document_ids = pairs.get_column("document_id").unique().to_list()
+    authors = (
+        document_contributors.select("document_id", "researcher_id")
+        .unique()
+        .filter(pl.col("document_id").is_in(filtered_document_ids))
+    )
+    author_counts = authors.group_by("document_id").agg(n_authors=pl.len())
+    qualifying = pl.col("n_authors") >= min_authors
+    if max_authors is not None:
+        qualifying = qualifying & (pl.col("n_authors") <= max_authors)
+    qualifying_docs = author_counts.filter(qualifying).select("document_id")
+    bounded_authors = authors.join(qualifying_docs, on="document_id", how="inner")
+
+    edges = (
+        bounded_authors.join(bounded_authors, on="document_id", suffix="_b")
+        .filter(pl.col("researcher_id") < pl.col("researcher_id_b"))
+        .select("researcher_id", "researcher_id_b")
+        .unique()
+    )
+    node_ids = authors.get_column("researcher_id").unique().to_list()
+    graph = rx.PyGraph()
+    index_by_researcher = dict(zip(node_ids, graph.add_nodes_from(node_ids), strict=True))
+    graph.add_edges_from_no_data(
+        [(index_by_researcher[a], index_by_researcher[b]) for a, b in edges.iter_rows()]
+    )
+    isolates = [idx for idx in graph.node_indices() if graph.degree(idx) == 0]
+    graph.remove_nodes_from(isolates)
+    n_nodes = graph.num_nodes()
+    component_sizes = sorted((len(c) for c in rx.connected_components(graph)), reverse=True)
+    largest = component_sizes[0] if component_sizes else 0
+    return {
+        "n_researchers_with_coauthorship_edge": n_nodes,
+        "n_coauthorship_components": len(component_sizes),
+        "largest_coauthorship_component_size": largest,
+        "largest_coauthorship_component_pct": round(100 * largest / n_nodes, 1)
+        if n_nodes
+        else 0.0,
+    }
+
+
+def _identity_reach_stats(
+    pairs: pl.DataFrame,
+    document_contributors: pl.DataFrame,
+    repository_contributors: pl.DataFrame,
+    rdal: pl.DataFrame,
+    rdal_confidence_threshold: float,
+) -> dict[str, float]:
+    """Share of researchers/developer accounts (among those authoring/contributing to `pairs`)
+    connected to at least one identity link on the other side -- same connection definition as
+    `network_entity_edge_counts` (identity counts only if a retained pair directly connects the
+    researcher, as an author, to the developer account, as a contributor to that pair's repo).
+    """
+    doc_ids = pairs.get_column("document_id").unique()
+    repo_ids = pairs.get_column("repository_id").unique()
+    authorship = (
+        document_contributors.select("document_id", "researcher_id")
+        .unique()
+        .filter(pl.col("document_id").is_in(doc_ids.implode()))
+    )
+    contribution = (
+        repository_contributors.select("repository_id", "developer_account_id")
+        .unique()
+        .filter(pl.col("repository_id").is_in(repo_ids.implode()))
+    )
+    n_researchers = authorship.n_unique("researcher_id")
+    n_developers = contribution.n_unique("developer_account_id")
+
+    pair_pool = pairs.select("document_id", "repository_id").unique()
+    connected_rd = (
+        authorship.join(pair_pool, on="document_id")
+        .join(contribution, on="repository_id")
+        .select("researcher_id", "developer_account_id")
+        .unique()
+    )
+    rdal_f = (
+        rdal.filter(pl.col("predictive_model_confidence") >= rdal_confidence_threshold)
+        .select("researcher_id", "developer_account_id")
+        .unique()
+    )
+    connected_identity = connected_rd.join(
+        rdal_f, on=["researcher_id", "developer_account_id"], how="semi"
+    )
+    n_researchers_with_identity = connected_identity.get_column("researcher_id").n_unique()
+    n_developers_with_identity = connected_identity.get_column(
+        "developer_account_id"
+    ).n_unique()
+    return {
+        "n_researchers": n_researchers,
+        "n_researchers_with_identity": n_researchers_with_identity,
+        "pct_researchers_with_identity": round(
+            100 * n_researchers_with_identity / n_researchers, 1
+        )
+        if n_researchers
+        else 0.0,
+        "n_developer_accounts": n_developers,
+        "n_developer_accounts_with_identity": n_developers_with_identity,
+        "pct_developer_accounts_with_identity": round(
+            100 * n_developers_with_identity / n_developers, 1
+        )
+        if n_developers
+        else 0.0,
+    }
+
+
+def seed_vs_full_network_comparison(
+    output_dir: Path = u.OUTPUT_DIR,
+    min_authors: int = 2,
+    max_authors: int | None = None,
+    rdal_confidence_threshold: float = 0.97,
+) -> None:
+    """
+    Compare the seed-only network (`link_processing_iteration IS NULL`) against the full
+    network (seed + mined pairs) on two things: co-authorship connectivity (largest-component
+    share and component count -- a structure mining does not traverse) and identity reach
+    (share of researchers linked to >=1 developer account, and vice versa -- the structure
+    mining actually walks). Saves one two-row CSV, seed-only vs. full.
+    """
+    pairs = u.load_filtered_pairs()
+    seed_pairs = pairs.filter(pl.col("link_processing_iteration").is_null())
+    print(
+        f"Full network: {pairs.height:,} pairs | Seed-only network: {seed_pairs.height:,} "
+        f"pairs ({100 * seed_pairs.height / pairs.height:.1f}% of the full network)"
+    )
+
+    print("Loading contributor/identity tables from HuggingFace...")
+    document_contributors = u.load_table("document_contributor")
+    repository_contributors = u.load_table("repository_contributor")
+    rdal = u.load_table("researcher_developer_account_link")
+
+    rows = []
+    for label, network_pairs in [("seed_only", seed_pairs), ("full", pairs)]:
+        coauth = _coauthorship_component_stats(
+            network_pairs, document_contributors, min_authors, max_authors
+        )
+        reach = _identity_reach_stats(
+            network_pairs,
+            document_contributors,
+            repository_contributors,
+            rdal,
+            rdal_confidence_threshold,
+        )
+        rows.append({"network": label, "n_pairs": network_pairs.height, **coauth, **reach})
+
+    out = pl.DataFrame(rows)
+    u.save_table(out, "seed_vs_full_network_comparison", output_dir)
+    print("\n--- Seed-only vs. full network comparison ---")
+    print(out)
+    print("----------------------------------------------\n")
+
+
+###############################################################################
 # Full-network entity/edge counts
 
 

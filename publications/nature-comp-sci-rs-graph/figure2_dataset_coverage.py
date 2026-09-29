@@ -292,3 +292,133 @@ def figure_2_dataset_coverage(output_dir: Path = u.OUTPUT_DIR) -> None:
         }
     )
     u.save_table(summary_stats, "figure2_summary_stats", output_dir)
+
+
+###############################################################################
+# Candidate Figure 2C -- mined share of pairs by field over time (decision aid, not wired
+# into the main Figure 2 composite; go/no-go pending)
+
+CANDIDATE_2C_MIN_PAIRS_PER_CELL = 100
+
+
+def candidate_figure2c_mined_share_by_field(output_dir: Path = u.OUTPUT_DIR) -> None:
+    """
+    Render two candidate versions of a possible Figure 2 Panel C -- mined share of pairs by
+    field, over time -- as standalone PNGs for a go/no-go decision. Not called from
+    `figure_2_dataset_coverage`. (a) top-6 fields + Other, 7 lines. (b) Computer Science vs.
+    every other field pooled, 2 lines. Both apply the same
+    `CANDIDATE_2C_MIN_PAIRS_PER_CELL` per-cell floor Figure 3 uses for its per-year series.
+    """
+    evaplot.set_style("evaplot_rc")
+    df = u.load_filtered_pairs(top_n_fields=10)
+    df = df.with_columns(pl.col("link_processing_iteration").is_not_null().alias("is_mined"))
+
+    current_year = date.today().year
+    year_df = df.filter(pl.col("document_publication_year") != current_year)
+
+    field_order = (
+        df.get_column("document_field_name_pruned")
+        .value_counts(sort=True)
+        .get_column("document_field_name_pruned")
+        .to_list()
+    )
+    top6_fields = [f for f in field_order if f != "Other"][:6]
+
+    # ---- (a) 7 lines: top-6 fields + Other ----
+    b_fields = [*top6_fields, "Other"]
+    field_mined_share = (
+        year_df.with_columns(
+            pl.when(pl.col("document_field_name_pruned").is_in(top6_fields))
+            .then(pl.col("document_field_name_pruned"))
+            .otherwise(pl.lit("Other"))
+            .alias("field7")
+        )
+        .group_by(["document_publication_year", "field7"])
+        .agg(pl.len().alias("total"), pl.col("is_mined").sum().alias("mined_count"))
+        .with_columns((100 * pl.col("mined_count") / pl.col("total")).alias("mined_pct"))
+        .filter(pl.col("total") >= CANDIDATE_2C_MIN_PAIRS_PER_CELL)
+        .sort(["field7", "document_publication_year"])
+    )
+    u.save_table(field_mined_share, "candidate_fig2c_mined_share_by_field_7lines", output_dir)
+
+    field_colors = u.field_color_map(b_fields)
+    fig_a, ax_a = plt.subplots(figsize=(8, 5.5))
+    for fname in b_fields:
+        plotted = field_mined_share.filter(pl.col("field7") == fname)
+        ax_a.plot(
+            plotted.get_column("document_publication_year").to_numpy(),
+            plotted.get_column("mined_pct").to_numpy(),
+            marker="o",
+            markersize=3.5,
+            linewidth=1.5,
+            color=field_colors[fname],
+            label=u.abbreviate_field(fname),
+        )
+    ax_a.set_xlabel("Publication Year")
+    ax_a.set_ylabel("Mined Share of Pairs (%)")
+    ax_a.set_ylim(0, 100)
+    u.style_legend(ax_a.legend(fontsize=8, title="", loc="upper left", ncol=2), fontsize=8)
+    u.shrink_ticks(ax_a, size=9)
+    abbrevs = u.field_abbreviation_caption(b_fields)
+    if abbrevs:
+        u.print_caption_note("candidate_fig2c_7lines", "Abbreviated field labels: " + abbrevs)
+    u.print_caption_note(
+        "candidate_fig2c_7lines",
+        f"Years with < {CANDIDATE_2C_MIN_PAIRS_PER_CELL} pairs in a field-year cell excluded.",
+    )
+    evaplot.adjust_layout(fig_a)
+    u.save_figure(fig_a, "candidate-fig2c-7lines", output_dir)
+    plt.close(fig_a)
+
+    # ---- (b) 2 lines: Computer Science vs. every other field pooled ----
+    cs_vs_rest_share = (
+        year_df.with_columns(
+            pl.when(pl.col("document_field_name_pruned") == "Computer Science")
+            .then(pl.lit("Computer Science"))
+            .otherwise(pl.lit("All other fields"))
+            .alias("field_group")
+        )
+        .group_by(["document_publication_year", "field_group"])
+        .agg(pl.len().alias("total"), pl.col("is_mined").sum().alias("mined_count"))
+        .with_columns((100 * pl.col("mined_count") / pl.col("total")).alias("mined_pct"))
+        .filter(pl.col("total") >= CANDIDATE_2C_MIN_PAIRS_PER_CELL)
+        .sort(["field_group", "document_publication_year"])
+    )
+    u.save_table(cs_vs_rest_share, "candidate_fig2c_mined_share_cs_vs_rest", output_dir)
+
+    palette2 = u.general_palette(2)
+    fig_b, ax_b = plt.subplots(figsize=(8, 5.5))
+    for group_label, color in zip(
+        ["Computer Science", "All other fields"], palette2, strict=True
+    ):
+        plotted = cs_vs_rest_share.filter(pl.col("field_group") == group_label)
+        ax_b.plot(
+            plotted.get_column("document_publication_year").to_numpy(),
+            plotted.get_column("mined_pct").to_numpy(),
+            marker="o",
+            markersize=4,
+            linewidth=2,
+            color=color,
+            label=group_label,
+        )
+    ax_b.set_xlabel("Publication Year")
+    ax_b.set_ylabel("Mined Share of Pairs (%)")
+    ax_b.set_ylim(0, 100)
+    u.style_legend(ax_b.legend(fontsize=8, title="", loc="upper left"), fontsize=8)
+    u.shrink_ticks(ax_b, size=9)
+    u.print_caption_note(
+        "candidate_fig2c_cs_vs_rest",
+        f"Years with < {CANDIDATE_2C_MIN_PAIRS_PER_CELL} pairs in a group-year cell excluded.",
+    )
+    evaplot.adjust_layout(fig_b)
+    u.save_figure(fig_b, "candidate-fig2c-cs-vs-rest", output_dir)
+    plt.close(fig_b)
+
+    # ---- Diagnostic: is the 2025 uptick a real trend or a provisional/partial-year artifact? ----
+    n_2025 = df.filter(pl.col("document_publication_year") == 2025).height
+    n_2024 = df.filter(pl.col("document_publication_year") == 2024).height
+    print(
+        f"\n2025 vs. 2024 pair counts (2025 excluded above only if it equals the current "
+        f"year): 2025 n={n_2025:,}, 2024 n={n_2024:,}. Current year excluded from the "
+        f"candidates: {current_year}."
+    )

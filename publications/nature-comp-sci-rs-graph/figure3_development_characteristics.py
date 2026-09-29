@@ -308,16 +308,27 @@ def _python_share_by_field_over_time(
 
 
 def _dependency_category_adoption(
-    df: pl.DataFrame, deps: pl.DataFrame, group_col: str | None, with_year: bool
+    df: pl.DataFrame,
+    deps: pl.DataFrame,
+    group_col: str | None,
+    with_year: bool,
+    repo_filter: pl.DataFrame | None = None,
+    numerator_ecosystems: list[str] | None = None,
 ) -> pl.DataFrame:
     """Adoption of the five dependency categories, as a long (category, [group], [year])
     frame with count/total/pct_repos. Repo-year attribution: first-seen publication year per
     repository (same dedup rule as `_manifest_adoption_over_time`).
+
+    `repo_filter`, if given, restricts the denominator population to a `repository_id` frame
+    (e.g. repositories with any parsed manifest). `numerator_ecosystems`, if given, restricts
+    which `repository_dependency` ecosystem rows can count toward a category hit.
     """
     base_cols = ["repository_id", "document_publication_year"]
     if group_col is not None:
         base_cols.append(group_col)
     repo_base = df.select(base_cols).unique(subset="repository_id", keep="first")
+    if repo_filter is not None:
+        repo_base = repo_base.join(repo_filter, on="repository_id", how="semi")
     key_cols = ([group_col] if group_col is not None else []) + (
         ["document_publication_year"] if with_year else []
     )
@@ -326,12 +337,16 @@ def _dependency_category_adoption(
         key_cols = ["_all"]
     total_per_group = repo_base.group_by(key_cols).agg(pl.len().alias("total"))
 
+    numerator_deps = deps
+    if numerator_ecosystems is not None:
+        numerator_deps = deps.filter(pl.col("ecosystem").is_in(numerator_ecosystems))
+
     frames = []
     for category, pkg_set in _DEPENDENCY_CATEGORIES.items():
         # software_name_normalized is hyphen/underscore-stripped, so match on normalized names.
         norm_pkgs = [normalize_name(p) for p in pkg_set]
         cat_repos = (
-            deps.filter(pl.col("software_name_normalized").is_in(norm_pkgs))
+            numerator_deps.filter(pl.col("software_name_normalized").is_in(norm_pkgs))
             .select("repository_id")
             .unique()
         )
@@ -543,7 +558,22 @@ def figure_3_software_development_characteristics(
     # Manifest adoption is CSV-only now -- cited as prose, not plotted.
     manifest_adoption = _manifest_adoption_over_time(df, deps)
     python_share = _python_share_by_field_over_time(df)
-    category_by_year = _dependency_category_adoption(df, deps, group_col=None, with_year=True)
+    # Panel C denominator: repositories with any parsed manifest, not every linked repository
+    # -- otherwise the tooling series partly just measures manifest adoption itself. Numerator
+    # restricted to pypi/cran/conda ecosystems, matching the manifest-adoption measure. The
+    # all-repositories/all-ecosystem version moves to the Supplement.
+    repos_with_any_manifest = deps.select("repository_id").unique()
+    category_by_year_all_repos = _dependency_category_adoption(
+        df, deps, group_col=None, with_year=True
+    )
+    category_by_year = _dependency_category_adoption(
+        df,
+        deps,
+        group_col=None,
+        with_year=True,
+        repo_filter=repos_with_any_manifest,
+        numerator_ecosystems=u.ALL_MANIFEST_ECOSYSTEMS,
+    )
     category_by_domain = _dependency_category_adoption(
         df, deps, group_col="document_domain_name", with_year=False
     )
@@ -584,9 +614,38 @@ def figure_3_software_development_characteristics(
     category_by_year_plotted = category_by_year.filter(
         pl.col("document_publication_year") < current_year
     )
+    category_by_year_all_repos_plotted = category_by_year_all_repos.filter(
+        pl.col("document_publication_year") < current_year
+    )
+    # Panel C data: with-manifest denominator, pypi/cran/conda-only numerator (main figure).
     u.save_table(
         category_by_year_plotted, "figure3_dependency_category_adoption_by_year", output_dir
     )
+    # All-repositories/all-ecosystem version, superseded as the main panel -- Supplement only.
+    u.save_table(
+        category_by_year_all_repos_plotted,
+        "supplemental_dependency_category_adoption_all_repos_by_year",
+        output_dir,
+    )
+    print("\nTooling adoption, with-manifest denominator (Panel C) vs. all-repos (Supplement):")
+    endpoint_years = [
+        category_by_year_plotted.get_column("document_publication_year").min(),
+        category_by_year_plotted.get_column("document_publication_year").max(),
+    ]
+    for cat_frame, cat_label in [
+        (category_by_year_plotted, "with-manifest denominator, pypi/cran/conda numerator"),
+        (category_by_year_all_repos_plotted, "all repos, all-ecosystem numerator"),
+    ]:
+        for category in _DEPENDENCY_CATEGORIES:
+            row = cat_frame.filter(
+                (pl.col("category") == category)
+                & pl.col("document_publication_year").is_in(endpoint_years)
+            ).sort("document_publication_year")
+            vals = ", ".join(
+                f"{r['document_publication_year']}: {r['pct_repos']:.1f}% (n={r['total']:,})"
+                for r in row.iter_rows(named=True)
+            )
+            print(f"  [{cat_label}] {category}: {vals}")
     # Documents with no OpenAlex domain are labeled "Unknown" rather than left blank.
     category_by_domain = category_by_domain.with_columns(
         pl.col("document_domain_name").fill_null("Unknown").replace({"": "Unknown"})
@@ -864,6 +923,79 @@ def figure_3_software_development_characteristics(
 
     u.save_figure(fig, "figure3_software_development_characteristics", output_dir)
     plt.close(fig)
+
+    # ---- Supplemental: tooling adoption, all-repositories denominator (superseded main-panel
+    # version; Panel C above uses the with-manifest denominator instead) ----
+    fig_tooling_supp, ax_tooling_supp = plt.subplots(figsize=(7, 5))
+    sns.lineplot(
+        data=category_by_year_all_repos_plotted.filter(
+            pl.col("total") >= MANIFEST_ADOPTION_MIN_REPOS_PER_YEAR
+        ).to_pandas(),
+        x="document_publication_year",
+        y="pct_repos",
+        hue="category",
+        style="category",
+        hue_order=list(_DEPENDENCY_CATEGORIES),
+        style_order=list(_DEPENDENCY_CATEGORIES),
+        palette=u.general_palette(len(_DEPENDENCY_CATEGORIES)),
+        markers=True,
+        dashes=True,
+        ax=ax_tooling_supp,
+    )
+    ax_tooling_supp.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax_tooling_supp.set_xlabel("Publication Year")
+    ax_tooling_supp.set_ylabel("% of Repos (all linked repositories)")
+    u.style_legend(ax_tooling_supp.legend(fontsize=8, title="", loc="upper left"), fontsize=8)
+    u.shrink_ticks(ax_tooling_supp, size=9)
+    u.print_caption_note(
+        "supplemental_dependency_category_adoption_all_repos",
+        "Same five tooling categories as Figure 3 Panel C, but over every linked repository "
+        "(not only those with a parsed manifest) and with no ecosystem restriction on the "
+        "numerator; superseded by Panel C's with-manifest, pypi/cran/conda-restricted version.",
+    )
+    evaplot.adjust_layout(fig_tooling_supp)
+    u.save_figure(
+        fig_tooling_supp, "supplemental_dependency_category_adoption_all_repos", output_dir
+    )
+    plt.close(fig_tooling_supp)
+
+    # ---- Supplemental: manifest adoption, Python-primary vs. R-primary repositories (Q10 --
+    # moved out of the main text; the R-primary decline is counter-intuitive and needs its own
+    # explanation, which belongs in the Supplement, not Results) ----
+    manifest_by_language = manifest_adoption.filter(pl.col("series") != "All repositories")
+    u.save_table(manifest_by_language, "supplemental_manifest_adoption_by_language", output_dir)
+    fig_manifest_supp, ax_manifest_supp = plt.subplots(figsize=(7, 5))
+    language_colors = u.general_palette(manifest_by_language.get_column("series").n_unique())
+    for series_label, color in zip(
+        manifest_by_language.get_column("series").unique(maintain_order=True).to_list(),
+        language_colors,
+        strict=True,
+    ):
+        plotted = manifest_by_language.filter(pl.col("series") == series_label)
+        ax_manifest_supp.plot(
+            plotted.get_column("document_publication_year").to_numpy(),
+            plotted.get_column("pct_repos").to_numpy(),
+            marker="o",
+            markersize=3.5,
+            linewidth=1.8,
+            color=color,
+            label=series_label,
+        )
+    ax_manifest_supp.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax_manifest_supp.set_xlabel("Publication Year")
+    ax_manifest_supp.set_ylabel("% of Repos with a Manifest")
+    ax_manifest_supp.set_ylim(0, 100)
+    u.style_legend(ax_manifest_supp.legend(fontsize=8, title="", loc="upper left"), fontsize=8)
+    u.shrink_ticks(ax_manifest_supp, size=9)
+    u.print_caption_note(
+        "supplemental_manifest_adoption_by_language",
+        "Manifest-adoption share of Python-primary and R-primary repositories by first-seen "
+        "publication year; years with "
+        f"< {MANIFEST_ADOPTION_MIN_REPOS_PER_YEAR} repos in a series excluded.",
+    )
+    evaplot.adjust_layout(fig_manifest_supp)
+    u.save_figure(fig_manifest_supp, "supplemental_manifest_adoption_by_language", output_dir)
+    plt.close(fig_manifest_supp)
 
     # ---- Supplemental: article vs preprint split ----
     fig_supp, axes_supp = plt.subplots(1, 2, figsize=(9.5, 4))
@@ -1276,3 +1408,89 @@ def supplemental_package_vs_script_diagnostics(output_dir: Path = u.OUTPUT_DIR) 
         "definition",
     )
     u.save_table(out, "supplemental_package_vs_script_diagnostic", output_dir)
+
+
+###############################################################################
+# Optional read-only check: does seed-source composition explain the with-manifest test/docs
+# tooling decline, or a package/script-shape effect?
+
+TOOLING_COMPOSITION_MIN_REPOS_PER_CELL = 20
+SOFTWARE_PAPER_SEED_SOURCES: tuple[str, ...] = ("JOSS", "SoftwareX")
+
+
+def tooling_composition_by_seed_source_diagnostic(output_dir: Path = u.OUTPUT_DIR) -> None:
+    """
+    Among with-manifest repositories, check whether the test/docs tooling decline (Figure 3
+    Panel C) is explained by seed-source composition shifting away from software papers (JOSS,
+    SoftwareX), which are more likely to declare test/docs tooling than the other sources
+    (PLOS, Papers with Code, SoftCite, mined pairs). Read-only analysis, not a manuscript
+    figure: (1) the software-paper share of with-manifest repositories by year; (2) test and
+    documentation tooling shares split by seed group and year, among with-manifest
+    repositories.
+    """
+    df = u.load_filtered_pairs(top_n_fields=10).sort(
+        "document_publication_year", maintain_order=True
+    )
+    deps = u.clean_dependency_names(u.load_table("repository_dependency"))
+    repos_with_any_manifest = deps.select("repository_id").unique()
+
+    repo_base = (
+        df.select("repository_id", "document_publication_year", "dataset_source_name_canonical")
+        .unique(subset="repository_id", keep="first")
+        .join(repos_with_any_manifest, on="repository_id", how="semi")
+        .with_columns(
+            pl.when(pl.col("dataset_source_name_canonical").is_in(SOFTWARE_PAPER_SEED_SOURCES))
+            .then(pl.lit("Software paper (JOSS/SoftwareX)"))
+            .otherwise(pl.lit("Other seed source"))
+            .alias("seed_group")
+        )
+    )
+
+    # ---- (1) software-paper share of with-manifest repos, by year ----
+    software_paper_share = (
+        repo_base.group_by("document_publication_year")
+        .agg(
+            pl.len().alias("total"),
+            (pl.col("seed_group") == "Software paper (JOSS/SoftwareX)")
+            .sum()
+            .alias("n_software_paper"),
+        )
+        .with_columns(
+            (100 * pl.col("n_software_paper") / pl.col("total")).alias("pct_software_paper")
+        )
+        .filter(pl.col("total") >= TOOLING_COMPOSITION_MIN_REPOS_PER_CELL)
+        .sort("document_publication_year")
+    )
+    u.save_table(
+        software_paper_share,
+        "supplemental_software_paper_share_of_manifest_repos_by_year",
+        output_dir,
+    )
+    print("\nSoftware-paper share of with-manifest repositories, by year:")
+    print(software_paper_share)
+
+    # ---- (2) test/docs tooling shares by seed group and year ----
+    frames = []
+    for category in ("Testing", "Documentation"):
+        norm_pkgs = [normalize_name(p) for p in _DEPENDENCY_CATEGORIES[category]]
+        cat_repos = (
+            deps.filter(pl.col("software_name_normalized").is_in(norm_pkgs))
+            .select("repository_id")
+            .unique()
+        )
+        key_cols = ["seed_group", "document_publication_year"]
+        total_per_cell = repo_base.group_by(key_cols).agg(pl.len().alias("total"))
+        frame = (
+            repo_base.join(cat_repos, on="repository_id", how="semi")
+            .group_by(key_cols)
+            .agg(pl.len().alias("count"))
+            .join(total_per_cell, on=key_cols, how="right")
+            .with_columns(pl.col("count").fill_null(0), pl.lit(category).alias("category"))
+            .with_columns((100 * pl.col("count") / pl.col("total")).alias("pct_repos"))
+            .filter(pl.col("total") >= TOOLING_COMPOSITION_MIN_REPOS_PER_CELL)
+        )
+        frames.append(frame)
+    out = pl.concat(frames).sort(["category", "seed_group", "document_publication_year"])
+    u.save_table(out, "supplemental_tooling_by_seed_group_and_year", output_dir)
+    print("\nTest/documentation tooling share among with-manifest repos, by seed group + year:")
+    print(out)

@@ -663,17 +663,34 @@ def _draw_quadpartite_network(
     field_order: list[str],
     stem: str = "figure1_quadpartite_network",
 ) -> None:
-    """Draw and save one Figure 1 render: only articles carry color (by field, matching
-    Figure 2 Panel B's palette); repositories/researchers/developers are grey outline-only
-    shapes; all edges uniform grey differentiated by alpha/linewidth; LineCollections and
-    scatters rasterized so the PDF stays small and fast to open.
+    """Draw and save one Figure 1 render: each of the four node types (article, repository,
+    researcher, developer account) is a filled shape in its own colour, with no field
+    encoding and no per-node labels; all four types share the same marker size and opacity, so
+    the identity layer (researchers/developer accounts) carries the same visual weight as
+    articles and repositories. All edges uniform grey differentiated by alpha/linewidth.
+    LineCollections and scatters rasterized so the PDF stays small and fast to open.
     """
-    # Shared field-to-color assignment used by every per-field figure.
-    field_colors = u.field_color_map([*field_order, "Other"])
-    # Repositories get their own light, non-grey color -- muted sky blue, colorblind-safe and
-    # unused by any of the six field colors; people nodes stay very light transparent grey.
-    repo_color = "#56B4E9"
-    people_grey = "#cccccc"
+    # Colourblind-safe (Paul Tol "muted") node-type colours, chosen to be distinct from the
+    # colourblind field palette (`u.field_color_map`), the green/orange comparison family
+    # (`u.general_palette`), and `u.DATA_VIEW_COLORS` used elsewhere in Figures 2-4.
+    node_type_colors: dict[str, str] = {
+        "article": "#332288",  # indigo
+        "repository": "#117733",  # dark green
+        "researcher": "#CC6677",  # muted rose
+        "developer": "#DDCC77",  # sand
+    }
+    node_type_markers: dict[str, str] = {
+        "article": "o",
+        "repository": "s",
+        "researcher": "D",
+        "developer": "^",
+    }
+    node_type_labels: dict[str, str] = {
+        "article": "Article",
+        "repository": "Repository",
+        "researcher": "Researcher (author)",
+        "developer": "Developer account",
+    }
 
     # Uniform grey edges: edge type is differentiated only by alpha/linewidth, never by hue.
     edge_grey = "#999999"
@@ -697,10 +714,11 @@ def _draw_quadpartite_network(
     }
     # Marker area grows as the node count shrinks (calibrated at the ~59k-node, 10,000-pair
     # render where 3.5pt^2 was legible), capped so a small sample doesn't turn into blobs.
+    # One shared size/alpha for all four node types -- researchers and developer accounts get
+    # the same visual weight as articles and repositories, not a de-emphasised treatment.
     n_nodes = len(graph.node_indices())
     size_scale = min(10.0, max(1.0, 59_000 / max(n_nodes, 1)))
     marker_size = 3.5 * size_scale
-    people_marker_size = 2.5 * size_scale
     node_alpha = 0.5 if size_scale < 2 else 0.75
     marker_lw = 0.25 if size_scale < 2 else 0.6
 
@@ -727,23 +745,17 @@ def _draw_quadpartite_network(
         )
     ax.autoscale_view()
 
-    # Colored, filled article nodes (grouped by field) -- the only color-encoded node type.
-    xs_by_group: dict[str, list[float]] = {}
-    ys_by_group: dict[str, list[float]] = {}
-    for node_i in graph.node_indices():
-        nd = graph[node_i]
-        if nd["type"] != "article":
+    # Filled shapes, one colour per node type, no field encoding and no per-node labels. All
+    # four types share the same marker size and opacity.
+    for ntype in ("article", "repository", "researcher", "developer"):
+        xs, ys = _node_positions_by_type(graph, positions, ntype)
+        if not xs:
             continue
-        group = nd.get("group", "Other")
-        x, y = positions[node_i]
-        xs_by_group.setdefault(group, []).append(x)
-        ys_by_group.setdefault(group, []).append(y)
-    for group, xs in xs_by_group.items():
         ax.scatter(
             xs,
-            ys_by_group[group],
-            c=field_colors.get(group, u.FIELD_OTHER_COLOR),
-            marker="o",
+            ys,
+            c=node_type_colors[ntype],
+            marker=node_type_markers[ntype],
             s=marker_size,
             alpha=node_alpha,
             edgecolors="none",
@@ -752,36 +764,11 @@ def _draw_quadpartite_network(
             rasterized=True,
         )
 
-    # Outline-only shapes for everything else: repositories in their own light blue at
-    # article-node size; people-nodes stay smallest, very light, and transparent.
-    for ntype, marker, edge_color, size, alpha in [
-        ("repository", "s", repo_color, marker_size, node_alpha),
-        ("researcher", "D", people_grey, people_marker_size, 0.3),
-        ("developer", "^", people_grey, people_marker_size, 0.3),
-    ]:
-        xs, ys = _node_positions_by_type(graph, positions, ntype)
-        if not xs:
-            continue
-        ax.scatter(
-            xs,
-            ys,
-            facecolors="none",
-            edgecolors=edge_color,
-            marker=marker,
-            s=size,
-            alpha=alpha,
-            linewidths=marker_lw,
-            zorder=4,
-            rasterized=True,
-        )
-
     legend_handles = [
-        _marker_handle("o", field_colors[f], f"Article: {f}") for f in [*field_order, "Other"]
+        _marker_handle(node_type_markers[ntype], node_type_colors[ntype], label)
+        for ntype, label in node_type_labels.items()
     ]
     legend_handles += [
-        _marker_handle("s", repo_color, "Repository", hollow=True),
-        _marker_handle("D", people_grey, "Researcher (author)", hollow=True),
-        _marker_handle("^", people_grey, "Developer account", hollow=True),
         mlines.Line2D([], [], color=edge_grey, lw=1.2, label="Authorship / contribution"),
         mlines.Line2D([], [], color=edge_grey, lw=1.5, label="Article-repository link"),
         mlines.Line2D([], [], color=edge_grey, lw=1.8, label="Researcher-developer identity"),
