@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import random
 from collections import Counter, deque
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -25,87 +25,13 @@ from matplotlib.collections import LineCollection
 # Layouts
 
 
-def _pack_components_layout(
-    graph: rx.PyGraph, seed: int = 42
-) -> tuple[dict[int, tuple[float, float]], float, float]:
-    """
-    Lay out a graph by connected component instead of one global force layout.
-
-    A random-pair sample's topology is a forest of thousands of small disjoint
-    article-repository-author-developer "stars". A global `rx.graph_spring_layout` call has
-    no attractive force between disconnected components, so at large sample sizes they
-    collapse into one dense, illegible disc. Packing instead: lay out each component with a
-    local spring layout, then place components into a grid (largest first, sized by each
-    component's bounding box) with padding proportional to cell size. Returns positions plus
-    the packed canvas's width and height (in data units) so the caller can size the figure.
-    """
-    rng = random.Random(seed)
-    components = [list(c) for c in rx.connected_components(graph)]
-
-    cell_boxes: list[tuple[list[int], float, float, dict[int, tuple[float, float]]]] = []
-    for comp in components:
-        if len(comp) == 1:
-            local_pos = {comp[0]: (0.0, 0.0)}
-            w = h = 1.0
-        else:
-            sub = graph.subgraph(comp)
-            k = 1.5 / (len(comp) ** 0.5)
-            # Spring layout is ~quadratic in node count; iteration count steps down as size
-            # grows to keep total layout time in single-digit minutes.
-            if len(comp) < 50:
-                n_iter = 60
-            elif len(comp) < 5_000:
-                n_iter = 100
-            elif len(comp) < 20_000:
-                n_iter = 50
-            else:
-                n_iter = 30
-            sub_pos = rx.graph_spring_layout(sub, k=k, num_iter=n_iter, seed=seed)  # type: ignore[call-arg]
-            xs = [p[0] for p in sub_pos.values()]
-            ys = [p[1] for p in sub_pos.values()]
-            minx, maxx = min(xs), max(xs)
-            miny, maxy = min(ys), max(ys)
-            w = max(maxx - minx, 0.3)
-            h = max(maxy - miny, 0.3)
-            local_pos = {
-                orig_i: (sub_pos[local_i][0] - minx, sub_pos[local_i][1] - miny)
-                for local_i, orig_i in enumerate(comp)
-            }
-        cell_boxes.append((comp, w, h, local_pos))
-
-    # Largest components first so they anchor the top-left of the grid; row width targets a
-    # roughly square canvas overall.
-    cell_boxes.sort(key=lambda cb: -len(cb[0]))
-    total_area = sum((w * 1.9 + 0.25) * (h * 1.9 + 0.25) for _, w, h, _ in cell_boxes)
-    target_row_width = (total_area**0.5) * 1.1
-
-    positions: dict[int, tuple[float, float]] = {}
-    cursor_x, cursor_y, row_height = 0.0, 0.0, 0.0
-    for _comp, w, h, local_pos in cell_boxes:
-        pad = max(0.25, 0.9 * max(w, h))
-        if cursor_x + w + pad > target_row_width and cursor_x > 0:
-            cursor_x = 0.0
-            cursor_y += row_height + pad
-            row_height = 0.0
-        jitter_x = rng.uniform(-0.15, 0.15) * pad
-        jitter_y = rng.uniform(-0.15, 0.15) * pad
-        for orig_i, (lx, ly) in local_pos.items():
-            positions[orig_i] = (cursor_x + lx + jitter_x, cursor_y + ly + jitter_y)
-        cursor_x += w + pad
-        row_height = max(row_height, h)
-
-    canvas_width = target_row_width
-    canvas_height = cursor_y + row_height
-    return positions, canvas_width, canvas_height
-
-
 def _global_spring_layout(
     graph: rx.PyGraph, seed: int = 42
 ) -> tuple[dict[int, tuple[float, float]], float, float]:
     """
     Lay out the whole sampled graph with one global spring layout. The snowball sample puts
-    ~99% of pairs in one giant component, which a conventional force layout renders directly
-    (the packed-by-component layout above exists for forest-of-tiny-stars topologies).
+    ~99% of pairs in one giant component, which a conventional force layout renders directly.
+    Used only to warm-start ForceAtlas2 below -- not rendered on its own.
     Iteration count steps down with node count (spring layout is ~quadratic); k is slightly
     above rustworkx's 1/sqrt(n) default to spread the giant component's dense core.
     """
@@ -214,16 +140,39 @@ def _forceatlas2_positions(
 # Graph construction
 
 
+def _add_provenance_colored_pair_edges(
+    graph: rx.PyGraph,
+    resolve_node: Callable[[str, int, bool], int | None],
+    sampled_pairs: pl.DataFrame,
+    pair_is_mined: dict[int, bool],
+) -> None:
+    """Add article-repository edges, split into a seed/mined edge type per pair (from
+    `pair_is_mined`) rather than one fixed type for the whole frame -- kept out of
+    `_build_quadpartite_graph`'s generic edge loop for that reason.
+    """
+    for row in sampled_pairs.iter_rows(named=True):
+        # create=True on both sides, so these are never actually None.
+        src_i = resolve_node("article", row["document_id"], True)
+        tgt_i = resolve_node("repository", row["repository_id"], True)
+        if src_i is None or tgt_i is None or graph.has_edge(src_i, tgt_i):
+            continue
+        is_mined = pair_is_mined.get(row["document_repository_link_id"], False)
+        etype = "article_repository_link_mined" if is_mined else "article_repository_link_seed"
+        graph.add_edge(src_i, tgt_i, {"type": etype})
+
+
 def _build_quadpartite_graph(
     sampled_pairs: pl.DataFrame,
     doc_authors: pl.DataFrame,
     repo_devs: pl.DataFrame,
     identity_edges: pl.DataFrame,
+    pair_is_mined: dict[int, bool],
     doc_fields: dict[int, str] | None = None,
 ) -> rx.PyGraph:
     """Build the quad-partite `rx.PyGraph` from the already-sampled/capped/filtered frames.
-    `doc_fields` attaches the field color-encoding attribute to article nodes -- the only
-    color-encoded node type.
+    `doc_fields` attaches the field color-encoding attribute to article nodes (unused for
+    drawing today, kept for the strata/mix reporting below). `pair_is_mined` splits each
+    article-repository edge into a seed/mined type so the draw step can color by provenance.
     """
     graph: rx.PyGraph = rx.PyGraph()
     node_idx: dict[tuple[str, int], int] = {}
@@ -241,15 +190,11 @@ def _build_quadpartite_graph(
         node_idx[key] = graph.add_node(payload)
         return node_idx[key]
 
+    _add_provenance_colored_pair_edges(graph, _resolve_node, sampled_pairs, pair_is_mined)
+
     # (frame, (source type, source column, create source), (target ditto), edge type);
     # existing-only endpoints (create=False) skip rows whose entity was never sampled.
     edge_specs: list[tuple[pl.DataFrame, tuple[str, str, bool], tuple[str, str, bool], str]] = [
-        (
-            sampled_pairs,
-            ("article", "document_id", True),
-            ("repository", "repository_id", True),
-            "article_repository_link",
-        ),
         (
             doc_authors,
             ("article", "document_id", False),
@@ -660,25 +605,28 @@ def _draw_quadpartite_network(
     canvas_height: float,
     caption: str,
     output_dir: Path,
-    field_order: list[str],
     stem: str = "figure1_quadpartite_network",
+    show_legend: bool = False,
 ) -> None:
-    """Draw and save one Figure 1 render: each of the four node types (article, repository,
-    researcher, developer account) is a filled shape in its own colour, with no field
-    encoding and no per-node labels; all four types share the same marker size and opacity, so
-    the identity layer (researchers/developer accounts) carries the same visual weight as
-    articles and repositories. All edges uniform grey differentiated by alpha/linewidth.
-    LineCollections and scatters rasterized so the PDF stays small and fast to open.
+    """Draw and save one Figure 1 render: article/researcher share one blue hue (article
+    filled, researcher hollow, lighter tint); repository/developer share one vermillion hue
+    the same way. Article-repository edges are coloured by provenance (seed vs. mined, from
+    `link_processing_iteration`); every other edge is light grey, differentiated only by
+    alpha/linewidth. No per-node labels. `show_legend=False` (the main output) omits the
+    boxed legend -- panel B carries the encoding instead; `show_legend=True` draws a small
+    reference legend for review. LineCollections and scatters rasterized so the PDF stays
+    small and fast to open.
     """
-    # Colourblind-safe (Paul Tol "muted") node-type colours, chosen to be distinct from the
-    # colourblind field palette (`u.field_color_map`), the green/orange comparison family
-    # (`u.general_palette`), and `u.DATA_VIEW_COLORS` used elsewhere in Figures 2-4.
+    # Two hue families, dark (filled) + light (hollow) tint each: blue for
+    # article/researcher, vermillion for repository/developer. Full separation from the Figs
+    # 2-4 field palette isn't achievable -- see the figure's memory-doc discussion.
     node_type_colors: dict[str, str] = {
-        "article": "#332288",  # indigo
-        "repository": "#117733",  # dark green
-        "researcher": "#CC6677",  # muted rose
-        "developer": "#DDCC77",  # sand
+        "article": "#1B4F72",
+        "researcher": "#7FB3D5",
+        "repository": "#B7472A",
+        "developer": "#F0B27A",
     }
+    hollow_node_types = {"researcher", "developer"}
     node_type_markers: dict[str, str] = {
         "article": "o",
         "repository": "s",
@@ -692,8 +640,12 @@ def _draw_quadpartite_network(
         "developer": "Developer account",
     }
 
-    # Uniform grey edges: edge type is differentiated only by alpha/linewidth, never by hue.
+    # Edge provenance hues (ColorBrewer Dark2 purple/gold -- a blue-yellow pair, robust under
+    # red-green colourblindness and distinct from the blue/vermillion node hues above and the
+    # field/general/data-view palettes used elsewhere): purple for seed pairs, gold for mined.
+    # Every other edge type stays uniform light grey, differentiated only by alpha/linewidth.
     edge_grey = "#999999"
+    seed_color, mined_color = "#7570B3", "#E6AB02"
     edge_style = {
         "authored_by": {"color": edge_grey, "lw": 0.25, "ls": "-", "zorder": 1, "alpha": 0.06},
         "contributed_to": {
@@ -703,30 +655,38 @@ def _draw_quadpartite_network(
             "zorder": 1,
             "alpha": 0.06,
         },
-        "article_repository_link": {
-            "color": edge_grey,
-            "lw": 0.5,
+        "article_repository_link_seed": {
+            "color": seed_color,
+            "lw": 0.9,
             "ls": "-",
             "zorder": 2,
-            "alpha": 0.15,
+            "alpha": 0.38,
+        },
+        "article_repository_link_mined": {
+            "color": mined_color,
+            "lw": 0.9,
+            "ls": "-",
+            "zorder": 2,
+            "alpha": 0.38,
         },
         "identity": {"color": edge_grey, "lw": 0.7, "ls": "-", "zorder": 3, "alpha": 0.15},
     }
-    # Marker area grows as the node count shrinks (calibrated at the ~59k-node, 10,000-pair
-    # render where 3.5pt^2 was legible), capped so a small sample doesn't turn into blobs.
-    # One shared size/alpha for all four node types -- researchers and developer accounts get
-    # the same visual weight as articles and repositories, not a de-emphasised treatment.
-    n_nodes = len(graph.node_indices())
-    size_scale = min(10.0, max(1.0, 59_000 / max(n_nodes, 1)))
-    marker_size = 3.5 * size_scale
-    node_alpha = 0.5 if size_scale < 2 else 0.75
-    marker_lw = 0.25 if size_scale < 2 else 0.6
+    # Marker area bumped ~2.5x over this figure's original 3.5pt^2 calibration so the two hue
+    # families read at panel size. Researcher/developer now draw ~0.7x that area -- people
+    # nodes outnumber article/repository nodes heavily at this sample size, so a slight size
+    # cut (on top of already being hollow) keeps them from dominating.
+    marker_size = 8.75
+    identity_marker_size = 8.75 * 0.7
+    node_alpha = 0.5
+    identity_alpha = 0.4
+    marker_lw = 0.25
 
     ref_canvas_extent = 143.2  # canvas width measured at the 2,000-seed-pair calibration run
     canvas_extent = max(canvas_width, canvas_height)
     figsize_in = min(22.0, max(14.0, 14.0 * canvas_extent / ref_canvas_extent))
 
     fig, ax = plt.subplots(figsize=(figsize_in, figsize_in))
+    ax.margins(0.02)  # crop the whitespace border down from matplotlib's default 5%
 
     for etype, style in edge_style.items():
         segments = _edge_segments(graph, positions, etype)
@@ -739,49 +699,64 @@ def _draw_quadpartite_network(
                 linewidths=style["lw"],
                 linestyles=style["ls"],
                 zorder=style["zorder"],
-                alpha=min(1.0, style["alpha"] * (1.0 if size_scale < 2 else 2.5)),
+                alpha=style["alpha"],
                 rasterized=True,
             )
         )
     ax.autoscale_view()
 
-    # Filled shapes, one colour per node type, no field encoding and no per-node labels. All
-    # four types share the same marker size and opacity.
-    for ntype in ("article", "repository", "researcher", "developer"):
+    # Article/repository filled; researcher/developer hollow (lighter tint of the same hue)
+    # and slightly smaller.
+    for ntype, color in node_type_colors.items():
         xs, ys = _node_positions_by_type(graph, positions, ntype)
         if not xs:
             continue
+        hollow = ntype in hollow_node_types
         ax.scatter(
             xs,
             ys,
-            c=node_type_colors[ntype],
+            facecolors="none" if hollow else color,
+            edgecolors=color if hollow else "none",
             marker=node_type_markers[ntype],
-            s=marker_size,
-            alpha=node_alpha,
-            edgecolors="none",
+            s=identity_marker_size if hollow else marker_size,
+            alpha=identity_alpha if hollow else node_alpha,
             linewidths=marker_lw,
             zorder=4,
             rasterized=True,
         )
 
-    legend_handles = [
-        _marker_handle(node_type_markers[ntype], node_type_colors[ntype], label)
-        for ntype, label in node_type_labels.items()
-    ]
-    legend_handles += [
-        mlines.Line2D([], [], color=edge_grey, lw=1.2, label="Authorship / contribution"),
-        mlines.Line2D([], [], color=edge_grey, lw=1.5, label="Article-repository link"),
-        mlines.Line2D([], [], color=edge_grey, lw=1.8, label="Researcher-developer identity"),
-    ]
-
-    legend = ax.legend(
-        handles=legend_handles,
-        loc="upper center",
-        bbox_to_anchor=(0.5, 1.08),
-        ncol=4,
-        fontsize=12,
-    )
-    u.style_legend(legend, fontsize=12)
+    if show_legend:
+        legend_handles = [
+            _marker_handle(
+                node_type_markers[ntype],
+                node_type_colors[ntype],
+                label,
+                hollow=ntype in hollow_node_types,
+            )
+            for ntype, label in node_type_labels.items()
+        ]
+        # Column-first order (matplotlib fills legends down each column, not across rows) for
+        # a 4-col x 2-row layout: nodes in cols 1-2, edges in cols 3-4.
+        legend_handles += [
+            mlines.Line2D(
+                [], [], color=seed_color, lw=1.5, label="Article-repository link (seed)"
+            ),
+            mlines.Line2D(
+                [], [], color=mined_color, lw=1.5, label="Article-repository link (mined)"
+            ),
+            mlines.Line2D([], [], color=edge_grey, lw=1.2, label="Authorship / contribution"),
+            mlines.Line2D(
+                [], [], color=edge_grey, lw=1.8, label="Researcher-developer identity"
+            ),
+        ]
+        legend = ax.legend(
+            handles=legend_handles,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 1.08),
+            ncol=4,
+            fontsize=8,
+        )
+        u.style_legend(legend, fontsize=8)
 
     ax.set_axis_off()
     ax.set_aspect("equal")
@@ -793,57 +768,44 @@ def _draw_quadpartite_network(
 
 def _render_layouts(
     graph: rx.PyGraph,
-    layout: str,
     seed: int,
     caption_base: str,
     output_dir: Path,
-    field_order: list[str],
+    stem_suffix: str = "",
 ) -> None:
-    """Compute the requested layout(s) and draw a figure per layout. Spring is the primary
-    output; ForceAtlas2 is an additional variant; any other `layout` value keeps the
-    per-component packed layout available.
+    """Compute ForceAtlas2 (the only layout this figure draws now -- warm-started from a
+    global spring layout that is never itself rendered) and draw two files: the main output
+    with no legend (panel B carries the encoding) and a `_review-legend` copy with a small
+    reference legend for sign-off. `stem_suffix` (e.g. "_n15000") writes a trial render to its
+    own files without touching the standard-name outputs.
     """
-    if layout in ("both", "spring", "forceatlas2"):
-        print("\nComputing global spring layout...")
-        positions, canvas_width, canvas_height = _global_spring_layout(graph, seed=seed)
-        if layout in ("both", "spring"):
-            _draw_quadpartite_network(
-                graph,
-                positions,
-                canvas_width,
-                canvas_height,
-                caption_base,
-                output_dir,
-                field_order,
-                stem="figure1_quadpartite_network",
-            )
-        if layout in ("both", "forceatlas2"):
-            print("\nComputing ForceAtlas2 layout (warm-started from spring positions)...")
-            fa2_positions = _forceatlas2_positions(graph, positions, seed=seed)
-            xs = [p[0] for p in fa2_positions.values()]
-            ys = [p[1] for p in fa2_positions.values()]
-            _draw_quadpartite_network(
-                graph,
-                fa2_positions,
-                max(xs),
-                max(ys),
-                caption_base,
-                output_dir,
-                field_order,
-                stem="figure1_quadpartite_network_forceatlas2",
-            )
-    else:
-        positions, canvas_width, canvas_height = _pack_components_layout(graph, seed=seed)
-        _draw_quadpartite_network(
-            graph,
-            positions,
-            canvas_width,
-            canvas_height,
-            caption_base,
-            output_dir,
-            field_order,
-            stem="figure1_quadpartite_network",
-        )
+    base_stem = f"figure1_quadpartite_network_forceatlas2{stem_suffix}"
+    print("\nComputing global spring layout (ForceAtlas2 warm-start)...")
+    positions, _canvas_width, _canvas_height = _global_spring_layout(graph, seed=seed)
+    print("\nComputing ForceAtlas2 layout (warm-started from spring positions)...")
+    fa2_positions = _forceatlas2_positions(graph, positions, seed=seed)
+    xs = [p[0] for p in fa2_positions.values()]
+    ys = [p[1] for p in fa2_positions.values()]
+    _draw_quadpartite_network(
+        graph,
+        fa2_positions,
+        max(xs),
+        max(ys),
+        caption_base,
+        output_dir,
+        stem=base_stem,
+        show_legend=False,
+    )
+    _draw_quadpartite_network(
+        graph,
+        fa2_positions,
+        max(xs),
+        max(ys),
+        caption_base,
+        output_dir,
+        stem=f"{base_stem}_review-legend",
+        show_legend=True,
+    )
 
 
 ###############################################################################
@@ -852,7 +814,7 @@ def _render_layouts(
 
 def figure_1_quadpartite_network(
     output_dir: Path = u.OUTPUT_DIR,
-    n_pairs: int = 1000,
+    n_pairs: int = 5000,
     n_top_hub_anchors_per_field: int = 2,
     n_random_hub_anchors_per_field: int = 3,
     min_anchor_pair_degree: int = 3,
@@ -861,12 +823,13 @@ def figure_1_quadpartite_network(
     field_share_cap: float = 0.18,
     rdal_confidence_threshold: float = 0.97,
     random_seed: int = 42,
-    layout: str = "both",
+    output_stem_suffix: str = "",
 ) -> None:
     """
     Build Figure 1, panel A: the quad-partite network -- articles, repositories, researchers
     (authors), and developer accounts (contributors) -- rendered together with rustworkx.
     The workflow diagram (Figure 1, panel B) is a hand-made image and out of scope here.
+    `output_stem_suffix` (e.g. "_n15000") routes a trial render to its own filenames.
 
     Sampling: field-stratified snowball from well-linked identity hubs, rather than a
     uniform-random pair sample (two randomly sampled pairs are bridged only if both happen to
@@ -899,6 +862,15 @@ def figure_1_quadpartite_network(
     rng = random.Random(random_seed)
 
     pairs = u.load_filtered_pairs()
+
+    # Seed vs. mined provenance per pair (`link_processing_iteration` IS NULL == seed), for the
+    # article-repository edge colouring below -- same convention as figure2_dataset_coverage.py.
+    pair_is_mined: dict[int, bool] = {
+        pid: it is not None
+        for pid, it in pairs.select(
+            "document_repository_link_id", "link_processing_iteration"
+        ).iter_rows()
+    }
 
     print("Loading contributor/identity tables from HuggingFace...")
     document_contributors = u.load_table("document_contributor")
@@ -1015,6 +987,7 @@ def figure_1_quadpartite_network(
         doc_authors,
         repo_devs,
         identity_edges,
+        pair_is_mined,
         doc_fields=doc_fields,
     )
 
@@ -1069,6 +1042,15 @@ def figure_1_quadpartite_network(
         )
     )
 
+    drawn_link_types = Counter(
+        graph.get_edge_data_by_index(idx)["type"] for idx in graph.edge_indices()
+    )
+    print(
+        "Drawn article-repository links by provenance: "
+        f"seed {drawn_link_types['article_repository_link_seed']:,}, "
+        f"mined {drawn_link_types['article_repository_link_mined']:,}."
+    )
+
     caption_base = (
         f"Field-stratified snowball sample of the quad-partite network (n={len(sampled):,} "
         f"article-repository pairs, at most {field_share_cap:.0%} per field stratum; "
@@ -1076,4 +1058,4 @@ def figure_1_quadpartite_network(
         f"{pct_pairs_in_largest:.1f}% of pairs)"
     )
 
-    _render_layouts(graph, layout, random_seed, caption_base, output_dir, fig1_fields)
+    _render_layouts(graph, random_seed, caption_base, output_dir, output_stem_suffix)
