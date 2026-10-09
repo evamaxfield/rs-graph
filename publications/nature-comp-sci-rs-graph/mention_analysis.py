@@ -30,6 +30,10 @@ from rs_graph.utils.software_alignment import align_software_names
 MIN_PAIRS_PER_CELL = 30
 
 
+# Drawn near print width; the saved PDF (tight bbox) lands at ~u.PRINT_FIGURE_WIDTH_IN.
+FIG4_FIGSIZE = (7.8, 4.0)
+
+
 def figure_4_mention_rate_by_field_and_year(
     output_dir: Path = u.OUTPUT_DIR,
     cutoff: float = 85.0,
@@ -281,7 +285,8 @@ def figure_4_mention_rate_by_field_and_year(
     print("\nOverall mention rate by field, conditional on >=1 extracted mention:")
     print(field_overall_conditional)
 
-    fig, ax = plt.subplots(figsize=(9, 5))
+    u.use_print_font_sizes()
+    fig, ax = plt.subplots(figsize=FIG4_FIGSIZE)
     # Shared field-to-color assignment across per-field figures; `style=` adds distinct
     # markers and dash patterns.
     field_color_lookup = u.field_color_map(canonical_field_order)
@@ -307,18 +312,18 @@ def figure_4_mention_rate_by_field_and_year(
         ax=ax,
     )
     ax.set_xlabel("Publication Year")
-    ax.set_ylabel("Software Mention Rate (%)")
+    ax.set_ylabel("Import Mention Rate (%)")
     # Legend outside the axes to stay clear of the data.
     leg = ax.legend(
         title="",
         loc="center left",
         bbox_to_anchor=(1.02, 0.5),
-        fontsize=8,
+        fontsize=u.PRINT_LEGEND_SIZE,
         handlelength=1.5,
         labelspacing=0.3,
         borderaxespad=0.6,
     )
-    u.style_legend(leg, fontsize=8)
+    u.style_legend(leg, fontsize=u.PRINT_LEGEND_SIZE)
     first_plotted_years = (
         plotted.group_by("document_field_name_pruned")
         .agg(pl.min("document_publication_year").alias("first_year"))

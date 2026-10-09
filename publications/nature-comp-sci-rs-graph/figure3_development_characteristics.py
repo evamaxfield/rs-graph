@@ -142,6 +142,7 @@ _PERMISSIVE_LICENSE_KEYWORDS: tuple[str, ...] = (
 
 
 FIELD_RHO_MIN_PAIRS = 10
+POOLED_FIELD_LABEL = "All fields (pooled)"
 
 
 def _top_pruned_field_names(df: pl.DataFrame, n: int) -> list[str]:
@@ -457,7 +458,8 @@ def _fwsi_vs_fwci_by_field(
     df: pl.DataFrame, fwci_docs: pl.DataFrame, fwsi_repos: pl.DataFrame
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Per-field Spearman rho between raw document FWCI and modified repository FWSI, at the
-    pair level, over every pruned field with at least `FIELD_RHO_MIN_PAIRS` pairs.
+    pair level, over every pruned field with at least `FIELD_RHO_MIN_PAIRS` pairs, plus a
+    pooled/overall row first.
     """
     field_map = df.select("document_id", "document_field_name_pruned").unique(
         subset="document_id", keep="first"
@@ -493,7 +495,18 @@ def _fwsi_vs_fwci_by_field(
                 ),
             }
         )
-    rho_df = pl.DataFrame(rho_rows).sort("rho", descending=True)
+    pooled = pl.DataFrame(
+        [
+            {
+                "field": POOLED_FIELD_LABEL,
+                **_spearman_with_ci(
+                    pair_level.get_column("document_raw_fwci").to_numpy(),
+                    pair_level.get_column("repository_modified_fwsi").to_numpy(),
+                ),
+            }
+        ]
+    )
+    rho_df = pl.concat([pooled, pl.DataFrame(rho_rows).sort("rho", descending=True)])
     return pair_level, rho_df
 
 
@@ -510,7 +523,7 @@ def _stars_vs_citations_by_field(df: pl.DataFrame) -> pl.DataFrame:
     ).drop_nulls(["document_cited_by_count", "repository_stargazers_count"])
     rows = [
         {
-            "field": "All fields (pooled)",
+            "field": POOLED_FIELD_LABEL,
             **_spearman_with_ci(
                 pair_level.get_column("repository_stargazers_count").to_numpy(),
                 pair_level.get_column("document_cited_by_count").to_numpy(),
@@ -609,6 +622,33 @@ def _plot_dependency_category_adoption(
 
 
 FIELD_LINE_ALPHA = 0.4
+# Drawn near print width; the saved PDF (tight bbox) lands at ~u.PRINT_FIGURE_WIDTH_IN.
+FIG3_FIGSIZE = (7.6, 6.1)
+FIG3_FIELD_LEGEND_SIZE = 7.5
+FIG3_YEAR_TICKS = 4
+FIG3_FOREST_TICK_SIZE = 8
+# Axes-fraction gap from each panel's bottom spine to the top of its below-panel legend.
+FIG3_LEGEND_BELOW_OFFSET = 0.26
+
+
+def _legend_below(
+    ax: Axes,
+    ncol: int,
+    fontsize: float = u.PRINT_LEGEND_SIZE,
+    x_center: float = 0.5,
+    offset: float = FIG3_LEGEND_BELOW_OFFSET,
+    **kwargs: object,
+) -> None:
+    """Place `ax`'s legend, unframed, centered below the panel's x-axis label."""
+    ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(x_center, -offset),
+        ncol=ncol,
+        frameon=False,
+        fontsize=fontsize,
+        title="",
+        **kwargs,
+    )
 
 
 def _plot_field_lines(
@@ -619,7 +659,7 @@ def _plot_field_lines(
     field_colors: dict[str, str],
 ) -> None:
     """Panel B/C style: one translucent line per field plus an opaque black dashed pooled
-    line drawn on top, with the field legend in the (data-free) upper-left corner.
+    line drawn on top.
     """
     for series_label in [*fields, PYTHON_SHARE_OVERALL_LABEL]:
         plotted = frame.filter(pl.col("series") == series_label)
@@ -636,10 +676,6 @@ def _plot_field_lines(
             label="Overall" if is_overall else u.abbreviate_field(series_label),
             zorder=3 if is_overall else 2,
         )
-    u.style_legend(
-        ax.legend(fontsize=6, title="", loc="upper left", ncol=2, columnspacing=0.8),
-        fontsize=6,
-    )
 
 
 ###############################################################################
@@ -829,8 +865,9 @@ def figure_3_software_development_characteristics(
     print(fwci_by_field)
 
     # ---- 2x3 grid, six panels; sized so fonts stay legible at Nature's 183mm print width ----
-    fig = plt.figure(figsize=(14, 8))
-    gs = fig.add_gridspec(2, 6, hspace=0.5, wspace=2.6)
+    u.use_print_font_sizes()
+    fig = plt.figure(figsize=FIG3_FIGSIZE)
+    gs = fig.add_gridspec(2, 6, hspace=0.95, wspace=3.3)
     ax_a = fig.add_subplot(gs[0, 0:2])
     ax_b = fig.add_subplot(gs[0, 2:4])
     ax_c = fig.add_subplot(gs[0, 4:6])
@@ -839,7 +876,7 @@ def figure_3_software_development_characteristics(
     ax_f = fig.add_subplot(gs[1, 4:6])
 
     for ax, label in zip([ax_a, ax_b, ax_c, ax_d, ax_e, ax_f], "ABCDEF", strict=True):
-        u.add_panel_label(ax, label)
+        u.add_panel_label(ax, label, fontsize=u.PRINT_PANEL_LABEL_SIZE)
 
     # A: dev activity duration by source -- horizontal boxplots; the "Negative = ..."
     # explainer lives in the figure caption.
@@ -853,10 +890,7 @@ def figure_3_software_development_characteristics(
     )
     ax_a.set_ylabel("")
     ax_a.set_xlabel("Duration (Years)")
-    leg = ax_a.legend(
-        fontsize=8, title="", loc="lower center", bbox_to_anchor=(0.5, 1.02), ncol=2
-    )
-    u.style_legend(leg)
+    _legend_below(ax_a, ncol=1)
     ax_a.axvline(0, color="#888888", linewidth=0.8, linestyle=":")
     # Cap x-limits to the 2nd-98th percentile so long-tail whiskers don't squeeze the boxes.
     u.cap_ylim_to_quantiles(ax_a, dev_duration.to_pandas()["duration_years"], axis="x")
@@ -871,7 +905,19 @@ def figure_3_software_development_characteristics(
     field_colors = u.field_color_map(python_share_fields)
     _plot_field_lines(ax_b, python_share, "pct_python", python_share_fields, field_colors)
     _plot_field_lines(ax_c, manifest_by_field, "pct_repos", python_share_fields, field_colors)
-    ax_b.xaxis.set_major_locator(MaxNLocator(integer=True))
+    # Each panel carries its own (identical) field legend.
+    for ax in (ax_b, ax_c):
+        _legend_below(
+            ax,
+            ncol=2,
+            fontsize=FIG3_FIELD_LEGEND_SIZE,
+            x_center=0.45,
+            handlelength=1.0,
+            handletextpad=0.4,
+            columnspacing=0.6,
+            labelspacing=0.3,
+        )
+    ax_b.xaxis.set_major_locator(MaxNLocator(nbins=FIG3_YEAR_TICKS, integer=True))
     ax_b.set_xlabel("Publication Year")
     ax_b.set_ylabel("% of Repos Python-Primary")
     ax_b.set_ylim(0, 100)
@@ -888,7 +934,7 @@ def figure_3_software_development_characteristics(
     # C: manifest adoption over time -- share of repositories with a parsed Python/R
     # (pypi/conda/cran) manifest, per field plus pooled (plotted above with B). Per-language
     # series stay in the Supplement.
-    ax_c.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax_c.xaxis.set_major_locator(MaxNLocator(nbins=FIG3_YEAR_TICKS, integer=True))
     ax_c.set_xlabel("Publication Year")
     ax_c.set_ylabel("% of Repos with Manifest")
     ax_c.set_ylim(0, 100)
@@ -923,11 +969,11 @@ def figure_3_software_development_characteristics(
             color=color,
             label=label,
         )
-    ax_d.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax_d.xaxis.set_major_locator(MaxNLocator(nbins=FIG3_YEAR_TICKS, integer=True))
     ax_d.set_xlabel("Publication Year")
     ax_d.set_ylabel("% of Repos")
     ax_d.set_ylim(0, 100)
-    u.style_legend(ax_d.legend(fontsize=8, title="", loc="upper right"), fontsize=8)
+    _legend_below(ax_d, ncol=1)
     u.print_caption_note(
         "figure3 Panel D",
         f"Years with < {LICENSE_ADOPTION_MIN_REPOS_PER_YEAR} repos excluded; unclassifiable "
@@ -968,8 +1014,7 @@ def figure_3_software_development_characteristics(
     )
     ax_e.set_xlabel("OpenAlex FWCI (log scale)")
     ax_e.set_ylabel("Count")
-    # Upper left keeps the legend clear of Panel F's long y-tick labels.
-    u.style_legend(ax_e.legend(fontsize=8, loc="upper left"))
+    _legend_below(ax_e, ncol=1, handlelength=1.4)
     u.shrink_ticks(ax_e, size=9)
     u.print_caption_note(
         "figure3 Panel E",
@@ -978,10 +1023,10 @@ def figure_3_software_development_characteristics(
     )
 
     # F: Spearman rho by field as a horizontal forest plot -- raw stars vs. raw citations
-    # (circles, pooled row on top, dashed line at the pooled value) and modified FWSI vs. raw
-    # FWCI (squares), the two markers offset vertically within each field row.
-    pooled_row = stars_rho_df.filter(pl.col("field") == "All fields (pooled)")
-    field_rows = stars_rho_df.filter(pl.col("field") != "All fields (pooled)").sort(
+    # (circles) and modified FWSI vs. raw FWCI (squares), offset vertically within each row;
+    # pooled row on top, with a line at each pooled value (grey dashed / orange dotted).
+    pooled_row = stars_rho_df.filter(pl.col("field") == POOLED_FIELD_LABEL)
+    field_rows = stars_rho_df.filter(pl.col("field") != POOLED_FIELD_LABEL).sort(
         "rho", descending=True
     )
     forest_fields = pl.concat([pooled_row, field_rows]).get_column("field").to_list()
@@ -1018,23 +1063,32 @@ def figure_3_software_development_characteristics(
         )
     pooled_rho = float(pooled_row.get_column("rho")[0])
     ax_f.axvline(pooled_rho, color="#888888", linewidth=0.9, linestyle="--", zorder=0)
+    pooled_fwsi_rho = float(
+        rho_df.filter(pl.col("field") == POOLED_FIELD_LABEL).get_column("rho")[0]
+    )
+    ax_f.axvline(
+        pooled_fwsi_rho, color=forest_colors[1], linewidth=1.1, linestyle=":", zorder=0
+    )
     ax_f.axvline(0, color="#bbbbbb", linewidth=0.8, linestyle=":", zorder=0)
     ax_f.set_yticks(np.arange(len(forest_fields)))
     ax_f.set_yticklabels([u.abbreviate_field(f) for f in forest_fields])
     ax_f.set_ylim(len(forest_fields) - 0.5, -0.5)
-    ax_f.set_xlabel("Spearman rho")
-    u.style_legend(ax_f.legend(fontsize=7, title="", loc="lower right"), fontsize=7)
-    u.shrink_ticks(ax_f, size=7)
+    ax_f.set_xlabel(r"Spearman's $\rho$")
+    _legend_below(ax_f, ncol=1)
+    u.shrink_ticks(ax_f, size=FIG3_FOREST_TICK_SIZE)
     u.print_caption_note(
         "figure3 Panel F",
         "Circles: raw stargazer vs. raw citation counts; squares: modified FWSI vs. raw OpenAlex "
-        "FWCI (repositories >= 2 years old). Bars = 95% CI; dashed line = pooled stars-vs-"
-        "citations rho. Every pruned field plus the Other bucket; per-series n in the backing "
+        "FWCI (repositories >= 2 years old). Bars = 95% CI; grey dashed line = pooled stars-vs-"
+        "citations rho; orange dotted line = pooled FWSI-vs-FWCI rho. Every pruned field plus "
+        "the Other bucket; per-series n in the backing "
         "CSVs. Abbreviated field labels: " + u.field_abbreviation_caption(forest_fields),
     )
 
     u.save_figure(fig, "figure3_software_development_characteristics", output_dir)
     plt.close(fig)
+    # Restore evaplot's sizes so the supplementals below render unchanged.
+    evaplot.set_style("evaplot_rc")
 
     # ---- Supplemental candidate: tooling adoption, with-manifest denominator (Figure 3
     # Panel C before the pooled manifest-adoption panel replaced it) ----

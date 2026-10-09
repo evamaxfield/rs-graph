@@ -13,6 +13,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Literal
 
+import matplotlib.pyplot as plt
 import pandas as pd
 import polars as pl
 import seaborn as sns
@@ -642,7 +643,7 @@ def format_p_value(p: float) -> str:
     return "< 1e-300" if p < 1e-300 else f"{p:.3g}"
 
 
-def shrink_ticks(ax: Axes, size: int = 8) -> None:
+def shrink_ticks(ax: Axes, size: float = 8) -> None:
     """Shrink tick label font size -- evaplot's default 15pt tick labels are too large for
     multi-panel figures with long categorical labels (field/domain names).
     """
@@ -696,7 +697,7 @@ _CONTRAST_MAGENTA = "#c2438a"
 TERTIARY_BINARY_PALETTE: list[str] = [_CONTRAST_GOLD, _CONTRAST_MAGENTA]
 
 
-def style_legend(legend: Legend | None, fontsize: int = 8) -> None:
+def style_legend(legend: Legend | None, fontsize: float = 8) -> None:
     """Give a legend a consistent bordered-box look across the figure set (evaplot's
     `legend.frameon: False` rcParam default otherwise leaves some legends unboxed).
     """
@@ -711,14 +712,37 @@ def style_legend(legend: Legend | None, fontsize: int = 8) -> None:
         text.set_fontsize(fontsize)
 
 
-def add_panel_label(ax: Axes, label: str) -> None:
+# Main-text figures are drawn at Nature's 183 mm double-column width, so drawn pt = print pt.
+PRINT_FIGURE_WIDTH_IN = 7.2
+PRINT_TICK_SIZE = 9
+PRINT_LEGEND_SIZE = 8.5
+PRINT_PANEL_LABEL_SIZE = 11
+_PRINT_RC: dict[str, Any] = {
+    "axes.labelsize": 10,
+    "axes.labelpad": 4,
+    "xtick.labelsize": PRINT_TICK_SIZE,
+    "ytick.labelsize": PRINT_TICK_SIZE,
+    "legend.fontsize": PRINT_LEGEND_SIZE,
+    "legend.title_fontsize": PRINT_LEGEND_SIZE,
+    "grid.linewidth": 0.8,
+}
+
+
+def use_print_font_sizes() -> None:
+    """Override evaplot's screen-sized fonts with print sizes for a figure drawn at
+    `PRINT_FIGURE_WIDTH_IN`; call `evaplot.set_style` again to restore.
+    """
+    plt.rcParams.update(_PRINT_RC)
+
+
+def add_panel_label(ax: Axes, label: str, fontsize: float = 10) -> None:
     """Add a bold panel label (A, B, C...) to the upper-left corner of an axes."""
     ax.text(
         -0.12,
         1.05,
         label,
         transform=ax.transAxes,
-        fontsize=10,
+        fontsize=fontsize,
         fontweight="bold",
         va="bottom",
         ha="left",

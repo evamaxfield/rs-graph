@@ -57,6 +57,11 @@ def _pwc_coverage_statistic(df: pl.DataFrame) -> dict[str, float]:
     }
 
 
+# Drawn near print width; the saved PDF (tight bbox) lands at ~u.PRINT_FIGURE_WIDTH_IN.
+FIG2_FIGSIZE = (5.35, 3.6)
+FIG2_LEGEND_B_ANCHOR = (1.32, 0.5)
+
+
 def figure_2_dataset_coverage(output_dir: Path = u.OUTPUT_DIR) -> None:
     """
     Build Figure 2: dataset coverage. (A) pair counts by field -- rs-graph, stacked seed vs.
@@ -147,9 +152,10 @@ def figure_2_dataset_coverage(output_dir: Path = u.OUTPUT_DIR) -> None:
     )
 
     # ---- Main figure: 2 panels, raw counts ----
-    fig, axes = plt.subplots(1, 2, figsize=(11, 5.5), gridspec_kw={"wspace": 0.45})
-    u.add_panel_label(axes[0], "A")
-    u.add_panel_label(axes[1], "B")
+    u.use_print_font_sizes()
+    fig, axes = plt.subplots(1, 2, figsize=FIG2_FIGSIZE, gridspec_kw={"wspace": 0.45})
+    u.add_panel_label(axes[0], "A", fontsize=u.PRINT_PANEL_LABEL_SIZE)
+    u.add_panel_label(axes[1], "B", fontsize=u.PRINT_PANEL_LABEL_SIZE)
 
     palette2 = u.general_palette(2)
     family_green, family_orange = palette2[0], palette2[1]
@@ -176,7 +182,7 @@ def figure_2_dataset_coverage(output_dir: Path = u.OUTPUT_DIR) -> None:
         seed_counts,
         height=bar_h,
         color=family_green,
-        label="rs-graph (seed pairs)",
+        label="RS-Graph (seed pairs)",
     )
     axes[0].barh(
         y_pos - bar_h / 2,
@@ -184,26 +190,29 @@ def figure_2_dataset_coverage(output_dir: Path = u.OUTPUT_DIR) -> None:
         left=seed_counts,
         height=bar_h,
         color=mined_tint,
-        label="rs-graph (mined pairs)",
+        label="RS-Graph (mined pairs)",
     )
     axes[0].barh(
         y_pos + bar_h / 2,
         pwc_counts,
         height=bar_h,
         color=family_orange,
-        label="Papers with Code (verified subset)",
+        label="Papers with Code\n(author-provided subset)",
     )
     axes[0].set_yticks(y_pos)
     axes[0].set_yticklabels([u.abbreviate_field(f) for f in field_order])
     axes[0].invert_yaxis()
     axes[0].set_xlabel("Article-Repository Pairs")
 
-    # ncol=2 keeps the two rs-graph entries adjacent on the top row; anchored right of the
-    # panel label so the two don't overlap.
+    # One column so the legend stays above Panel A; anchored right of the panel label.
     leg_a = axes[0].legend(
-        fontsize=8, title="", loc="lower left", bbox_to_anchor=(0.05, 1.02), ncol=2
+        fontsize=u.PRINT_LEGEND_SIZE,
+        title="",
+        loc="lower left",
+        bbox_to_anchor=(0.05, 1.02),
+        ncol=1,
     )
-    u.style_legend(leg_a)
+    u.style_legend(leg_a, fontsize=u.PRINT_LEGEND_SIZE)
     u.shrink_ticks(axes[0], size=9)
 
     # Panel B: stacked yearly counts by field, with each year's mined share overlaid as a
@@ -252,13 +261,13 @@ def figure_2_dataset_coverage(output_dir: Path = u.OUTPUT_DIR) -> None:
     leg_b = axes[1].legend(
         handles_b + handles_b2,
         labels_b + labels_b2,
-        fontsize=8,
+        fontsize=u.PRINT_LEGEND_SIZE,
         title="",
         loc="center left",
-        bbox_to_anchor=(1.16, 0.5),
+        bbox_to_anchor=FIG2_LEGEND_B_ANCHOR,
         borderaxespad=0.0,
     )
-    u.style_legend(leg_b, fontsize=8)
+    u.style_legend(leg_b, fontsize=u.PRINT_LEGEND_SIZE)
     evaplot.rotate_xticklabels(axes[1], rotation=40)
     u.shrink_ticks(axes[1], size=9)
     u.shrink_ticks(ax_b2, size=9)
