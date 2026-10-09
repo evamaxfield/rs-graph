@@ -36,17 +36,32 @@ app = typer.Typer()
 ################################################################################
 
 
+def _tagged_path(path: Path, output_tag: str | None) -> Path:
+    """Append `-{output_tag}` to a filename stem, or return the path unchanged."""
+    if output_tag is None:
+        return path
+    return path.with_name(f"{path.stem}-{output_tag}{path.suffix}")
+
+
 @app.command()
-def create_annotation_set() -> None:
-    """Sample pairs per field and write the agreement + per-annotator annotation CSVs."""
+def create_annotation_set(output_tag: str | None = None) -> None:
+    """
+    Sample pairs per field and write the agreement + per-annotator annotation CSVs.
+
+    `output_tag` (e.g. a draw date) is appended to every output filename so an earlier
+    sample is never overwritten. Also reports the sample's mining-round mix and each
+    stratum's share of all mined pairs (the weights for a stratum-weighted precision).
+    """
     # Load dataset with top 5 fields (5 + Other)
     df = u.load_filtered_pairs(top_n_fields=5)
 
     # Filter to only rows with a predictive model confidence that isn't null
     df = df.filter(pl.col("predictive_model_confidence").is_not_null())
+    # Fixed row order so the seeded draws below are reproducible run to run.
+    df = df.sort("document_repository_link_id")
 
     # Iter top fields
-    top_fields = df.get_column("document_field_name_pruned").unique().to_list()
+    top_fields = df.get_column("document_field_name_pruned").unique().sort().to_list()
 
     # We annotate 600 overall
     # 24 from training agreement set, 576 from all independent annotations
@@ -101,7 +116,7 @@ def create_annotation_set() -> None:
     )
 
     # Save training set to be annotated by all annotators for agreement analysis
-    agreement_df.write_csv(TRAINING_ANNOTATION_FILENAME_PATH)
+    agreement_df.write_csv(_tagged_path(TRAINING_ANNOTATION_FILENAME_PATH, output_tag))
 
     # Get the number of rows each annotator should annotate from the independent set
     num_annotators = len(ANNOTATORS)
@@ -116,7 +131,47 @@ def create_annotation_set() -> None:
 
         # Save output CSV for this annotator
         output_path = DATA_DIR / FULL_TO_ANNOTATE_FILENAME_TEMPLATE.format(annotator=annotator)
-        annotator_subset.write_csv(output_path)
+        annotator_subset.write_csv(_tagged_path(output_path, output_tag))
+
+    # Report the round mix of the drawn sample and each stratum's mined-pair share
+    sampled = pl.concat(
+        [
+            pl.concat(agreement_subsets).with_columns(pl.lit("agreement").alias("subset")),
+            pl.concat(independent_subsets).with_columns(pl.lit("independent").alias("subset")),
+        ]
+    )
+    n_overlap = sampled.filter(pl.col("document_repository_link_id").is_duplicated()).height
+    print(f"Pairs drawn into both the agreement and independent subsets: {n_overlap // 2}")
+    round_mix = (
+        sampled.group_by("subset", "link_processing_iteration")
+        .agg(pl.len().alias("n_pairs"))
+        .with_columns(
+            (100 * pl.col("n_pairs") / pl.col("n_pairs").sum().over("subset")).alias(
+                "pct_of_subset"
+            )
+        )
+        .sort("subset", "link_processing_iteration")
+    )
+    print(round_mix)
+    u.save_table(
+        round_mix,
+        _tagged_path(Path("link_directionality_sample_round_mix"), output_tag).name,
+        u.OUTPUT_DIR,
+    )
+    stratum_weights = (
+        df.group_by("document_field_name_pruned")
+        .agg(pl.len().alias("n_mined_pairs"))
+        .with_columns(
+            (pl.col("n_mined_pairs") / pl.col("n_mined_pairs").sum()).alias("stratum_weight")
+        )
+        .sort("n_mined_pairs", descending=True)
+    )
+    print(stratum_weights)
+    u.save_table(
+        stratum_weights,
+        _tagged_path(Path("link_directionality_stratum_weights"), output_tag).name,
+        u.OUTPUT_DIR,
+    )
 
 
 def _pairwise_kappa_str(va: list[str | None], vb: list[str | None]) -> str:

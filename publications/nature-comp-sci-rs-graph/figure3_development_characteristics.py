@@ -15,6 +15,7 @@ import numpy as np
 import polars as pl
 import seaborn as sns
 import utils as u
+from matplotlib.axes import Axes
 from matplotlib.ticker import MaxNLocator
 from scipy.stats import spearmanr
 
@@ -307,6 +308,61 @@ def _python_share_by_field_over_time(
     )
 
 
+def _manifest_adoption_by_field_over_time(
+    df: pl.DataFrame, deps: pl.DataFrame, top_n_fields: int = PYTHON_SHARE_TOP_N_FIELDS
+) -> pl.DataFrame:
+    """Per-field split of the pooled "All repositories" series from
+    `_manifest_adoption_over_time`: % of repositories with a parsed Python/R (pypi/conda/cran)
+    manifest, by first-seen publication year. Same repo-year attribution, numerator and
+    per-year repository floor as that series; field buckets match
+    `_python_share_by_field_over_time` (top-`top_n_fields` pruned fields, "Other", and a
+    pooled all-fields line).
+    """
+    current_year = date.today().year
+    repos_with_manifest = (
+        deps.filter(pl.col("ecosystem").is_in(u.ALL_MANIFEST_ECOSYSTEMS))
+        .select("repository_id")
+        .unique()
+        .with_columns(pl.lit(True).alias("has_manifest"))
+    )
+    top_fields = _top_pruned_field_names(df, top_n_fields)
+    repo_year = (
+        df.select("repository_id", "document_publication_year", "document_field_name_pruned")
+        .unique(subset="repository_id", keep="first")
+        .filter(
+            (pl.col("document_publication_year") >= u.DEFAULT_MIN_YEAR)
+            & (pl.col("document_publication_year") < current_year)
+        )
+        .join(repos_with_manifest, on="repository_id", how="left")
+        .with_columns(
+            pl.col("has_manifest").fill_null(False),
+            pl.when(pl.col("document_field_name_pruned").is_in(top_fields))
+            .then(pl.col("document_field_name_pruned"))
+            .otherwise(pl.lit("Other"))
+            .alias("field"),
+        )
+    )
+
+    def series_frame(repos: pl.DataFrame, label: str) -> pl.DataFrame:
+        return (
+            repos.group_by("document_publication_year")
+            .agg(pl.len().alias("total"), pl.col("has_manifest").sum().alias("count"))
+            .with_columns(
+                pl.lit(label).alias("series"),
+                (pl.col("count") / pl.col("total") * 100).alias("pct_repos"),
+            )
+            .filter(pl.col("total") >= MANIFEST_ADOPTION_MIN_REPOS_PER_YEAR)
+            .sort("document_publication_year")
+        )
+
+    frames = [series_frame(repo_year, PYTHON_SHARE_OVERALL_LABEL)]
+    for field in [*top_fields, "Other"]:
+        frames.append(series_frame(repo_year.filter(pl.col("field") == field), field))
+    return pl.concat(frames).select(
+        "series", "document_publication_year", "count", "total", "pct_repos"
+    )
+
+
 def _dependency_category_adoption(
     df: pl.DataFrame,
     deps: pl.DataFrame,
@@ -525,6 +581,67 @@ def _license_adoption_over_time(df: pl.DataFrame) -> pl.DataFrame:
     return out
 
 
+def _plot_dependency_category_adoption(
+    ax: Axes, category_by_year: pl.DataFrame, legend_loc: str = "upper left"
+) -> None:
+    """Draw the five dependency-category adoption lines by publication year onto `ax`, over
+    years with at least `MANIFEST_ADOPTION_MIN_REPOS_PER_YEAR` repositories in the denominator.
+    """
+    sns.lineplot(
+        data=category_by_year.filter(
+            pl.col("total") >= MANIFEST_ADOPTION_MIN_REPOS_PER_YEAR
+        ).to_pandas(),
+        x="document_publication_year",
+        y="pct_repos",
+        hue="category",
+        style="category",
+        hue_order=list(_DEPENDENCY_CATEGORIES),
+        style_order=list(_DEPENDENCY_CATEGORIES),
+        palette=u.general_palette(len(_DEPENDENCY_CATEGORIES)),
+        markers=True,
+        dashes=True,
+        ax=ax,
+    )
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.set_xlabel("Publication Year")
+    u.style_legend(ax.legend(fontsize=8, title="", loc=legend_loc), fontsize=8)
+    u.shrink_ticks(ax, size=9)
+
+
+FIELD_LINE_ALPHA = 0.4
+
+
+def _plot_field_lines(
+    ax: Axes,
+    frame: pl.DataFrame,
+    value_col: str,
+    fields: list[str],
+    field_colors: dict[str, str],
+) -> None:
+    """Panel B/C style: one translucent line per field plus an opaque black dashed pooled
+    line drawn on top, with the field legend in the (data-free) upper-left corner.
+    """
+    for series_label in [*fields, PYTHON_SHARE_OVERALL_LABEL]:
+        plotted = frame.filter(pl.col("series") == series_label)
+        is_overall = series_label == PYTHON_SHARE_OVERALL_LABEL
+        ax.plot(
+            plotted.get_column("document_publication_year").to_numpy(),
+            plotted.get_column(value_col).to_numpy(),
+            marker="o",
+            markersize=3,
+            linewidth=2.2 if is_overall else 1.5,
+            linestyle="--" if is_overall else "-",
+            color="black" if is_overall else field_colors[series_label],
+            alpha=1.0 if is_overall else FIELD_LINE_ALPHA,
+            label="Overall" if is_overall else u.abbreviate_field(series_label),
+            zorder=3 if is_overall else 2,
+        )
+    u.style_legend(
+        ax.legend(fontsize=6, title="", loc="upper left", ncol=2, columnspacing=0.8),
+        fontsize=6,
+    )
+
+
 ###############################################################################
 
 
@@ -534,10 +651,11 @@ def figure_3_software_development_characteristics(
     """
     Build Figure 3: software development characteristics, one consolidated 6-panel figure.
     (A) dev activity duration, (B) Python's share of repositories over time by field, (C)
-    dependency-category adoption over time, (D) license adoption over time (any /
-    permissive / copyleft), (E) raw-FWCI distribution, (F) raw-stars-vs-raw-citations
-    Spearman rho by field as a horizontal forest plot with a pooled row. Also produces the
-    article-vs-preprint supplemental split from the same computations.
+    Python/R dependency-manifest adoption over time by field, with a pooled line, (D) license adoption over time
+    (any / permissive / copyleft), (E) raw-FWCI distribution, (F) Spearman rho by field as a
+    horizontal forest plot, raw stars vs. raw citations (with a pooled row) alongside modified
+    FWSI vs. raw FWCI. Also produces the dependency-category (tooling) adoption and
+    article-vs-preprint supplementals from the same computations.
     """
     evaplot.set_style("evaplot_rc")
     # Stable year sort so every keep="first" dedup below attributes the earliest publication.
@@ -555,13 +673,12 @@ def figure_3_software_development_characteristics(
     fwsi_repos = u.compute_modified_fwsi(df)
 
     dev_duration = _dev_duration_frame(df)
-    # Manifest adoption is CSV-only now -- cited as prose, not plotted.
     manifest_adoption = _manifest_adoption_over_time(df, deps)
     python_share = _python_share_by_field_over_time(df)
-    # Panel C denominator: repositories with any parsed manifest, not every linked repository
+    manifest_by_field = _manifest_adoption_by_field_over_time(df, deps)
+    # Tooling denominator: repositories with any parsed manifest, not every linked repository
     # -- otherwise the tooling series partly just measures manifest adoption itself. Numerator
-    # restricted to pypi/cran/conda ecosystems, matching the manifest-adoption measure. The
-    # all-repositories/all-ecosystem version moves to the Supplement.
+    # restricted to pypi/cran/conda ecosystems, matching the manifest-adoption measure.
     repos_with_any_manifest = deps.select("repository_id").unique()
     category_by_year_all_repos = _dependency_category_adoption(
         df, deps, group_col=None, with_year=True
@@ -586,11 +703,10 @@ def figure_3_software_development_characteristics(
     # Vanishingly small p-values print as a bound rather than a literal 0.0.
     format_p = pl.col("p_value").map_elements(u.format_p_value, return_dtype=pl.String)
 
-    # FWSI-vs-FWCI rho is saved as CSV only; Panel F plots raw stars vs. raw citations.
     u.save_table(
         rho_df.with_columns(format_p), "figure3_fwsi_fwci_spearman_by_field", output_dir
     )
-    print("\nFWSI-vs-raw-FWCI Spearman rho by field (CSV only, not plotted):")
+    print("\nFWSI-vs-raw-FWCI Spearman rho by field (Panel F, square markers):")
     print(rho_df)
 
     stars_rho_df = _stars_vs_citations_by_field(df)
@@ -599,7 +715,7 @@ def figure_3_software_development_characteristics(
         "figure3_stars_citations_spearman_by_field",
         output_dir,
     )
-    print("\nRaw-stars-vs-raw-citations Spearman rho by field (Panel F):")
+    print("\nRaw-stars-vs-raw-citations Spearman rho by field (Panel F, circle markers):")
     print(stars_rho_df)
 
     license_adoption = _license_adoption_over_time(df)
@@ -607,9 +723,18 @@ def figure_3_software_development_characteristics(
     print("\nLicense adoption by year (Panel D):")
     print(license_adoption)
 
-    # Panel B/C data as labeled tables, with exact adoption percentages.
+    # Panel B/C data as labeled tables; Panel C's pooled line is the "All repositories"
+    # series, checked against the per-field frame's pooled line below.
     u.save_table(manifest_adoption, "figure3_manifest_adoption_by_year", output_dir)
     u.save_table(python_share, "figure3_python_share_by_field_over_year", output_dir)
+    u.save_table(manifest_by_field, "figure3_manifest_adoption_by_field_over_year", output_dir)
+    manifest_by_field_pooled = manifest_by_field.filter(
+        pl.col("series") == PYTHON_SHARE_OVERALL_LABEL
+    ).select("document_publication_year", "count", "total")
+    manifest_all_repos = manifest_adoption.filter(pl.col("series") == "All repositories")
+    assert manifest_by_field_pooled.equals(
+        manifest_all_repos.select("document_publication_year", "count", "total")
+    ), "Panel C per-field pooled line diverges from the 'All repositories' series"
     current_year = date.today().year
     category_by_year_plotted = category_by_year.filter(
         pl.col("document_publication_year") < current_year
@@ -617,17 +742,18 @@ def figure_3_software_development_characteristics(
     category_by_year_all_repos_plotted = category_by_year_all_repos.filter(
         pl.col("document_publication_year") < current_year
     )
-    # Panel C data: with-manifest denominator, pypi/cran/conda-only numerator (main figure).
+    # Tooling data (former Panel C, now a supplementary candidate): with-manifest
+    # denominator, pypi/cran/conda-only numerator. Filename kept for continuity.
     u.save_table(
         category_by_year_plotted, "figure3_dependency_category_adoption_by_year", output_dir
     )
-    # All-repositories/all-ecosystem version, superseded as the main panel -- Supplement only.
+    # All-repositories/all-ecosystem version -- Supplement only.
     u.save_table(
         category_by_year_all_repos_plotted,
         "supplemental_dependency_category_adoption_all_repos_by_year",
         output_dir,
     )
-    print("\nTooling adoption, with-manifest denominator (Panel C) vs. all-repos (Supplement):")
+    print("\nTooling adoption (Supplement), with-manifest denominator vs. all-repos:")
     endpoint_years = [
         category_by_year_plotted.get_column("document_publication_year").min(),
         category_by_year_plotted.get_column("document_publication_year").max(),
@@ -736,35 +862,19 @@ def figure_3_software_development_characteristics(
     u.cap_ylim_to_quantiles(ax_a, dev_duration.to_pandas()["duration_years"], axis="x")
     u.shrink_ticks(ax_a, size=9)
 
-    # B: Python's share of repositories over time, one line per field plus a pooled line.
+    # B and C: one line per field plus a pooled line, sharing fields, colors and legend.
     python_share_fields = [
         s
         for s in python_share.get_column("series").unique(maintain_order=True).to_list()
         if s != PYTHON_SHARE_OVERALL_LABEL
     ]
     field_colors = u.field_color_map(python_share_fields)
-    for series_label in [*python_share_fields, PYTHON_SHARE_OVERALL_LABEL]:
-        plotted = python_share.filter(pl.col("series") == series_label)
-        is_overall = series_label == PYTHON_SHARE_OVERALL_LABEL
-        ax_b.plot(
-            plotted.get_column("document_publication_year").to_numpy(),
-            plotted.get_column("pct_python").to_numpy(),
-            marker="o",
-            markersize=3,
-            linewidth=2.2 if is_overall else 1.5,
-            linestyle="--" if is_overall else "-",
-            color="black" if is_overall else field_colors[series_label],
-            label="Overall" if is_overall else u.abbreviate_field(series_label),
-            zorder=3 if is_overall else 2,
-        )
+    _plot_field_lines(ax_b, python_share, "pct_python", python_share_fields, field_colors)
+    _plot_field_lines(ax_c, manifest_by_field, "pct_repos", python_share_fields, field_colors)
     ax_b.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax_b.set_xlabel("Publication Year")
     ax_b.set_ylabel("% of Repos Python-Primary")
     ax_b.set_ylim(0, 100)
-    u.style_legend(
-        ax_b.legend(fontsize=6, title="", loc="upper left", ncol=2, columnspacing=0.8),
-        fontsize=6,
-    )
     u.print_caption_note(
         "figure3 Panel B",
         f"Share of repositories with a known primary language whose primary language is "
@@ -775,30 +885,22 @@ def figure_3_software_development_characteristics(
     )
     u.shrink_ticks(ax_b, size=9)
 
-    # C: dependency-category adoption over time -- five lines, pooled across domains; the
-    # per-domain snapshot goes to the backing CSV / supplement.
-    sns.lineplot(
-        data=category_by_year_plotted.filter(
-            pl.col("total") >= MANIFEST_ADOPTION_MIN_REPOS_PER_YEAR
-        ).to_pandas(),
-        x="document_publication_year",
-        y="pct_repos",
-        hue="category",
-        style="category",
-        hue_order=list(_DEPENDENCY_CATEGORIES),
-        style_order=list(_DEPENDENCY_CATEGORIES),
-        palette=u.general_palette(len(_DEPENDENCY_CATEGORIES)),
-        markers=True,
-        dashes=True,
-        ax=ax_c,
-    )
+    # C: manifest adoption over time -- share of repositories with a parsed Python/R
+    # (pypi/conda/cran) manifest, per field plus pooled (plotted above with B). Per-language
+    # series stay in the Supplement.
     ax_c.xaxis.set_major_locator(MaxNLocator(integer=True))
     ax_c.set_xlabel("Publication Year")
-    ax_c.set_ylabel("% of Repos")
-    # Headroom above the data so the legend doesn't sit on the early Testing line.
-    ax_c.set_ylim(0, 12)
-    u.style_legend(ax_c.legend(fontsize=8, title="", loc="upper left"), fontsize=8)
+    ax_c.set_ylabel("% of Repos with Manifest")
+    ax_c.set_ylim(0, 100)
     u.shrink_ticks(ax_c, size=9)
+    u.print_caption_note(
+        "figure3 Panel C",
+        "Share of repositories with a parsed Python or R dependency manifest (pypi, conda or "
+        f"cran), by first-seen publication year; top {PYTHON_SHARE_TOP_N_FIELDS} fields + "
+        "Other (translucent, same field colors as Panel B) + a pooled all-repositories "
+        f"line (black dashed); years with < {MANIFEST_ADOPTION_MIN_REPOS_PER_YEAR} repos in a "
+        "series excluded",
+    )
 
     # D: license adoption over time -- any / permissive / copyleft license share of repos by
     # first-seen publication year.
@@ -875,83 +977,96 @@ def figure_3_software_development_characteristics(
         "the log axis; median includes them",
     )
 
-    # F: raw-stars-vs-raw-citations Spearman rho by field -- horizontal forest plot with the
-    # pooled rho as the top row and a reference line at its value.
+    # F: Spearman rho by field as a horizontal forest plot -- raw stars vs. raw citations
+    # (circles, pooled row on top, dashed line at the pooled value) and modified FWSI vs. raw
+    # FWCI (squares), the two markers offset vertically within each field row.
     pooled_row = stars_rho_df.filter(pl.col("field") == "All fields (pooled)")
     field_rows = stars_rho_df.filter(pl.col("field") != "All fields (pooled)").sort(
         "rho", descending=True
     )
-    forest = pl.concat([pooled_row, field_rows]).to_pandas()
-    point_color = u.general_palette(1)[0]
-    ys = np.arange(len(forest))
-    xerr_lo = (forest["rho"] - forest["rho_ci_lo"]).to_numpy()
-    xerr_hi = (forest["rho_ci_hi"] - forest["rho"]).to_numpy()
-    ax_f.errorbar(
-        x=forest["rho"],
-        y=ys,
-        xerr=[xerr_lo, xerr_hi],
-        fmt="o",
-        color=point_color,
-        ecolor="black",
-        elinewidth=1,
-        capsize=3,
-        markersize=6,
-        markeredgecolor="black",
-        markeredgewidth=0.6,
-    )
+    forest_fields = pl.concat([pooled_row, field_rows]).get_column("field").to_list()
+    forest_row = {field: i for i, field in enumerate(forest_fields)}
+    fwsi_unplotted = set(rho_df.get_column("field").to_list()) - set(forest_fields)
+    if fwsi_unplotted:
+        print(
+            f"  Panel F: FWSI-vs-FWCI fields with no stars row, not plotted: {fwsi_unplotted}"
+        )
+    forest_colors = u.general_palette(2)
+    forest_offset = 0.18
+    for rho_frame, label, marker, color, offset in [
+        (stars_rho_df, "Stars vs. citations", "o", forest_colors[0], -forest_offset),
+        (rho_df, "FWSI vs. FWCI", "s", forest_colors[1], forest_offset),
+    ]:
+        plotted = rho_frame.filter(pl.col("field").is_in(forest_fields))
+        rho = plotted.get_column("rho").to_numpy()
+        ax_f.errorbar(
+            x=rho,
+            y=np.array([forest_row[f] for f in plotted.get_column("field")]) + offset,
+            xerr=[
+                rho - plotted.get_column("rho_ci_lo").to_numpy(),
+                plotted.get_column("rho_ci_hi").to_numpy() - rho,
+            ],
+            fmt=marker,
+            color=color,
+            ecolor="black",
+            elinewidth=0.8,
+            capsize=2,
+            markersize=4.5,
+            markeredgecolor="black",
+            markeredgewidth=0.6,
+            label=label,
+        )
     pooled_rho = float(pooled_row.get_column("rho")[0])
     ax_f.axvline(pooled_rho, color="#888888", linewidth=0.9, linestyle="--", zorder=0)
     ax_f.axvline(0, color="#bbbbbb", linewidth=0.8, linestyle=":", zorder=0)
-    ax_f.set_yticks(ys)
-    ax_f.set_yticklabels(
-        [
-            f"{u.abbreviate_field(f)} (n={n:,})"
-            for f, n in zip(forest["field"], forest["n"], strict=True)
-        ]
-    )
-    ax_f.invert_yaxis()
-    ax_f.set_ylim(len(forest) - 0.5, -0.5)
-    ax_f.set_xlabel("Spearman rho (stars vs. citations)")
-    # Smaller than the other panels: the field+n y-tick labels are the longest text in the grid.
+    ax_f.set_yticks(np.arange(len(forest_fields)))
+    ax_f.set_yticklabels([u.abbreviate_field(f) for f in forest_fields])
+    ax_f.set_ylim(len(forest_fields) - 0.5, -0.5)
+    ax_f.set_xlabel("Spearman rho")
+    u.style_legend(ax_f.legend(fontsize=7, title="", loc="lower right"), fontsize=7)
     u.shrink_ticks(ax_f, size=7)
     u.print_caption_note(
         "figure3 Panel F",
-        "Raw stargazer and citation counts; dashed line = pooled rho. Every pruned field "
-        "plus the Other bucket. Abbreviated field labels: "
-        + u.field_abbreviation_caption(forest["field"].tolist()),
+        "Circles: raw stargazer vs. raw citation counts; squares: modified FWSI vs. raw OpenAlex "
+        "FWCI (repositories >= 2 years old). Bars = 95% CI; dashed line = pooled stars-vs-"
+        "citations rho. Every pruned field plus the Other bucket; per-series n in the backing "
+        "CSVs. Abbreviated field labels: " + u.field_abbreviation_caption(forest_fields),
     )
 
     u.save_figure(fig, "figure3_software_development_characteristics", output_dir)
     plt.close(fig)
 
-    # ---- Supplemental: tooling adoption, all-repositories denominator (superseded main-panel
-    # version; Panel C above uses the with-manifest denominator instead) ----
-    fig_tooling_supp, ax_tooling_supp = plt.subplots(figsize=(7, 5))
-    sns.lineplot(
-        data=category_by_year_all_repos_plotted.filter(
-            pl.col("total") >= MANIFEST_ADOPTION_MIN_REPOS_PER_YEAR
-        ).to_pandas(),
-        x="document_publication_year",
-        y="pct_repos",
-        hue="category",
-        style="category",
-        hue_order=list(_DEPENDENCY_CATEGORIES),
-        style_order=list(_DEPENDENCY_CATEGORIES),
-        palette=u.general_palette(len(_DEPENDENCY_CATEGORIES)),
-        markers=True,
-        dashes=True,
-        ax=ax_tooling_supp,
+    # ---- Supplemental candidate: tooling adoption, with-manifest denominator (Figure 3
+    # Panel C before the pooled manifest-adoption panel replaced it) ----
+    fig_tooling_manifest, ax_tooling_manifest = plt.subplots(figsize=(7, 5))
+    _plot_dependency_category_adoption(
+        ax_tooling_manifest, category_by_year_plotted, legend_loc="upper right"
     )
-    ax_tooling_supp.xaxis.set_major_locator(MaxNLocator(integer=True))
-    ax_tooling_supp.set_xlabel("Publication Year")
+    ax_tooling_manifest.set_ylabel("% of Repos with a Parsed Manifest")
+    ax_tooling_manifest.set_ylim(bottom=0)
+    u.print_caption_note(
+        "supplemental_dependency_category_adoption_with_manifest",
+        "Share of repositories with any parsed manifest that declare a package from each of "
+        "five tooling categories (pypi/cran/conda numerator only), by first-seen publication "
+        f"year; years with < {MANIFEST_ADOPTION_MIN_REPOS_PER_YEAR} repos excluded.",
+    )
+    evaplot.adjust_layout(fig_tooling_manifest)
+    u.save_figure(
+        fig_tooling_manifest,
+        "supplemental_dependency_category_adoption_with_manifest",
+        output_dir,
+    )
+    plt.close(fig_tooling_manifest)
+
+    # ---- Supplemental: tooling adoption, all-repositories denominator ----
+    fig_tooling_supp, ax_tooling_supp = plt.subplots(figsize=(7, 5))
+    _plot_dependency_category_adoption(ax_tooling_supp, category_by_year_all_repos_plotted)
     ax_tooling_supp.set_ylabel("% of Repos (all linked repositories)")
-    u.style_legend(ax_tooling_supp.legend(fontsize=8, title="", loc="upper left"), fontsize=8)
-    u.shrink_ticks(ax_tooling_supp, size=9)
     u.print_caption_note(
         "supplemental_dependency_category_adoption_all_repos",
-        "Same five tooling categories as Figure 3 Panel C, but over every linked repository "
-        "(not only those with a parsed manifest) and with no ecosystem restriction on the "
-        "numerator; superseded by Panel C's with-manifest, pypi/cran/conda-restricted version.",
+        "Same five tooling categories as the with-manifest supplemental, but over every linked "
+        "repository (not only those with a parsed manifest) and with no ecosystem restriction "
+        "on the numerator.",
     )
     evaplot.adjust_layout(fig_tooling_supp)
     u.save_figure(
@@ -1420,8 +1535,8 @@ SOFTWARE_PAPER_SEED_SOURCES: tuple[str, ...] = ("JOSS", "SoftwareX")
 
 def tooling_composition_by_seed_source_diagnostic(output_dir: Path = u.OUTPUT_DIR) -> None:
     """
-    Among with-manifest repositories, check whether the test/docs tooling decline (Figure 3
-    Panel C) is explained by seed-source composition shifting away from software papers (JOSS,
+    Among with-manifest repositories, check whether the test/docs tooling decline (the
+    with-manifest tooling supplemental) is explained by seed-source composition shifting away from software papers (JOSS,
     SoftwareX), which are more likely to declare test/docs tooling than the other sources
     (PLOS, Papers with Code, SoftCite, mined pairs). Read-only analysis, not a manuscript
     figure: (1) the software-paper share of with-manifest repositories by year; (2) test and
@@ -1494,3 +1609,206 @@ def tooling_composition_by_seed_source_diagnostic(output_dir: Path = u.OUTPUT_DI
     u.save_table(out, "supplemental_tooling_by_seed_group_and_year", output_dir)
     print("\nTest/documentation tooling share among with-manifest repos, by seed group + year:")
     print(out)
+
+
+###############################################################################
+# Seed vs. mined characteristics, licence categories, FWCI coverage profile
+
+
+def _license_category_expr() -> pl.Expr:
+    """Per-repository licence category with the Panel D keyword lists: copyleft first,
+    then permissive, then any other recorded licence, else none.
+    """
+    lic = pl.col("repository_license")
+    copyleft = pl.any_horizontal(
+        [lic.str.contains(k, literal=True) for k in _COPYLEFT_LICENSE_KEYWORDS]
+    )
+    permissive = pl.any_horizontal(
+        [lic.str.contains(k, literal=True) for k in _PERMISSIVE_LICENSE_KEYWORDS]
+    )
+    return (
+        pl.when(lic.is_null())
+        .then(pl.lit("none"))
+        .when(copyleft)
+        .then(pl.lit("copyleft"))
+        .when(permissive)
+        .then(pl.lit("permissive"))
+        .otherwise(pl.lit("other_or_unclassified"))
+        .alias("license_category")
+    )
+
+
+def _characteristics_row(
+    group: str, pairs: pl.DataFrame, repos_with_manifest: pl.DataFrame
+) -> dict[str, float | int | str]:
+    """One row of seed-vs-mined characteristics, each metric on the same population as its
+    main-text counterpart (FWCI over all documents; repository metrics over repositories
+    first seen 2008 to last year, attributed to their earliest publication year).
+    """
+    current_year = date.today().year
+    docs = pairs.unique(subset="document_id", keep="first")
+    fwci = docs.select("document_fwci").drop_nulls()
+    repos = pairs.unique(subset="repository_id", keep="first").filter(
+        pl.col("document_publication_year") < current_year
+    )
+    repos = repos.with_columns(
+        _license_category_expr(),
+        pl.col("repository_id")
+        .is_in(repos_with_manifest.get_column("repository_id").implode())
+        .alias("has_manifest"),
+    )
+    known_language = repos.drop_nulls("repository_primary_language")
+    last_year = repos.filter(pl.col("document_publication_year") == current_year - 1)
+    timing = _dev_duration_frame(pairs)
+
+    def pct(frame: pl.DataFrame, expr: pl.Expr) -> float:
+        return 100 * frame.select(expr.mean()).item() if frame.height else float("nan")
+
+    def median_days(period: str) -> float:
+        vals = timing.filter(pl.col("period") == period)
+        return vals.select(pl.col("duration_years").median() * 365.25).item()
+
+    return {
+        "group": group,
+        "n_pairs": pairs.height,
+        "n_documents": docs.height,
+        "pct_documents_with_fwci": 100 * fwci.height / docs.height,
+        "median_fwci_incl_zero": fwci.select(pl.col("document_fwci").median()).item(),
+        "median_fwci_excl_zero": fwci.filter(pl.col("document_fwci") > 0)
+        .select(pl.col("document_fwci").median())
+        .item(),
+        "pct_fwci_above_1": pct(fwci, pl.col("document_fwci") > 1),
+        "n_repositories_2008_to_last_year": repos.height,
+        "pct_permissive": pct(repos, pl.col("license_category") == "permissive"),
+        "pct_copyleft": pct(repos, pl.col("license_category") == "copyleft"),
+        "pct_other_or_unclassified": pct(
+            repos, pl.col("license_category") == "other_or_unclassified"
+        ),
+        "pct_no_license": pct(repos, pl.col("license_category") == "none"),
+        "pct_with_manifest_2008_to_last_year": pct(repos, pl.col("has_manifest")),
+        f"pct_with_manifest_{current_year - 1}": pct(last_year, pl.col("has_manifest")),
+        "n_repositories_known_language": known_language.height,
+        "pct_python_of_known_language": pct(
+            known_language, pl.col("repository_primary_language") == "Python"
+        ),
+        "median_days_created_before_publication": median_days("Before Publication"),
+        "median_days_last_push_after_publication": median_days("After Publication"),
+    }
+
+
+def seed_vs_mined_characteristics(output_dir: Path = u.OUTPUT_DIR) -> None:
+    """
+    Supplementary table: FWCI, licence, manifest share, Python share and publication timing
+    split by how pairs entered RS-Graph (seed vs. mined, with Papers with Code separated from
+    the other seeds). The "All pairs" row reproduces the pooled main-text figures. Also
+    writes every recorded licence string with its category and repository count, so the
+    permissive/copyleft keyword lists can be checked against the data.
+    """
+    df = u.load_filtered_pairs(top_n_fields=10).sort(
+        "document_publication_year", maintain_order=True
+    )
+    deps = u.clean_dependency_names(u.load_table("repository_dependency"))
+    repos_with_manifest = (
+        deps.filter(pl.col("ecosystem").is_in(u.ALL_MANIFEST_ECOSYSTEMS))
+        .select("repository_id")
+        .unique()
+    )
+
+    is_mined = pl.col("link_processing_iteration").is_not_null()
+    is_pwc = pl.col("dataset_source_name") == "pwc"
+    groups = [
+        ("All pairs", df),
+        ("Seed (all sources)", df.filter(~is_mined)),
+        ("Seed: Papers with Code", df.filter(~is_mined & is_pwc)),
+        ("Seed: other four sources", df.filter(~is_mined & ~is_pwc)),
+        ("Mined (rounds 1-5)", df.filter(is_mined)),
+        (
+            "Mined, excluding Computer Science",
+            df.filter(is_mined).filter(pl.col("document_field_name") != "Computer Science"),
+        ),
+        (
+            "Seed, excluding Computer Science",
+            df.filter(~is_mined).filter(pl.col("document_field_name") != "Computer Science"),
+        ),
+    ]
+    table = pl.DataFrame(
+        [_characteristics_row(g, frame, repos_with_manifest) for g, frame in groups]
+    )
+    n_repos_both = (
+        df.group_by("repository_id")
+        .agg(is_mined.any().alias("m"), (~is_mined).any().alias("s"))
+        .filter(pl.col("m") & pl.col("s"))
+        .height
+    )
+    print(f"Repositories linked through both a seed pair and a mined pair: {n_repos_both:,}")
+    with pl.Config(tbl_cols=-1, tbl_width_chars=250):
+        print(table)
+    u.save_table(table, "seed_vs_mined_characteristics", output_dir)
+
+    current_year = date.today().year
+    license_strings = (
+        df.unique(subset="repository_id", keep="first")
+        .filter(pl.col("document_publication_year") < current_year)
+        .with_columns(_license_category_expr())
+        .group_by("license_category", "repository_license")
+        .agg(pl.len().alias("n_repositories"))
+        .sort("license_category", "n_repositories", descending=[False, True])
+    )
+    with pl.Config(tbl_rows=60, fmt_str_lengths=60):
+        print(license_strings)
+    u.save_table(license_strings, "license_category_strings", output_dir)
+
+
+def fwci_coverage_profile(output_dir: Path = u.OUTPUT_DIR) -> None:
+    """
+    How documents with an OpenAlex FWCI differ from those without one: document type,
+    publication year, route into RS-Graph, field and open-access status, one row per group.
+    """
+    df = u.load_filtered_pairs(top_n_fields=10)
+    docs = df.group_by("document_id").agg(
+        pl.col("document_fwci").first().is_not_null().alias("has_fwci"),
+        pl.col("document_type_bucket").first(),
+        pl.col("document_publication_year").first(),
+        pl.col("document_field_name").first(),
+        pl.col("document_is_open_access").first(),
+        pl.col("document_cited_by_count").first(),
+        pl.col("link_processing_iteration").is_not_null().all().alias("only_mined"),
+        (pl.col("dataset_source_name") == "pwc").any().alias("any_pwc"),
+    )
+    current_year = date.today().year
+    profile = (
+        docs.group_by("has_fwci")
+        .agg(
+            pl.len().alias("n_documents"),
+            (100 * (pl.col("document_type_bucket") == "article").mean()).alias("pct_article"),
+            (100 * (pl.col("document_type_bucket") == "preprint").mean()).alias("pct_preprint"),
+            (100 * (pl.col("document_type_bucket") == "other").mean()).alias("pct_other_type"),
+            pl.col("document_publication_year").median().alias("median_publication_year"),
+            (100 * (pl.col("document_publication_year") >= current_year - 1).mean()).alias(
+                f"pct_published_{current_year - 1}_or_later"
+            ),
+            (100 * pl.col("any_pwc").mean()).alias("pct_with_pwc_pair"),
+            (100 * pl.col("only_mined").mean()).alias("pct_only_mined_pairs"),
+            (100 * (pl.col("document_field_name") == "Computer Science").mean()).alias(
+                "pct_computer_science"
+            ),
+            (100 * pl.col("document_is_open_access").cast(pl.Float64).mean()).alias(
+                "pct_open_access"
+            ),
+            pl.col("document_cited_by_count").median().alias("median_cited_by_count"),
+        )
+        .sort("has_fwci", descending=True)
+    )
+    with pl.Config(tbl_cols=-1, tbl_width_chars=250):
+        print(profile)
+    by_type = (
+        docs.group_by("document_type_bucket")
+        .agg(
+            pl.len().alias("n_documents"),
+            (100 * pl.col("has_fwci").mean()).alias("pct_with_fwci"),
+        )
+        .sort("n_documents", descending=True)
+    )
+    print(by_type)
+    u.save_table(profile, "fwci_coverage_profile", output_dir)
+    u.save_table(by_type, "fwci_coverage_by_document_type", output_dir)

@@ -425,7 +425,9 @@ def mining_rounds_table(output_dir: Path = u.OUTPUT_DIR) -> None:
           (not timestamp-based) attributing each identity link to the earliest iteration
           whose document-repository pair could have produced it.
     The combined table's "Seed" row is broken down by original seed source in indented
-    sub-rows; only mining_rounds_table.csv is saved.
+    sub-rows, with pairs and identities accumulated in the listed order and each seed
+    identity counted under the first listed source that reaches it; only
+    mining_rounds_table.csv is saved.
     """
     print("Loading document_repository_link, dataset_source from HuggingFace...")
     raw_links = _load_links_with_source_names()
@@ -527,7 +529,7 @@ def mining_rounds_table(output_dir: Path = u.OUTPUT_DIR) -> None:
     # Reuse the already-loaded standard-filtered pairs table instead of re-running the full
     # HuggingFace load/join/filter pipeline for the same default args.
     drl_filtered = filtered_pairs_for_iteration.select(
-        "document_id", "repository_id", "link_processing_iteration"
+        "document_id", "repository_id", "link_processing_iteration", "dataset_source_name"
     )
     print(
         f"Using the standard-filtered article-repository pairs table as the join's candidate "
@@ -638,8 +640,9 @@ def mining_rounds_table(output_dir: Path = u.OUTPUT_DIR) -> None:
     )
 
     # Per-source breakdown of the Seed total, indented under the "Seed" group-header row.
-    # Identity attribution is not source-scoped, so identity columns stay blank on sub-rows.
-    seed_by_source = (
+    # Sources are listed by pair count and accumulated in that order; an identity reachable
+    # through more than one seed source counts under the first source listed.
+    seed_pairs_by_source = (
         filtered_pairs_for_iteration.filter(
             pl.col("link_processing_iteration").is_null()
             & pl.col("dataset_source_name").is_in(SEED_SOURCE_NAMES)
@@ -647,16 +650,60 @@ def mining_rounds_table(output_dir: Path = u.OUTPUT_DIR) -> None:
         .group_by("dataset_source_name")
         .agg(pl.len().alias("new_pairs"))
         .sort("new_pairs", descending=True)
+        .with_row_index("source_rank")
+    )
+    seed_identity_sources = (
+        candidate_pairs.filter(pl.col("link_processing_iteration").is_null())
+        .join(
+            seed_pairs_by_source.select("dataset_source_name", "source_rank"),
+            on="dataset_source_name",
+        )
+        .select("researcher_id", "developer_account_id", "dataset_source_name", "source_rank")
+        .unique()
+    )
+    seed_identities_reachable = (
+        seed_identity_sources.group_by("dataset_source_name")
+        .agg(pl.len().alias("reachable_identities"))
+        .join(seed_pairs_by_source, on="dataset_source_name")
+        .sort("source_rank")
+        .select("dataset_source_name", "reachable_identities")
+    )
+    print(
+        "\nSeed identities reachable through each seed source (overlapping, not deduplicated):"
+    )
+    print(seed_identities_reachable)
+    seed_identities_first_source = (
+        seed_identity_sources.group_by(["researcher_id", "developer_account_id"])
+        .agg(pl.min("source_rank"))
+        .group_by("source_rank")
+        .agg(pl.len().alias("new_identities"))
+    )
+    seed_by_source = (
+        seed_pairs_by_source.join(seed_identities_first_source, on="source_rank", how="left")
+        .sort("source_rank")
+        .with_columns(pl.col("new_identities").fill_null(0))
+        .with_columns(
+            pl.col("new_pairs").cum_sum().alias("cumulative_pairs"),
+            pl.col("new_identities").cum_sum().alias("cumulative_identities"),
+        )
         .select(
             (
                 pl.lit("  ")
                 + pl.col("dataset_source_name").replace_strict(u.SOURCE_DISPLAY_NAMES)
             ).alias("round"),
             pl.col("new_pairs").cast(pl.Int64),
-            pl.lit(None, dtype=pl.Int64).alias("cumulative_pairs"),
-            pl.lit(None, dtype=pl.Int64).alias("new_identities"),
-            pl.lit(None, dtype=pl.Int64).alias("cumulative_identities"),
+            pl.col("cumulative_pairs").cast(pl.Int64),
+            pl.col("new_identities").cast(pl.Int64),
+            pl.col("cumulative_identities").cast(pl.Int64),
         )
+    )
+    seed_row = combined.head(1).row(0, named=True)
+    seed_source_identities_total = int(seed_by_source.get_column("new_identities").sum())
+    seed_source_pairs_total = int(seed_by_source.get_column("new_pairs").sum())
+    print(
+        f"Seed-source sub-rows sum to {seed_source_pairs_total:,} pairs "
+        f"(Seed row: {seed_row['new_pairs']:,}) and {seed_source_identities_total:,} "
+        f"identities (Seed row: {seed_row['new_identities']:,})"
     )
 
     # Seed header first, its per-source sub-rows, then the mining rounds.
@@ -687,6 +734,8 @@ def data_coverage_counts(output_dir: Path = u.OUTPUT_DIR) -> None:
     print(f"  document_software_mention: {len(mentions):,} rows")
     deps = u.clean_dependency_names(deps)
     deps_pr = deps.filter(pl.col("ecosystem").is_in(u.ALL_MANIFEST_ECOSYSTEMS))
+    # Same mention cleaning as Figure 4, so "has a mention" agrees across outputs.
+    mentions = u.clean_mention_names(mentions)
 
     repo_with_import = set(imports.get_column("repository_id"))
     repo_with_dep = set(deps_pr.get_column("repository_id"))
@@ -733,6 +782,19 @@ def data_coverage_counts(output_dir: Path = u.OUTPUT_DIR) -> None:
     ).height
     print(f"Pairs with all three (complete coverage): {n_pairs_complete:,}")
 
+    # Import/dependency counts restricted to the same publication years as mentions.
+    capped = flagged.filter(
+        pl.col("document_publication_year") <= u.MENTION_EXTRACTION_YEAR_CAP
+    )
+    n_pairs_capped = capped.height
+    n_repos_with_import_capped = capped.filter(pl.col("has_import")).n_unique("repository_id")
+    n_repos_with_dep_capped = capped.filter(pl.col("has_dependency")).n_unique("repository_id")
+    print(
+        f"Through {u.MENTION_EXTRACTION_YEAR_CAP}: {n_pairs_capped:,} pairs; "
+        f"{n_repos_with_import_capped:,} repositories with >=1 import; "
+        f"{n_repos_with_dep_capped:,} repositories with >=1 manifest dependency"
+    )
+
     summary = pl.DataFrame(
         {
             "statistic": [
@@ -746,6 +808,9 @@ def data_coverage_counts(output_dir: Path = u.OUTPUT_DIR) -> None:
                 "n_pairs_dependencies_and_mentions",
                 "n_pairs_imports_and_dependencies",
                 "n_pairs_complete_coverage",
+                "n_pairs_through_mention_cap_year",
+                "n_repositories_with_gte1_import_through_mention_cap_year",
+                "n_repositories_with_gte1_manifest_dependency_through_mention_cap_year",
             ],
             "value": [
                 n_pairs,
@@ -758,6 +823,9 @@ def data_coverage_counts(output_dir: Path = u.OUTPUT_DIR) -> None:
                 n_pairs_dep_mention,
                 n_pairs_import_dep,
                 n_pairs_complete,
+                n_pairs_capped,
+                n_repos_with_import_capped,
+                n_repos_with_dep_capped,
             ],
         }
     )

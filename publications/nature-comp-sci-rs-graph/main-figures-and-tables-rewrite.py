@@ -27,10 +27,14 @@ from figure1_quadpartite_network import figure_1_quadpartite_network
 from figure2_dataset_coverage import (
     candidate_figure2c_mined_share_by_field,
     figure_2_dataset_coverage,
+    pwc_by_year_check,
+    pwc_retention_breakdown,
 )
 from figure3_development_characteristics import (
     figure_3_software_development_characteristics,
+    fwci_coverage_profile,
     fwsi_fwci_comparison_table,
+    seed_vs_mined_characteristics,
     supplemental_manifest_file_adoption,
     supplemental_package_vs_script_diagnostics,
     tooling_composition_by_seed_source_diagnostic,
@@ -44,6 +48,7 @@ from network_statistics import (
     coauthorship_network,
     date_delta_figure,
     network_entity_edge_counts,
+    publication_timing_by_source,
     seed_vs_full_network_comparison,
 )
 from tables_and_counts import (
@@ -60,8 +65,12 @@ app = typer.Typer()
 app.command()(figure_1_quadpartite_network)
 app.command()(figure_2_dataset_coverage)
 app.command()(candidate_figure2c_mined_share_by_field)
+app.command()(pwc_by_year_check)
+app.command()(pwc_retention_breakdown)
 app.command()(figure_3_software_development_characteristics)
 app.command()(fwsi_fwci_comparison_table)
+app.command()(seed_vs_mined_characteristics)
+app.command()(fwci_coverage_profile)
 app.command()(figure_4_mention_rate_by_field_and_year)
 app.command()(predictors_of_software_mentioning)
 app.command()(table1_top_software_by_usage)
@@ -73,6 +82,7 @@ app.command()(mining_rounds_table)
 app.command()(coauthorship_network)
 app.command()(seed_vs_full_network_comparison)
 app.command()(network_entity_edge_counts)
+app.command()(publication_timing_by_source)
 app.command()(import_dependency_iou_over_time)
 app.command()(mentions_coverage_by_year)
 app.command()(mentions_alignment_over_time)

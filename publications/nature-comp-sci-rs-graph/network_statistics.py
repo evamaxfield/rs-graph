@@ -670,3 +670,56 @@ def network_entity_edge_counts(output_dir: Path = u.OUTPUT_DIR) -> None:
     for k, v in summary.items():
         print(f"  {k}: {v:,}")
     print("---------------------------------------\n")
+
+
+def publication_timing_by_source(output_dir: Path = u.OUTPUT_DIR) -> None:
+    """
+    Median days from repository creation to publication, and from publication to last push,
+    by route into RS-Graph (each seed source and mined). `all_pairs` uses every filtered pair,
+    the population behind the pooled 96 / 117-day medians; `one_to_one` uses the strict
+    one-to-one subset that `date_delta_figure` uses, for comparison with its percentiles.
+    """
+    df = u.load_filtered_pairs(top_n_fields=10)
+    df = df.with_columns(
+        pl.col("document_publication_date_parsed").cast(pl.Datetime("us")).alias("_pub_dt"),
+        pl.col("repository_last_pushed_datetime")
+        .str.to_datetime(strict=False)
+        .alias("_last_pushed"),
+    ).with_columns(
+        (pl.col("_pub_dt") - pl.col("repository_creation_datetime_parsed"))
+        .dt.total_days()
+        .alias("days_created_before_publication"),
+        (pl.col("_last_pushed") - pl.col("_pub_dt"))
+        .dt.total_days()
+        .alias("days_last_push_after_publication"),
+    )
+
+    def summarise(frame: pl.DataFrame, population: str) -> pl.DataFrame:
+        aggs = [
+            pl.len().alias("n_pairs"),
+            pl.col("days_created_before_publication").median().alias("median_days_before"),
+            pl.col("days_last_push_after_publication").median().alias("median_days_after"),
+            pl.col("days_last_push_after_publication").quantile(0.25).alias("p25_days_after"),
+            (100 * (pl.col("days_last_push_after_publication") <= 0).mean()).alias(
+                "pct_no_push_after_publication"
+            ),
+        ]
+        by_source = frame.group_by(pl.col("dataset_source_name_canonical").alias("group")).agg(
+            aggs
+        )
+        seeds = (
+            frame.filter(pl.col("link_processing_iteration").is_null())
+            .select(aggs)
+            .with_columns(pl.lit("Seed (all sources)").alias("group"))
+        )
+        pooled = frame.select(aggs).with_columns(pl.lit("All pairs").alias("group"))
+        return pl.concat(
+            [by_source, seeds.select(by_source.columns), pooled.select(by_source.columns)]
+        ).with_columns(pl.lit(population).alias("population"))
+
+    table = pl.concat(
+        [summarise(df, "all_pairs"), summarise(_one_to_one(df), "one_to_one")]
+    ).sort("population", "group")
+    with pl.Config(tbl_rows=30, tbl_cols=-1, tbl_width_chars=200):
+        print(table)
+    u.save_table(table, "publication_timing_by_source", output_dir)

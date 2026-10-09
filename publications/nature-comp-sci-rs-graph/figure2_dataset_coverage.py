@@ -16,6 +16,8 @@ import polars as pl
 import utils as u
 from datasets import DatasetDict, load_dataset
 
+from rs_graph.utils.code_host_parsing import parse_code_host_url
+
 ###############################################################################
 
 
@@ -422,3 +424,162 @@ def candidate_figure2c_mined_share_by_field(output_dir: Path = u.OUTPUT_DIR) -> 
         f"year): 2025 n={n_2025:,}, 2024 n={n_2024:,}. Current year excluded from the "
         f"candidates: {current_year}."
     )
+
+
+def pwc_by_year_check(output_dir: Path = u.OUTPUT_DIR) -> None:
+    """
+    Seed vs. mined pair counts by publication year, with Papers with Code split out from the
+    other seed sources (`pwc_by_year_check.csv`), plus the same counts by publication
+    half-year (`pwc_by_half_year_check.csv`): PwC stopped adding links in July 2025, so its
+    2025 coverage is partial and the drop concentrates in second-half publications.
+    """
+    df = u.load_filtered_pairs(top_n_fields=10).with_columns(
+        pl.col("link_processing_iteration").is_null().alias("is_seed"),
+        (pl.col("dataset_source_name") == "pwc").alias("is_pwc"),
+        pl.when(pl.col("document_publication_date_parsed").dt.month() <= 6)
+        .then(pl.lit("Jan-Jun"))
+        .otherwise(pl.lit("Jul-Dec"))
+        .alias("publication_half_year"),
+    )
+
+    def counts(keys: list[str]) -> pl.DataFrame:
+        return (
+            df.group_by(keys)
+            .agg(
+                pl.len().alias("total_pairs"),
+                pl.col("is_seed").sum().alias("seed_pairs"),
+                (~pl.col("is_seed")).sum().alias("mined_pairs"),
+                pl.col("is_pwc").sum().alias("pwc_seed_pairs"),
+                (pl.col("is_seed") & ~pl.col("is_pwc")).sum().alias("non_pwc_seed_pairs"),
+            )
+            .sort(keys)
+        )
+
+    by_year = counts(["document_publication_year"])
+    by_half_year = counts(["document_publication_year", "publication_half_year"])
+    print(by_year)
+    print(by_half_year.filter(pl.col("document_publication_year") >= 2023))
+    u.save_table(by_year, "pwc_by_year_check", output_dir)
+    u.save_table(by_half_year, "pwc_by_half_year_check", output_dir)
+
+
+def _pwc_row_repo_key(repo_url: str) -> tuple[str, str] | None:
+    """Lowercased (owner, name) for a PwC repo URL, or None when the ingestion pipeline's
+    code-host parser would reject it as not a full GitHub repository URL.
+    """
+    try:
+        parsed = parse_code_host_url(repo_url)
+    except ValueError:
+        return None
+    if parsed.host != "github" or parsed.owner is None or parsed.name is None:
+        return None
+    return parsed.owner.lower(), parsed.name.lower()
+
+
+def pwc_retention_breakdown(output_dir: Path = u.OUTPUT_DIR) -> None:
+    """
+    Trace every author-provided ("official") Papers with Code link to where it ends up:
+    rejected at source parsing (no arXiv ID; not a GitHub repository URL), retained as a
+    PwC pair, present under another route, or absent because its article and/or repository
+    never entered the database (ingestion errors are not in the published dataset, so the
+    error behind each absent link can't be traced from here). Rows are PwC link rows, the
+    same denominator as `pwc_coverage_pct` in `figure2_summary_stats.csv`.
+    """
+    pwc_ds = load_dataset("pwc-archive/links-between-paper-and-code")
+    assert isinstance(pwc_ds, DatasetDict)
+    pwc_df = pwc_ds["train"].to_polars()
+    assert isinstance(pwc_df, pl.DataFrame)
+    pwc_official = pwc_df.filter(pl.col("is_official"))
+
+    rows = []
+    for r in pwc_official.iter_rows(named=True):
+        arxiv_id = r["paper_arxiv_id"]
+        repo_key = _pwc_row_repo_key(r["repo_url"]) if arxiv_id else None
+        rows.append(
+            {
+                "doi": f"10.48550/arxiv.{arxiv_id}".lower() if arxiv_id else None,
+                "owner": repo_key[0] if repo_key else None,
+                "name": repo_key[1] if repo_key else None,
+                "source_step": (
+                    "no_arxiv_id"
+                    if not arxiv_id
+                    else ("not_a_github_repository_url" if repo_key is None else None)
+                ),
+            }
+        )
+    links = pl.DataFrame(rows)
+
+    # DOI -> document via primary and alternate DOIs (arXiv DOIs are often alternates).
+    documents = u.load_table("document").select(
+        pl.col("id").alias("document_id"), pl.col("doi").str.to_lowercase()
+    )
+    alternate_dois = u.load_table("document_alternate_doi").select(
+        "document_id", pl.col("doi").str.to_lowercase()
+    )
+    doi_to_document = pl.concat([documents, alternate_dois]).unique("doi", keep="first")
+    repositories = u.load_table("repository").select(
+        pl.col("id").alias("repository_id"),
+        pl.col("owner").str.to_lowercase(),
+        pl.col("name").str.to_lowercase(),
+    )
+    raw_links = u.load_table("document_repository_link").select(
+        "document_id", "repository_id", "dataset_source_id"
+    )
+    pwc_source_id = (
+        u.load_table("dataset_source").filter(pl.col("name") == "pwc").get_column("id").item()
+    )
+    filtered = (
+        u.load_filtered_pairs()
+        .select("document_id", "repository_id", "dataset_source_name")
+        .unique(["document_id", "repository_id"])
+    )
+
+    traced = (
+        links.join(doi_to_document, on="doi", how="left")
+        .join(repositories, on=["owner", "name"], how="left")
+        .join(
+            raw_links.group_by("document_id", "repository_id").agg(
+                (pl.col("dataset_source_id") == pwc_source_id).any().alias("has_pwc_link")
+            ),
+            on=["document_id", "repository_id"],
+            how="left",
+        )
+        .join(filtered, on=["document_id", "repository_id"], how="left")
+    )
+    traced = traced.with_columns(
+        pl.when(pl.col("source_step").is_not_null())
+        .then(pl.col("source_step"))
+        .when(pl.col("document_id").is_null() & pl.col("repository_id").is_null())
+        .then(pl.lit("article_and_repository_absent"))
+        .when(pl.col("document_id").is_null())
+        .then(pl.lit("article_absent"))
+        .when(pl.col("repository_id").is_null())
+        .then(pl.lit("repository_absent"))
+        .when(pl.col("dataset_source_name") == "pwc")
+        .then(pl.lit("retained_as_pwc_pair"))
+        .when(pl.col("dataset_source_name").is_not_null())
+        .then(pl.lit("retained_under_another_route"))
+        .when(pl.col("has_pwc_link").fill_null(False))
+        .then(pl.lit("pwc_link_removed_by_standard_filters"))
+        .when(pl.col("has_pwc_link").is_not_null())
+        .then(pl.lit("linked_only_by_another_route_below_filters"))
+        .otherwise(pl.lit("article_and_repository_present_not_linked"))
+        .alias("outcome")
+    )
+    breakdown = (
+        traced.group_by("outcome")
+        .agg(pl.len().alias("n_pwc_link_rows"))
+        .with_columns(
+            (100 * pl.col("n_pwc_link_rows") / pwc_official.height).alias("pct_of_official")
+        )
+        .sort("n_pwc_link_rows", descending=True)
+    )
+    print(f"Official PwC link rows: {pwc_official.height:,}")
+    print(breakdown)
+    print(
+        "Rows retained under another route, by route:",
+        traced.filter(pl.col("outcome") == "retained_under_another_route")
+        .get_column("dataset_source_name")
+        .value_counts(),
+    )
+    u.save_table(breakdown, "pwc_retention_breakdown", output_dir)
