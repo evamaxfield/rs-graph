@@ -39,7 +39,7 @@ Separately, researchers interested in Science of Science (SciSci) have attempted
 
 We introduce the Research Software Graph (RS-Graph), a network of 309,959 article-repository pairs linking scientific articles to their official source code repositories. We define an ``official'' article-repository pair as one in which the repository stores the analysis, visualization, or other processing and software code which produced the results described in the article, or, for software papers, the repository holds the software the article describes. Stated another way, in the case where the authors of an article didn't provide a code availability statement, an inferred article-repository pair should link to the repository that would reasonably be named in a code availability statement if one were added to the paper.
 
-RS-Graph is structured as a network composed of four types of nodes: articles, repositories, researchers (OpenAlex author records), and developer accounts (e.g., GitHub accounts). Nodes in the graph are connected via four types of edges: article-repository links (connecting articles to their official code implementations), authorships (connecting researchers to their authored articles), code contributions (connecting developer accounts to the repositories they have made direct code contributions to), and researcher-developer-account identities (connecting researchers to their own developer accounts) (Figure~\ref{fig:overview}).
+RS-Graph is structured as a network composed of four types of nodes: articles, repositories, researchers (OpenAlex author records), and developer accounts (e.g., GitHub accounts). Nodes in the graph are connected via four types of edges: article-repository links (connecting articles to their official code implementations), authorships (connecting researchers to their authored articles), code contributions (connecting developer accounts to the repositories they have made direct code contributions to), and researcher-developer-account identities (connecting researchers to their own developer accounts) (Fig.~\ref{fig:overview}).
 
 Along with each node in the network, we include metadata, bibliometric information, and parsed supporting content (see Supplementary Table S2 for the full dataset description). In addition, where possible, each article-repository pair within RS-Graph provides up to three views of software use. The three views are mentions of software extracted from the article's full text as provided by the SoftCite-2025 dataset~\cite{howison_2025_15149379}, names of software imported in Python and R source code files, and the names of software listed in dependency manifest files (files such as requirements.txt or DESCRIPTION that list the packages a project depends on).
 
@@ -59,7 +59,7 @@ Along with each node in the network, we include metadata, bibliometric informati
 \end{figure}
 %TC:endignore
 
-RS-Graph is made possible due to two key methodological contributions: our Article-Repository Matching Model (ARMM), which is able to infer official article-repository pairs, and our process for iteratively mining the constructed network of articles, repositories, researchers, and developer accounts, to find both new researcher-developer-account identities and article-repository pairs. We first build upon the work from Brown, Slaughter, and Weber~\cite{brown2026code} in their development of an author--developer account matching model, which we refer to as the ADAMM for shorthand, for inferring researcher-developer-account shared identities. Specifically, we first seed the network with article-repository pairs (``seed'' pairs, taken from existing collections where authors or publishers state the link) from five preexisting sources. We use the ADAMM to infer researcher-developer-account identities from these seed pairs. Then, we add additional article-repository pairs and researcher-developer-account identities by iteratively comparing and scoring the publications and repositories of existing researcher-developer-account identities, before forming new identities from the newly established pairs (Figure~\ref{fig:overview}C). Our mining process supplies not only 37\% of all article-repository pairs in the seeded or high-precision subset of RS-Graph, but additionally enables continued expansion of the dataset over time.
+RS-Graph is made possible due to two key methodological contributions: our Article-Repository Matching Model (ARMM), which is able to infer official article-repository pairs, and our process for iteratively mining the constructed network of articles, repositories, researchers, and developer accounts, to find both new researcher-developer-account identities and article-repository pairs. We first build upon the work from Brown, Slaughter, and Weber~\cite{brown2026code} in their development of an author--developer account matching model, which we refer to as the ADAMM for shorthand, for inferring researcher-developer-account shared identities. Specifically, we first seed the network with article-repository pairs (``seed'' pairs, taken from existing collections where authors or publishers state the link) from five preexisting sources. We use the ADAMM to infer researcher-developer-account identities from these seed pairs. Then, we add additional article-repository pairs and researcher-developer-account identities by iteratively comparing and scoring the publications and repositories of existing researcher-developer-account identities, before forming new identities from the newly established pairs (Fig.~\ref{fig:overview}C). Our mining process supplies not only 37\% of all article-repository pairs in the seeded or high-precision subset of RS-Graph, but additionally enables continued expansion of the dataset over time.
 
 We make RS-Graph, the Article-Repository Matching Model (ARMM), and our processing methodology publicly available to support multiple research communities in their work towards understanding the products and practices of contemporary science (see Data and Code availability).
 
@@ -71,7 +71,7 @@ RS-Graph is a multi-disciplinary dataset of ``official'' article-repository pair
 
 We seed RS-Graph by first combining five pre-existing resources. The five pre-existing resources are the author-provided subset of Papers with Code, data and code availability statements in PLOS articles, software articles from the Journal of Open Source Software (JOSS) and SoftwareX, and repository links extracted from code-sharing statements in the SoftCite-2025 dataset~\cite{howison_2025_15149379}. While Papers with Code is concentrated in Computer Science, PLOS and SoftCite-2025 span a much broader range of fields and give our mining process a starting point outside of a single domain. Unlike the other four sources, seed pairs from SoftCite-2025 relied upon a supplementary model for predicting whether a code-sharing statement in an article's full-text pointed to an ``official'' code repository or merely to a piece of software used during the course of research (see Methods).
 
-We then gather metadata for each article and repository from OpenAlex, Semantic Scholar, and GitHub, and use the ADAMM to link each article's authors to their GitHub developer accounts, forming researcher-developer-account identities (Figure~\ref{fig:overview}C; Methods). This version extends the earlier release of RS-Graph by Brown, Slaughter, and Weber~\cite{brown2026code}, which contained 163,292 pairs from Papers with Code, PLOS, JOSS, and SoftwareX, with the SoftCite-2025 seeds, updated seed data, the mining workflow, and the three views of software use (Supplementary Table S1).
+We then gather metadata for each article and repository from OpenAlex, Semantic Scholar, and GitHub, and use the ADAMM to link each article's authors to their GitHub developer accounts, forming researcher-developer-account identities (Fig.~\ref{fig:overview}C; Methods). This version extends the earlier release of RS-Graph by Brown, Slaughter, and Weber~\cite{brown2026code}, which contained 163,292 pairs from Papers with Code, PLOS, JOSS, and SoftwareX, with the SoftCite-2025 seeds, updated seed data, the mining workflow, and the three views of software use (Supplementary Table S1).
 
 We then expand RS-Graph by iteratively processing the constructed network of articles, repositories, researchers, and developer accounts. Specifically, for each researcher with a linked GitHub profile, we use the ARMM to score each of their publications against each repository they have directly contributed code to, and apply the ADAMM to the authors of each newly inferred pair (Methods). We conduct three standard rounds of mining, with most mined pairs found in the first round, followed by two extended rounds that relax two of the pipeline's constraints (Table~\ref{tab:mining}; Methods).
 
@@ -133,7 +133,7 @@ Node or edge type & Count \\
 \end{table}
 %TC:endignore
 
-Additionally, our mining process diversifies the dataset by finding proportionally more pairs tied to older and non-CS publications (Figure~\ref{fig:coverage}B) than the seeded portion of the dataset provided. RS-Graph as a whole contains article-repository pairs across 26 fields (the OpenAlex field of each article's primary topic), of which, computer science contributes roughly half of all pairs (49.2\%). Pairs found via our iterative mining process account for 44.0\% of pairs outside of computer science versus 29.2\% of pairs within computer science (Figure~\ref{fig:coverage}A). Further, pairs found from mining make up the majority of pairs in Environmental Science (58.7\%), Biochemistry, Genetics and Molecular Biology (55.6\%), and Medicine (50.6\%). Finally, mined pairs, have grown every year since 2008, and grew the most in 2025, from 16,010 to 20,715 (Figure~\ref{fig:coverage}B).
+Additionally, our mining process diversifies the dataset by finding proportionally more pairs tied to older and non-CS publications (Fig.~\ref{fig:coverage}B) than the seeded portion of the dataset provided. RS-Graph as a whole contains article-repository pairs across 26 fields (the OpenAlex field of each article's primary topic), of which, computer science contributes roughly half of all pairs (49.2\%). Pairs found via our iterative mining process account for 44.0\% of pairs outside of computer science versus 29.2\% of pairs within computer science (Fig.~\ref{fig:coverage}A). Further, pairs found from mining make up the majority of pairs in Environmental Science (58.7\%), Biochemistry, Genetics and Molecular Biology (55.6\%), and Medicine (50.6\%). Finally, mined pairs, have grown every year since 2008, and grew the most in 2025, from 16,010 to 20,715 (Fig.~\ref{fig:coverage}B).
 
 %TC:ignore
 \begin{figure}[ht]
@@ -157,21 +157,21 @@ Next, we document the characteristics of RS-Graph as a whole so that users can u
 \end{figure}
 %TC:endignore
 
-Repositories in RS-Graph have a median of 1 contributor (64.6\% have exactly one), with 15 commits, spanning 244 days from creation to last push. When split by article publication date, the median repository is created 96 days prior to article publication (or pre-print availability), and receives its last push 117 days after (Figure~\ref{fig:development}A). Development periods differ by article-repository pair source (Supplementary Table S4). JOSS and SoftwareX are software papers, which explains their long development timelines, while Papers with Code is mostly preprints, which is why they have shorter timelines (repositories linked to preprints are created a median of 26 days before publication, compared with 175 days for journal articles).
+Repositories in RS-Graph have a median of 1 contributor (64.6\% have exactly one), with 15 commits, spanning 244 days from creation to last push. When split by article publication date, the median repository is created 96 days prior to article publication (or pre-print availability), and receives its last push 117 days after (Fig.~\ref{fig:development}A). Development periods differ by article-repository pair source (Supplementary Table S4). JOSS and SoftwareX are software papers, which explains their long development timelines, while Papers with Code is mostly preprints, which is why they have shorter timelines (repositories linked to preprints are created a median of 26 days before publication, compared with 175 days for journal articles).
 
 Over a quarter of pairs (27.3\%) show no push after publication, so many repositories are snapshots of the code at publication rather than maintained projects. Finally, the 244-day span from creation to last push for repositories in RS-Graph, is far longer than the 9.9-day median active span of GitHub projects in general~\cite{kalliamvakou2016promises}.
 
-Just over half of the repositories in RS-Graph are written in Python, and Python usage increases over time for repositories in the dataset. Specifically, 53.7\% of repositories in RS-Graph have a primary language of Python, and the percent of repositories with Python as their primary language rose from 22.2\% in 2012 to 57.6\% in 2025. Repositories that GitHub labels as primarily Jupyter Notebook (15.7\% of repositories with a known primary language) are not counted as Python here, although we do extract imports from their notebooks for our description of imported software in these repositories (Methods). Further, the rise of Python adoption in RS-Graph repositories is found across every field (Figure~\ref{fig:development}B).
+Just over half of the repositories in RS-Graph are written in Python, and Python usage increases over time for repositories in the dataset. Specifically, 53.7\% of repositories in RS-Graph have a primary language of Python, and the percent of repositories with Python as their primary language rose from 22.2\% in 2012 to 57.6\% in 2025. Repositories that GitHub labels as primarily Jupyter Notebook (15.7\% of repositories with a known primary language) are not counted as Python here, although we do extract imports from their notebooks for our description of imported software in these repositories (Methods). Further, the rise of Python adoption in RS-Graph repositories is found across every field (Fig.~\ref{fig:development}B).
 
-Of particular note to researchers interested in reproducibility, repositories in RS-Graph have increasingly included Python- or R-language dependency manifests over time. Repositories containing a Python- or R-language dependency manifest rose from 17.0\% in 2017 to 42.5\% in 2025 (Figure~\ref{fig:development}C).
+Of particular note to researchers interested in reproducibility, repositories in RS-Graph have increasingly included Python- or R-language dependency manifests over time. Repositories containing a Python- or R-language dependency manifest rose from 17.0\% in 2017 to 42.5\% in 2025 (Fig.~\ref{fig:development}C).
 
-For researchers interested in reusing the source-code of repositories in RS-Graph for training and evaluation of LLMs and agentic systems, roughly one-third of repositories in RS-Graph include permissive licensing. Overall, 35.8\% of repositories include a permissive license (e.g., MIT, Apache-2.0, or BSD), while 49.9\% have no license, 8.6\% have a copyleft license (e.g., GPL), and 5.7\% are under other, non-standard licenses that GitHub could not match (Figure~\ref{fig:development}D). GitHub's license detection misses licenses stated in non-standard files, so the 49.9\% with no license is an upper bound.
+For researchers interested in reusing the source-code of repositories in RS-Graph for training and evaluation of LLMs and agentic systems, roughly one-third of repositories in RS-Graph include permissive licensing. Overall, 35.8\% of repositories include a permissive license (e.g., MIT, Apache-2.0, or BSD), while 49.9\% have no license, 8.6\% have a copyleft license (e.g., GPL), and 5.7\% are under other, non-standard licenses that GitHub could not match (Fig.~\ref{fig:development}D). GitHub's license detection misses licenses stated in non-standard files, so the 49.9\% with no license is an upper bound.
 
-One clear skew in the characteristics of RS-Graph, is that article-repository pairs are, on average, associated with more citations than similar articles. We use OpenAlex's Field-Weighted Citation Impact (FWCI) to normalize article citations so that 1.0 is the average four-year citations of an article in a given subfield, publication-year, and document-type. FWCI is available from OpenAlex for 57.6\% of articles in RS-Graph, and the median article in our dataset has an FWCI of 2.04, roughly twice the average of an article in the respective cohort (Figure~\ref{fig:development}E). Articles without an FWCI are mostly preprints (91.8\%). The skew is weaker among mined pairs, where the median article has an FWCI of 1.59, compared to 2.47 for seed articles (Supplementary Table S3).
+One clear skew in the characteristics of RS-Graph, is that article-repository pairs are, on average, associated with more citations than similar articles. We use OpenAlex's Field-Weighted Citation Impact (FWCI) to normalize article citations so that 1.0 is the average four-year citations of an article in a given subfield, publication-year, and document-type. FWCI is available from OpenAlex for 57.6\% of articles in RS-Graph, and the median article in our dataset has an FWCI of 2.04, roughly twice the average of an article in the respective cohort (Fig.~\ref{fig:development}E). Articles without an FWCI are mostly preprints (91.8\%). The skew is weaker among mined pairs, where the median article has an FWCI of 1.59, compared to 2.47 for seed articles (Supplementary Table S3).
 
 The visibility of the linked repositories can be measured via proxy by using each repository's ``stargazer'' count. A repository's stargazer count is the number of individuals who have ``starred'' the repository on GitHub, an act similar to ``liking'' or ``bookmarking'' a piece of content on other social media platforms. We introduce a repository's Field-Weighted Stargazer Impact (FWSI) as the repository counterpart to an article's FWCI. We use a similar formula to compute a repository's FWSI with modifications for repository and stargazer information. We also normalize among RS-Graph's linked repositories, so 1.0 means average for a linked repository in its peer group and not for GitHub as a whole (more details are available in Methods).
 
-Kept as stargazers count or normalized to FWSI, both form negligible to moderate positive correlations with their citation and FWCI counterparts (Figure~\ref{fig:development}F). None of these correlations are strong, suggesting that stargazers are a related but distinct signal from citations, and possibly useful for altmetrics~\cite{priem2011altmetrics}.
+Kept as stargazers count or normalized to FWSI, both form negligible to moderate positive correlations with their citation and FWCI counterparts (Fig.~\ref{fig:development}F). None of these correlations are strong, suggesting that stargazers are a related but distinct signal from citations, and possibly useful for altmetrics~\cite{priem2011altmetrics}.
 
 RS-Graph may skew towards high-impact articles as the authors of those articles are simply more likely to make their code available and discoverable. As such, this should not be treated as a finding of the benefit of openly accessible code, as has been shown previously for the citation of openly accessible data~\cite{colavizza2020citation} without additional research and verification.
 
@@ -229,16 +229,7 @@ R & ggplot2 & 5,780 & 1,162 & 425 & 73.5 \\
 \end{table}
 %TC:endignore
 
-Articles name few of the libraries their code imports. We define the ``import mention rate'' as the share of a repository's distinct imported libraries that its article names, and the ``dependency mention rate'' as the same share for its depended upon libraries, after fuzzy string alignment of software names (Methods). When filtered to articles published through 2022 with at least one mention and at least one Python or R import (34,014 article-repository pairs, which we call mention-eligible pairs), article-repository pairs in RS-Graph have an import mention rate of 7.00\%, differing slightly by field and over time (Figure~\ref{fig:mentionrate}). Additionally, 56.74\% of articles in the same filtered set, mention none of their imported software at all. The dependency mention rate for the same period is 2.34\%, across the 14,586 pairs with at least one mention and at least one listed dependency (Supplementary Table S6).
-
-%TC:ignore
-\begin{figure}[ht]
-\centering
-\includegraphics[width=\textwidth]{fig4_mention_rate.pdf}
-% TITLE: new, from existing wording, for Eva review
-\caption{\textbf{Import mention rate by field and article publication year.} Import mention rate among mention-eligible pairs (the conditional rate), by field and article publication year, through 2022; the six most common fields, with field-year cells of fewer than 30 mention-eligible pairs omitted.}\label{fig:mentionrate}
-\end{figure}
-%TC:endignore
+Articles name few of the libraries their code imports. We define the ``import mention rate'' as the share of a repository's distinct imported libraries that its article names, and the ``dependency mention rate'' as the same share for its depended upon libraries, after fuzzy string alignment of software names (Methods). When filtered to articles published through 2022 with at least one mention and at least one Python or R import (34,014 article-repository pairs, which we call mention-eligible pairs), article-repository pairs in RS-Graph have an import mention rate of 7.00\%, differing slightly by field and over time (Supplementary Fig. S2). Additionally, 56.74\% of articles in the same filtered set, mention none of their imported software at all. The dependency mention rate for the same period is 2.34\%, across the 14,586 pairs with at least one mention and at least one listed dependency (Supplementary Table S6).
 
 We next ask which imported libraries go unmentioned, using an exploratory logistic regression focused on two library-level predictors: a software's popularity and its age. We treat whether an article mentions a software as the outcome, and define a software's popularity as the natural log of the cumulative number of article-repository pairs importing the library, up to and including the article's publication year, and its age as the number of years since the software was first imported by any repository (floored at 2008, the year GitHub became publicly available). Included in our regression are controls for article field (the five largest fields plus ``Other''), document type, publication year, and we additionally cluster errors by both article and library. We find that a software's popularity is negatively associated with its being mentioned. In our primary model, fit on all article-repository pairs with imports whose article was published through 2022, each log-unit increase in popularity comes with 8.5\% lower odds of the software being mentioned in the paper (95\% CI $-$14.8\% to $-$1.8\%, p~=~0.014), while a software's age is not significant (p~=~0.51). We test twelve configurations of the model, and the popularity coefficient is negative in all twelve, though not significant in all of them, including the same model fit only on mention-eligible pairs ($-$6.7\%, p~=~0.069; Methods; Supplementary Table S7).
 
@@ -274,28 +265,13 @@ Our descriptions of coverage, characteristics, and even software used, are just 
 %TC:break Methods
 \section{Methods}\label{sec:methods}
 
-%TC:ignore
-\begingroup
-\renewcommand{\tablename}{Methods Table}%
-\renewcommand{\theHtable}{methods.\arabic{table}}%
-\setcounter{table}{0}%
-\begin{table}[ht]
-\caption{\textbf{Classification models used in constructing RS-Graph, their task, held-out performance and availability.} Availability gives HuggingFace repository IDs; the links are in Code availability.}\label{tab:models}
-\footnotesize
-\begin{tabular}{@{}p{0.17\textwidth}p{0.25\textwidth}p{0.19\textwidth}p{0.29\textwidth}@{}}
-\toprule
-Model & Task & Performance & Availability \\
-\midrule
-Article-Repository Matching Model (ARMM) & Predicts whether an article-repository pair forms an ``official'' pair & Macro F1 0.975; precision 0.975; recall 0.975 & Weights: \texttt{evamxb/\allowbreak binary-article-repo-\allowbreak em-clf-optimized}; training data: \texttt{evamxb/\allowbreak article-repo-em-dataset} \\
-\addlinespace
-Author--developer account matching model (ADAMM) & Predicts whether a researcher and a GitHub developer account represent the same individual & Binary F1 0.944; precision 0.938; recall 0.950; cross-dataset F1 0.88--0.90 & Weights: \texttt{evamxb/\allowbreak dev-author-em-clf}; training and evaluation data on request from Harvard Dataverse (doi:10.7910/DVN/KPYVI1) \\
-\addlinespace
-Software Repository Sharing Statement Classifier & Predicts whether a software mention context contains a statement linking an article to its official code repository & Macro F1 0.827; precision 0.860; recall 0.815 & Weights: \texttt{evamxb/\allowbreak software-mentions-\allowbreak repo-clf}; training data in the \texttt{sci-soft-models} repository \\
-\botrule
-\end{tabular}
-\end{table}
-\endgroup
-%TC:endignore
+Classification models used in constructing RS-Graph, and where each is described:
+
+\begin{itemize}
+\item \textbf{Article-Repository Matching Model (ARMM):} \nameref{subsec:m-armm}.
+\item \textbf{Author--developer account matching model (ADAMM):} \nameref{subsec:m-identities}.
+\item \textbf{Software Repository Sharing Statement Classifier:} \nameref{subsec:m-seeds}.
+\end{itemize}
 
 \subsection{Seed article-repository pairs}\label{subsec:m-seeds}
 
@@ -356,7 +332,7 @@ Software Repository Sharing Statement Classifier & Predicts whether a software m
   \item \textbf{Task:} is an article author the same person as a GitHub account? Exact matching fails (``J. Doe'' vs ``Jane Doe'').
   \item \textbf{Model:} DeBERTa-v3-base on author name, username and display name, trained on 2,999 annotated JOSS candidates (2 annotators, 451 matches).
     \begin{itemize}[$\circ$]
-    \item Binary F1 0.944 (P 0.938, R 0.950); 0.88--0.90 on PLOS, SoftwareX and Papers with Code (Methods Table~\ref{tab:models}).
+    \item Binary F1 0.944 (P 0.938, R 0.950); 0.88--0.90 on PLOS, SoftwareX and Papers with Code.
     \end{itemize}
   \item \textbf{Threshold:} 0.97, as in Brown, Slaughter and Weber. 171,802 predicted identities $\rightarrow$ 163,651 ($-$4.74\%).
   \item \textbf{Counted only via a retained pair} linking the researcher to the account.
@@ -389,6 +365,7 @@ Software Repository Sharing Statement Classifier & Predicts whether a software m
   \end{itemize}
 \item \textbf{Input, features and model}
   \begin{itemize}[--]
+  \item \textbf{Task:} predicts whether an article-repository pair forms an ``official'' pair.
   \item \textbf{Input:} one XML string per pair, shown in Supplementary Note 2 (the only callout for that note).
   \item \textbf{Limits:} abstract truncated to 3,000 characters and README to 6,000 (\texttt{<TRUNC/>} marks a cut). Missing fields are written as ``None''. Maximum 8,192 tokens.
   \item \textbf{Feature ablation:} six candidate fields dropped.
@@ -397,7 +374,8 @@ Software Repository Sharing Statement Classifier & Predicts whether a software m
   \end{itemize}
 \item \textbf{Held-out performance and the 0.9994 threshold}
   \begin{itemize}[--]
-  \item \textbf{Stable by field and period:} lowest field Physics \& Astronomy at 0.951; lowest period pre-2016 at 0.950 (Supplementary Fig. S2).
+  \item \textbf{Overall:} macro F1 0.975 (P 0.975, R 0.975) on the held-out test set.
+  \item \textbf{Stable by field and period:} lowest field Physics \& Astronomy at 0.951; lowest period pre-2016 at 0.950 (Supplementary Fig. S3).
   \item \textbf{Small variation by source:} lowest on SoftCite-2025 positives (binary F1 0.968).
   \item \textbf{README length matters:} macro F1 0.957 for READMEs under 100 characters vs 0.979 at 1,601--3,200. This motivates the mining README filter.
   \item \textbf{Threshold 0.9994:} the highest-recall threshold with held-out precision $\geq$ 0.999.
@@ -559,39 +537,24 @@ Software Repository Sharing Statement Classifier & Predicts whether a software m
   \item \textbf{Scope:} each repository counts once, with its field and type taken from its first linked pair. Only repositories $\geq$ 2 years old at collection are scored.
   \item \textbf{Why lifetime stars:} full star histories are infeasible to fetch at this scale. Grouping by creation year stands in for a fixed citation window.
   \item \textbf{Why field, not subfield:} subfield peer groups would be too small.
-  \item \textbf{Differences in full:} Methods Table~\ref{tab:fwsi}.
+  \item \textbf{Differences in full, by component:}
+    \begin{itemize}[$\circ$]
+    \item \textbf{Numerator:} FWCI: Citations in the publication year and the three following years; FWSI: Lifetime stargazers (no fixed window).
+    \item \textbf{Field grain:} FWCI: Subfield; FWSI: Field: the nine most common OpenAlex fields plus ``Other''.
+    \item \textbf{Year:} FWCI: Article publication year; FWSI: Repository creation year.
+    \item \textbf{Type:} FWCI: Work type (journal articles and conference proceedings split); FWSI: Linked article's type: article, preprint, or other.
+    \item \textbf{Reference set:} FWCI: All works in OpenAlex; FWSI: RS-Graph's linked repositories only.
+    \item \textbf{Eligibility:} FWCI: Works that OpenAlex scores; FWSI: Repositories at least two years old at collection time.
+    \end{itemize}
   \end{itemize}
 \end{itemize}
-
-%TC:ignore
-\begingroup
-\renewcommand{\tablename}{Methods Table}%
-\renewcommand{\theHtable}{methods.\arabic{table}}%
-\begin{table}[ht]
-\caption{\textbf{FWSI adapts OpenAlex's FWCI to repositories; differences by component.}}\label{tab:fwsi}
-\footnotesize
-\begin{tabular}{@{}p{0.16\textwidth}p{0.38\textwidth}p{0.38\textwidth}@{}}
-\toprule
- & FWCI (OpenAlex) & FWSI (this work) \\
-\midrule
-Numerator & Citations in the publication year and the three following years & Lifetime stargazers (no fixed window) \\
-Field grain & Subfield & Field: the nine most common OpenAlex fields plus ``Other'' \\
-Year & Article publication year & Repository creation year \\
-Type & Work type (journal articles and conference proceedings split) & Linked article's type: article, preprint, or other \\
-Reference set & All works in OpenAlex & RS-Graph's linked repositories only \\
-Eligibility & Works that OpenAlex scores & Repositories at least two years old at collection time \\
-\botrule
-\end{tabular}
-\end{table}
-\endgroup
-%TC:endignore
 
 \subsection{Statistical analysis}\label{subsec:m-statistics}
 
 \begin{itemize}
 \item \textbf{Mention rates under two denominators}
   \begin{itemize}[--]
-  \item \textbf{Conditional rate (headline, Fig.~\ref{fig:mentionrate}):} pairs with $\geq$ 1 extracted mention (``mention-eligible''), n = 34,014 $\rightarrow$ 7.00\%. Extraction failure can't drag it down.
+  \item \textbf{Conditional rate (headline, Supplementary Fig. S2):} pairs with $\geq$ 1 extracted mention (``mention-eligible''), n = 34,014 $\rightarrow$ 7.00\%. Extraction failure can't drag it down.
   \item \textbf{Unconditional rate:} all pairs with $\geq$ 1 import, n = 97,926 $\rightarrow$ 2.49\%. It describes the corpus, extraction misses included.
   \item \textbf{Both denominators:} in Supplementary Table S6.
   \end{itemize}
@@ -636,9 +599,15 @@ RS-Graph is released in two versions on HuggingFace, both under a CC BY 4.0 lice
 
 The full data collection, processing, and mining workflow is available at \url{https://github.com/evamaxfield/rs-graph} and archived on Zenodo (\textcolor{red}{[LINK: Zenodo DOI of the workflow archive, minted at release]}). The replication package for every figure, table, and statistic reported in this article is in the same repository, at \texttt{publications/nature-comp-sci-rs-graph/}. The ARMM weights and its training dataset are available on HuggingFace (\url{https://huggingface.co/evamxb/binary-article-repo-em-clf-optimized} and \url{https://huggingface.co/datasets/evamxb/article-repo-em-dataset}). The ARMM, the author--developer account matching model of Brown, Slaughter, and Weber~\cite{brown2026code} (\url{https://huggingface.co/evamxb/dev-author-em-clf}), and the Software Repository Sharing Statement Classifier (\url{https://huggingface.co/evamxb/software-mentions-repo-clf}) are distributed with wrapper inference code through the \texttt{sci-soft-models} Python package (\url{https://github.com/evamaxfield/sci-soft-models}). The notebook conversion and import extraction tools are available at \url{https://github.com/evamaxfield/py-nb-to-src} and \url{https://github.com/evamaxfield/py-extract-imported-libraries}.
 
+\bibliography{main}
+
 \bmhead{Acknowledgements}
 
 \textcolor{red}{[ACKNOWLEDGEMENTS: funding sources, annotators, and other contributors]}
+
+\bmhead{Funding}
+
+\textcolor{red}{[FUNDING: funder and grant number for each author]}
 
 \bmhead{Author contributions}
 
@@ -649,6 +618,5 @@ The full data collection, processing, and mining workflow is available at \url{h
 \textcolor{red}{[COMPETING INTERESTS: statement for each author]}
 
 %TC:endignore
-\bibliography{main}
 
 \end{document}
