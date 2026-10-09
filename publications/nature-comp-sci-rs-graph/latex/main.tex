@@ -317,7 +317,7 @@ Classification models used in constructing RS-Graph, and where each is described
 \item \textbf{Metadata enrichment and exclusion rules}
   \begin{itemize}[--]
   \item \textbf{DOI resolution:} Semantic Scholar maps preprints to later published versions. The preprint DOI is kept as an alternate.
-  \item \textbf{Article records} from OpenAlex~\cite{priem2022openalex}. Field = the field of the article's primary topic. The full field list is in Supplementary Table S2.
+  \item \textbf{Article records} from OpenAlex~\cite{priem2022openalex}. Field = the field of the article's primary topic. The stored article metadata is listed in Supplementary Table S2.
   \item \textbf{Researchers:} OpenAlex author records.
   \item \textbf{Repositories:} GitHub URLs normalised (GitHub Pages resolved); metadata, README and contributors from the GitHub API.
   \item \textbf{Exclusion:} articles not found via Semantic Scholar or OpenAlex, and repositories not found via the GitHub API, are dropped.
@@ -366,7 +366,7 @@ Classification models used in constructing RS-Graph, and where each is described
 \item \textbf{Input, features and model}
   \begin{itemize}[--]
   \item \textbf{Task:} predicts whether an article-repository pair forms an ``official'' pair.
-  \item \textbf{Input:} one XML string per pair, shown in Supplementary Note 2 (the only callout for that note).
+  \item \textbf{Input:} one XML string per pair, shown in Supplementary Note 2.
   \item \textbf{Limits:} abstract truncated to 3,000 characters and README to 6,000 (\texttt{<TRUNC/>} marks a cut). Missing fields are written as ``None''. Maximum 8,192 tokens.
   \item \textbf{Feature ablation:} six candidate fields dropped.
   \item \textbf{Bases compared:} \texttt{gte-multilingual-base}~\cite{zhang2024mgte}, \texttt{ModernBERT-base}~\cite{warner2025smarter} and \texttt{bge-m3}~\cite{chen2024m3}. \texttt{gte-multilingual-base} was best on macro F1.

@@ -1,0 +1,331 @@
+\documentclass[pdflatex,sn-nature]{sn-jnl}% Same class and reference style as main.tex
+
+\usepackage{graphicx}%
+\usepackage{amsmath,amssymb,amsfonts}%
+\usepackage{xcolor}%
+\usepackage{textcomp}%
+\usepackage{booktabs}%
+\usepackage{array}%
+
+\unnumbered% Nature-style unnumbered section heads (sn-jnl macro)
+\renewcommand{\labelitemiii}{$\circ$}
+
+\graphicspath{{fig/supp/}}
+
+\raggedbottom
+
+% Supplementary float labels: "Supplementary Fig. S1", "Supplementary Table S1".
+\renewcommand{\figurename}{Supplementary Fig.}
+\renewcommand{\thefigure}{S\arabic{figure}}
+\renewcommand{\tablename}{Supplementary Table}
+\renewcommand{\thetable}{S\arabic{table}}
+\providecommand{\theHfigure}{}
+\renewcommand{\theHfigure}{S\arabic{figure}}
+\providecommand{\theHtable}{}
+\renewcommand{\theHtable}{S\arabic{table}}
+
+% Supplementary References continue the main list's numbering.
+% Set this to the number of distinct \cite keys in main.tex (37 on 2026-10-09).
+\newcommand{\SImainrefcount}{37}
+% natbib's thebibliography zeroes NAT@ctr when it opens, so the offset goes after it.
+\makeatletter
+\let\SIorigthebibliography\thebibliography
+\renewcommand{\thebibliography}[1]{%
+  \SIorigthebibliography{#1}%
+  \global\c@NAT@ctr=\SImainrefcount\relax}
+\makeatother
+
+\begin{document}
+
+\title{Supplementary Information for: \textcolor{red}{[TITLE TBD]}}
+
+\author*[1]{\fnm{Eva Maxfield} \sur{Brown}}\email{evamxb@uw.edu}
+
+\author[1]{\fnm{Nicholas} \sur{Weber}}\email{nmweber@uw.edu}
+
+\affil*[1]{\orgdiv{Information School}, \orgname{University of Washington}, \orgaddress{\city{Seattle}, \state{WA}, \country{USA}}}
+
+\maketitle
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Supplementary Notes
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section*{Supplementary Note 1: Co-authorship network connectivity before and after mining}\label{snote:network}
+
+\noindent\textcolor{red}{[TO WRITE]}
+\begin{itemize}
+\item \textbf{Central point:} mining connects the co-authorship network, as expected from snowball-style growth.
+  \begin{itemize}[--]
+  \item \textbf{Two networks:} seed only (co-authorships of seed-pair articles) vs seed and mined (the seeded or high-precision subset).
+  \item \textbf{Largest component:} 84.9\% of researchers (354,036 of 417,082 with $\geq$ 1 co-authorship edge) $\rightarrow$ 93.6\% (590,147 of 630,651).
+  \item \textbf{Components:} 14,145 $\rightarrow$ 9,387.
+  \item \textbf{Why:} every mined pair is found through a researcher who already authored an RS-Graph article, so the network grows outward from the seed sources' researchers.
+  \item \textbf{Construction, one clause:} an undirected network linking researchers who share an RS-Graph article; co-authorships outside RS-Graph aren't included.
+  \end{itemize}
+\end{itemize}
+
+% Hidden v7 prose (Supplementary Note 1, last sentence removed):
+% We describe how the network connectivity changes from before to after mining. We construct and compare two co-authorship networks: the first constructed from the co-authorships of articles provided by seed pairs (``seed only''), and a second from co-authorships from the seeded or high-precision subset which contains both seed and mined pairs (``seed and mined''). The largest connected component contains 84.9\% of researchers in the seed only network (354,036 of the 417,082 researchers with at least one co-authorship edge) and 93.6\% of researchers in the seed and mined network (590,147 of 630,651), and the number of connected components falls from 14,145 to 9,387. This increase is expected, as mining works much like snowball sampling: every mined pair is found through a researcher who already authored an article in RS-Graph, so RS-Graph grows outward from the researchers of the seed sources.
+
+\section*{Supplementary Note 2: ARMM input format}\label{snote:armminput}
+
+\begin{itemize}
+\item \textcolor{red}{[ARMM input XML template would go here: one example pair, with the article block (title, DOI, publication date, abstract) and the repository block (owner, name, description, primary language, fork status, creation and last-pushed datetimes, stargazers, forks, open issues, commits, size, topics, README), showing \texttt{<TRUNC/>} and ``None''.]}
+\end{itemize}
+
+\section*{Supplementary Note 3: Alignment between imports and declared dependencies}\label{snote:iou}
+
+\noindent\textcolor{red}{[TO WRITE]}
+\begin{itemize}
+\item \textbf{Central point:} among repositories with both views, alignment is flat over time; the rising unconditional series measures how manifests spread, not closer alignment.
+  \begin{itemize}[--]
+  \item \textbf{Definition:} the per-repository IoU of the aligned, normalized import and dependency name sets (PyPI, Conda, CRAN).
+  \item \textbf{Conditional IoU:} repositories with $\geq$ 1 import and $\geq$ 1 declared dependency.
+  \item \textbf{Unconditional IoU:} also admits repositories with only one view, at IoU = 0. Repositories with neither are excluded, since IoU is undefined on two empty sets.
+  \item \textbf{Trend test:} Spearman $\rho$ between publication year and the annual mean IoU.
+  \item \textbf{Conditional result:} 0.394 (2013) $\rightarrow$ 0.393 (2022), $\rho$ = 0.32, p = 0.365, 41,935 pairs through 2022.
+  \item \textbf{Unconditional result:} 0.125 (2012) $\rightarrow$ 0.189 (2022), $\rho$ = 0.936, p = $2.2\times10^{-5}$, 98,507 pairs. This tracks manifest adoption.
+  \end{itemize}
+\end{itemize}
+
+% Hidden v7 prose (Methods, Mention, Import, and Dependency Rates, second paragraph: the IoU definition):
+% Alignment between imports and declared dependencies is measured per repository as the Intersection over Union of the two normalized name sets, again reported under two denominators. The \emph{conditional} variant includes only repositories that have both at least one import and at least one declared dependency, and measures alignment among projects that could in principle align. The \emph{unconditional} variant additionally admits repositories with exactly one of the two views, entering them at IoU = 0; repositories with neither view are excluded, since IoU is undefined on two empty sets. Because manifest adoption rose steeply over the study period, the unconditional series tracks that adoption rather than any change in alignment, and we label it accordingly wherever it appears. Trends over time are tested with Spearman rank correlations between publication year and the annual mean IoU (Supplementary Note 3).
+%
+% Hidden v7 prose (Supplementary Note 3: the results):
+% Among repositories with both at least one import and at least one declared PyPI, Conda, or CRAN dependency (conditional IoU), the annual mean Intersection over Union of the two name sets is flat, at 0.394 in 2013 and 0.393 in 2022 (Spearman $\rho$ = 0.32, p = 0.365, 41,935 pairs through 2022). Admitting repositories with only one of the two views at IoU = 0 (unconditional IoU) produces a strong upward trend, from 0.125 in 2012 to 0.189 in 2022 ($\rho$ = 0.936, p = $2.2\times10^{-5}$, 98,507 pairs), which measures the spread of dependency manifests rather than closer alignment.
+
+\clearpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Supplementary Tables
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Table S1
+\begin{table}[p]
+\caption{\textbf{Prior resources linking scientific articles, code, and software use.} Resources are listed with the scope their own titles and descriptions report. ``Official pairs'' means links between an article and the repository holding its own code, as defined in the main text.}\label{stab:prior}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{68pt}>{\raggedright\arraybackslash}p{80pt}>{\raggedright\arraybackslash}p{58pt}>{\raggedright\arraybackslash}p{60pt}>{\raggedright\arraybackslash}p{42pt}>{\raggedright\arraybackslash}p{34pt}@{}}
+\toprule
+Resource & What it links & Fields & Official article--code pairs & Researcher--developer identities & Views of software use \\
+\midrule
+Papers with Code (author-provided and community links) & Papers to code implementations & Mostly computer science and machine learning & Author-provided links mixed with community reimplementations & No & None \\
+Linked\-Papers\-With\-Code (F\"{a}rber \& Lamprecht, 2023)~\cite{farber2023linked} & Papers with Code as an RDF knowledge graph & Machine learning & As in Papers with Code & No & None \\
+Science Data Lake (Wilinski, 2026)~\cite{wilinski2026science} & Eight scholarly sources joined by DOI, including Papers with Code & All fields (bibliometric); paper--code links from Papers with Code only & As in Papers with Code & No & None \\
+OpenAIRE Graph (Manghi et al., 2019)~\cite{manghi2019openaire} & Publication--software relations within a scholarly knowledge graph & All fields & Not distinguished from other publication--software relations & No & None \\
+Softcite dataset (Du et al., 2021)~\cite{du2021softcite} & Software mentions in articles & Biomedical and economic research & No & No & Mentions \\
+SoMeSci (Schindler et al., 2021)~\cite{schindler2021somesci} & Gold-standard knowledge graph of software mentions & Scientific articles & No & No & Mentions \\
+CZ Software Mentions (Istrate et al., 2022)~\cite{istrate2022large} & Software mentions in biomedical papers, some disambiguated and linked to the mentioned software's repository & Biomedical & No & No & Mentions \\
+SoftCite-2025 extractions (Howison et al., 2025)~\cite{howison_2025_15149379} & Software mentions across the open-access literature & All fields (open access) & No (used here as a seed source) & No & Mentions \\
+Trisovic et al. (2022)~\cite{trisovic2022large} & Replication datasets in Harvard Dataverse and their R code & Studies depositing replication data in Harvard Dataverse & Code deposited with the study & No & None \\
+Wattanakriengkrai et al. (2022)~\cite{wattanakriengkrai2022github} & GitHub repositories that link to academic papers & All fields & Repository-to-paper links & No & None \\
+RS-Graph v1 (Brown, Slaughter, \& Weber, 2026)~\cite{brown2026code} & 163,292 article-repository pairs from Papers with Code, PLOS, JOSS, and SoftwareX & Mostly computer science, since most pairs come from Papers with Code & Stated links & Yes & None \\
+RS-Graph (this work) & 309,959 article-repository pairs from five seed sources plus mining & 26 fields & Stated links, classifier-derived seeds, and mined pairs, each with its route and confidence & Yes & Mentions, imports, and dependencies \\
+\botrule
+\end{tabular}
+\end{table}
+
+% Table S2
+\begin{table}[p]
+\caption{\textbf{RS-Graph data dictionary.} Tables and key columns in RS-Graph (\texttt{rs\_graph/db/models.py}). Every table also carries an integer \texttt{id} and \texttt{created\_datetime} / \texttt{updated\_datetime} collection timestamps. Fields marked ``full release only'' are omitted from the public release.}\label{stab:dictionary}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{94pt}>{\raggedright\arraybackslash}p{92pt}>{\raggedright\arraybackslash}p{170pt}@{}}
+\toprule
+Table & Holds & Key columns \\
+\midrule
+\texttt{document} & One row per article & \texttt{doi}, \texttt{open\_alex\_id}, \texttt{title}, \texttt{publication\_date}, \texttt{cited\_by\_count}, \texttt{fwci}, \texttt{citation\_normalized\_percentile}, \texttt{document\_type}, \texttt{is\_open\_access}, \texttt{open\_access\_status}, \texttt{primary\_location\_id}, \texttt{best\_open\_access\_location\_id} \\
+\texttt{document\_alternate\_doi} & Alternate DOIs (e.g., the preprint DOI of a published article) & \texttt{document\_id}, \texttt{doi} \\
+\texttt{document\_abstract} & Article abstracts (full release only) & \texttt{document\_id}, \texttt{content} \\
+\texttt{location}, \texttt{source} & Where an article is published or hosted & \texttt{landing\_page\_url}, \texttt{pdf\_url}, \texttt{is\_open\_access}, \texttt{license}, \texttt{version}; venue \texttt{name}, \texttt{source\_type}, \texttt{host\_organization\_name} \\
+\texttt{topic}, \texttt{document\_topic} & OpenAlex topics and their fields, subfields, and domains & \texttt{name}, \texttt{field\_name}, \texttt{subfield\_name}, \texttt{domain\_name}; per-document \texttt{score} \\
+\texttt{researcher} & One row per OpenAlex author record & \texttt{open\_alex\_id}, \texttt{orcid}, \texttt{name}, \texttt{works\_count}, \texttt{cited\_by\_count}, \texttt{h\_index}, \texttt{i10\_index}, \texttt{two\_year\_mean\_citedness} \\
+\texttt{document\_contributor} & Authorship edges & \texttt{researcher\_id}, \texttt{document\_id}, \texttt{position}, \texttt{is\_corresponding} \\
+\texttt{institution}, \texttt{document\_contributor\_\allowbreak institution} & Author affiliations on each article & \texttt{name}, \texttt{country\_code}, \texttt{institution\_type}, \texttt{ror} \\
+\texttt{funder}, \texttt{funding\_instance}, \texttt{document\_funding\_instance} & Funding acknowledged by each article & funder \texttt{name}, \texttt{award\_id} \\
+\texttt{code\_host} & Code hosting platform (GitHub) & \texttt{name} \\
+\texttt{repository} & One row per repository & \texttt{owner}, \texttt{name}, \texttt{description}, \texttt{is\_fork}, \texttt{forks\_count}, \texttt{stargazers\_count}, \texttt{watchers\_count}, \texttt{open\_issues\_count}, \texttt{commits\_count}, \texttt{size\_kb}, \texttt{topics}, \texttt{primary\_language}, \texttt{default\_branch}, \texttt{license}, \texttt{processed\_at\_sha}, \texttt{creation\_datetime}, \texttt{last\_pushed\_datetime} \\
+\texttt{repository\_readme} & README text & \texttt{repository\_id}, \texttt{content} \\
+\texttt{repository\_language} & Bytes of code per language & \texttt{language}, \texttt{bytes\_of\_code} \\
+\texttt{repository\_file} & File tree & \texttt{path}, \texttt{tree\_type}, \texttt{bytes\_of\_code} \\
+\texttt{developer\_account} & One row per developer account & \texttt{username}; \texttt{name} and \texttt{email} (full release only) \\
+\texttt{repository\_contributor} & Code contribution edges & \texttt{repository\_id}, \texttt{developer\_account\_id} \\
+\texttt{document\_repository\_link} & Article-repository pairs & \texttt{document\_id}, \texttt{repository\_id}, \texttt{dataset\_source\_id} (route), \texttt{iteration} (mining round), \texttt{predictive\_model\_name}, \texttt{predictive\_model\_version}, \texttt{predictive\_model\_confidence} \\
+\texttt{dataset\_source} & Names of the routes into the dataset & \texttt{name} \\
+\texttt{researcher\_developer\_\allowbreak account\_link} & Researcher-developer-account identities & \texttt{researcher\_id}, \texttt{developer\_account\_id}, \texttt{predictive\_model\_name}, \texttt{predictive\_model\_version}, \texttt{predictive\_model\_confidence}, \texttt{last\_snowball\_processed\_datetime} \\
+\texttt{document\_software\_mention} & Software mentions from SoftCite-2025 & \texttt{softcite\_mention\_id}, \texttt{software\_name}, \texttt{software\_name\_normalized}, \texttt{mention\_context} \\
+\texttt{repository\_import} & Imported third-party libraries & \texttt{software\_name}, \texttt{software\_name\_normalized}, \texttt{file\_paths} \\
+\texttt{repository\_dependency} & Declared dependencies & \texttt{software\_name}, \texttt{software\_name\_normalized}, \texttt{version\_spec}, \texttt{ecosystem}, \texttt{manifest\_paths}, \texttt{dependency\_type} \\
+\botrule
+\end{tabular}
+\end{table}
+
+% Table S3
+\begin{sidewaystable}
+\caption{\textbf{Characteristics of seed and mined pairs.} Each column uses the same population as the corresponding statistic in Results: FWCI over all articles; license, manifest, and Python share over repositories linked to articles published 2008--2025; timing per pair. Python share here is pooled over 2008--2025 (53.6\% for all pairs), while Results pools 2012--2025 (53.7\%). No repository is linked through both a seed pair and a mined pair. \protect\textcolor{red}{[S3 TIMING NOTE: Eva writes]}}\label{stab:seedmined}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{88pt}*{9}{>{\raggedleft\arraybackslash}p{39pt}}>{\raggedleft\arraybackslash}p{52pt}@{}}
+\toprule
+Group & Pairs & Articles with FWCI & Median FWCI & Articles with FWCI $>$ 1 & Permissive license & No license & Manifest (2008--2025) & Manifest (2025) & Python (known language) & Median days created before / last push after publication \\
+\midrule
+All pairs & 309,959 & 57.6\% & 2.04 & 65.1\% & 35.8\% & 49.9\% & 34.0\% & 42.5\% & 53.6\% & 96 / 117 \\
+Seed (all sources) & 196,107 & 54.2\% & 2.47 & 68.7\% & 39.4\% & 46.6\% & 38.6\% & 46.4\% & 61.0\% & 97 / 164 \\
+Seed: Papers with Code & 168,456 & 51.4\% & 2.70 & 70.4\% & 41.1\% & 46.6\% & 40.8\% & 47.8\% & 65.4\% & 81 / 163 \\
+Seed: other four sources & 27,651 & 70.6\% & 1.63 & 61.5\% & 29.1\% & 46.1\% & 24.6\% & 28.2\% & 31.6\% & 268 / 176 \\
+Mined (rounds 1--5) & 113,852 & 63.3\% & 1.59 & 59.9\% & 29.5\% & 55.5\% & 26.1\% & 38.5\% & 40.4\% & 95 / 51 \\
+Mined, excluding Computer Science & 64,727 & 68.6\% & 1.76 & 62.2\% & 27.6\% & 55.5\% & 21.9\% & 30.2\% & 30.4\% & 118 / 49 \\
+Seed, excluding Computer Science & 82,607 & 61.3\% & 2.38 & 68.4\% & 35.2\% & 47.2\% & 31.6\% & 39.4\% & 46.7\% & 166 / 142 \\
+\botrule
+\end{tabular}
+\footnotetext{Median FWCI includes articles with zero citations. Percentages of articles with FWCI are of all articles in the group; the median and the share above 1 are among articles with an FWCI.}
+\footnotetext{{\color{red}[TO WRITE: S3 timing note, replacing the red placeholder in the caption. Facts to write from:]\newline
+\textbullet\ \textbf{Central point:} the mining window narrows a publication-proximate pattern the seeds already show; it doesn't create it.\newline
+\textbullet\ Mining scored only repositories created 556 days before to 73 days after publication, so mined pairs are publication-proximate by construction.\newline
+\textbullet\ Seed pairs had no window. 76.9\% of seed repositories were created within one year of publication, and 54.2\% had all their recorded activity (creation through last push) inside that year.\newline
+\textbullet\ Mined pairs: 88.3\% and 68.1\%.\newline
+\textbullet\ The medians beside them: seed 97 days created before / 164 days last push after; mined 95 / 51.\newline
+\textbullet\ The four percentages come from v7 and were not re-derived (no CSV holds them).}}
+\end{sidewaystable}
+
+% Table S4
+\begin{table}[p]
+\caption{\textbf{Repository timing relative to article publication, by pair source.} Median days from repository creation to article publication, and from article publication to the repository's last push, over all pairs in the seeded or high-precision subset. Negative values mean the event came after (creation) or before (last push) publication.}\label{stab:timing}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{70pt}>{\raggedleft\arraybackslash}p{40pt}*{3}{>{\raggedleft\arraybackslash}p{70pt}}@{}}
+\toprule
+Source & Pairs & Median days created before publication & Median days of last push after publication & Pairs with no push after publication \\
+\midrule
+JOSS & 2,969 & 561 & 718 & 8.3\% \\
+SoftCite-2025 & 16,653 & 236 & 295 & 27.8\% \\
+PLOS & 7,361 & 246 & $-$34 & 64.8\% \\
+SoftwareX & 668 & 216.5 & 144 & 28.7\% \\
+Papers with Code & 168,456 & 81 & 163 & 22.4\% \\
+Mined & 113,852 & 95 & 51 & 32.5\% \\
+All pairs & 309,959 & 96 & 117 & 27.3\% \\
+\botrule
+\end{tabular}
+\end{table}
+
+% Table S5 (sideways: five name-and-count columns do not fit the text width)
+\begin{sidewaystable}
+\caption{\textbf{Most common software within each view, and software one view carries that another does not.} The upper block gives the most common software names within each view, counted as the number of article-repository pairs in which the name appears, over that view's own eligible population. Mention names in the upper block have generic extraction terms removed. The lower block gives, for each of the six pairwise directions, the five most common names present in one view and matched by nothing in the other, over pairs published through 2022 for which that comparison is computable; mention names there are shown before the generic-term stop list is applied, to show what mention extraction returns in practice. Names are in their normalized form.}\label{stab:topsoftware}
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{44pt}>{\raggedright\arraybackslash}p{86pt}>{\raggedleft\arraybackslash}p{32pt}>{\raggedright\arraybackslash}p{60pt}>{\raggedright\arraybackslash}p{70pt}>{\raggedright\arraybackslash}p{78pt}>{\raggedright\arraybackslash}p{72pt}>{\raggedright\arraybackslash}p{68pt}@{}}
+\toprule
+Block & View or comparison & Eligible pairs & Rank 1 & Rank 2 & Rank 3 & Rank 4 & Rank 5 \\
+\midrule
+Most common within a view & Mentions (generic terms removed) & 52,445 & matlab (5,019) & pytorch (4,467) & linux (2,510) & tensorflow (1,864) & scikitlearn (1,731) \\
+ & Mentions, ranks 6--10 & 52,445 & scipy (1,562) & numpy (1,390) & windows (1,201) & samtools (1,091) & ensembl (1,030) \\
+ & Imports & 96,955 & numpy (79,258) & matplotlib (50,308) & scipy (45,278) & torch (41,895) & pandas (35,722) \\
+ & Dependencies & 42,197 & numpy (28,135) & scipy (19,801) & matplotlib (18,549) & pandas (15,530) & tqdm (15,330) \\
+\midrule
+Unmatched across views & Imports not matched to dependencies & 41,994 & numpy (7,684) & matplotlib (7,018) & scipy (5,804) & torch (5,161) & pandas (4,789) \\
+ & Dependencies not matched to imports & 41,994 & six (7,903) & certifi (7,343) & pythondateutil (7,295) & pyparsing (6,870) & cycler (5,912) \\
+ & Mentions not matched to imports & 34,014 & code (8,528) & scripts (3,908) & latex (3,687) & github (2,976) & script (2,789) \\
+ & Imports not matched to mentions & 34,014 & numpy (25,187) & matplotlib (15,653) & scipy (14,198) & pandas (12,325) & tqdm (9,448) \\
+ & Mentions not matched to dependencies & 14,586 & code (3,534) & latex (1,836) & github (1,270) & scripts (1,248) & script (1,004) \\
+ & Dependencies not matched to mentions & 14,586 & numpy (8,971) & scipy (6,331) & matplotlib (5,883) & pandas (5,306) & tqdm (4,963) \\
+\botrule
+\end{tabular}
+\end{sidewaystable}
+
+% Table S6
+\begin{table}[p]
+\caption{\textbf{Mention rates under both denominators.} Pairs published through 2022. The conditional rate counts only pairs whose article has at least one extracted mention; the unconditional rate counts every pair with the view.}\label{stab:denominators}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{51pt}>{\raggedright\arraybackslash}p{85pt}*{5}{>{\raggedleft\arraybackslash}p{34pt}}@{}}
+\toprule
+View & Denominator & Pairs & Mention rate & Python & R & Pairs naming none \\
+\midrule
+Imports & Conditional (mention-eligible pairs) & 34,014 & 7.00\% & 5.50\% & 10.81\% & 56.74\% \\
+Imports & Unconditional (all pairs with imports) & 97,926 & 2.49\% & 1.83\% & 5.23\% & 84.98\% \\
+Dependencies & Conditional & 14,586 & 2.34\% & 2.00\% & 5.18\% & 62.17\% \\
+Dependencies & Unconditional (all pairs with dependencies) & 42,615 & 0.77\% & 0.64\% & 2.25\% & 87.05\% \\
+\botrule
+\end{tabular}
+\footnotetext{For the unconditional import rate, the Python and R columns split pairs by the repository's primary language.}
+\end{table}
+
+% Table S7
+\begin{sidewaystable}
+\caption{\textbf{Logistic regression of whether an imported library is mentioned, all twelve specifications.} Hungarian alignment within each pair (Methods). Estimates are percentage changes in the odds of a mention per log-unit of popularity or per year of age, with two-way cluster-robust p-values (article and library). ``Cap'' is the 2022 publication-year cap.}\label{stab:logit}
+\begin{tabular}{@{}lllrll@{}}
+\toprule
+Population & Cap & Model & n (rows) & Popularity: odds change (p) & Age: odds change (p) \\
+\midrule
+All pairs with imports & 2022 & Popularity only & 975,239 & $-$8.6\% (0.064) & not in model \\
+All pairs with imports & 2022 & Popularity and age & 975,239 & $-$16.3\% ($7.3\times10^{-6}$) & +7.9\% (0.015) \\
+All pairs with imports & 2022 & Controlled & 975,239 & $-$8.5\% (0.014) & +3.1\% (0.505) \\
+All pairs with imports & None & Popularity only & 2,493,085 & $-$14.8\% (0.0005) & not in model \\
+All pairs with imports & None & Popularity and age & 2,493,085 & $-$12.9\% (0.007) & $-$1.8\% (0.412) \\
+All pairs with imports & None & Controlled & 2,493,085 & $-$4.8\% (0.198) & +0.7\% (0.852) \\
+Mention-eligible pairs & 2022 & Popularity only & 346,278 & $-$6.8\% (0.197) & not in model \\
+Mention-eligible pairs & 2022 & Popularity and age & 346,278 & $-$11.7\% (0.003) & +4.9\% (0.178) \\
+Mention-eligible pairs & 2022 & Controlled & 346,278 & $-$6.7\% (0.069) & +2.2\% (0.659) \\
+Mention-eligible pairs & None & Popularity only & 385,502 & $-$6.8\% (0.195) & not in model \\
+Mention-eligible pairs & None & Popularity and age & 385,502 & $-$11.4\% (0.005) & +4.5\% (0.175) \\
+Mention-eligible pairs & None & Controlled & 385,502 & $-$6.5\% (0.077) & +1.8\% (0.712) \\
+\botrule
+\end{tabular}
+\end{sidewaystable}
+
+% Table S8
+\begin{table}[p]
+\caption{\textbf{ARMM training and evaluation data by seed source and negative strategy.} Positive counts are those of the replication package (164,479 pairs). The 164,572 positives in Methods are the training pipeline's own count, taken before the $\geq$ 2008 publication-year filter (12 pairs) and before one-to-one deduplication against mined pairs added later (81 pairs).}\label{stab:armmdata}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Seed source or negative strategy & Pairs & Share \\
+\midrule
+\textbf{Positive pairs (one-to-one seed pairs), by seed source} & & \\
+\quad Papers with Code & 143,434 & 87.2\% \\
+\quad SoftCite-2025 & 10,837 & 6.6\% \\
+\quad PLOS & 6,886 & 4.2\% \\
+\quad JOSS & 2,730 & 1.7\% \\
+\quad SoftwareX & 592 & 0.4\% \\
+\quad \textbf{Total} & \textbf{164,479} & \textbf{100.0\%} \\
+\midrule
+\textbf{Negative pairs (synthetic), by strategy} & & \\
+\quad Simple shuffle & 16,457 & 10.2\% \\
+\quad Random out-of-domain & 16,457 & 10.2\% \\
+\quad Nearest-neighbour out-of-domain & 16,453 & 10.2\% \\
+\quad Same author, different article & 57,600 & 35.8\% \\
+\quad Same contributor, different repository & 53,816 & 33.5\% \\
+\quad \textbf{Total} & \textbf{160,783} & \textbf{100.0\%} \\
+\botrule
+\end{tabular}
+\end{table}
+
+\clearpage
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Supplementary Figures
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Fig. S1
+\begin{figure}[p]
+\centering
+\includegraphics[width=\textwidth]{figS1_date_window.pdf}
+\caption{\textbf{Days between repository creation and article publication for one-to-one seed pairs.} Publication date minus repository creation date over the 164,479 one-to-one seed pairs in the final data; positive values mean the repository was created before publication. The solid line marks the median (82 days). Dashed lines mark the mining window: repositories created at most 556 days before and 73 days after publication, the 10th and 90th percentiles of one-to-one seed pairs when mining began. Recomputed on these final data, the percentiles are 557 and 72 days.}\label{sfig:datewindow}
+\end{figure}
+
+% Fig. S2
+\begin{figure}[p]
+\centering
+\includegraphics[width=\textwidth]{figS2_mention_rate.pdf}
+\caption{\textbf{Import mention rate by field and article publication year.} Import mention rate among mention-eligible pairs (the conditional rate), by field and article publication year, through 2022; the six most common fields, with field-year cells of fewer than 30 mention-eligible pairs omitted.}\label{sfig:mentionrate}
+\end{figure}
+
+% Fig. S3 (print-width redraw deferred)
+\begin{figure}[p]
+\centering
+\includegraphics[width=\textwidth]{figS3_armm_confusion_by_field.pdf}
+\caption{\textbf{ARMM confusion matrices on the held-out test set, by field.} Confusion matrices generated from the held-out test set across nine categories: the seven most common named fields, an ``Unknown'' category for articles OpenAlex does not assign a field, and the held-out ``Other'' fields, each under 2\% of the dataset.}\label{sfig:armmconfusion}
+\end{figure}
+
+\clearpage
+
+\renewcommand{\refname}{Supplementary References}
+\bibliography{main}
+
+\end{document}
