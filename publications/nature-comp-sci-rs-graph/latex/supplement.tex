@@ -9,6 +9,12 @@
 
 \unnumbered% Nature-style unnumbered section heads (sn-jnl macro)
 \renewcommand{\labelitemiii}{$\circ$}
+% Handwriting space between outline bullets; set to 0pt to turn off.
+\newlength{\writinggap}\setlength{\writinggap}{5\baselineskip}
+\makeatletter
+\newcommand{\writingspace}{\g@addto@macro\itemargs{\itemsep\writinggap\topsep\writinggap}}
+\makeatother
+\writingspace
 
 \graphicspath{{fig/supp/}}
 

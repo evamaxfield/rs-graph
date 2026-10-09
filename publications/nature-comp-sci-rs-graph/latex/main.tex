@@ -8,6 +8,11 @@
 
 \unnumbered% Nature-style unnumbered section heads (sn-jnl macro)
 \renewcommand{\labelitemiii}{$\circ$}% third-level bullets in the Methods outline
+% Handwriting space between outline bullets; set to 0pt to turn off.
+\newlength{\writinggap}\setlength{\writinggap}{5\baselineskip}
+\makeatletter
+\newcommand{\writingspace}{\g@addto@macro\itemargs{\itemsep\writinggap\topsep\writinggap}}
+\makeatother
 
 \graphicspath{{fig/}}
 
@@ -264,6 +269,7 @@ Our descriptions of coverage, characteristics, and even software used, are just 
 
 %TC:break Methods
 \section{Methods}\label{sec:methods}
+\writingspace
 
 Classification models used in constructing RS-Graph, and where each is described:
 
