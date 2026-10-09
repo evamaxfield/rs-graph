@@ -7,6 +7,7 @@
 \usepackage{booktabs}%
 
 \unnumbered% Nature-style unnumbered section heads (sn-jnl macro)
+\renewcommand{\labelitemiii}{$\circ$}% third-level bullets in the Methods outline
 
 \graphicspath{{fig/}}
 
@@ -145,7 +146,7 @@ Additionally, our mining process diversifies the dataset by finding proportional
 
 \subsection{Characteristics}\label{subsec:characteristics}
 
-Next, we document the characteristics of RS-Graph as a whole so that users can understand its composition and skew. Some of these characteristics partly reflect how pairs were found. Mined candidate repositories had to be created between 556 days before and 73 days after the linked article's publication, and in the first three rounds needed a README of at least 200 characters. As a result, timing and documentation differ between seed and mined pairs by construction (Supplementary Table S3).
+Next, we document the characteristics of RS-Graph as a whole so that users can understand its composition and skew. Some of these characteristics partly reflect how pairs were found. Mined candidate repositories had to be created between 556 days before and 73 days after the linked article's publication (Supplementary Fig. S1), and in the first three rounds needed a README of at least 200 characters. As a result, timing and documentation differ between seed and mined pairs by construction (Supplementary Table S3).
 
 %TC:ignore
 \begin{figure}[!tbp]
@@ -270,7 +271,359 @@ In this work, we have built RS-Graph via a combination of \textbf{Seed Datasets}
 
 Our descriptions of coverage, characteristics, and even software used, are just that: they are descriptive. Software mentions datasets have larger sample sizes (SoftCite-2025 extracts mentions from 24 million open-access articles~\cite{howison_2025_15149379}), and from those datasets, and prior work~\cite{hannay2009scientists}, we know that more researchers create and use software than RS-Graph contains. RS-Graph represents what we have found in our collection so far, which means all of our description is taken from researchers that open their code on GitHub, and either directly through sharing requirements or software papers, or in some minimal way, make their article and repository semantically similar. RS-Graph represents only the most visible set of code created as a part of scientific work, but it is the most complete set we have been able to assemble. This means that we can support researchers now, with this release of RS-Graph, but our methods set us up for the future.
 
-% Methods: to be ported
+%TC:break Methods
+\section{Methods}\label{sec:methods}
+
+%TC:ignore
+\begingroup
+\renewcommand{\tablename}{Methods Table}%
+\renewcommand{\theHtable}{methods.\arabic{table}}%
+\setcounter{table}{0}%
+\begin{table}[ht]
+\caption{\textbf{Classification models used in constructing RS-Graph, their task, held-out performance and availability.} Availability gives HuggingFace repository IDs; the links are in Code availability.}\label{tab:models}
+\footnotesize
+\begin{tabular}{@{}p{0.17\textwidth}p{0.25\textwidth}p{0.19\textwidth}p{0.29\textwidth}@{}}
+\toprule
+Model & Task & Performance & Availability \\
+\midrule
+Article-Repository Matching Model (ARMM) & Predicts whether an article-repository pair forms an ``official'' pair & Macro F1 0.975; precision 0.975; recall 0.975 & Weights: \texttt{evamxb/\allowbreak binary-article-repo-\allowbreak em-clf-optimized}; training data: \texttt{evamxb/\allowbreak article-repo-em-dataset} \\
+\addlinespace
+Author--developer account matching model (ADAMM) & Predicts whether a researcher and a GitHub developer account represent the same individual & Binary F1 0.944; precision 0.938; recall 0.950; cross-dataset F1 0.88--0.90 & Weights: \texttt{evamxb/\allowbreak dev-author-em-clf}; training and evaluation data on request from Harvard Dataverse (doi:10.7910/DVN/KPYVI1) \\
+\addlinespace
+Software Repository Sharing Statement Classifier & Predicts whether a software mention context contains a statement linking an article to its official code repository & Macro F1 0.827; precision 0.860; recall 0.815 & Weights: \texttt{evamxb/\allowbreak software-mentions-\allowbreak repo-clf}; training data in the \texttt{sci-soft-models} repository \\
+\botrule
+\end{tabular}
+\end{table}
+\endgroup
+%TC:endignore
+
+\subsection{Seed article-repository pairs}\label{subsec:m-seeds}
+
+\begin{itemize}
+\item \textbf{Four seed sources with stated links}
+  \begin{itemize}[--]
+  \item \textbf{Five sources, 196,107 seed pairs.} Counts per source are in Table~\ref{tab:mining}.
+  \item \textbf{Papers with Code:} author-provided links only (168,456 pairs). Taken from the final Internet Archive snapshot (2025-07-28 URL), since the platform is offline.
+  \item \textbf{JOSS:} 2,969 pairs from the JOSS API (repository URL + DOI).
+  \item \textbf{SoftwareX:} 668 pairs from the ElsevierSoftwareX GitHub organisation.
+  \item \textbf{PLOS:} 7,361 pairs. Repository links come from the data availability sections of JATS XML, read with \texttt{allofplos} (\url{https://github.com/PLOS/allofplos}).
+  \end{itemize}
+\item \textbf{The accessible Papers with Code subset}
+  \begin{itemize}[--]
+  \item \textbf{Definition:} an author-provided link whose article resolves in OpenAlex (by arXiv-derived DOI) and whose repository exists on GitHub.
+  \item \textbf{Links vs pairs:} 194,541 links $\rightarrow$ 168,627 retained (86.7\%) $\rightarrow$ 168,456 unique pairs (86.6\%).
+  \end{itemize}
+\item \textbf{SoftCite-2025 seeds through the Software Repository Sharing Statement Classifier}
+  \begin{itemize}[--]
+  \item \textbf{Why:} to offset the CS/ML skew of the other four sources. SoftCite-2025 covers 24M open-access articles~\cite{howison_2025_15149379}.
+  \item \textbf{Task:} does a mention context state the article's \emph{own} official repository?
+  \item \textbf{Annotation:}
+    \begin{itemize}[$\circ$]
+    \item Sampled across SoftCite's ``created'' / ``shared'' / ``used'' purpose labels.
+    \item Trial set of 30, 3 annotators, Fleiss $\kappa = 0.777$.
+    \item 1,000 annotated examples, labelled match / no-match / error-or-ignorable.
+    \end{itemize}
+  \item \textbf{Model:} fine-tuned ModernBERT-base~\cite{warner2025smarter}.
+    \begin{itemize}[$\circ$]
+    \item 80/20 stratified split.
+    \item Features: title + mention context + repository URL, chosen by ablation over 4 candidates.
+    \item 2,048 tokens, 2 epochs.
+    \item Macro F1 0.827 (P 0.860, R 0.815).
+    \end{itemize}
+  \item \textbf{Extraction:} keep contexts with a GitHub URL, then classify $\rightarrow$ 16,653 seed pairs.
+  \item \textbf{No ARMM score:} these seeds bypass the 0.9994 filter (Discussion limitation).
+  \end{itemize}
+\end{itemize}
+
+\subsection{Article and repository metadata}\label{subsec:m-metadata}
+
+\begin{itemize}
+\item \textbf{Metadata enrichment and exclusion rules}
+  \begin{itemize}[--]
+  \item \textbf{DOI resolution:} Semantic Scholar maps preprints to later published versions. The preprint DOI is kept as an alternate.
+  \item \textbf{Article records} from OpenAlex~\cite{priem2022openalex}. Field = the field of the article's primary topic. The full field list is in Supplementary Table S2.
+  \item \textbf{Researchers:} OpenAlex author records.
+  \item \textbf{Repositories:} GitHub URLs normalised (GitHub Pages resolved); metadata, README and contributors from the GitHub API.
+  \item \textbf{Exclusion:} articles not found via Semantic Scholar or OpenAlex, and repositories not found via the GitHub API, are dropped.
+  \end{itemize}
+\end{itemize}
+
+\subsection{Researcher-developer-account identities}\label{subsec:m-identities}
+
+\begin{itemize}
+\item \textbf{The ADAMM of Brown, Slaughter and Weber~\cite{brown2026code}, reused unchanged}
+  \begin{itemize}[--]
+  \item \textbf{Task:} is an article author the same person as a GitHub account? Exact matching fails (``J. Doe'' vs ``Jane Doe'').
+  \item \textbf{Model:} DeBERTa-v3-base on author name, username and display name, trained on 2,999 annotated JOSS candidates (2 annotators, 451 matches).
+    \begin{itemize}[$\circ$]
+    \item Binary F1 0.944 (P 0.938, R 0.950); 0.88--0.90 on PLOS, SoftwareX and Papers with Code (Methods Table~\ref{tab:models}).
+    \end{itemize}
+  \item \textbf{Threshold:} 0.97, as in Brown, Slaughter and Weber. 171,802 predicted identities $\rightarrow$ 163,651 ($-$4.74\%).
+  \item \textbf{Counted only via a retained pair} linking the researcher to the account.
+  \item \textbf{Known bias:} worse on short usernames and display names, better on Anglo-Saxon names; errors can propagate across rounds (Discussion).
+  \end{itemize}
+\end{itemize}
+
+\subsection{Article-Repository Matching Model}\label{subsec:m-armm}
+
+\begin{itemize}
+\item \textbf{Training and evaluation data}
+  \begin{itemize}[--]
+  \item \textbf{Positives:} one-to-one seed pairs from all five sources $\rightarrow$ 164,572. Counts by source are in Supplementary Table S8.
+  \item \textbf{Negatives, 160,783 from five strategies} (counts per strategy in Supplementary Table S8):
+    \begin{itemize}[$\circ$]
+    \item simple shuffle
+    \item random out-of-domain GitHub repositories
+    \item nearest-neighbour out-of-domain ($k = 300$ per language, one-to-one via the Hungarian algorithm~\cite{crouse2016implementing})
+    \item same author, different article
+    \item same contributor, different repository
+    \end{itemize}
+  \item \textbf{Dedup:} by DOI and by repository owner/name. A positive wins over a negative.
+  \item \textbf{Split:}
+    \begin{itemize}[$\circ$]
+    \item Stratified by source, field and year bin.
+    \item Fields under 2\% of the data, pre-2016 articles and 2025+ articles are held out for test only.
+    \item Leakage guard: train rows sharing an ID with a test row move to test.
+    \item Result: 199,312 train / 120,030 test.
+    \end{itemize}
+  \end{itemize}
+\item \textbf{Input, features and model}
+  \begin{itemize}[--]
+  \item \textbf{Input:} one XML string per pair, shown in Supplementary Note 2 (the only callout for that note).
+  \item \textbf{Limits:} abstract truncated to 3,000 characters and README to 6,000 (\texttt{<TRUNC/>} marks a cut). Missing fields are written as ``None''. Maximum 8,192 tokens.
+  \item \textbf{Feature ablation:} six candidate fields dropped.
+  \item \textbf{Bases compared:} \texttt{gte-multilingual-base}~\cite{zhang2024mgte}, \texttt{ModernBERT-base}~\cite{warner2025smarter} and \texttt{bge-m3}~\cite{chen2024m3}. \texttt{gte-multilingual-base} was best on macro F1.
+  \item \textbf{Training:} 1 epoch, AdamW, learning rate 5e-5, weight decay 0.01, FP16.
+  \end{itemize}
+\item \textbf{Held-out performance and the 0.9994 threshold}
+  \begin{itemize}[--]
+  \item \textbf{Stable by field and period:} lowest field Physics \& Astronomy at 0.951; lowest period pre-2016 at 0.950 (Supplementary Fig. S2).
+  \item \textbf{Small variation by source:} lowest on SoftCite-2025 positives (binary F1 0.968).
+  \item \textbf{README length matters:} macro F1 0.957 for READMEs under 100 characters vs 0.979 at 1,601--3,200. This motivates the mining README filter.
+  \item \textbf{Threshold 0.9994:} the highest-recall threshold with held-out precision $\geq$ 0.999.
+    \begin{itemize}[$\circ$]
+    \item Chosen for precision, because mining adds pairs at scale with no author signal behind any one pair.
+    \end{itemize}
+  \end{itemize}
+\end{itemize}
+
+\subsection{Iterative mining}\label{subsec:m-mining}
+
+\begin{itemize}
+\item \textbf{One mining round}
+  \begin{itemize}[--]
+  \item \textbf{Start:} seed identities (ADAMM $\geq$ 0.97).
+  \item \textbf{Candidates:} for each identity $\geq$ 0.97, take the researcher's OpenAlex works $\times$ the repositories the account owns or contributed to, minus articles and repositories already in RS-Graph.
+  \item \textbf{Date window:} the repository is created $\leq$ 556 days before to $\leq$ 73 days after publication.
+    \begin{itemize}[$\circ$]
+    \item That is the 10th--90th percentile of one-to-one seed pairs when mining began (Supplementary Fig. S1).
+    \item Recomputed on the final data it is 557/72.
+    \end{itemize}
+  \item \textbf{README filter, rounds 1--3:} $\geq$ 200 characters.
+  \item \textbf{Forks:} GitHub forks are skipped.
+  \item \textbf{One-to-one:} ARMM-scored, keeping the top-confidence pair per article and per repository within each batch (all rounds).
+  \item \textbf{Each retained pair} is enriched (Article and repository metadata), and its new identities seed the next round.
+  \end{itemize}
+\item \textbf{Standard and extended rounds}
+  \begin{itemize}[--]
+  \item \textbf{Three standard rounds,} each seeded by the previous round's identities. Batches hold 24 identities.
+  \item \textbf{Batching caveat:} a stored pair removes its article and repository from later batches, so a weaker early match can block a better one. Rounds 4--5 revisit these.
+  \item \textbf{Extended rounds 4--5:} the README filter is removed, and articles and repositories from pairs below 0.9994 are re-evaluated. Round 5 runs on round 4's new identities.
+  \end{itemize}
+\end{itemize}
+
+\subsection{Annotation of mined pairs}\label{subsec:m-annotation}
+
+\begin{itemize}
+\item \textbf{Sample and labels}
+  \begin{itemize}[--]
+  \item \textbf{Sample:} 600 mined pairs $\geq$ 0.9994 from all five rounds, stratified by the five largest fields + Other.
+    \begin{itemize}[$\circ$]
+    \item Trial set of 24 (4 per stratum), labelled by all 3 annotators.
+    \item Then 576 (96 per stratum), split into three sets of 192, one annotator each.
+    \item By round: 338 / 63 / 40 / 149 / 10. Rounds 4--5 make up 26.5\% of the sample vs 24.5\% of mined pairs.
+    \end{itemize}
+  \item \textbf{Validity labels:} match / no-match / unsure / not-available, against the ``official'' definition.
+  \item \textbf{Evidence:} full text where accessible; otherwise abstract or landing page plus the repository. Full-text access is recorded per pair (\textcolor{red}{[NO-FULL-TEXT: N]}).
+  \item \textbf{Directionality, four binary labels:}
+    \begin{itemize}[$\circ$]
+    \item article links to the repository
+    \item repository links to the article (URL, DOI or citation, any version)
+    \item article links to a different repository
+    \item repository links to a different article
+    \end{itemize}
+  \item \textbf{Open access:} OA status from OpenAlex.
+  \end{itemize}
+\item \textbf{Agreement and precision estimates}
+  \begin{itemize}[--]
+  \item \textbf{Agreement:} 3 annotators on the trial set; three-way Fleiss $\kappa$~\cite{fleiss1971measuring}.
+    \begin{itemize}[$\circ$]
+    \item Validity: \textcolor{red}{[KAPPA-MATCH]}.
+    \item Directionality: \textcolor{red}{[KAPPA-REPO-IN-ARTICLE]}, \textcolor{red}{[KAPPA-ARTICLE-IN-REPO]}, \textcolor{red}{[KAPPA-DIFF-REPO]}, \textcolor{red}{[KAPPA-DIFF-ARTICLE]}.
+    \item Resolved by consensus before full annotation.
+    \end{itemize}
+  \item \textbf{Strict vs lenient:} strict counts unsure and not-available as errors; lenient excludes them.
+  \item \textbf{Weighting:} strata weighted by their share of the 113,852 mined pairs (CS .391, Other .294, Biochem .126, Eng .090, Med .065, Phys .034).
+  \item \textbf{Intervals:} exact Clopper--Pearson 95\% CIs~\cite{clopper1934use}.
+  \item \textbf{Unweighted figures:} \textcolor{red}{[PRECISION-STRICT-UNWEIGHTED]}, \textcolor{red}{[PRECISION-LENIENT-UNWEIGHTED]}. Reported in Methods only.
+  \item \textbf{Directionality shares:} computed on the same sample.
+  \end{itemize}
+\end{itemize}
+
+\subsection{Three views of software use}\label{subsec:m-views}
+
+\begin{itemize}
+\item \textbf{Mentions and imports}
+  \begin{itemize}[--]
+  \item \textbf{Mentions:}
+    \begin{itemize}[$\circ$]
+    \item SoftCite-2025 is joined on lowercased primary or alternate DOI.
+    \item Capped at 2022: SoftCite covers 28.8\% of documents in 2022, 8.8\% in 2023 and about 0 from 2024.
+    \end{itemize}
+  \item \textbf{Imports:}
+    \begin{itemize}[$\circ$]
+    \item Every repository is cloned at the stored commit, and its Python and R files are parsed.
+    \item Notebooks are converted to scripts with \texttt{py-nb-to-src} (\url{https://github.com/evamaxfield/py-nb-to-src}), so repositories GitHub labels Jupyter Notebook contribute imports.
+    \item Imports are parsed with \texttt{py-extract-imported-libraries} (tree-sitter; \url{https://github.com/evamaxfield/py-extract-imported-libraries}, \url{https://github.com/tree-sitter/tree-sitter}).
+    \end{itemize}
+  \item \textbf{Scope:} third-party packages only; vendored directories and config files are skipped.
+  \end{itemize}
+\item \textbf{Dependency manifests}
+  \begin{itemize}[--]
+  \item \textbf{Parser:} \texttt{git-pkgs} (\url{https://github.com/git-pkgs/git-pkgs}) on the same clone; all ecosystems stored.
+  \item \textbf{Analyses use PyPI, Conda and CRAN only.}
+  \item \textbf{Pinning:} 71.0\% of requirements-style rows pin an exact version, the \texttt{pip freeze} pattern. So some listed dependencies are transitive (six, certifi).
+  \item \textbf{Manifest adoption:} at least one parsed Python or R dependency (Fig.~\ref{fig:development}C).
+  \end{itemize}
+\end{itemize}
+
+\subsection{Software name alignment}\label{subsec:m-alignment}
+
+\begin{itemize}
+\item \textbf{Normalise, alias, fuzzy match, assign one-to-one, per pair}
+  \begin{itemize}[--]
+  \item \textbf{Normalise:} lowercase; strip separators, version specifiers and trailing punctuation.
+  \item \textbf{Alias registry:}
+    \begin{itemize}[$\circ$]
+    \item 48 hand-curated groups (e.g. \texttt{PIL} / \texttt{Pillow}; \texttt{torch} / \texttt{pytorch}). Same group = exact match.
+    \item Names in \emph{different} groups are vetoed as distinct (\texttt{stlearn} $\neq$ \texttt{sklearn}).
+    \end{itemize}
+  \item \textbf{Fuzzy matching and assignment:} \texttt{rapidfuzz} (\url{https://github.com/rapidfuzz/RapidFuzz}) simple ratio $\geq$ 85, then the Hungarian algorithm for a one-to-one assignment within each pair.
+  \item \textbf{Applied to:} imports $\times$ mentions, dependencies $\times$ mentions, and imports $\times$ dependencies. This gives Table~\ref{tab:topsoftware}'s ``declaring'' and ``mentioning'' columns.
+  \item \textbf{Generic terms:} 11 generic mention terms (\texttt{code}, \texttt{scripts}, \texttt{latex} \ldots) are removed before ranking.
+  \item \textbf{Supplement:} top items per view are in Supplementary Table S5. The import--dependency IoU, its definition and its trend over time are in Supplementary Note 3.
+  \end{itemize}
+\end{itemize}
+
+\subsection{Analysis population}\label{subsec:m-population}
+
+\begin{itemize}
+\item \textbf{The seeded or high-precision subset}
+  \begin{itemize}[--]
+  \item \textbf{Filter chain:}
+    \begin{itemize}[$\circ$]
+    \item 763,238 stored links.
+    \item Keep ARMM $\geq$ 0.9994, or no ARMM prediction (the seeds, including the SoftCite seeds) $\rightarrow$ 309,983.
+    \item Publication year $\geq$ 2008 $\rightarrow$ 309,959 pairs / 303,157 articles / 296,786 repositories.
+    \end{itemize}
+  \item \textbf{Why 2008, two reasons:}
+    \begin{itemize}[$\circ$]
+    \item GitHub launched in 2008, and every pair in RS-Graph is a GitHub pair. A pre-2008 article's repository can only have been created after the article, for example when code was moved to GitHub later.
+    \item Pre-2008 pairs are too sparse for the by-year series (the floor removes 24 pairs).
+    \end{itemize}
+  \item \textbf{Identities:} $\geq$ 0.97, counted only through retained pairs.
+  \item \textbf{Deduplication:} done once over the whole subset. Seed and mined labels are added afterwards, for breakdowns only.
+  \item \textbf{Repository-level properties} (language, license, manifests, alignment) are computed once per repository.
+  \end{itemize}
+\item \textbf{Time series and classification rules}
+  \begin{itemize}[--]
+  \item \textbf{Year:} the year = the linked article's publication year. A repository linked to several articles is placed in its earliest year, once.
+  \item \textbf{Sparse years:} manifest and license series need $\geq$ 100 repositories in a year.
+  \item \textbf{Mention cap:} mention analyses stop at 2022, a limit of the source data, not of our filters.
+  \item \textbf{Fields:} the 9 most common OpenAlex fields + Other. The regression uses 5 + Other.
+  \item \textbf{Licenses:} keyword rules over GitHub license names, checking copyleft first.
+    \begin{itemize}[$\circ$]
+    \item GitHub's ``Other'' counts as licensed but falls in neither the permissive nor the copyleft series.
+    \item Detection misses non-standard files, so the unlicensed share is an upper bound.
+    \end{itemize}
+  \end{itemize}
+\end{itemize}
+
+\subsection{FWCI and FWSI}\label{subsec:m-fwsi}
+
+\begin{itemize}
+\item \textbf{FWSI is FWCI adapted to stargazers, normalised within RS-Graph}
+  \begin{itemize}[--]
+  \item \textbf{FWCI:} OpenAlex's value as released.
+  \item \textbf{FWSI:} lifetime stargazers $\div$ the mean lifetime stargazers of RS-Graph repositories that share its field (9 + Other), creation year and linked-article type (article / preprint / other).
+  \item \textbf{Scope:} each repository counts once, with its field and type taken from its first linked pair. Only repositories $\geq$ 2 years old at collection are scored.
+  \item \textbf{Why lifetime stars:} full star histories are infeasible to fetch at this scale. Grouping by creation year stands in for a fixed citation window.
+  \item \textbf{Why field, not subfield:} subfield peer groups would be too small.
+  \item \textbf{Differences in full:} Methods Table~\ref{tab:fwsi}.
+  \end{itemize}
+\end{itemize}
+
+%TC:ignore
+\begingroup
+\renewcommand{\tablename}{Methods Table}%
+\renewcommand{\theHtable}{methods.\arabic{table}}%
+\begin{table}[ht]
+\caption{\textbf{FWSI adapts OpenAlex's FWCI to repositories; differences by component.}}\label{tab:fwsi}
+\footnotesize
+\begin{tabular}{@{}p{0.16\textwidth}p{0.38\textwidth}p{0.38\textwidth}@{}}
+\toprule
+ & FWCI (OpenAlex) & FWSI (this work) \\
+\midrule
+Numerator & Citations in the publication year and the three following years & Lifetime stargazers (no fixed window) \\
+Field grain & Subfield & Field: the nine most common OpenAlex fields plus ``Other'' \\
+Year & Article publication year & Repository creation year \\
+Type & Work type (journal articles and conference proceedings split) & Linked article's type: article, preprint, or other \\
+Reference set & All works in OpenAlex & RS-Graph's linked repositories only \\
+Eligibility & Works that OpenAlex scores & Repositories at least two years old at collection time \\
+\botrule
+\end{tabular}
+\end{table}
+\endgroup
+%TC:endignore
+
+\subsection{Statistical analysis}\label{subsec:m-statistics}
+
+\begin{itemize}
+\item \textbf{Mention rates under two denominators}
+  \begin{itemize}[--]
+  \item \textbf{Conditional rate (headline, Fig.~\ref{fig:mentionrate}):} pairs with $\geq$ 1 extracted mention (``mention-eligible''), n = 34,014 $\rightarrow$ 7.00\%. Extraction failure can't drag it down.
+  \item \textbf{Unconditional rate:} all pairs with $\geq$ 1 import, n = 97,926 $\rightarrow$ 2.49\%. It describes the corpus, extraction misses included.
+  \item \textbf{Both denominators:} in Supplementary Table S6.
+  \end{itemize}
+\item \textbf{Logistic regression of whether an imported library is mentioned}
+  \begin{itemize}[--]
+  \item \textbf{Frame:} one row per (article, repository, library): 2,493,085 rows (975,239 with the 2022 cap), after dropping generic terms, libraries seen fewer than 3 times and pairs in the top 1\% by number of distinct libraries.
+  \item \textbf{Predictors:}
+    \begin{itemize}[$\circ$]
+    \item Popularity = ln(cumulative article-repository pairs importing the library, up to and including the article's year).
+    \item Age = years since the library's first import in the corpus. This is floored by the 2008 start, so it isn't the true age.
+    \end{itemize}
+  \item \textbf{Controls:} field (5 + Other, ranked over unique articles), document type, publication year (linear).
+  \item \textbf{Errors:} two-way cluster-robust SEs on article and library~\cite{cameron2011robust}.
+  \item \textbf{Twelve specifications:} 3 model forms (popularity only; both; both + controls) $\times$ 2 denominators $\times$ 2 year-cap settings. All are in Supplementary Table S7.
+  \item \textbf{Primary specification:} controlled, 2022 cap, unconditional population. Restricting to articles with $\geq$ 1 mention conditions on a variable tied to both the outcome and the predictors (collider bias).
+  \end{itemize}
+\item \textbf{Correlations}
+  \begin{itemize}[--]
+  \item \textbf{Method:} Spearman's $\rho$, pooled and within each field (9 + Other), with Fisher-$z$ 95\% CIs.
+  \item \textbf{Raw measures:} stargazers vs citations over the full subset.
+  \item \textbf{Normalised measures:} FWSI vs FWCI over repositories $\geq$ 2 years old.
+  \end{itemize}
+\end{itemize}
+
+\subsection{Personal data and provenance}\label{subsec:m-provenance}
+
+\begin{itemize}
+\item \textbf{Released fields are a deliberate trade-off. Every link is traceable}
+  \begin{itemize}[--]
+  \item \textbf{Released fields:} the public release withholds abstracts and developer display names and emails, and keeps username--researcher links, which make contribution measurable. Every link carries its route, model version and confidence, commit SHA and collection date.
+  \end{itemize}
+\end{itemize}
 
 %TC:ignore
 \backmatter
