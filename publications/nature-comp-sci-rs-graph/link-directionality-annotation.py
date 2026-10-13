@@ -85,9 +85,9 @@ def create_annotation_set(output_tag: str | None = None) -> None:
         pl.col("document_repository_link_id"),
         pl.col("document_id"),
         pl.col("repository_id"),
-        pl.col("predictive_model_confidence"),
         pl.col("document_field_name_pruned"),
         (pl.lit("https://doi.org/") + pl.col("document_doi")).alias("document_url"),
+        pl.col("document_is_open_access"),
         (
             pl.lit("https://github.com/")
             + pl.col("repository_owner")
@@ -95,6 +95,7 @@ def create_annotation_set(output_tag: str | None = None) -> None:
             + pl.col("repository_name")
         ).alias("repository_url"),
         pl.lit(None).alias("label"),
+        pl.lit(None).alias("full-text-available"),
         pl.lit(None).alias("this-repo-linked-in-paper"),
         pl.lit(None).alias("this-article-linked-in-repo"),
         pl.lit(None).alias("diff-repo-linked-in-paper"),
@@ -115,6 +116,18 @@ def create_annotation_set(output_tag: str | None = None) -> None:
         .sample(fraction=1.0, seed=4, shuffle=True)
     )
 
+    # The open-access column comes from the document table via the base join, so no extra join
+    assert len(agreement_df) == 24
+    assert len(independent_df) == 576
+    assert agreement_df.get_column("document_is_open_access").null_count() == 0
+    assert independent_df.get_column("document_is_open_access").null_count() == 0
+    assert (
+        pl.concat([agreement_df, independent_df])
+        .get_column("document_repository_link_id")
+        .n_unique()
+        == 600
+    )
+
     # Save training set to be annotated by all annotators for agreement analysis
     agreement_df.write_csv(_tagged_path(TRAINING_ANNOTATION_FILENAME_PATH, output_tag))
 
@@ -125,6 +138,7 @@ def create_annotation_set(output_tag: str | None = None) -> None:
         start_idx = i * num_rows_per_annotator
         end_idx = (i + 1) * num_rows_per_annotator
         annotator_subset = independent_df[start_idx:end_idx]
+        assert len(annotator_subset) == 192
         print(
             f"Annotator {annotator} assigned {len(annotator_subset)} rows for independent annotation."
         )
