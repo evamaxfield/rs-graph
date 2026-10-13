@@ -429,21 +429,21 @@ Classification models used in constructing RS-Graph, and where each is described
     \end{itemize}
   \item \textbf{Validity labels:} match / no-match / unsure / not-available, against the ``official'' definition.
   \item \textbf{Evidence:} full text where accessible; otherwise abstract or landing page plus the repository. Full-text access is recorded per pair (\textcolor{red}{[NO-FULL-TEXT: N]}).
-  \item \textbf{Directionality, four binary labels:}
+  \item \textbf{Directionality, two binary labels:}
     \begin{itemize}[$\circ$]
     \item article links to the repository
-    \item repository links to the article (URL, DOI or citation, any version)
-    \item article links to a different repository
-    \item repository links to a different article
+    \item repository links to the article (URL, DOI or citation, any version; a title alone does not count)
     \end{itemize}
   \item \textbf{Open access:} OA status from OpenAlex.
   \end{itemize}
 \item \textbf{Agreement and precision estimates}
   \begin{itemize}[--]
-  \item \textbf{Agreement:} 3 annotators on the trial set; three-way Fleiss $\kappa$~\cite{fleiss1971measuring}.
+  \item \textbf{Agreement:} 3 annotators on the trial set; percent agreement and Gwet's AC1~\cite{gwet2008computing}.
     \begin{itemize}[$\circ$]
-    \item Validity: \textcolor{red}{[KAPPA-MATCH]}.
-    \item Directionality: \textcolor{red}{[KAPPA-REPO-IN-ARTICLE]}, \textcolor{red}{[KAPPA-ARTICLE-IN-REPO]}, \textcolor{red}{[KAPPA-DIFF-REPO]}, \textcolor{red}{[KAPPA-DIFF-ARTICLE]}.
+    \item Why AC1: $\kappa$ is unstable when nearly all labels fall in one category (94\% match).
+    \item Validity: 94.4\%, AC1 0.942 ($N=24$).
+    \item Directionality: article links repository 93.9\%, AC1 0.879; repository links article 81.8\%, AC1 0.699 ($N=22$).
+    \item Full-text access: 91.7\%, AC1 0.902 ($N=24$).
     \item Resolved by consensus before full annotation.
     \end{itemize}
   \item \textbf{Strict vs lenient:} strict counts unsure and not-available as errors; lenient excludes them.

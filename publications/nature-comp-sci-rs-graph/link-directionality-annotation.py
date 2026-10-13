@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import polars as pl
 import typer
 import utils as u
-from statsmodels.stats.inter_rater import aggregate_raters, cohens_kappa, fleiss_kappa
 
 ################################################################################
 
@@ -16,13 +14,13 @@ DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 ANNOTATORS = ["eva", "sarah", "anna"]
-ANNOTATION_COLUMNS = [
-    "label",
-    "this-repo-linked-in-paper",
-    "this-article-linked-in-repo",
-    "diff-repo-linked-in-paper",
-    "diff-article-linked-in-repo",
-]
+# Each annotated column and the full category set it is rated on (Gwet's AC1 uses the set size)
+ANNOTATION_CATEGORIES = {
+    "label": ["match", "no-match", "unsure", "not-available"],
+    "full-text-available": ["yes", "no"],
+    "this-repo-linked-in-article": ["yes", "no"],
+    "this-article-linked-in-repo": ["yes", "no"],
+}
 FULL_TO_ANNOTATE_FILENAME_TEMPLATE = "link-directionality-to-annotate-{annotator}.csv"
 TRAINING_ANNOTATION_FILENAME_PATH = DATA_DIR / "link-directionality-training-annotation-set.csv"
 TRAINING_ANNOTATION_FILENAME_TEMPLATE = "link-directionality-training-annotated-{annotator}.csv"
@@ -96,10 +94,8 @@ def create_annotation_set(output_tag: str | None = None) -> None:
         ).alias("repository_url"),
         pl.lit(None).alias("label"),
         pl.lit(None).alias("full-text-available"),
-        pl.lit(None).alias("this-repo-linked-in-paper"),
+        pl.lit(None).alias("this-repo-linked-in-article"),
         pl.lit(None).alias("this-article-linked-in-repo"),
-        pl.lit(None).alias("diff-repo-linked-in-paper"),
-        pl.lit(None).alias("diff-article-linked-in-repo"),
         pl.lit(None).alias("notes"),
     ]
 
@@ -188,48 +184,68 @@ def create_annotation_set(output_tag: str | None = None) -> None:
     )
 
 
-def _pairwise_kappa_str(va: list[str | None], vb: list[str | None]) -> str:
-    """Format Cohen's kappa (with N) for two annotators' labels, skipping unlabeled rows."""
-    valid = [(a, b) for a, b in zip(va, vb, strict=False) if a is not None and b is not None]
-    if len(valid) < 2:
-        return "N/A"
-    a_arr = np.array([v[0] for v in valid])
-    b_arr = np.array([v[1] for v in valid])
-    categories = sorted(set(a_arr) | set(b_arr))
-    cat_idx = {c: i for i, c in enumerate(categories)}
-    table = np.zeros((len(categories), len(categories)), dtype=int)
-    for a, b in zip(a_arr, b_arr, strict=False):
-        table[cat_idx[a], cat_idx[b]] += 1
-    kappa = cohens_kappa(table).kappa
-    kappa_str = f"{kappa:.3f}" if not np.isnan(kappa) else "N/A (trivially perfect)"
-    return f"{kappa_str}  (N={len(valid)})"
+def _agreement_stats(rows: list[list[str]], categories: list[str]) -> tuple[float, float]:
+    """Percent agreement and Gwet's AC1 for rows that every rater labeled."""
+    n_raters = len(rows[0])
+    pairs_per_row = n_raters * (n_raters - 1)
+    # Share of agreeing rater pairs per row, averaged over rows
+    p_a = (
+        sum(sum(row.count(c) * (row.count(c) - 1) for c in categories) for row in rows)
+        / pairs_per_row
+        / len(rows)
+    )
+    pi = [sum(row.count(c) for row in rows) / (len(rows) * n_raters) for c in categories]
+    p_e = sum(p * (1 - p) for p in pi) / (len(categories) - 1)
+    return p_a, (p_a - p_e) / (1 - p_e)
 
 
-def _fleiss_kappa_str(shared_rows: list[list[str]]) -> str:
-    """Format Fleiss' kappa (with N) for the rows every annotator labeled."""
-    if len(shared_rows) < 2:
+def _agreement_str(rows: list[list[str]], categories: list[str]) -> str:
+    """Format percent agreement and AC1 (with N), or N/A when too few rows."""
+    if len(rows) < 2:
         return "N/A (insufficient shared non-null rows)"
-    # aggregate_raters expects an (N_subjects x N_raters) array of category indices
-    categories = sorted({v for row in shared_rows for v in row})
-    cat_idx = {c: j for j, c in enumerate(categories)}
-    ratings_matrix = np.array([[cat_idx[v] for v in row] for row in shared_rows])
-    table, _ = aggregate_raters(ratings_matrix)
-    fk = fleiss_kappa(table)
-    fk_str = f"{fk:.3f}" if not np.isnan(fk) else "N/A (trivially perfect)"
-    return f"{fk_str}  (N={len(shared_rows)})"
+    p_a, ac1 = _agreement_stats(rows, categories)
+    return f"agreement {100 * p_a:.1f}%, AC1 {ac1:.3f}  (N={len(rows)})"
+
+
+def _load_annotated_sets() -> tuple[dict[str, pl.DataFrame], list[str]]:
+    """Load each annotator's trial sheet and the columns present in all of them."""
+    dfs = {
+        annotator: pl.read_csv(
+            DATA_DIR / TRAINING_ANNOTATION_FILENAME_TEMPLATE.format(annotator=annotator),
+            infer_schema=False,
+        )
+        for annotator in ANNOTATORS
+    }
+
+    compare_columns = []
+    for col in ANNOTATION_CATEGORIES:
+        if all(col in df.columns for df in dfs.values()):
+            compare_columns.append(col)
+        else:
+            typer.echo(f"Skipping {col}: not present in every annotated set")
+    return dfs, compare_columns
+
+
+def _column_values(base: pl.DataFrame, col: str) -> dict[str, list[str | None]]:
+    """Each annotator's values for a column, empty cells as None, unknown categories rejected."""
+    annotator_vals: dict[str, list[str | None]] = {}
+    for annotator in ANNOTATORS:
+        vals = [
+            str(v).strip() if (v is not None and str(v).strip()) else None
+            for v in base[f"{col}_{annotator}"].to_list()
+        ]
+        unknown = {v for v in vals if v is not None} - set(ANNOTATION_CATEGORIES[col])
+        if unknown:
+            raise ValueError(f"{annotator} has unexpected {col} values: {sorted(unknown)}")
+        annotator_vals[annotator] = vals
+    return annotator_vals
 
 
 @app.command()
 def compare_annotation_sets() -> None:
-    """Report inter-rater agreement and disagreements across the annotated training sets."""
-    # Load all annotated CSVs
+    """Report percent agreement, Gwet's AC1 and disagreements across the trial sets."""
     # Inner join on the shared row identifier keeps only rows present in all files
-    dfs = {
-        annotator: pl.read_csv(
-            DATA_DIR / TRAINING_ANNOTATION_FILENAME_TEMPLATE.format(annotator=annotator)
-        )
-        for annotator in ANNOTATORS
-    }
+    dfs, compare_columns = _load_annotated_sets()
 
     base = (
         dfs["eva"]
@@ -238,45 +254,45 @@ def compare_annotation_sets() -> None:
                 "document_repository_link_id",
                 "document_url",
                 "repository_url",
-                *ANNOTATION_COLUMNS,
+                *compare_columns,
             ]
         )
-        .rename({col: f"{col}_eva" for col in ANNOTATION_COLUMNS})
+        .rename({col: f"{col}_eva" for col in compare_columns})
     )
 
     for annotator in ["sarah", "anna"]:
         other = (
             dfs[annotator]
-            .select(["document_repository_link_id", *ANNOTATION_COLUMNS])
-            .rename({col: f"{col}_{annotator}" for col in ANNOTATION_COLUMNS})
+            .select(["document_repository_link_id", *compare_columns])
+            .rename({col: f"{col}_{annotator}" for col in compare_columns})
         )
         base = base.join(other, on="document_repository_link_id", how="inner")
 
     doc_urls = base["document_url"].to_list()
     repo_urls = base["repository_url"].to_list()
 
-    for col in ANNOTATION_COLUMNS:
+    summary_rows = []
+    for col in compare_columns:
         typer.echo(f"\n{'=' * 60}")
         typer.echo(f"Column: {col}")
         typer.echo("=" * 60)
 
-        # Normalize empty strings to None for consistent handling.
-        annotator_vals: dict[str, list[str | None]] = {}
-        for annotator in ANNOTATORS:
-            raw = base[f"{col}_{annotator}"].to_list()
-            annotator_vals[annotator] = [
-                str(v).strip() if (v is not None and str(v).strip()) else None for v in raw
-            ]
+        categories = ANNOTATION_CATEGORIES[col]
+        annotator_vals = _column_values(base, col)
 
-        # --- Pairwise Cohen's kappa ---
+        # --- Pairwise agreement ---
         typer.echo("\n--- Inter-Rater Agreement ---")
-        typer.echo("Pairwise Cohen's Kappa:")
+        typer.echo("Pairwise:")
         pairs = [("eva", "sarah"), ("eva", "anna"), ("sarah", "anna")]
         for name_a, name_b in pairs:
-            kappa_str = _pairwise_kappa_str(annotator_vals[name_a], annotator_vals[name_b])
-            typer.echo(f"  {name_a} vs {name_b}: {kappa_str}")
+            pair_rows = [
+                [a, b]
+                for a, b in zip(annotator_vals[name_a], annotator_vals[name_b], strict=True)
+                if a is not None and b is not None
+            ]
+            typer.echo(f"  {name_a} vs {name_b}: {_agreement_str(pair_rows, categories)}")
 
-        # --- Three-way Fleiss' kappa ---
+        # --- Three-way agreement ---
         # Keep only rows every annotator labeled
         shared_rows: list[list[str]] = []
         for i in range(len(doc_urls)):
@@ -284,7 +300,18 @@ def compare_annotation_sets() -> None:
             non_null = [v for v in row_vals if v is not None]
             if len(non_null) == len(ANNOTATORS):
                 shared_rows.append(non_null)
-        typer.echo(f"Three-way Fleiss' Kappa: {_fleiss_kappa_str(shared_rows)}")
+        typer.echo(f"Three-way: {_agreement_str(shared_rows, categories)}")
+        if len(shared_rows) >= 2:
+            p_a, ac1 = _agreement_stats(shared_rows, categories)
+            summary_rows.append(
+                {
+                    "column": col,
+                    "n_pairs": len(shared_rows),
+                    "n_all_agree": sum(len(set(row)) == 1 for row in shared_rows),
+                    "percent_agreement": 100 * p_a,
+                    "gwet_ac1": ac1,
+                }
+            )
 
         # --- Disagreements ---
         disagreements = [
@@ -300,6 +327,10 @@ def compare_annotation_sets() -> None:
                 v = annotator_vals[ann][i]
                 typer.echo(f"\t- {ann}: {v if v is not None else '(empty)'}")
             typer.echo("")
+
+    summary = pl.DataFrame(summary_rows)
+    typer.echo(summary)
+    u.save_table(summary, "link_directionality_trial_agreement", u.OUTPUT_DIR)
 
 
 if __name__ == "__main__":
