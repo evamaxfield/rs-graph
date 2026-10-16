@@ -5,8 +5,10 @@ Docs/marketing site for the rs-graph dataset. See
 
 ## Layout
 
-- `data-prep/` -- Python. Queries `sci-soft-collections/rs-graph-v2-full` on HuggingFace and writes small,
-  committed JSON files to `data-prep/output/`. Nothing heavy runs in the browser or in CI.
+- `data-prep/` -- Python. Queries the gated `sci-soft-collections/rs-graph-v2-full` on HuggingFace
+  (the public release is `sci-soft-collections/rs-graph-v2`; the site's loading snippet and
+  viewer links point there) and writes small, committed JSON files to `data-prep/output/`.
+  Nothing heavy runs in the browser or in CI.
 - `site/` -- Astro app. Imports `data-prep/output/*.json` (staged into `site/public/data/`) and
   renders charts with Observable Plot. Zero JS shipped per page except the chart islands.
 
@@ -25,7 +27,7 @@ PYTHONPATH=. .venv/bin/python queries/ml_tooling_adoption.py
 PYTHONPATH=. .venv/bin/python queries/coauthorship_network.py
 PYTHONPATH=. .venv/bin/python queries/embedding_clusters.py   # slow -- embeds + UMAPs a sample; NOT rendered on the site (see below)
 PYTHONPATH=. .venv/bin/python queries/home_stats.py
-.venv/bin/python extract_snippets.py   # regenerates site/src/generated/*.py.txt
+.venv/bin/python extract_snippets.py   # regenerates site/src/generated/*.py.txt (also copies rs_graph/release/templates/load_rs_graph.py)
 
 # stage the new output for the site
 cp output/*.json ../site/public/data/

@@ -151,6 +151,17 @@ db-upgrade target="dev":
 	perl -pi -e 's|{{db_path}}-{{db_version}}-{{target}}.db|REPLACE_SQLITE_DB_PATH|g' {{justfile_directory()}}/alembic.ini
 
 ###############################################################################
+# Dataset release (HuggingFace)
+
+# export the database and upload the full and public datasets (variant: full, public or both)
+upload-to-huggingface db variant="both":
+	rs-graph-upload-to-huggingface {{db}} --variant {{variant}}
+
+# Disabled until the dataset is released; needs a CLI command wired to rs_graph.release.zenodo
+# release-deposit-zenodo *flags:
+# 	rs-graph-release deposit-zenodo {{flags}}
+
+###############################################################################
 # Docker management
 
 # build docker image locally

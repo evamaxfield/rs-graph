@@ -52,9 +52,7 @@ for domain_name in sorted(authors["domain_name"].unique().to_list()):
     n_edges = graph.num_edges()
     density = (2 * n_edges / (n_nodes * (n_nodes - 1))) if n_nodes > 1 else 0.0
     components = rx.connected_components(graph)
-    largest_component_frac = (
-        max(len(c) for c in components) / n_nodes if n_nodes else 0.0
-    )
+    largest_component_frac = max(len(c) for c in components) / n_nodes if n_nodes else 0.0
     transitivity = rx.transitivity(graph) if n_nodes > 2 else 0.0
 
     domain_stats.append(

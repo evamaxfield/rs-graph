@@ -1,7 +1,7 @@
 """Q2: whether code contributions are recognized as authorship (qss-code-authors replication).
 
 Matches repository contributors to researchers via ResearcherDeveloperAccountLink
-(confidence >= 0.9), restricted throughout to high-precision article-repository links.
+(confidence >= 0.97), restricted throughout to high-precision article-repository links.
 See doi.org/10.1162/QSS.a.465 for the original v1 finding this replicates.
 """
 
@@ -72,7 +72,7 @@ def run() -> dict:
         "question": "Are code contributions recognized as authorship?",
         "methodology": (
             "document_repository_link filtered to NULL OR confidence >= 0.9994; "
-            "researcher_developer_account_link filtered to confidence >= 0.9"
+            "researcher_developer_account_link filtered to confidence >= 0.97"
         ),
         "unrestricted": {
             "n_hp_linked_documents": n_unrestricted,

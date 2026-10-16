@@ -5,12 +5,16 @@
 export interface TableField {
   name: string;
   type: string;
+  // Present only in the gated full release, not the public one.
+  fullOnly?: boolean;
 }
 
 export interface TableDef {
   name: string;
   docstring: string;
   fields: TableField[];
+  // Whole table is present only in the gated full release.
+  fullOnly?: boolean;
 }
 
 export interface FamilyDef {
@@ -50,6 +54,7 @@ export const families: FamilyDef[] = [
       {
         name: 'DocumentAbstract',
         docstring: 'Stores the abstract for a document.',
+        fullOnly: true,
         fields: [
           { name: 'document_id', type: 'int (FK: document)' },
           { name: 'content', type: 'str | None' },
@@ -294,8 +299,8 @@ export const families: FamilyDef[] = [
         fields: [
           { name: 'code_host_id', type: 'int (FK: code_host)' },
           { name: 'username', type: 'str' },
-          { name: 'name', type: 'str | None' },
-          { name: 'email', type: 'str | None' },
+          { name: 'name', type: 'str | None', fullOnly: true },
+          { name: 'email', type: 'str | None', fullOnly: true },
         ],
       },
       {

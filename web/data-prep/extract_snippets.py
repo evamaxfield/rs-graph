@@ -14,6 +14,22 @@ END_MARKER = "# --- site-snippet:end ---"
 QUERIES_DIR = os.path.join(os.path.dirname(__file__), "queries")
 GENERATED_DIR = os.path.join(os.path.dirname(__file__), "..", "site", "src", "generated")
 
+# Whole files copied verbatim (source path, output name), shared with the dataset card.
+WHOLE_FILE_SOURCES = [
+    (
+        os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "rs_graph",
+            "release",
+            "templates",
+            "load_rs_graph.py",
+        ),
+        "load_rs_graph.py.txt",
+    ),
+]
+
 
 def extract_snippet(path: str) -> str | None:
     with open(path) as f:
@@ -48,6 +64,12 @@ def run() -> None:
         with open(os.path.join(GENERATED_DIR, out_name), "w") as f:
             f.write(snippet)
         print(f"extracted {out_name}")
+    for source_path, out_name in WHOLE_FILE_SOURCES:
+        with open(source_path) as f:
+            contents = f.read()
+        with open(os.path.join(GENERATED_DIR, out_name), "w") as f:
+            f.write(contents)
+        print(f"copied {out_name}")
 
 
 if __name__ == "__main__":

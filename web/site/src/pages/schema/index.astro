@@ -1,21 +1,25 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { families } from '../../lib/schemaData';
+
+const PUBLIC_REPO = 'sci-soft-collections/rs-graph-v2';
+const FULL_REPO = 'sci-soft-collections/rs-graph-v2-full';
 ---
 
 <BaseLayout title="Schema">
   <section class="container">
     <h1 class="title-lg">Schema reference</h1>
     <p class="body-md intro">
-      All 27 tables, grouped into 7 entity families. Every table ships together in one dataset:
-      no coverage badges, nothing "coming soon." Every table also carries
+      All 27 tables, grouped into 7 entity families. The gated full release has every table; the
+      public release omits the abstracts table and two developer-account columns, marked
+      <span class="full-only-badge">gated full release only</span> below. Every table also carries
       <code>created_datetime</code> / <code>updated_datetime</code> timestamps, omitted from the field
       tables below to avoid repetition.
     </p>
     <p class="body-sm intro">
-      Each table below links to its HuggingFace dataset viewer. Since both RS-Graph repos are
-      private today, that link requires signing in with an authorized HF account (see the Home
-      page's "Using this dataset responsibly" section for the request path).
+      Each table below links to its HuggingFace dataset viewer: the public release, or the gated
+      full release for tables that exist only there. The gated viewer needs an HF account with
+      approved access (see the Home page's "Using this dataset responsibly" section).
     </p>
 
     <input
@@ -63,7 +67,8 @@ import { families } from '../../lib/schemaData';
                 (table: {
                   name: string;
                   docstring: string;
-                  fields: { name: string; type: string }[];
+                  fields: { name: string; type: string; fullOnly?: boolean }[];
+                  fullOnly?: boolean;
                 }) => (
                   <div
                     class="table-block"
@@ -77,6 +82,9 @@ import { families } from '../../lib/schemaData';
                       .toLowerCase()}
                   >
                     <h3 class="title-sm">{table.name}</h3>
+                    {table.fullOnly && (
+                      <span class="full-only-badge">gated full release only</span>
+                    )}
                     <p class="body-sm docstring">{table.docstring}</p>
                     <table>
                       <thead>
@@ -90,6 +98,9 @@ import { families } from '../../lib/schemaData';
                           <tr>
                             <td>
                               <code class="field-name">{f.name}</code>
+                              {f.fullOnly && (
+                                <span class="full-only-badge">gated full release only</span>
+                              )}
                             </td>
                             <td>{f.type}</td>
                           </tr>
@@ -98,7 +109,7 @@ import { families } from '../../lib/schemaData';
                     </table>
                     <a
                       class="body-sm viewer-link"
-                      href={`https://huggingface.co/datasets/evamxb/rs-graph-v2-full/viewer/${table.name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()}`}
+                      href={`https://huggingface.co/datasets/${table.fullOnly ? FULL_REPO : PUBLIC_REPO}/viewer/${table.name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()}`}
                     >
                       View sample rows on the HuggingFace dataset viewer &rarr;
                     </a>
@@ -226,6 +237,17 @@ import { families } from '../../lib/schemaData';
   .docstring {
     color: var(--color-text-muted);
     margin-bottom: 0.75rem;
+  }
+  .full-only-badge {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0 0.4rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    font-weight: 400;
+    white-space: nowrap;
   }
   .viewer-link {
     display: inline-block;

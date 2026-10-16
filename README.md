@@ -52,56 +52,38 @@ While there is more information available in the dataset, these are the primary 
 
 ### rs-graph-v2
 
-The second release of data from our processing pipeline is available on HuggingFace: [evamxb/rs-graph-v2](https://huggingface.co/datasets/evamxb/rs-graph-v2)
+The second release of data from our processing pipeline is available on HuggingFace in two variants,
+both built from the same database. Every table is a separate dataset config, and both are released
+under CC BY 4.0. READMEs, descriptions, titles, and mention snippets keep their original upstream
+terms.
 
-The publicly available (redacted) version of the dataset excludes tables containing personally identifiable information about researchers and developers (i.e. the `researcher`, `developer_account`, `document_contributor`, `document_contributor_institution`, `repository_contributor`, and `researcher_developer_account_link` tables).
+| Variant | Repo | Access |
+|---|---|---|
+| Public | [sci-soft-collections/rs-graph-v2](https://huggingface.co/datasets/sci-soft-collections/rs-graph-v2) | open |
+| Full | [sci-soft-collections/rs-graph-v2-full](https://huggingface.co/datasets/sci-soft-collections/rs-graph-v2-full) | gated, manual approval |
+
+The public variant omits three things, and everything else ships in both:
+
+- the `document_abstract` table (abstracts are available from OpenAlex by DOI)
+- the `developer_account.name` column
+- the `developer_account.email` column (both available from the GitHub API by username)
+
+To request access to the full variant, use the access form on its HuggingFace page (name,
+affiliation, intended use). Approval is manual.
+
+The release does not filter by model confidence. The recommended filters are:
+
+- article-repository pairs: `document_repository_link.predictive_model_confidence` is NULL (curated)
+  or >= 0.9994
+- researcher-developer identity links: `researcher_developer_account_link.predictive_model_confidence`
+  >= 0.97
+- publication year >= 2008
+
+The dataset card on HuggingFace and the [docs site](https://evamaxfield.github.io/rs-graph/) both
+carry a copy-paste loading snippet that applies these filters. To report a problem or request
+removal of a record, open an issue on this repository.
 
 The database schema/models are available at: [./rs_graph/db/models.py](./rs_graph/db/models.py)
-
-#### Usage
-
-```bash
-pip install datasets polars
-```
-
-Each table is stored as a separate config on HuggingFace. Load individual tables by name:
-
-```python
-from datasets import load_dataset
-import polars as pl
-
-# Helper to load a table as a polars DataFrame (zero-copy via Arrow)
-def load_table(table: str) -> pl.DataFrame:
-    ds = load_dataset("evamxb/rs-graph-v2", table, split="train")
-    return pl.from_arrow(ds.data.table)
-
-# Load all article info
-documents = load_table("document")
-print(documents.head(10))
-
-# Load and join article-repository links with repository info
-article_repo_links = load_table("document_repository_link")
-repositories = load_table("repository")
-
-merged = (
-    article_repo_links
-    .join(
-        documents.select("id", "title", "cited_by_count").rename({"id": "document_id"}),
-        on="document_id",
-    )
-    .join(
-        repositories.select("id", "name", "description").rename({
-            "id": "repository_id",
-            "name": "repository_name",
-            "description": "repository_description",
-        }),
-        on="repository_id",
-    )
-)
-print(merged.select(
-    "title", "repository_name", "repository_description", "cited_by_count",
-).head(10))
-```
 
 ### rs-graph-v1
 

@@ -24,6 +24,7 @@ import q3Snippet from '../generated/top_libraries.py.txt?raw';
 import q3CrossViewSnippet from '../generated/library_cross_view.py.txt?raw';
 import mlAdoptionSnippet from '../generated/ml_tooling_adoption.py.txt?raw';
 import coauthorshipSnippet from '../generated/coauthorship_network.py.txt?raw';
+import loadSnippet from '../generated/load_rs_graph.py.txt?raw';
 
 const mlAdoptionDomainsByPct = [...mlAdoption.domains].sort(
   (a: { pct: number }, b: { pct: number }) => b.pct - a.pct,
@@ -106,51 +107,7 @@ const questionTabs = [
 
 const loadingSnippet = `pip install datasets polars
 
-from datasets import load_dataset
-import polars as pl
-
-# Helper to load a table as a polars DataFrame (zero-copy via Arrow)
-def load_table(table: str) -> pl.DataFrame:
-    ds = load_dataset("evamxb/rs-graph-v2-full", table, split="train", token="<HF_TOKEN>")
-    return pl.from_arrow(ds.data.table)
-
-# Load all article info
-documents = load_table("document")
-print(documents.head(10))
-
-# Load and join article-repository links with repository info
-article_repo_links = load_table("document_repository_link")
-repositories = load_table("repository")
-
-merged = (
-    article_repo_links
-    .join(
-        documents.select("id", "title", "cited_by_count").rename({"id": "document_id"}),
-        on="document_id",
-    )
-    .join(
-        repositories.select("id", "name", "description").rename({
-            "id": "repository_id",
-            "name": "repository_name",
-            "description": "repository_description",
-        }),
-        on="repository_id",
-    )
-)
-print(merged.select(
-    "title", "repository_name", "repository_description", "cited_by_count",
-).head(10))
-
-# Code-adjacent join: pull each repo's README alongside its detected imports
-readmes = load_table("repository_readme").rename({"content": "readme_content"})
-imports = load_table("repository_import")
-
-code_adjacent = (
-    repositories
-    .join(readmes, left_on="id", right_on="repository_id", how="inner")
-    .join(imports, left_on="id", right_on="repository_id", how="inner")
-)
-print(code_adjacent.select("name", "readme_content", "software_name_normalized").head(10))`;
+${loadSnippet}`;
 ---
 
 <BaseLayout title="Home">
@@ -168,9 +125,9 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
         <a class="btn btn--secondary" href={withBase('/schema')}>Browse the schema</a>
       </div>
       <p class="body-sm hero__access-note">
-        Both HuggingFace dataset repos are private today -- access requires an emailed request
-        for an <code>HF_TOKEN</code>, and there's no pinned dataset version/DOI yet. See "Using
-        this dataset responsibly" below for the request path.
+        RS-Graph v2 is on HuggingFace in two variants: a public release and a gated full
+        release. There's no pinned dataset version/DOI yet. See "Using this dataset responsibly"
+        below for what differs and how to request full access.
       </p>
       <p class="body-sm hero__access-note">
         51.7% of linked repos carry a detected license (MIT 25.7% &middot; Apache-2.0 7.8%
@@ -230,19 +187,14 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
       <div data-tab-panel="loading">
         <p class="body-md intro">
           Every RS-Graph table is a separate HuggingFace dataset config under
-          <code>evamxb/rs-graph-v2-full</code>. Load individual tables by name and join with
-          polars.
+          <code>sci-soft-collections/rs-graph-v2</code>. Load individual tables by name and join
+          with polars.
         </p>
         <p class="body-sm quickstart-note">
-          Requires a HuggingFace access token. Both RS-Graph repos are private today. See the
-          "Using this dataset responsibly" section below for how to request one.
-        </p>
-        <p class="body-sm quickstart-note">
-          The snippet below loads <code>evamxb/rs-graph-v2-full</code>. For code-only analysis
-          (no author&harr;developer identity matching), request <code
-            >evamxb/rs-graph-v2-redacted</code
-          >
-          instead. It excludes PII-bearing tables and is sufficient for everything except Q2.
+          The snippet below loads the public release, which needs no access request. It omits
+          abstracts and developer display names and emails; those are only in the gated
+          <code>sci-soft-collections/rs-graph-v2-full</code>. See "Dataset versions &amp;
+          access" below.
         </p>
         <Code
           code={loadingSnippet}
@@ -252,11 +204,9 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
           wrap
         />
         <p class="body-md">
-          Note the last join above: <code>repository_readme</code> and <code
-            >repository_import</code
-          >
-          are the two code-adjacent tables (README text and extracted library names). There is no
-          table containing actual source file contents. See
+          <code>repository_readme</code> and <code>repository_import</code> are the two code-adjacent
+          tables (README text and extracted library names). There is no table containing actual source
+          file contents. See
           <a href={withBase('/schema#repositories-and-code')}>Repositories &amp; Code</a> on the Schema
           page for what's actually stored.
         </p>
@@ -652,8 +602,7 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
         <p class="body-sm">
           <code>researcher_developer_account_link.predictive_model_confidence</code> -- every row
           is model-predicted, no curated case. <strong>Recommended filter:</strong>
-          <code>&gt;= 0.9</code>
-          (retains 97.0% of links, 180,463 of 185,966).
+          <code>&gt;= 0.97</code>.
         </p>
         <p class="body-sm">
           <strong>Publication-year floor: 2008.</strong> GitHub launched February 2008; any document
@@ -697,16 +646,19 @@ print(code_adjacent.select("name", "readme_content", "software_name_normalized")
         </ul>
         <h3 class="title-sm">Dataset versions &amp; access</h3>
         <p class="body-sm">
-          RS-Graph v2 ships as two HuggingFace dataset repos: <code
-            >evamxb/rs-graph-v2-redacted</code
-          >
-          (excludes PII-bearing tables, sufficient for everything except Q2 above) and
-          <code>evamxb/rs-graph-v2-full</code> (every table, needed for Q2 and author&harr;developer
-          identity work). <strong>Both are private today.</strong> To get access, open an issue or
-          email the maintainer for an <code>HF_TOKEN</code>; see the
-          <a href="https://github.com/evamaxfield/rs-graph#rs-graph-v2">repo README</a> for the request
-          path. There is no dataset revision/version number pinned anywhere yet -- note the date you
-          pulled the data if reproducing a specific number matters.
+          RS-Graph v2 ships as two HuggingFace dataset repos built from the same database:
+          <code>sci-soft-collections/rs-graph-v2</code> (public) and
+          <code>sci-soft-collections/rs-graph-v2-full</code> (gated, manual approval). The public
+          release omits the <code>document_abstract</code> table (abstracts are available from OpenAlex
+          by DOI) and the <code>developer_account</code>
+          <code>name</code> and
+          <code>email</code> columns (available from the GitHub API by username); everything else
+          ships in both, including every analysis on this site. The full release is for work that
+          needs those fields. To request full access, use the gated-access form on its HuggingFace
+          page; see the
+          <a href="https://github.com/evamaxfield/rs-graph#rs-graph-v2">repo README</a> for details.
+          There is no dataset revision/version number pinned anywhere yet -- note the date you pulled
+          the data if reproducing a specific number matters.
         </p>
         <h3 class="title-sm" id="citing">Citing RS-Graph</h3>
         <p class="body-sm">

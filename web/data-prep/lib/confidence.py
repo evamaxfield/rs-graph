@@ -12,8 +12,8 @@ import polars as pl
 DOCUMENT_REPOSITORY_LINK_THRESHOLD = 0.9994
 
 # researcher_developer_account_link.predictive_model_confidence:
-# every row is model-predicted; this retains ~97% of links while dropping the uncertain tail.
-RESEARCHER_DEVELOPER_ACCOUNT_LINK_THRESHOLD = 0.9
+# every row is model-predicted; this drops the uncertain tail of identity links.
+RESEARCHER_DEVELOPER_ACCOUNT_LINK_THRESHOLD = 0.97
 
 # GitHub launched February 2008 -- any document/repository data implying an
 # earlier date for linked code is a data-encoding artifact (likely OpenAlex-side),
