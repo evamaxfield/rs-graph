@@ -11,6 +11,7 @@ from collections import Counter, deque
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import evaplot
 import matplotlib.lines as mlines
@@ -20,6 +21,7 @@ import polars as pl
 import rustworkx as rx
 import utils as u
 from matplotlib.collections import LineCollection
+from PIL import Image
 
 ###############################################################################
 # Layouts
@@ -55,7 +57,7 @@ def _forceatlas2_positions(
     graph: rx.PyGraph,
     init: dict[int, tuple[float, float]],
     seed: int = 42,
-    max_iter: int = 60,
+    max_iter: int = 150,
     repulsion_sample: int = 8192,
 ) -> dict[int, tuple[float, float]]:
     """
@@ -554,6 +556,11 @@ def _sampled_entity_frames(
 ###############################################################################
 # Drawing
 
+# Coloured links (identity, seed, mined) share one width (pt) and alpha so no type outweighs
+# another.
+LINK_LW = 0.30
+LINK_ALPHA = 0.65
+
 
 def _edge_segments(
     graph: rx.PyGraph, positions: dict[int, tuple[float, float]], etype: str
@@ -601,38 +608,29 @@ def _marker_handle(
 def _draw_quadpartite_network(
     graph: rx.PyGraph,
     positions: dict[int, tuple[float, float]],
-    canvas_width: float,
-    canvas_height: float,
     caption: str,
     output_dir: Path,
     stem: str = "figure1_quadpartite_network",
     show_legend: bool = False,
+    link_lw: float = LINK_LW,
+    link_alpha: float = LINK_ALPHA,
 ) -> None:
     """Draw and save one Figure 1 render: article/researcher share one blue hue (article
     filled, researcher hollow, lighter tint); repository/developer share one vermillion hue
     the same way. Article-repository edges are coloured by provenance (seed vs. mined, from
-    `link_processing_iteration`); every other edge is light grey, differentiated only by
-    alpha/linewidth. No per-node labels. `show_legend=False` (the main output) omits the
-    boxed legend -- panel B carries the encoding instead; `show_legend=True` draws a small
+    `link_processing_iteration`) and identity edges green, all drawn above the nodes at one
+    `link_lw`/`link_alpha`; authorship and contribution edges are light grey beneath them.
+    Drawn at print size (point values equal points on the page). No per-node labels.
+    `show_legend=False` (the main output) omits the boxed legend -- panel B carries the encoding instead; `show_legend=True` draws a small
     reference legend for review. LineCollections and scatters rasterized so the PDF stays
     small and fast to open.
     """
     # Two hue families, dark (filled) + light (hollow) tint each: blue for
     # article/researcher, vermillion for repository/developer. Full separation from the Figs
     # 2-4 field palette isn't achievable -- see the figure's memory-doc discussion.
-    node_type_colors: dict[str, str] = {
-        "article": "#1B4F72",
-        "researcher": "#7FB3D5",
-        "repository": "#B7472A",
-        "developer": "#F0B27A",
-    }
-    hollow_node_types = {"researcher", "developer"}
-    node_type_markers: dict[str, str] = {
-        "article": "o",
-        "repository": "s",
-        "researcher": "D",
-        "developer": "^",
-    }
+    node_type_colors = u.NODE_TYPE_COLORS
+    hollow_node_types = u.HOLLOW_NODE_TYPES
+    node_type_markers = u.NODE_TYPE_MARKERS
     node_type_labels: dict[str, str] = {
         "article": "Article",
         "repository": "Repository",
@@ -643,50 +641,26 @@ def _draw_quadpartite_network(
     # Edge provenance hues (ColorBrewer Dark2 purple/gold -- a blue-yellow pair, robust under
     # red-green colourblindness and distinct from the blue/vermillion node hues above and the
     # field/general/data-view palettes used elsewhere): purple for seed pairs, gold for mined.
-    # Every other edge type stays uniform light grey, differentiated only by alpha/linewidth.
-    edge_grey = "#999999"
-    seed_color, mined_color = "#7570B3", "#E6AB02"
-    edge_style = {
-        "authored_by": {"color": edge_grey, "lw": 0.25, "ls": "-", "zorder": 1, "alpha": 0.06},
-        "contributed_to": {
-            "color": edge_grey,
-            "lw": 0.25,
-            "ls": "-",
-            "zorder": 1,
-            "alpha": 0.06,
-        },
-        "article_repository_link_seed": {
-            "color": seed_color,
-            "lw": 0.9,
-            "ls": "-",
-            "zorder": 2,
-            "alpha": 0.38,
-        },
-        "article_repository_link_mined": {
-            "color": mined_color,
-            "lw": 0.9,
-            "ls": "-",
-            "zorder": 2,
-            "alpha": 0.38,
-        },
-        "identity": {"color": edge_grey, "lw": 0.7, "ls": "-", "zorder": 3, "alpha": 0.15},
+    # Authorship/contribution edges stay uniform light grey beneath the nodes.
+    edge_grey = u.EDGE_GREY
+    seed_color, mined_color = u.SEED_LINK_COLOR, u.MINED_LINK_COLOR
+    grey = {"color": edge_grey, "lw": 0.15, "zorder": 1, "alpha": 0.2}
+    coloured = {"lw": link_lw, "zorder": 4, "alpha": link_alpha}
+    edge_style: dict[str, dict[str, Any]] = {
+        "authored_by": grey,
+        "contributed_to": grey,
+        "identity": {"color": u.IDENTITY_LINK_COLOR, **coloured},
+        "article_repository_link_seed": {"color": seed_color, **coloured},
+        "article_repository_link_mined": {"color": mined_color, **coloured},
     }
-    # Marker area bumped ~2.5x over this figure's original 3.5pt^2 calibration so the two hue
-    # families read at panel size. Researcher/developer now draw ~0.7x that area -- people
-    # nodes outnumber article/repository nodes heavily at this sample size, so a slight size
-    # cut (on top of already being hollow) keeps them from dominating.
-    marker_size = 8.75
-    identity_marker_size = 8.75 * 0.7
-    node_alpha = 0.5
-    identity_alpha = 0.4
-    marker_lw = 0.25
+    # Articles/repositories solid, people hollow and fainter; sizes are marker widths in pt.
+    marker_size = 1.1**2
+    people_marker_size = 1.0**2
+    people_alpha = 0.8
+    people_lw = 0.2
 
-    ref_canvas_extent = 143.2  # canvas width measured at the 2,000-seed-pair calibration run
-    canvas_extent = max(canvas_width, canvas_height)
-    figsize_in = min(22.0, max(14.0, 14.0 * canvas_extent / ref_canvas_extent))
-
-    fig, ax = plt.subplots(figsize=(figsize_in, figsize_in))
-    ax.margins(0.02)  # crop the whitespace border down from matplotlib's default 5%
+    fig, ax = plt.subplots(figsize=(179.7 / 72, 179.7 / 72))
+    fig.subplots_adjust(0, 0, 1, 1)
 
     for etype, style in edge_style.items():
         segments = _edge_segments(graph, positions, etype)
@@ -697,17 +671,17 @@ def _draw_quadpartite_network(
                 segments,
                 colors=style["color"],
                 linewidths=style["lw"],
-                linestyles=style["ls"],
                 zorder=style["zorder"],
                 alpha=style["alpha"],
+                capstyle="round",
                 rasterized=True,
             )
         )
     ax.autoscale_view()
 
-    # Article/repository filled; researcher/developer hollow (lighter tint of the same hue)
-    # and slightly smaller.
-    for ntype, color in node_type_colors.items():
+    # People hollow (deeper outline tint) under the solid article/repository nodes, articles
+    # last so the repository red doesn't dominate overlaps.
+    for ntype in ("researcher", "developer", "repository", "article"):
         xs, ys = _node_positions_by_type(graph, positions, ntype)
         if not xs:
             continue
@@ -715,13 +689,13 @@ def _draw_quadpartite_network(
         ax.scatter(
             xs,
             ys,
-            facecolors="none" if hollow else color,
-            edgecolors=color if hollow else "none",
+            facecolors="none" if hollow else node_type_colors[ntype],
+            edgecolors=u.NODE_BORDER_COLORS[ntype] if hollow else "none",
             marker=node_type_markers[ntype],
-            s=identity_marker_size if hollow else marker_size,
-            alpha=identity_alpha if hollow else node_alpha,
-            linewidths=marker_lw,
-            zorder=4,
+            s=people_marker_size if hollow else marker_size,
+            alpha=people_alpha if hollow else 1.0,
+            linewidths=people_lw if hollow else 0,
+            zorder=2 if hollow else 3,
             rasterized=True,
         )
 
@@ -746,7 +720,11 @@ def _draw_quadpartite_network(
             ),
             mlines.Line2D([], [], color=edge_grey, lw=1.2, label="Authorship / contribution"),
             mlines.Line2D(
-                [], [], color=edge_grey, lw=1.8, label="Researcher-developer identity"
+                [],
+                [],
+                color=u.IDENTITY_LINK_COLOR,
+                lw=1.5,
+                label="Researcher-developer identity",
             ),
         ]
         legend = ax.legend(
@@ -758,12 +736,23 @@ def _draw_quadpartite_network(
         )
         u.style_legend(legend, fontsize=8)
 
+    # Square limits centred on the layout so the PNG is exactly figsize x dpi.
+    node_xy = [positions[i] for i in graph.node_indices()]
+    x_lo, x_hi = min(x for x, _ in node_xy), max(x for x, _ in node_xy)
+    y_lo, y_hi = min(y for _, y in node_xy), max(y for _, y in node_xy)
+    half = 0.5 * max(x_hi - x_lo, y_hi - y_lo) * 1.01
+    ax.set_xlim((x_lo + x_hi) / 2 - half, (x_lo + x_hi) / 2 + half)
+    ax.set_ylim((y_lo + y_hi) / 2 - half, (y_lo + y_hi) / 2 + half)
     ax.set_axis_off()
     ax.set_aspect("equal")
     u.print_caption_note(stem, caption)
 
-    u.save_figure(fig, stem, output_dir)
+    u.save_figure(fig, stem, output_dir, dpi=600, tight=False)
     plt.close(fig)
+    # Matplotlib writes RGBA; journals want an RGB PNG.
+    png_path = output_dir / f"{stem}.png"
+    with Image.open(png_path) as rgba:
+        rgba.convert("RGB").save(png_path, dpi=(600, 600))
 
 
 def _render_layouts(
@@ -784,13 +773,9 @@ def _render_layouts(
     positions, _canvas_width, _canvas_height = _global_spring_layout(graph, seed=seed)
     print("\nComputing ForceAtlas2 layout (warm-started from spring positions)...")
     fa2_positions = _forceatlas2_positions(graph, positions, seed=seed)
-    xs = [p[0] for p in fa2_positions.values()]
-    ys = [p[1] for p in fa2_positions.values()]
     _draw_quadpartite_network(
         graph,
         fa2_positions,
-        max(xs),
-        max(ys),
         caption_base,
         output_dir,
         stem=base_stem,
@@ -799,8 +784,6 @@ def _render_layouts(
     _draw_quadpartite_network(
         graph,
         fa2_positions,
-        max(xs),
-        max(ys),
         caption_base,
         output_dir,
         stem=f"{base_stem}_review-legend",
@@ -814,7 +797,7 @@ def _render_layouts(
 
 def figure_1_quadpartite_network(
     output_dir: Path = u.OUTPUT_DIR,
-    n_pairs: int = 5000,
+    n_pairs: int = 1500,
     n_top_hub_anchors_per_field: int = 2,
     n_random_hub_anchors_per_field: int = 3,
     min_anchor_pair_degree: int = 3,
@@ -828,7 +811,7 @@ def figure_1_quadpartite_network(
     """
     Build Figure 1, panel A: the quad-partite network -- articles, repositories, researchers
     (authors), and developer accounts (contributors) -- rendered together with rustworkx.
-    The workflow diagram (Figure 1, panel B) is a hand-made image and out of scope here.
+    The main output omits the legend because panel B carries the node and edge encoding.
     `output_stem_suffix` (e.g. "_n15000") routes a trial render to its own filenames.
 
     Sampling: field-stratified snowball from well-linked identity hubs, rather than a

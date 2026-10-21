@@ -24,6 +24,7 @@ from armm_verification import (
     classification_models_table_verification,
 )
 from figure1_quadpartite_network import figure_1_quadpartite_network
+from figure1_schematics import figure_1b_network_schematic, figure_1c_mining_workflow
 from figure2_dataset_coverage import (
     candidate_figure2c_mined_share_by_field,
     figure_2_dataset_coverage,
@@ -63,6 +64,8 @@ from tables_and_counts import (
 app = typer.Typer()
 
 app.command()(figure_1_quadpartite_network)
+app.command()(figure_1b_network_schematic)
+app.command()(figure_1c_mining_workflow)
 app.command()(figure_2_dataset_coverage)
 app.command()(candidate_figure2c_mined_share_by_field)
 app.command()(pwc_by_year_check)

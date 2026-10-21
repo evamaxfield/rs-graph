@@ -617,15 +617,30 @@ def compute_modified_fwsi(
 # Plotting support
 
 
-def save_figure(fig: Figure, stem: str, output_dir: Path) -> None:
-    """Save a figure as PNG, TIFF (LZW-compressed), and PDF to `output_dir` at 300 dpi."""
+def save_figure(
+    fig: Figure,
+    stem: str,
+    output_dir: Path,
+    pad_inches: float = 0.1,
+    dpi: int = 300,
+    tight: bool = True,
+) -> None:
+    """Save a figure as PNG, TIFF (LZW-compressed), and PDF to `output_dir` at `dpi`;
+    `tight=False` keeps the exact figure size instead of cropping to the content.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
     for ext in ("png", "tiff", "pdf"):
         # LZW is lossless and cuts TIFF sizes ~5-10x.
         extra: dict[str, Any] = (
             {"pil_kwargs": {"compression": "tiff_lzw"}} if ext == "tiff" else {}
         )
-        fig.savefig(output_dir / f"{stem}.{ext}", dpi=300, bbox_inches="tight", **extra)
+        fig.savefig(
+            output_dir / f"{stem}.{ext}",
+            dpi=dpi,
+            bbox_inches="tight" if tight else None,
+            pad_inches=pad_inches,
+            **extra,
+        )
     print(f"Saved figure: {output_dir / stem} (.png/.tiff/.pdf)")
 
 
@@ -695,6 +710,31 @@ DATA_VIEW_COLORS: dict[str, str] = {
 _CONTRAST_GOLD = "#c9a227"
 _CONTRAST_MAGENTA = "#c2438a"
 TERTIARY_BINARY_PALETTE: list[str] = [_CONTRAST_GOLD, _CONTRAST_MAGENTA]
+
+# Figure 1 node and edge encoding, shared by the network render (A) and the schematic (B).
+NODE_TYPE_COLORS: dict[str, str] = {
+    "article": "#1B4F72",
+    "researcher": "#7FB3D5",
+    "repository": "#B7472A",
+    "developer": "#F0B27A",
+}
+NODE_TYPE_MARKERS: dict[str, str] = {
+    "article": "o",
+    "repository": "s",
+    "researcher": "D",
+    "developer": "^",
+}
+HOLLOW_NODE_TYPES = {"researcher", "developer"}
+EDGE_GREY = "#999999"
+SEED_LINK_COLOR, MINED_LINK_COLOR = "#7570B3", "#E6AB02"
+MINED_LINK_TEXT_COLOR = "#9A7400"
+IDENTITY_LINK_COLOR = _FAMILY_GREEN
+# Deeper outline tones for the two pale node types, used where small chips need contrast.
+NODE_BORDER_COLORS: dict[str, str] = {
+    **NODE_TYPE_COLORS,
+    "researcher": "#5B97C2",
+    "developer": "#E08F4A",
+}
 
 
 def style_legend(legend: Legend | None, fontsize: float = 8) -> None:
