@@ -286,15 +286,15 @@ After initial inspection, we found that SoftCite-2025's ``purpose assessment'' l
 As a result, we instead constructed a dataset for annotation that was stratified across all three purpose assessment labels, which after annotation, would allow us to train a classifier that could identify software repository sharing statements from the SoftCite-2025 dataset.
 
 We first conducted a trial annotation round using 30 examples, and together the three annotators achieved a Fleiss' $\kappa$ of 0.777~\cite{fleiss1971measuring}.
-After trial annotation, we moved on to a full annotation round, where the same three annotators collectively annotated 1,000 examples as either ``match'', ``no match'', or ``error-or-ignorable''.
-Annotators skipped 2 examples because of errors or information we could not find (e.g., a missing repository or article full text), and we trained and evaluated on the 879 labeled match or no match.
+After trial annotation, we moved on to a full annotation round, where the same three annotators collectively annotated 1,000 examples as either ``match'', ``no match'', or ``error-or-ignorable'' (e.g., a missing repository or article full text).
+We trained and evaluated on the 879 labeled match or no match.
 
 Our Software Repository Sharing Statement Classifier was trained and evaluated using the annotated examples by fine-tuning ModernBERT-base~\cite{warner2025smarter} under four input feature sets and one to three training epochs.
 We split the examples 80/20, stratified on label, and added synthetic negatives to both sets, pairing one positive's mention context with another's repository URL at one fifth the number of positives.
 The final classifier takes the article title, the mention context, and the repository URL as input, with a maximum input length of 2,048 tokens, and we trained it for 2 epochs.
 On the 199 held-out examples, the classifier achieved a macro F1 of 0.827 (precision 0.860, recall 0.815).
 
-We applied the trained classifier to all mention contexts in the SoftCite-2025 dataset that included a GitHub URL and had a purpose assessment certainty of at least 0.5, finding 16,653 additional article-repository pairs to add to the seeded portion of RS-Graph.
+We applied the trained classifier to all mention contexts in the SoftCite-2025 dataset that included a GitHub URL, finding 16,653 additional article-repository pairs to add to the seeded portion of RS-Graph.
 
 \subsection{Article and repository metadata}\label{subsec:m-metadata}
 
@@ -306,9 +306,9 @@ After normalization, we retrieve each repository's metadata (e.g., primary langu
 \subsection{Researcher-developer-account identities}\label{subsec:m-identities}
 
 We reuse, unchanged, the author--developer account matching model (ADAMM) of Brown, Slaughter, and Weber~\cite{brown2026code}, a fine-tuned DeBERTa-v3-base model that compares an OpenAlex author's name with a GitHub account's username and display name.
-Trained on 2,999 annotated JOSS author and account pairs, it reaches a binary F1 of 0.944 (precision 0.938, recall 0.950) on held-out JOSS pairs and 0.88--0.90 on samples from PLOS, SoftwareX, and Papers with Code.
+Trained on 2,999 annotated examples, each a JOSS author and a GitHub account, it reaches a binary F1 of 0.944 (precision 0.938, recall 0.950) on held-out JOSS examples and 0.88--0.90 on samples from PLOS, SoftwareX, and Papers with Code.
 We apply the ADAMM to every combination of a stored pair's authors and code contributors, store every predicted match as an identity with its confidence, and use only identities with a confidence of at least 0.97, the threshold Brown, Slaughter, and Weber recommend, in mining and analysis.
-The model performs worse on short usernames and display names and on names that are not Anglo-Saxon.
+The model performs worse on short usernames and display names and on names that are not from primarily English-speaking cultures.
 
 \subsection{Article-Repository Matching Model}\label{subsec:m-armm}
 
@@ -317,13 +317,13 @@ The ARMM was trained using a dataset of positive and negative examples of articl
 \begin{enumerate}
 \item \emph{Simple shuffle.} A seed article paired with another seed pair's repository.
 \item \emph{Random out-of-domain.} A seed article paired with a random GitHub repository outside the seed pairs.
-\item \emph{Nearest-neighbor out-of-domain.} A seed pair's repository replaced by an out-of-domain repository in the same primary language, chosen from the 300 nearest by Manhattan distance over repository metadata and assigned one-to-one with the Hungarian algorithm~\cite{crouse2016implementing}.
+\item \emph{Nearest-neighbor out-of-domain.} A seed article paired with an out-of-domain repository in the same primary language whose metadata most resembles that of the article's true repository. We represent each repository as a vector of 11 metadata features scaled to [0, 1] (e.g., log-transformed star, fork, commit, and contributor counts, whether it has a README, and its creation year). For each true repository we take the 300 nearest out-of-domain repositories by Manhattan distance, and the Hungarian algorithm~\cite{crouse2016implementing} then assigns them one-to-one so that no out-of-domain repository is used twice.
 \item \emph{Same author, different article.} A seed repository paired with another article by one of its contributing authors, using identities with a confidence of at least 0.97 and researchers linked to no more than three developer accounts.
 \item \emph{Same contributor, different repository.} A seed article paired with another repository of one of its authoring contributors.
 \end{enumerate}
 
-\noindent Strategies 4 and 5 mimic the errors we expected from mining, so we sampled each at a target of 35\% of negatives and the other three at 10\% each, with realized counts in Supplementary Table S8.
-We deduplicated training examples that used the same article-repository pair, keeping the real positive pair over any synthetic negative built on the same article and repository.
+\noindent Strategies 4 and 5 mimic the errors we expected from mining, so we sampled each at a target of 35\% of negatives and the other three at 10\% each (full counts in Supplementary Table S8).
+We kept one example per article-repository pair, so if a negative strategy happened to produce a real seed pair, the positive example replaced the synthetic negative.
 
 We first split the positive examples 80/20 into training and test sets, stratified by seed source, article field, and binned publication year, and then generated negatives separately within each split, drawing out-of-domain repositories from disjoint pools.
 Training examples tied to article fields that made up less than 2\% of the positive examples, or were tied to articles published before 2016 or in 2025 or later, were moved entirely to our test set to assess whether the model generalized to unseen fields and publication periods.
@@ -332,8 +332,8 @@ The final dataset used for training had 199,312 examples, and the final dataset 
 The model input was formatted as an XML string with features for both the article and repository.
 The XML template for model input is available in Supplementary Note 2.
 Multiple input feature sets were evaluated, with our final model excluding six features that were available to us but whose removal had a negligible effect on performance (macro F1 of 0.966 with all features and 0.961 without the six, on a separate 39,988-example test set used for model selection).
-The six are the author list, contributor list, topic domains, topic fields, document type, and repository file tree.
-The file tree and contributor list would need extra API calls at inference, and we dropped the author and contributor lists together so the model could not lean on their overlap, likely the largest source of false positives in mining.
+The six excluded features are the author list, contributor list, topic domains, topic fields, document type, and repository file tree.
+The file tree and contributor list would need extra API calls at inference, and we dropped the author and contributor lists together so the model could not lean on their overlap, which we hypothesized would be the largest source of false positives when applying the model to mining candidates.
 
 We additionally trained and evaluated multiple base transformer models as the starting point for our fine-tuning: multilingual GTE (\texttt{gte-multilingual-base})~\cite{zhang2024mgte}, ModernBERT-base~\cite{warner2025smarter}, and BGE-M3~\cite{chen2024m3}.
 On the same 39,988-example test set, \texttt{gte-multilingual-base} reached the highest macro F1 (0.967, against 0.960 for ModernBERT-base), while BGE-M3 did not converge.
@@ -344,18 +344,18 @@ On the 120,030-example final test set, macro F1 was at least 0.95 in every artic
 The share of examples classified correctly ranged from 0.938 (SoftCite-2025) to 0.996 (JOSS) across seed sources and from 0.964 to 0.996 across negative strategies.
 Finally, because our goal was to create a dataset of ``official'' article-repository pairs with minimal false positives, we additionally found the lowest ARMM confidence score at which precision on the test set reached at least 0.999, which we calculated to be a confidence score of 0.9994.
 At this threshold, recall on the test set is 0.779.
-We chose the threshold on the test set, whose class balance differs from that of mining candidates, and the ARMM is trained on seed pairs and synthetic negatives but applied to candidates drawn from one researcher's own articles and repositories.
-We therefore estimate the precision of mined pairs separately through annotation (see Annotation of mined pairs).
+Because our test set uses synthetic negatives and we chose the threshold on it, we additionally estimate the precision of mined pairs through annotation (see Annotation of mined pairs).
 
 \subsection{Iterative mining}\label{subsec:m-mining}
 
 Each round starts by selecting all researcher-developer-account identities that have a confidence of at least 0.97 (per the work of Brown, Slaughter, and Weber~\cite{brown2026code}) and which have not yet been processed in a previous round of mining.
+Within a mining round, we process identities in batches of 24 and store each batch's results in the database before starting the next, so that an interruption does not lose the round's progress.
 For each identity, we retrieve the researcher's list of articles from OpenAlex and the list of repositories (owned or contributed to, excluding forks) by their associated GitHub account from the GitHub API.
 We filter out any articles or repositories which are already present in RS-Graph.
 We then use the two lists of articles and repositories to create all possible combinations of article-repository pairs.
 To reduce the number of candidate pairs we need to process with the ARMM, we filter out any candidate pairs which have a repository creation date that is more than 556 days before the article publication date, or more than 73 days after the article publication date.
 These thresholds were determined by calculating the 10th and 90th percentile differences in publication date and repository creation date across the one-to-one subset of the seeded article-repository pairs available when mining began (Supplementary Fig. S1).
-Finally, we use the details of each pairing as the ARMM input and infer whether the pair forms an ``official'' article-repository pair or not, keeping the highest-confidence pair per article and per repository within each batch of 24 identities.
+Finally, we use the details of each pairing as the ARMM input and infer whether the pair forms an ``official'' article-repository pair or not, keeping the highest-confidence pair per article and per repository within each batch.
 After ARMM inference, we finish retrieving the remaining pieces of metadata including details about article authors and code contributing developer accounts before following the methodology from Brown, Slaughter, and Weber~\cite{brown2026code} to identify new researcher-developer-account identities to use in the next round of mining.
 Every new identity with a confidence of at least 0.97 seeds the next round, including identities found on candidate pairs that fell below the ARMM threshold.
 
@@ -364,7 +364,7 @@ For the first three rounds of mining, we had two additional constraints in place
 We initially filtered out repositories with a README of less than 200 characters to ensure that the ARMM would have the most information available for inference.
 However, we judged the ARMM performance sufficient to enable mining without the README filter, especially given that we were planning on filtering the mined pairs to their high-precision confidence threshold of 0.9994, at which precision on test examples with READMEs under 200 characters was 0.998.
 Additionally, the first three rounds of mining also came with a limitation in how batches shared the candidate pool.
-Once a batch stored a pair, its article and repository left the candidate pool for the rest of the round, even below 0.9994, so a weak early match could block a better later one.
+Once a batch stored a pair, its article and repository left the candidate pool for the rest of the mining round, even below 0.9994, so a weak early match could block a better later one.
 To resolve these issues, we conducted fourth and fifth rounds of mining which allowed repositories with shorter (or entirely missing) READMEs and returned the articles and repositories of pairs with confidence scores of less than 0.9994 to the candidate pool.
 
 \subsection{Annotation of mined pairs}\label{subsec:m-annotation}
@@ -379,10 +379,10 @@ Annotators also recorded whether the article links to the repository (any URL to
 An article without full text and with no link in its abstract or landing page has an unknown label, which we exclude from that label's denominator (\textcolor{red}{[ARTICLE-LINK-UNKNOWN: N]} pairs).
 % TODO: fill ARTICLE-LINK-UNKNOWN and EXCLUDED once all 576 pairs are labeled and Anna's and Sarah's sets are scored.
 
-Because nearly all labels fall in one category, we measured trial-set agreement with percent agreement and Gwet's AC1~\cite{gwet2008computing}, which was 94.4\% (AC1 0.942) for validity and 91.7\% (AC1 0.902) for full-text access.
-One annotator left both directionality labels blank for two pairs without full text, so directionality agreement covers 22 pairs, with 93.9\% (AC1 0.879) for article-to-repository links and 81.8\% (AC1 0.699) for repository-to-article links.
-Strict precision counts unsure and not-available pairs as errors, and lenient precision excludes them (\textcolor{red}{[EXCLUDED: N]} pairs).
-Both are unweighted proportions over the field-stratified sample, with exact Clopper--Pearson 95\% confidence intervals~\cite{clopper1934use}.
+Because nearly all labels fall in one category, we measured trial-set agreement with percent agreement and Gwet's AC1~\cite{gwet2008computing}, which was \textcolor{red}{[VALIDITY-AGREEMENT: X\% (AC1 X)]} for validity and \textcolor{red}{[FULLTEXT-AGREEMENT: X\% (AC1 X)]} for full-text access.
+Directionality agreement covers \textcolor{red}{[DIRECTIONALITY-N: N]} pairs, with \textcolor{red}{[A2R-AGREEMENT: X\% (AC1 X)]} for article-to-repository links and \textcolor{red}{[R2A-AGREEMENT: X\% (AC1 X)]} for repository-to-article links.
+% TODO: Eva will supply an updated trial set. Fill the agreement values above from it, and if DIRECTIONALITY-N is below 24, add a clause saying why.
+Strict precision counts unsure and not-available pairs as errors, and lenient precision excludes them (\textcolor{red}{[EXCLUDED: N]} pairs), both with exact Clopper--Pearson 95\% confidence intervals~\cite{clopper1934use}.
 
 \subsection{Three views of software use}\label{subsec:m-views}
 
@@ -396,14 +396,14 @@ We convert Jupyter notebooks to scripts with \texttt{py-nb-to-src} and extract i
 We focus on ``third-party'' installed packages only, ignoring standard library packages and not processing source code files that are from directories which likely contain documentation, testing, or other ``vendored'' source code.
 
 Finally, we include the listed dependencies from each repository's dependency manifest files.
-We parse dependency manifests with \texttt{git-pkgs} (\url{https://github.com/git-pkgs/git-pkgs}) on the same clone.
+We parse dependency manifests with \texttt{git-pkgs} (\url{https://github.com/git-pkgs/git-pkgs}) using the same cloned repository as we used for import extraction.
 We store every ecosystem that \texttt{git-pkgs} reads but analyze only PyPI and Conda dependencies for Python and CRAN dependencies for R, including development and test dependencies.
 
 \subsection{Software name alignment}\label{subsec:m-alignment}
 
 We normalize names by lowercasing them, removing spaces, hyphens, and underscores, and cutting them at the first version comparator or other non-name character.
-We then use a two-step approach to align the normalized software names, first, by calculating the fuzzy string similarity between all pairs of normalized software names within a single article-repository pair, and second, by using the string similarity scores and the Hungarian algorithm~\cite{crouse2016implementing} to find the optimal one-to-one alignment between the two sets of software names that maximizes the total similarity.
-We keep an aligned pair only when its RapidFuzz (\url{https://github.com/rapidfuzz/RapidFuzz}) similarity ratio is at least 85 of 100.
+We then use a two-step approach to align the normalized software names, first, by calculating the fuzzy string similarity between all combinations of normalized software names within a single article-repository pair, and second, by using the string similarity scores and the Hungarian algorithm~\cite{crouse2016implementing} to find the optimal one-to-one alignment between the two sets of software names that maximizes the total similarity.
+We keep two aligned names only when their RapidFuzz (\url{https://github.com/rapidfuzz/RapidFuzz}) similarity ratio is at least 85 of 100.
 We additionally create a registry of software aliases for software that frequently failed our fuzzy matching, or did not pass our minimum similarity threshold, but which we could identify as the same software across views.
 The registry holds 48 hand-curated groups (e.g., \texttt{pil} and \texttt{pillow}), and names in different groups never match, so \texttt{stlearn} and \texttt{sklearn} stay apart.
 Within each pair we align imports with mentions, dependencies with mentions, and imports with dependencies, whenever both views are non-empty.
@@ -441,7 +441,7 @@ The second uses all pairs with at least one import or dependency, so it includes
 
 We fit logistic regressions with one row per article, repository, and imported library, with the outcome whether the library aligns with a mention in the article.
 We fit sixteen specifications, covering four model forms, two populations, and the 2022 cap, after filtering generic and rarely imported libraries (Supplementary Table S7).
-All fits use two-way cluster-robust standard errors by article and library~\cite{cameron2011robust}, and aligning each import with any matching mention instead changes no estimate by more than 0.11 percentage points.
+All fits use two-way cluster-robust standard errors by article and library~\cite{cameron2011robust}.
 We treat the controlled model fit on all pairs with imports published through 2022 as our primary specification, because the cap limits the model to years in which SoftCite-2025 extraction coverage is stable, and keeping pairs with no extracted mention avoids conditioning on whether any mention was extracted, which depends on the same field, year, and imports as the outcome.
 Supplementary Table S9 gives the full coefficients of the primary specification.
 
@@ -451,7 +451,7 @@ We used statsmodels 0.14.6 and SciPy 1.17.0. % CHECK: versions read from the loc
 
 \subsection{Personal data and provenance}\label{subsec:m-provenance}
 
-Although all of the data we use and release are public, RS-Graph connects researchers' scholarly records with their GitHub profiles, which may show names or email addresses that differ from those in their publications (e.g., one name in their scholarly writing and another on their GitHub profile).
+Although all of the data we use and release are public, RS-Graph connects researchers' scholarly records with their GitHub profiles, which may show names or email addresses that differ from those in their publications.
 As such, we do not include the display names or emails of any developer accounts in the public release of RS-Graph, and we will review and handle any requests for the removal of GitHub account records from RS-Graph and release a new version of the dataset without those records.
 Every pair and identity records its route into RS-Graph, the model, version, and confidence that produced it, and its collection date (Supplementary Table S2).
 
