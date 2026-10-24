@@ -19,6 +19,7 @@ import statsmodels.formula.api as smf
 import utils as u
 from scipy.stats import norm, pearsonr
 from statsmodels.discrete.discrete_model import BinaryResultsWrapper
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 from statsmodels.stats.sandwich_covariance import cov_cluster_2groups
 
 from rs_graph.utils.software_alignment import align_software_names
@@ -477,6 +478,61 @@ def _fit_and_cluster(
     return model, se, pvals, ci_lo, ci_hi
 
 
+def _save_primary_model_tables(
+    model: BinaryResultsWrapper,
+    se: np.ndarray,
+    pvals: np.ndarray,
+    ci_lo: np.ndarray,
+    ci_hi: np.ndarray,
+    regression_pd: pd.DataFrame,
+    output_dir: Path,
+) -> None:
+    """Write every term of the primary specification (controlled, all pairs with imports,
+    year-capped, grouped Hungarian), plus the age-popularity correlation and VIFs.
+    """
+    params = model.params.to_numpy()
+    coef_df = pl.DataFrame(
+        {
+            "term": model.params.index.to_list(),
+            "coefficient": params.tolist(),
+            "std_err_2way_cluster": se.tolist(),
+            "z_2way_cluster": (params / se).tolist(),
+            "p_value_2way_cluster": pvals.tolist(),
+            "ci_lower_2way_cluster": ci_lo.tolist(),
+            "ci_upper_2way_cluster": ci_hi.tolist(),
+            "odds_ratio": np.exp(params).tolist(),
+            "odds_ratio_ci_lower": np.exp(ci_lo).tolist(),
+            "odds_ratio_ci_upper": np.exp(ci_hi).tolist(),
+            "odds_pct_change_per_unit": ((np.exp(params) - 1) * 100).tolist(),
+        }
+    ).with_columns(
+        pl.lit(int(model.nobs)).alias("n_obs"),
+        pl.lit(regression_pd["document_id"].nunique()).alias("n_documents"),
+        pl.lit(regression_pd["library_name_normalized"].nunique()).alias("n_libraries"),
+    )
+    u.save_table(coef_df, "mention_primary_model_full_coefficients", output_dir)
+
+    corr_r, corr_p = pearsonr(
+        regression_pd["age_years"], regression_pd["log_cumulative_imports"]
+    )
+    exog = model.model.exog
+    exog_names = model.model.exog_names
+    diag_rows = [
+        {"diagnostic": "pearson_r_age_popularity", "term": None, "value": float(corr_r)},
+        {"diagnostic": "pearson_p_age_popularity", "term": None, "value": float(corr_p)},
+    ]
+    diag_rows += [
+        {
+            "diagnostic": "vif",
+            "term": term,
+            "value": float(variance_inflation_factor(exog, i)),
+        }
+        for i, term in enumerate(exog_names)
+        if term != "Intercept"
+    ]
+    u.save_table(pl.DataFrame(diag_rows), "mention_primary_model_collinearity", output_dir)
+
+
 def _prepare_regression_features(
     long_df: pl.DataFrame,
     doc_meta: pl.DataFrame,
@@ -721,6 +777,15 @@ def predictors_of_software_mentioning(
                         formula, regression_pd, doc_groups, lib_groups
                     )
                     print(f"[{name}] N={int(model.nobs):,}")
+                    if (
+                        alignment == "grouped_hungarian"
+                        and denominator == "all_pairs_with_imports"
+                        and cap_applied
+                        and name == "controlled"
+                    ):
+                        _save_primary_model_tables(
+                            model, se, pvals, ci_lo, ci_hi, regression_pd, output_dir
+                        )
                     for predictor in key_predictors:
                         idx = model.params.index.get_loc(predictor)
                         coef = model.params.iloc[idx]

@@ -38,6 +38,8 @@ OUTPUT_DIR = THIS_DIR / "outputs"
 
 DEFAULT_CONFIDENCE_THRESHOLD = 0.9994
 DEFAULT_MIN_YEAR = 2008
+# Fixed reference date for age computations: the latest link/snowball-processing date.
+DATASET_AS_OF = date(2026, 6, 26)
 # Researcher-developer identity-link confidence threshold, used throughout (following
 # Brown, Slaughter & Weber).
 DEFAULT_RDAL_CONFIDENCE_THRESHOLD = 0.97
@@ -562,12 +564,13 @@ def compute_modified_fwsi(
     """
     Compute modified FWSI (lifetime stargazers / peer-group mean lifetime stargazers) at the
     repository level, restricted to repositories >= `min_age_years` old as of `as_of` (defaults
-    to today). A repository's field/doctype for peer-grouping purposes is taken from its first
-    linked document-repository pair (repositories can link to more than one document; this
-    picks one deterministically rather than double-counting the repository once per pair).
+    to `DATASET_AS_OF`). A repository's field/doctype for peer-grouping purposes is taken from
+    its first linked document-repository pair (repositories can link to more than one
+    document; this picks one deterministically rather than double-counting the repository
+    once per pair).
     """
     if as_of is None:
-        as_of = date.today()
+        as_of = DATASET_AS_OF
 
     select_cols = list(
         dict.fromkeys(

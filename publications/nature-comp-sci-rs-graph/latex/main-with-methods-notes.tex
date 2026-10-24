@@ -269,182 +269,191 @@ Our descriptions of coverage, characteristics, and even software used, are just 
 
 %TC:break Methods
 \section{Methods}\label{sec:methods}
-\writingspace
-
-% Comment from Eva: Removed the "classification models used in constructing RS-Graph" mini-section. Didn't feel right without being a table but we can't include a table in methods so I thought it was best to remove it entirely. Happy to discuss though.
 
 \subsection{Seed article-repository pairs}\label{subsec:m-seeds}
 
-\begin{itemize}
-\item \textbf{Four seed sources with stated links}
+The five seed sources contributed 196,107 article-repository pairs to RS-Graph (full counts by source in Table~\ref{tab:mining}).
+The largest seed dataset was Papers with Code, from which we gathered the 168,456 author-provided article-repository pairs from the final snapshot made available on the Internet Archive (\url{https://web.archive.org/web/20250728234509/https://production-media.paperswithcode.com/about/links-between-papers-and-code.json.gz}).
+The snapshot held 194,541 author-provided links, which reduced to 168,456 unique pairs after we dropped articles not found in OpenAlex and repositories not on GitHub.
+We collected 2,969 JOSS article-repository pairs using the JOSS API which provides the repository URL along with each article's DOI.
+We collected 668 SoftwareX article-repository pairs by matching the upstream parent of each fork in the SoftwareX GitHub organization to its article through the ScienceDirect API, using the Elsevier ID stored as the fork's name.
+Finally, article-repository pairs from PLOS were gathered from the data and code availability sections made available in the JATS XML files from the \texttt{allofplos} Python package.
+We took the first URL in each article's data availability statement and kept the pair when that URL pointed to a GitHub repository, which gave 7,361 pairs.
 
-  % RS-Graph was seeded via the combination of five pre-existing datasets, four of which needed minimal processing before use (Papers with Code, JOSS, SoftwareX, and PLOS), and one (SoftCite-2025) which relied on a supplemental classifier prior to use as a seed source.
-  % Together, all five sources contributed 196,107 article-repository pairs to RS-Graph (full counts by source in Table 1). The largest seed dataset was Papers with Code form which we gathered the 168,456 author-provided article-repository links from the final snapshot made available on the Internet Archive (https://web.archive.org/web/20250728234509/https://production-media.paperswithcode.com/about/links-between-papers-and-code.json.gz).
-  % We collected 2,969 JOSS article-repository pairs using the JOSS API which provides the repository URL along with each article's DOI.
-  % We collected 668 SoftwareX article-repository pairs in two steps: first, we retrieved the upstream parent repository of each of the SoftwareX GitHub organization controlled downstream forks.
-  % We then matched each original upstream parent repository to their SoftwareX article using their Elsevier ID, which is stored as the name of the SoftwareX owned downstream forked GitHub repository, using the ScienceDirect API.
-  % Finally, article-repository pairs from PLOS were gathered from the data and code availability sections made available in the JATS XML files from the `allofplos` Python package.
+The final seeded portion of article-repository pairs was extracted from the SoftCite-2025 dataset~\cite{howison_2025_15149379} using our Software Repository Sharing Statement Classifier.
+Specifically, to make use of the SoftCite-2025 dataset, we trained a computational model that infers if a software mention context (e.g., a sentence) contains a software repository sharing statement or not.
+After initial inspection, we found that SoftCite-2025's ``purpose assessment'' labels (share, created, used) did not align with our goals.
+As a result, we instead constructed a dataset for annotation that was stratified across all three purpose assessment labels, which after annotation, would allow us to train a classifier that could identify software repository sharing statements from the SoftCite-2025 dataset.
 
-  % Comment from Eva: Should we cut the "The accessible Papers with Code subset" portion? I don't know if it is really needed.
+We first conducted a trial annotation round using 30 examples, and together the three annotators achieved a Fleiss' $\kappa$ of 0.777~\cite{fleiss1971measuring}.
+After trial annotation, we moved on to a full annotation round, where the same three annotators collectively annotated 1,000 examples as either ``match'', ``no match'', or ``error-or-ignorable''.
+Annotators skipped 2 examples because of errors or information we could not find (e.g., a missing repository or article full text), and we trained and evaluated on the 879 labeled match or no match.
 
-  % The final seeded portion of article-repository pairs was extracted from the SoftCite-2025 dataset~\cite{howison_2025_15149379} using our Software Repository Sharing Statement Classifier.
-  % We specifically added this portion of the seeded article-repository pairs due to how prevalent Computer Science and Machine Learning are in the other four seed sources.
-  % The SoftCite-2025 dataset on the other hand, is a large-scale dataset of software mentions, with their full sentence-level contexts, extracted from 24 million open-access articles, across a wide range of fields.
-  % Specifically, to make use of the SoftCite-2025 dataset, we trained a computational model that infers if a software mention context (e.g., a sentence) contains a software repository sharing statement or not.
-  % Software mentions data from the SoftCite-2025 dataset include "purpose assessment" labels which are intended to indicate whether a software mention is used for a specific purpose: to _share_ a software repository with the reader, to label a software as being _created_ by the authors, or to label a software as being _used_ by the authors.
-  % However, after initial inspection of the purpose assessment labels, we found that relying solely on the mentions of software with high scores for the "created" purpose assessment label, was not sufficient to consistently identify software repository sharing statements.
-  % As a result, we instead constructed a dataset for annotation that was stratified across all three purpose assessment labels, which after annotation, would allow us to train a classifier that could identify software repository sharing statements from the SoftCite-2025 dataset.
+Our Software Repository Sharing Statement Classifier was trained and evaluated using the annotated examples by fine-tuning ModernBERT-base~\cite{warner2025smarter} under four input feature sets and one to three training epochs.
+We split the examples 80/20, stratified on label, and added synthetic negatives to both sets, pairing one positive's mention context with another's repository URL at one fifth the number of positives.
+The final classifier takes the article title, the mention context, and the repository URL as input, with a maximum input length of 2,048 tokens, and we trained it for 2 epochs.
+On the 199 held-out examples, the classifier achieved a macro F1 of 0.827 (precision 0.860, recall 0.815).
 
-  % We first conducted a trial annotation round using 30 examples, and together the three annotators, achieved a Fleiss' Kappa of 0.774.
-  % After trial annotation, we moved on to a full annotation round, where the same three annotators collectively labeled 1,000 examples as either "match", "no match", or "error-or-ignorable."
-  % Annotators were allowed to visit the linked repository and the view the article's full text to make their decision regarding if the software mention context contained a software repository sharing statement for the article's "official" source code repository.
-  
-  % Our Software Repository Sharing Statement Classifier was trained and evaluated using the 1,000 annotated examples across multiple base models and feature sets.
-  % Comment from Eva: fill in the token limit and the 2 epochs here, as well as the next sentence regarding model macro F1.
-
-  % We finally made use of the trained Software Repository Sharing Statement Classifier to identify software repository sharing statements from the SoftCite-2025 dataset.
-  % Specifically, we applied the trained classifier to all mention contexts in the SoftCite-2025 dataset that included a GitHub URL, finding 16,653 additional article-repository pairs to add to the seeded portion of RS-Graph.
-  % Notably, each of the article-repository pairs from SoftCite-2025 were identified by the Software Repository Sharing Statement Classifier, rather than the ARMM, and as a result, the article-repository pairs from SoftCite-2025 do not have an ARMM confidence score associated with them.
-  % Given that the article-repository pairs from SoftCite-2025 are still inferred pairs and not explicitely author-provided like all of the others, downstream users of RS-Graph can filter out the SoftCite-2025 pairs as needed.
-
-  
-\end{itemize}
+We applied the trained classifier to all mention contexts in the SoftCite-2025 dataset that included a GitHub URL and had a purpose assessment certainty of at least 0.5, finding 16,653 additional article-repository pairs to add to the seeded portion of RS-Graph.
 
 \subsection{Article and repository metadata}\label{subsec:m-metadata}
 
-% Every article and repository in RS-Graph, whether seeded or mined, is processed using the the same workflow to gather and store associated metadata, bibliometric information, and certain pieces of content.
-% First, each article DOI is resolved to it's canonical version via the Semantic Scholar API.
-% Specifically, this process allows us to find and use the peer-reviewed and published versions of each article and preprint, while additionally keeping the original DOI for each article for provenance and traceability.
-% After DOI resolution, we retrieve each article's metadata (e.g., title, fields, publication year, etc.), bibliometric information (e.g., citation counts, FWCI, etc.), and authorship records (e.g., OpenAlex author IDs, ORCIDs, etc.) from the OpenAlex API.
-% For each repository, we first normalize the URL that was found or provided to the canonical repository URL in order to handle any redirects, reformatting of documentation pages (e.g., username.github.io/repository-name to github.com/username/repository-name), and the removal of any additional details (e.g., branch name, '.git', etc.).
-% After normalization, we retrieve each repository's metadata (e.g., primary language, license), social metrics (e.g., stargazers count, forks count), README content, and the GitHub profile information for each code contributor from the GitHub API.
-% Throughout this process, article-repository pairs with articles that are not found via the Semantic Scholar or OpenAlex APIs, or repositories that are not found via the GitHub API, are not included in RS-Graph.
+First, each article DOI is resolved to its canonical version via the Semantic Scholar API.
+After DOI resolution, we retrieve each article's metadata (e.g., title, fields, publication year), bibliometric information (e.g., citation counts, FWCI), and authorship records (e.g., OpenAlex author IDs, ORCIDs) from the OpenAlex API~\cite{priem2022openalex} (Supplementary Table S2).
+For each repository, we first normalize the URL that was found or provided to the canonical repository URL in order to handle any redirects, resolution of GitHub Pages URLs, and the removal of any additional details.
+After normalization, we retrieve each repository's metadata (e.g., primary language, license), social metrics (e.g., stargazers count, forks count), README content, and the GitHub profile information for each code contributor from the GitHub API.
 
 \subsection{Researcher-developer-account identities}\label{subsec:m-identities}
 
-% Comment from Eva: Can you write this section? Your outline was basically spot on and it is largely a summary from the Brown, Slaughter, and Weber paper.
+We reuse, unchanged, the author--developer account matching model (ADAMM) of Brown, Slaughter, and Weber~\cite{brown2026code}, a fine-tuned DeBERTa-v3-base model that compares an OpenAlex author's name with a GitHub account's username and display name.
+Trained on 2,999 annotated JOSS author and account pairs, it reaches a binary F1 of 0.944 (precision 0.938, recall 0.950) on held-out JOSS pairs and 0.88--0.90 on samples from PLOS, SoftwareX, and Papers with Code.
+We apply the ADAMM to every combination of a stored pair's authors and code contributors, store every predicted match as an identity with its confidence, and use only identities with a confidence of at least 0.97, the threshold Brown, Slaughter, and Weber recommend, in mining and analysis.
+The model performs worse on short usernames and display names and on names that are not Anglo-Saxon.
 
 \subsection{Article-Repository Matching Model}\label{subsec:m-armm}
 
-% A central component of our work is the creation and utilization of our Article-Repository Matching Model (ARMM), a machine learning model that predicts if the given details for an article and repository form an "official" pair.
-% The model was trained using a dataset of positive and negative examples of article-repository pairs, where positive examples were drawn from all five of the seed sources, and negative examples were generated using multiple strategies to create a range of negative examples that would be challenging for the model to classify.
-% Specifically, negative examples were generated using one of five different strategies: (1) random sample, (2) random out-of-domain GitHub repositories, (3) nearest neighbor out-of-domain GitHub repositories, (4) same-author different-repository, and (5) same-repository different-author.
-% Comment from Eva: Can you write out the details for each of those five strategies? Each one should be given a single sentence description.
-% Given that the same article or repository may be used in multiple positive and negative examples due to the randomness of synthetic examples, we deduplicated training examples that used the same article-repository pair, keeping the positive real pairs over any randomly generated false negatives.
+The ARMM was trained using a dataset of positive and negative examples of article-repository pairs, where positive examples were drawn from the 164,572 one-to-one seed pairs of all five seed sources (Supplementary Table S8), and negative examples were generated using one of five different strategies:
 
-% We split the constructed corpus of positive and negative examples into training and testing sets, and stratified across a number of conditions, while also moving some examples entirely into the test set to ensure that the model generalized to unseen articles and repositories.
-% The training and test splits started with an 80/20 split of examples and were stratified across the pair source (including both positive sources such as PLOS, JOSS, etc., and negative sources such as random sampling, nearest neighbor, etc.), the article's field, and binned article publication year.
-% Training examples tied to article fields that made up less than 2% of the total training and testing examples, or were tied to articles published before 2016 or after 2025, were moved entirely to our test set to ensure that the model generalized to unseen fields and publication periods.
-% We additionally guarded against data leakage by ensuring that the train and test sets each used entirely distinct collections of articles and repositories.
-% The final dataset used for training had 199,312 examples (X positive, Y negative), and the final dataset used for testing had 120,030 examples (A positive, B negative).
+\begin{enumerate}
+\item \emph{Simple shuffle.} A seed article paired with another seed pair's repository.
+\item \emph{Random out-of-domain.} A seed article paired with a random GitHub repository outside the seed pairs.
+\item \emph{Nearest-neighbor out-of-domain.} A seed pair's repository replaced by an out-of-domain repository in the same primary language, chosen from the 300 nearest by Manhattan distance over repository metadata and assigned one-to-one with the Hungarian algorithm~\cite{crouse2016implementing}.
+\item \emph{Same author, different article.} A seed repository paired with another article by one of its contributing authors, using identities with a confidence of at least 0.97 and researchers linked to no more than three developer accounts.
+\item \emph{Same contributor, different repository.} A seed article paired with another repository of one of its authoring contributors.
+\end{enumerate}
 
-% The model input was formatted as an XML. string with features for both the article and repository.
-% In short, our goal was to train the model that when given the details of a possible article-repository pair, the model would predict if the pair formed an "official" pair or not.
-% The XML template for model input is available in Supplementary Note 2.
-% Some limits were put in place for the model input, specifically limiting article abstracts to 3,000 characters and repository README content to 6,000 characters, and any time either the abstract or README content exceed those limits, the text was truncated and a `<TRUNC/>` tag was added to the end of the truncated text.
-% Multiple input feature sets were evaluated, with our final model excluding six features that were available to us but were found to be either detrimental to model performance, or negligible to performance while requiring additional API calls to retrieve the data before inference in the planned inference pipeline.
-% Those six features are: X, Y, Z, A, B, C.
-% Comment from Eva: Can you fill in those six features please?
+\noindent Strategies 4 and 5 mimic the errors we expected from mining, so we sampled each at a target of 35\% of negatives and the other three at 10\% each, with realized counts in Supplementary Table S8.
+We deduplicated training examples that used the same article-repository pair, keeping the real positive pair over any synthetic negative built on the same article and repository.
 
-% We additionally trained and evaluated multiple base transformer models as the starting point for our fine-tuning: X, Y, Z, A, B, C.
-% Comment from Eva: Can you fill in those base models please? With citation to their associated papers
-% Our final ARMM, after all training and evaluation across different base models and feature ablation, was fine-tuned from X, and used the following features:
-% Comment from Eva: that list of final features is long, likely best to enumerate them as a list with numbered bullets rather than inline in a sentence.
+We first split the positive examples 80/20 into training and test sets, stratified by seed source, article field, and binned publication year, and then generated negatives separately within each split, drawing out-of-domain repositories from disjoint pools.
+Training examples tied to article fields that made up less than 2\% of the positive examples, or were tied to articles published before 2016 or in 2025 or later, were moved entirely to our test set to assess whether the model generalized to unseen fields and publication periods.
+The final dataset used for training had 199,312 examples, and the final dataset used for testing had 120,030 examples (63,299 positive, 56,731 negative).
 
-% We evaluated the ARMM on the test set using standard binary classification metrics, and additionally evaluated the model across a number of conditions to ensure that the model generalized well across different article fields, publication years, and pair sources.
-% Comment from Eva: Can you write out the overall performance sentence, the stable by field and time period sentence, and the results by article-repository pair source sentence?
-% Relevant to our implementation of the iterative mining process was the fact that model performance decreases as repository README length decreases, ...
-% Comment from Eva: Can you finish the README sentence immediately before this one with a two performance numbers? One for README lengths > 200 characters, and one for README lengths < 200 characters. Or something like that?
-% We initially added a filter to the mining process to skip repositories with README lengths with less than 200 characters but on later rounds of iterative mining, we removed this behavior as we had decided that the ARMM performance in handling shorter, or entirely missing, README content, was still substantial enough to continue mining without the filter.
-% Finally, because our ultimate end goal was to create a dataset of "official" article-repository pairs with minimal false positives, we additionally found the minimum ARMM confidence score to use as a threshold to achieve 0.999 precision on the test set, which we calculated to be a confidence score of 0.9994.
+The model input was formatted as an XML string with features for both the article and repository.
+The XML template for model input is available in Supplementary Note 2.
+Multiple input feature sets were evaluated, with our final model excluding six features that were available to us but whose removal had a negligible effect on performance (macro F1 of 0.966 with all features and 0.961 without the six, on a separate 39,988-example test set used for model selection).
+The six are the author list, contributor list, topic domains, topic fields, document type, and repository file tree.
+The file tree and contributor list would need extra API calls at inference, and we dropped the author and contributor lists together so the model could not lean on their overlap, likely the largest source of false positives in mining.
 
+We additionally trained and evaluated multiple base transformer models as the starting point for our fine-tuning: multilingual GTE (\texttt{gte-multilingual-base})~\cite{zhang2024mgte}, ModernBERT-base~\cite{warner2025smarter}, and BGE-M3~\cite{chen2024m3}.
+On the same 39,988-example test set, \texttt{gte-multilingual-base} reached the highest macro F1 (0.967, against 0.960 for ModernBERT-base), while BGE-M3 did not converge.
+Our final ARMM, after all training and evaluation across different base models and feature ablation, was fine-tuned from \texttt{gte-multilingual-base}, and used the 18 article and repository features in the Supplementary Note 2 template.
+We fine-tuned for one epoch with AdamW (learning rate $5\times10^{-5}$, weight decay 0.01), FP16 mixed precision, a maximum input length of 8,192 tokens, and random seed 12.
+
+On the 120,030-example final test set, macro F1 was at least 0.95 in every article field and publication period, lowest for Physics and Astronomy (0.951; Supplementary Fig. S3) and for articles published before 2016 (0.950).
+The share of examples classified correctly ranged from 0.938 (SoftCite-2025) to 0.996 (JOSS) across seed sources and from 0.964 to 0.996 across negative strategies.
+Finally, because our goal was to create a dataset of ``official'' article-repository pairs with minimal false positives, we additionally found the lowest ARMM confidence score at which precision on the test set reached at least 0.999, which we calculated to be a confidence score of 0.9994.
+At this threshold, recall on the test set is 0.779.
+We chose the threshold on the test set, whose class balance differs from that of mining candidates, and the ARMM is trained on seed pairs and synthetic negatives but applied to candidates drawn from one researcher's own articles and repositories.
+We therefore estimate the precision of mined pairs separately through annotation (see Annotation of mined pairs).
 
 \subsection{Iterative mining}\label{subsec:m-mining}
 
-% Next we describe our iterative mining process for finding new article-repository pairs and new researcher-developer-account identities by stepping through a single round of the processing workflow.
-% Each round starts by selecting all researcher-developer-account identities that have a confidnece of at least 0.97 (per the work of Brown, Slaughter, and Weber~\cite{brown2026code}) and which have not yet been processed in a previous round of mining.
-% For each identity, we retrieve the researchers list of articles from OpenAlex and the list of repositories (owned or contributed to, excluding forks) by their associated GitHub account from the GitHub API.
-% We filter out any articles or repositories which are already present in RS-Graph.
-% We then use the two lists of articles and repositories to create all possible combinations of article-repository pairs.
-% This typically results in a large number of candidate pairs, many of which are not likely to be official pairs simply due to their large difference in publication year and repository creation date.
-% To reduce the number of candidate pairs we will need to process with the ARMM, we filter out any candidate pairs which have a repository creation date that is more than 556 days before the article publication date, or more than 73 days after the article publication date.
-% These thresholds were determined by caluculating the 10th and 90th percentile differences in publication date and repository creation date across the one-to-one subset of the seeded article-repository pairs (Supplementary Fig. S1).
-% Comment from Eva: I removed the sentence about the README filter here because it is discussed a bit in the ARMM section and I revisit it in the iterations / rounds section.
-% Finally, we use the details of each pairing as the ARMM input and infer whether the pair forms an "official" article-repository pair or not, keeping the top confidence pair per article and per repository.
-% After ARMM inference, we finish retrieving the remaining pieces of metadata and bibliometric information from OpenAlex and GitHub including details about article authors and code contributing developer accounts before following the methodology from Brown, Slaughter, and Weber~\cite{brown2026code} to identify new researcher-developer-account identities to use in the next round of mining.
+Each round starts by selecting all researcher-developer-account identities that have a confidence of at least 0.97 (per the work of Brown, Slaughter, and Weber~\cite{brown2026code}) and which have not yet been processed in a previous round of mining.
+For each identity, we retrieve the researcher's list of articles from OpenAlex and the list of repositories (owned or contributed to, excluding forks) by their associated GitHub account from the GitHub API.
+We filter out any articles or repositories which are already present in RS-Graph.
+We then use the two lists of articles and repositories to create all possible combinations of article-repository pairs.
+To reduce the number of candidate pairs we need to process with the ARMM, we filter out any candidate pairs which have a repository creation date that is more than 556 days before the article publication date, or more than 73 days after the article publication date.
+These thresholds were determined by calculating the 10th and 90th percentile differences in publication date and repository creation date across the one-to-one subset of the seeded article-repository pairs available when mining began (Supplementary Fig. S1).
+Finally, we use the details of each pairing as the ARMM input and infer whether the pair forms an ``official'' article-repository pair or not, keeping the highest-confidence pair per article and per repository within each batch of 24 identities.
+After ARMM inference, we finish retrieving the remaining pieces of metadata including details about article authors and code contributing developer accounts before following the methodology from Brown, Slaughter, and Weber~\cite{brown2026code} to identify new researcher-developer-account identities to use in the next round of mining.
+Every new identity with a confidence of at least 0.97 seeds the next round, including identities found on candidate pairs that fell below the ARMM threshold.
 
-% We conducted three initial rounds of mining before making minor modifications to the processing workflow, and conducting two additional rounds of mining using the modified workflow.
-% For the first three rounds of mining, we had two additional constraints in place to filter out repositories prior to creating all possible combinations of article-repository pairs.
-% As discussed in our section on the ARMM, we found that model performance decreased as README length decreased, and we initially filtered out repositories with a README of less than 200 characters to ensure that the ARMM would have the most information available for inference.
-% However, after further discussion, we decided that the ARMM performance was still substantial enough to enable mining without the README filter, especially given that we were planning on filtering the mined pairs to their high-precision confidence threshold of 0.9994.
-% Additionally, the first three rounds of mining also came with a limitation...
-% Comment from Eva: Can you fill in the limitation sentence? Specifically this should refer to the fact that as soon as we found a "match" for an article-repository pair in one batch of processing, that article and that repository were removed from the candidate pool for the rest of the round, even if the found "match" had a low confidence score.
-% To resolve these issues, we conducted a fourth and fifth round of mining which allowed repositories with shorter (or entirely missing) READMEs and re-evaluated any article-repository pairs that had confidence scores of less than 0.9994.
+We conducted three standard rounds of mining before modifying the processing workflow, and conducted two extended rounds of mining using the modified workflow.
+For the first three rounds of mining, we had two additional constraints in place.
+We initially filtered out repositories with a README of less than 200 characters to ensure that the ARMM would have the most information available for inference.
+However, we judged the ARMM performance sufficient to enable mining without the README filter, especially given that we were planning on filtering the mined pairs to their high-precision confidence threshold of 0.9994, at which precision on test examples with READMEs under 200 characters was 0.998.
+Additionally, the first three rounds of mining also came with a limitation in how batches shared the candidate pool.
+Once a batch stored a pair, its article and repository left the candidate pool for the rest of the round, even below 0.9994, so a weak early match could block a better later one.
+To resolve these issues, we conducted fourth and fifth rounds of mining which allowed repositories with shorter (or entirely missing) READMEs and returned the articles and repositories of pairs with confidence scores of less than 0.9994 to the candidate pool.
 
 \subsection{Annotation of mined pairs}\label{subsec:m-annotation}
 
-% To ensure the validity of our chosen high-precision ARMM confidence threshold of 0.9994, we annotated a sample of 600 mined article-repository pairs which met the threshold, to determine the precision of our mining workflow, and to understand any existing linkage behaviors.
-% Specifically, ...
-% Comment from Eva: Can you fill in all of these details? From the sample, to the trial set, to the full set. Note that I don't think we need to mention that number of examples per "mining round." Go all the way to the validity labels, the evidence that annotators were allowed to use, the directionality (note that we didn't annotate the article linking to a different repository or the repository linking to a different article, so dont include those), and don't mention the open access status from OpenAlex, just that we recorded if we had full text access ourselves. One more note, our determination of if the repository linked to the article was based on if there was a URL to the article, a DOI to the article, or some other clear identifier for the article (e.g., arxiv ID, PubMed ID, etc.). A title wasn't enough as titles can have typos or changes across versions, etc.
-% Comment from Eva: Also write the Agreement and Precision estimates paragraph, including everything that was in the outline. Although I don't think we need to include the "weighting" by field.
+To ensure the validity of our chosen high-precision ARMM confidence threshold of 0.9994, we annotated a sample of 600 mined article-repository pairs which met the threshold, to determine the precision of our mining workflow, and to understand any existing linkage behaviors.
+Specifically, we drew the sample from all five mining rounds and stratified it by article field, taking 100 pairs from each of the five largest fields and 100 from all other fields combined.
+Three annotators, including the first author, each labeled a trial set of 24 pairs (4 per stratum) and resolved disagreements by consensus, and then each labeled 192 of the remaining 576 pairs.
+Annotators labeled each pair as match, no-match, unsure, or not-available, judged against our definition of an ``official'' pair from the Introduction.
+Annotators used the article's full text where we could access it, and otherwise its abstract or landing page, recorded whether we had the full text, and never labeled a pair not-available for lack of full text alone.
+
+Annotators also recorded whether the article links to the repository (any URL to it) and whether the repository links to the article (a URL, DOI, or other identifier such as an arXiv or PubMed ID for any version, but not a title alone).
+An article without full text and with no link in its abstract or landing page has an unknown label, which we exclude from that label's denominator (\textcolor{red}{[ARTICLE-LINK-UNKNOWN: N]} pairs).
+% TODO: fill ARTICLE-LINK-UNKNOWN and EXCLUDED once all 576 pairs are labeled and Anna's and Sarah's sets are scored.
+
+Because nearly all labels fall in one category, we measured trial-set agreement with percent agreement and Gwet's AC1~\cite{gwet2008computing}, which was 94.4\% (AC1 0.942) for validity and 91.7\% (AC1 0.902) for full-text access.
+One annotator left both directionality labels blank for two pairs without full text, so directionality agreement covers 22 pairs, with 93.9\% (AC1 0.879) for article-to-repository links and 81.8\% (AC1 0.699) for repository-to-article links.
+Strict precision counts unsure and not-available pairs as errors, and lenient precision excludes them (\textcolor{red}{[EXCLUDED: N]} pairs).
+Both are unweighted proportions over the field-stratified sample, with exact Clopper--Pearson 95\% confidence intervals~\cite{clopper1934use}.
 
 \subsection{Three views of software use}\label{subsec:m-views}
 
-% RS-Graph includes three views of software use and in the following section, we describe how each view was acquired, how they were processed, and how software entities were matched together across views.
-% First is software mentions: names of software formally or informally mentioned in article text, extracted from a software mention extraction model.
-% Comment from Eva: Can you write the SoftCite-2025 dataset is joined to RS-Graph on primary or alternate article DOI, and then that we observed that SoftCite-2025 includes strong coverage up until 2022, etc.
+First is software mentions: names of software formally or informally mentioned in article text, extracted from a software mention extraction model.
+We join SoftCite-2025 mentions to RS-Graph on each article's lowercased primary or alternate DOI.
+Mentions cover 22.6--31.3\% of articles per year from 2011 to 2022, but 8.8\% in 2023 and none in 2024 or 2025, so every mention analysis stops at 2022.
 
-% Second is each repository's imported software from source code files.
-% Comment from Eva: Can you write out how the imports are extracted by cloning the whole repository, retrieving the imports from Python and R files, and that we include the commit hash of the repository in our repository metadata so that researchers can trace the imports back to the point in time when we processed the repository. Also include the sentences about the notebook conversion, and that imports are extracted using `py-extract-imported-libraries'.
-% We focus on "third-party" installed packages only, ignoring standard library packages and not processing source code files that are from directories which likely contain documentation, testing, or other "vendored" source code.
+Second is each repository's imported software from source code files.
+We clone each repository in full and record the commit we processed (\texttt{processed\_at\_sha}, Supplementary Table S2).
+We convert Jupyter notebooks to scripts with \texttt{py-nb-to-src} and extract imports from every Python and R file with the tree-sitter-based \texttt{py-extract-imported-libraries}.
+We focus on ``third-party'' installed packages only, ignoring standard library packages and not processing source code files that are from directories which likely contain documentation, testing, or other ``vendored'' source code.
 
-% Finally, we include the listed dependencies from each repository's dependency manifest files.
-% Comment from Eva: Can you write out this section? A few changes, I think we can skip over the "pinning: 71.0% of requirements-style rows pin exact versions, and manifest adoption details.
+Finally, we include the listed dependencies from each repository's dependency manifest files.
+We parse dependency manifests with \texttt{git-pkgs} (\url{https://github.com/git-pkgs/git-pkgs}) on the same clone.
+We store every ecosystem that \texttt{git-pkgs} reads but analyze only PyPI and Conda dependencies for Python and CRAN dependencies for R, including development and test dependencies.
 
 \subsection{Software name alignment}\label{subsec:m-alignment}
 
-% In order to compare the three views of software against one another, we need to be able to match software entities together regardless of spelling or other textual differences in their names across views.
-% Comment from Eva: Can you write the text normalization sentence?
-% We then use a two step approach to align the normalized software names, first, by calculating the fuzzy string similarity between all pairs of normalized software names within a single article-repository pair, and second, by using the string similarity scores and the Hungarian Algorithm to find the optimal one-to-one alignment between the two sets of software names that maximizes the total similarity.
-% Comment from Eva: Can you note that we also include a threshold on the minimum similarity score for a pair to be considered a valid pairing.
-% We additionally create a registry of software aliases for software that frequently failed our fuzzy matching, or did not pass our minimum similarity threshold, but which we could identify as the same software across views.
-% Comment from Eva: Can you write out the details about the alias registry in short.
-% Comment from Eva: Can you write out the details about how then we conducted comparisons for each article-repository pair, across each combination of the three views within each pair?
-% Comment from Eva: I think cut the generic terms sentence here, it is an analysis decision that can be stated later, but then, please explain that the top items per view, and the top items that aren't found in the opposing view, are available as tables in the Supplement?
+We normalize names by lowercasing them, removing spaces, hyphens, and underscores, and cutting them at the first version comparator or other non-name character.
+We then use a two-step approach to align the normalized software names, first, by calculating the fuzzy string similarity between all pairs of normalized software names within a single article-repository pair, and second, by using the string similarity scores and the Hungarian algorithm~\cite{crouse2016implementing} to find the optimal one-to-one alignment between the two sets of software names that maximizes the total similarity.
+We keep an aligned pair only when its RapidFuzz (\url{https://github.com/rapidfuzz/RapidFuzz}) similarity ratio is at least 85 of 100.
+We additionally create a registry of software aliases for software that frequently failed our fuzzy matching, or did not pass our minimum similarity threshold, but which we could identify as the same software across views.
+The registry holds 48 hand-curated groups (e.g., \texttt{pil} and \texttt{pillow}), and names in different groups never match, so \texttt{stlearn} and \texttt{sklearn} stay apart.
+Within each pair we align imports with mentions, dependencies with mentions, and imports with dependencies, whenever both views are non-empty.
+Supplementary Table S5 lists the most common software in each view and in one view only.
 
 \subsection{Analysis population}\label{subsec:m-population}
 
-% Any analysis and description of the dataset described in the article uses a filtered set of article-repository pairs and researcher-developer-account identities.
-% The dataset as a whole includes 763,238 article-repository pairs, and X researcher-developer-account identities.
-% Our primary filter keeps only seed and inferred pairs that meet our high-precision confidence threshold of 0.9994 for inferred article-repository pairs and 0.97 for inferred researcher-developer-account identities reducing the dataset to X article-repository pairs and Y researcher-developer-account identities.
-% Comment from Eva: please fill in those X and Y numbers in the immediately prior sentence.
-% In addition, we filter out pairs with article publication dates from before 2008 for two reasons.
-% First, there are very few articles in our dataset that fall into this criteria, and any analysis using these pairs would be underpowered or unrepresentative.
-% Second, GitHub only became publically available in 2008, and as a result, any repositories linked to articles published before then, would likely have been code migrated to GitHub from another platform, and as a result, we cannot be sure that all of the repositories metadata and contribution histories were correctly preserved during the migration process.
-% This filtering reduces the dataset of article-repository pairs down to the final X that we use for descriptive analysis and reporting.
-% From the filtered set of article-repository pairs, we gather all of the researcher-developer-account identities, and filter out any identities that do not have a confidence score of at least 0.97 (per the recommendation of Brown, Slaughter, and Weber~\cite{brown2026code}).
-% Comment from Eva: does the deduplication of identities do _anything_? How many are dropped? Where does that occur?
+The dataset as a whole includes 763,238 stored article-repository links (196,131 seed links and 567,107 ARMM-scored candidates) and 208,932 researcher-developer-account identities.
+Our primary filter keeps all seed pairs, and only the inferred pairs and identities that meet our high-precision confidence thresholds of 0.9994 for inferred article-repository pairs and 0.97 for inferred researcher-developer-account identities, reducing the dataset to 309,983 article-repository pairs and 193,436 researcher-developer-account identities.
+In addition, we filter out pairs with article publication dates from before 2008.
+This filtering removes 24 pairs, all of them seed pairs, and reduces the dataset of article-repository pairs down to the final 309,959 that we use for descriptive analysis and reporting.
+From the filtered set of article-repository pairs, we keep only the identities that link one of a retained pair's authors to one of its repository's contributors, which leaves 163,651 researcher-developer-account identities.
 
-% Comment from Eva: can you write all of the time series and classification rules paragraph? With one move, I think the repository-level properties bullet that was originally in the preceeding paragraph should be moved to this one as it fits more with the idea of "how things are aggregated, grouped, etc." for description and visualization.
+We compute repository-level properties (primary language, license, and dependency manifests) once per repository and count each article and repository once (303,157 articles and 296,786 repositories).
+Time series place each pair in its article's publication year, and a repository linked to several articles in the year of its earliest one.
+Dependency manifest and license series include a year only when it has at least 100 repositories.
+Figures use the nine most common OpenAlex fields plus Other, and the regression and annotation sample use the five most common plus Other.
+We classify licenses with keyword rules over GitHub's license names, checking copyleft first, and count GitHub's ``Other'' as licensed but neither permissive nor copyleft.
+A repository has a dependency manifest when we parsed at least one PyPI, Conda, or CRAN dependency from it.
 
 \subsection{FWCI and FWSI}\label{subsec:m-fwsi}
 
-% We adapt the Field-Weighted Citation Impact (FWCI) metric from articles to repostories by creating our Field-Weighted Stargazer Impact (FWSI) metric.
-% Comment from Eva: can you write out the FWSI definition / formula sentence, the scope, the why lifetime stars, and why field and not subfield sentences? Skip the FWCI note about our usage as released by OpenAlex, not needed here imo.
-% We note that potential improvements or alternative formulations to FWSI could be made by focusing on software type rather than document type and potentially adding programming language as an additional grouping factor as both are likely highly impactful to their each repository's stargazer count.
-% Comment from Eva: The immediately prior sentence is a start, in general I like it, but I would really like to say that there isn't an automated method for software type classification, but there is prior work on categories of research software (Multidimensional Research Software Categorization from Hasselbring et al.)
-% Comment from Eva: I think we can remove the paragraph that steps bullet by bullet through the differences between the calculations. Assume the reader is smart and understands our simple explanation of differences.
+We adapt the Field-Weighted Citation Impact (FWCI) metric from articles to repositories by creating our Field-Weighted Stargazer Impact (FWSI) metric.
+A repository's FWSI is its lifetime stargazer count divided by the mean count of RS-Graph repositories sharing its field (nine most common plus Other), creation year, and linked article type (article, preprint, or other).
+We count each repository once, with field and type from its first linked pair, and score only repositories created in 2024 or earlier, at least two calendar years before the year of the dataset's last pair (26 June 2026).
+We use lifetime counts because full star histories are infeasible to collect at this scale, and creation-year grouping stands in for FWCI's fixed citation window.
+We group by field rather than subfield because subfield peer groups would be too small.
+We are not aware of an automated method for classifying research software by type, although Hasselbring et al.~\cite{hasselbring2025multi} propose a multidimensional categorization of research software that could define such peer groups.
 
 \subsection{Statistical analysis}\label{subsec:m-statistics}
 
-% Comment from Eva: Can you write this section? I think a lot of this should largely be descriptive of the various configurations in which we could have approached the analysis. And of particular note, I think including a sentence near the end of the logistic regressions paragraph about how we focused on the controlled model with the 2022 publication year cap, in the unconditional population, was because X. We had some previous discussion back and forth about this if you can dig it up. But I think it was basically something like "the 2022 cap maximizes the the software mentions data against the RS-Graph population, but it would be unfair to imports and dependencies to not include them, and thus the unconditional population is the most fair comparison??" Something like that, but happy to go back and forth again, I just think we should include a single sentence about why that one was highlighted in the paper.
+We report mention rates under two denominators, both limited to articles published through 2022.
+The first uses mention-eligible pairs, whose articles have at least one extracted mention, so extraction failures cannot lower the rate.
+The second uses all pairs with at least one import or dependency, so it includes extraction misses (Supplementary Table S6).
+
+We fit logistic regressions with one row per article, repository, and imported library, with the outcome whether the library aligns with a mention in the article.
+We fit sixteen specifications, covering four model forms, two populations, and the 2022 cap, after filtering generic and rarely imported libraries (Supplementary Table S7).
+All fits use two-way cluster-robust standard errors by article and library~\cite{cameron2011robust}, and aligning each import with any matching mention instead changes no estimate by more than 0.11 percentage points.
+We treat the controlled model fit on all pairs with imports published through 2022 as our primary specification, because the cap limits the model to years in which SoftCite-2025 extraction coverage is stable, and keeping pairs with no extracted mention avoids conditioning on whether any mention was extracted, which depends on the same field, year, and imports as the outcome.
+Supplementary Table S9 gives the full coefficients of the primary specification.
+
+We compute Spearman's $\rho$ with Fisher $z$ 95\% confidence intervals, pooled and within each of the nine most common fields plus Other.
+We correlate stargazers with citations over all 309,959 pairs and FWSI with FWCI over the 167,378 pairs that have both, so a repository linked to several articles counts once per pair.
+We used statsmodels 0.14.6 and SciPy 1.17.0. % CHECK: versions read from the local rs-graph environment, confirm against the replication package
 
 \subsection{Personal data and provenance}\label{subsec:m-provenance}
 
-% We recognize that all of the data we use and release as a part of RS-Graph is public, we are connecting researchers scholarly presence with their GitHub profiles, which may include different names or emails that they use in a professional capacity.
-% As such, we do not include the display names or emails of any developer accounts in the public release of RS-Graph, and we will review and handle any requests for the removal of GitHub account records from RS-Graph and release a new version of the dataset without those records.
-
-% Comment from Eva: Does that read okay? Is there anything else we should include here?
+Although all of the data we use and release are public, RS-Graph connects researchers' scholarly records with their GitHub profiles, which may show names or email addresses that differ from those in their publications (e.g., one name in their scholarly writing and another on their GitHub profile).
+As such, we do not include the display names or emails of any developer accounts in the public release of RS-Graph, and we will review and handle any requests for the removal of GitHub account records from RS-Graph and release a new version of the dataset without those records.
+Every pair and identity records its route into RS-Graph, the model, version, and confidence that produced it, and its collection date (Supplementary Table S2).
 
 %TC:ignore
 \backmatter

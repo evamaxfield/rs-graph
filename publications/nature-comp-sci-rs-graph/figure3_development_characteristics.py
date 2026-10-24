@@ -6,7 +6,6 @@ supplemental), and the package-shaped vs. script-shaped repository diagnostic.
 
 from __future__ import annotations
 
-from datetime import date
 from pathlib import Path
 
 import evaplot
@@ -196,7 +195,7 @@ def _dev_duration_frame(df: pl.DataFrame) -> pl.DataFrame:
 def _manifest_adoption_over_time(df: pl.DataFrame, deps: pl.DataFrame) -> pl.DataFrame:
     # Dedup to one row per repository (first-seen publication year) -- the panel reports a
     # "% of Repos" statistic, so a repository must not be counted once per linked paper.
-    current_year = date.today().year
+    current_year = u.DATASET_AS_OF.year
     year_repo = (
         df.select("repository_id", "document_publication_year", "repository_primary_language")
         .unique(subset="repository_id", keep="first")
@@ -261,7 +260,7 @@ def _python_share_by_field_over_time(
     and a pooled all-fields line. Repo-year attribution and the per-year repository floor match
     `_manifest_adoption_over_time`.
     """
-    current_year = date.today().year
+    current_year = u.DATASET_AS_OF.year
     repo_year = (
         df.select(
             "repository_id",
@@ -319,7 +318,7 @@ def _manifest_adoption_by_field_over_time(
     `_python_share_by_field_over_time` (top-`top_n_fields` pruned fields, "Other", and a
     pooled all-fields line).
     """
-    current_year = date.today().year
+    current_year = u.DATASET_AS_OF.year
     repos_with_manifest = (
         deps.filter(pl.col("ecosystem").is_in(u.ALL_MANIFEST_ECOSYSTEMS))
         .select("repository_id")
@@ -550,7 +549,7 @@ def _license_adoption_over_time(df: pl.DataFrame) -> pl.DataFrame:
     or a copyleft license. Licenses matching neither keyword list (incl. GitHub's literal
     "Other") count toward "any" only.
     """
-    current_year = date.today().year
+    current_year = u.DATASET_AS_OF.year
     repo_year = (
         df.select("repository_id", "document_publication_year", "repository_license")
         .unique(subset="repository_id", keep="first")
@@ -771,7 +770,7 @@ def figure_3_software_development_characteristics(
     assert manifest_by_field_pooled.equals(
         manifest_all_repos.select("document_publication_year", "count", "total")
     ), "Panel C per-field pooled line diverges from the 'All repositories' series"
-    current_year = date.today().year
+    current_year = u.DATASET_AS_OF.year
     category_by_year_plotted = category_by_year.filter(
         pl.col("document_publication_year") < current_year
     )
@@ -1399,7 +1398,7 @@ def supplemental_manifest_file_adoption(output_dir: Path = u.OUTPUT_DIR) -> None
     for fname in all_manifest_files:
         print(f"Repositories with a root-level {fname} blob: {len(repos_with_file[fname]):,}")
 
-    current_year = date.today().year
+    current_year = u.DATASET_AS_OF.year
     repo_level = (
         df.group_by("repository_id")
         .agg(
@@ -1699,7 +1698,7 @@ def _characteristics_row(
     main-text counterpart (FWCI over all documents; repository metrics over repositories
     first seen 2008 to last year, attributed to their earliest publication year).
     """
-    current_year = date.today().year
+    current_year = u.DATASET_AS_OF.year
     docs = pairs.unique(subset="document_id", keep="first")
     fwci = docs.select("document_fwci").drop_nulls()
     repos = pairs.unique(subset="repository_id", keep="first").filter(
@@ -1799,7 +1798,7 @@ def seed_vs_mined_characteristics(output_dir: Path = u.OUTPUT_DIR) -> None:
         print(table)
     u.save_table(table, "seed_vs_mined_characteristics", output_dir)
 
-    current_year = date.today().year
+    current_year = u.DATASET_AS_OF.year
     license_strings = (
         df.unique(subset="repository_id", keep="first")
         .filter(pl.col("document_publication_year") < current_year)
@@ -1829,7 +1828,7 @@ def fwci_coverage_profile(output_dir: Path = u.OUTPUT_DIR) -> None:
         pl.col("link_processing_iteration").is_not_null().all().alias("only_mined"),
         (pl.col("dataset_source_name") == "pwc").any().alias("any_pwc"),
     )
-    current_year = date.today().year
+    current_year = u.DATASET_AS_OF.year
     profile = (
         docs.group_by("has_fwci")
         .agg(

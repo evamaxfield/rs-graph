@@ -6,7 +6,6 @@ summary statistics.
 
 from __future__ import annotations
 
-from datetime import date
 from pathlib import Path
 
 import evaplot
@@ -121,7 +120,7 @@ def figure_2_dataset_coverage(output_dir: Path = u.OUTPUT_DIR) -> None:
     u.save_table(source_by_field, "supplemental_seed_source_by_field", output_dir)
 
     # ---- Panel B data: counts per year x top-6 field + Other, plus per-year mined share ----
-    current_year = date.today().year
+    current_year = u.DATASET_AS_OF.year
     partial_year_note = None
     year_df = df
     if df.get_column("document_publication_year").max() == current_year:
@@ -324,7 +323,7 @@ def candidate_figure2c_mined_share_by_field(output_dir: Path = u.OUTPUT_DIR) -> 
     df = u.load_filtered_pairs(top_n_fields=10)
     df = df.with_columns(pl.col("link_processing_iteration").is_not_null().alias("is_mined"))
 
-    current_year = date.today().year
+    current_year = u.DATASET_AS_OF.year
     year_df = df.filter(pl.col("document_publication_year") != current_year)
 
     field_order = (
