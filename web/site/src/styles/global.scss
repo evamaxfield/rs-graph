@@ -386,41 +386,6 @@ td {
   border-top: 3px solid var(--color-purple);
 }
 
-// Tab-nav: a small button-row control that swaps sibling panels client-side.
-.tabnav-buttons {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin-bottom: 1.5rem;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.tabnav-buttons button {
-  font: inherit;
-  font-weight: 600;
-  padding: 0.6rem 1.1rem;
-  border: none;
-  background: none;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  border-bottom: 3px solid transparent;
-  margin-bottom: -1px;
-}
-
-.tabnav-buttons button:hover {
-  color: var(--color-text);
-}
-
-.tabnav-buttons button[aria-selected='true'] {
-  color: var(--color-brand);
-  border-bottom-color: var(--color-brand);
-}
-
-.tabnav-buttons--nested button[aria-selected='true'] {
-  color: var(--color-accent);
-  border-bottom-color: var(--color-accent);
-}
-
 // Accordion: native <details>, styled so the summary reads as a clickable header.
 .accordion {
   border: 1px solid var(--color-border);
@@ -464,60 +429,9 @@ td {
   display: none;
 }
 
-// Per-family color accent on the Schema page's 7 entity-family accordions --
-// gives the most structurally "categorical" page on the site some wayfinding
-// use of the existing chart palette instead of 7 visually-identical accordions.
-// Mapped by family slug (semantic) rather than nth-child (positional) so the
-// mapping survives reordering families in schemaData.ts.
+// Docs family accordions: 4px accent border; color is set in docs/index.astro.
 #schema-families .accordion {
   border-left: 4px solid var(--color-border);
-}
-
-#schema-families .accordion[data-family-slug='documents'] {
-  border-left-color: var(--chart-1);
-}
-#schema-families .accordion[data-family-slug='people-and-institutions'] {
-  border-left-color: var(--chart-2);
-}
-#schema-families .accordion[data-family-slug='funding'] {
-  border-left-color: var(--chart-3);
-}
-#schema-families .accordion[data-family-slug='repositories-and-code'] {
-  border-left-color: var(--chart-4);
-}
-// developer-accounts and article-repo-links swapped from the initial chart-5/
-// chart-6 mapping -- yellow-70 (chart-6) sat too close to funding's orange-60
-// (chart-3) in light mode; pink-60 (chart-5) separates from orange more clearly.
-#schema-families .accordion[data-family-slug='developer-accounts-and-matching'] {
-  border-left-color: var(--chart-6);
-}
-#schema-families .accordion[data-family-slug='article-repository-links'] {
-  border-left-color: var(--chart-5);
-}
-#schema-families .accordion[data-family-slug='provenance-and-internals'] {
-  border-left-color: var(--chart-7);
-}
-
-// Footer-ish accordion sections (Data Sources / Methodology / Publications) --
-// visually de-emphasized, smaller text, sits near the bottom of Home.
-.footer-sections {
-  margin-top: 3rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--color-border);
-}
-
-.footer-sections .accordion {
-  font-size: 0.9rem;
-}
-
-.footer-sections .accordion summary {
-  font-size: 0.85rem;
-  padding: 0.75rem 1rem;
-}
-
-.footer-sections .accordion__body {
-  padding: 1rem;
-  color: var(--color-text-muted);
 }
 
 // Schema search box

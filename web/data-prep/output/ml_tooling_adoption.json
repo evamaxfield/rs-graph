@@ -1,155 +1,1224 @@
 {
-  "question": "How has the use of ML/AI methods grown in scientific code, and does it vary by domain?",
-  "methodology": "document_repository_link filtered to NULL OR confidence >= 0.9994; repo creation_year >= 2008 and <= 2024 (2025 excluded, partial year); ML/AI import set: accelerate, catboost, diffusers, flax, jax, keras, lightgbm, onnx, onnxruntime, peft, pytorch, scikitlearn, sentencetransformers, sklearn, tensorflow, timm, torch, transformers, xgboost",
-  "ml_library_names": [
-    "accelerate",
-    "catboost",
-    "diffusers",
-    "flax",
-    "jax",
-    "keras",
-    "lightgbm",
-    "onnx",
-    "onnxruntime",
-    "peft",
-    "pytorch",
-    "scikitlearn",
-    "sentencetransformers",
-    "sklearn",
-    "tensorflow",
-    "timm",
-    "torch",
-    "transformers",
-    "xgboost"
-  ],
-  "series": [
-    {
-      "year": 2008,
-      "total": 4,
-      "with_ml": 0,
-      "pct": 0.0
+  "meta": {
+    "repo_id": "sci-soft-collections/rs-graph-v2-full",
+    "revision_sha": "f89430637f0b437e4692cdfd664414c573d1cdbc",
+    "run_date": "2026-10-27",
+    "thresholds": {
+      "pair_confidence": 0.9994,
+      "identity_confidence": 0.97,
+      "min_publication_year": 2008
     },
-    {
-      "year": 2009,
-      "total": 22,
-      "with_ml": 1,
-      "pct": 4.5
-    },
+    "n_pairs": 309959,
+    "n_rows": 150
+  },
+  "headline": {
+    "ml_pct_2010": 7.9,
+    "ml_pct_2024": 61.1,
+    "ml_n_repos_2024": 50784,
+    "manifest_pct_2010": 18.0,
+    "manifest_pct_2024": 44.9,
+    "manifest_n_repos_2024": 50784
+  },
+  "rows": [
     {
       "year": 2010,
-      "total": 69,
-      "with_ml": 6,
-      "pct": 8.7
+      "domain": "All domains",
+      "series": "Dependency manifest",
+      "n_repos": 89,
+      "n_flagged": 16,
+      "pct": 18.0
     },
     {
       "year": 2011,
-      "total": 212,
-      "with_ml": 7,
-      "pct": 3.3
+      "domain": "All domains",
+      "series": "Dependency manifest",
+      "n_repos": 240,
+      "n_flagged": 63,
+      "pct": 26.2
     },
     {
       "year": 2012,
-      "total": 410,
-      "with_ml": 14,
-      "pct": 3.4
+      "domain": "All domains",
+      "series": "Dependency manifest",
+      "n_repos": 506,
+      "n_flagged": 87,
+      "pct": 17.2
     },
     {
       "year": 2013,
-      "total": 946,
-      "with_ml": 33,
-      "pct": 3.5
+      "domain": "All domains",
+      "series": "Dependency manifest",
+      "n_repos": 1150,
+      "n_flagged": 193,
+      "pct": 16.8
     },
     {
       "year": 2014,
-      "total": 1846,
-      "with_ml": 89,
+      "domain": "All domains",
+      "series": "Dependency manifest",
+      "n_repos": 2179,
+      "n_flagged": 389,
+      "pct": 17.9
+    },
+    {
+      "year": 2015,
+      "domain": "All domains",
+      "series": "Dependency manifest",
+      "n_repos": 4051,
+      "n_flagged": 676,
+      "pct": 16.7
+    },
+    {
+      "year": 2016,
+      "domain": "All domains",
+      "series": "Dependency manifest",
+      "n_repos": 6154,
+      "n_flagged": 1232,
+      "pct": 20.0
+    },
+    {
+      "year": 2017,
+      "domain": "All domains",
+      "series": "Dependency manifest",
+      "n_repos": 9830,
+      "n_flagged": 2084,
+      "pct": 21.2
+    },
+    {
+      "year": 2018,
+      "domain": "All domains",
+      "series": "Dependency manifest",
+      "n_repos": 14621,
+      "n_flagged": 3322,
+      "pct": 22.7
+    },
+    {
+      "year": 2019,
+      "domain": "All domains",
+      "series": "Dependency manifest",
+      "n_repos": 21171,
+      "n_flagged": 5692,
+      "pct": 26.9
+    },
+    {
+      "year": 2020,
+      "domain": "All domains",
+      "series": "Dependency manifest",
+      "n_repos": 30317,
+      "n_flagged": 9188,
+      "pct": 30.3
+    },
+    {
+      "year": 2021,
+      "domain": "All domains",
+      "series": "Dependency manifest",
+      "n_repos": 35941,
+      "n_flagged": 12029,
+      "pct": 33.5
+    },
+    {
+      "year": 2022,
+      "domain": "All domains",
+      "series": "Dependency manifest",
+      "n_repos": 40700,
+      "n_flagged": 14958,
+      "pct": 36.8
+    },
+    {
+      "year": 2023,
+      "domain": "All domains",
+      "series": "Dependency manifest",
+      "n_repos": 47493,
+      "n_flagged": 19252,
+      "pct": 40.5
+    },
+    {
+      "year": 2024,
+      "domain": "All domains",
+      "series": "Dependency manifest",
+      "n_repos": 50784,
+      "n_flagged": 22807,
+      "pct": 44.9
+    },
+    {
+      "year": 2010,
+      "domain": "All domains",
+      "series": "ML library import",
+      "n_repos": 89,
+      "n_flagged": 7,
+      "pct": 7.9
+    },
+    {
+      "year": 2011,
+      "domain": "All domains",
+      "series": "ML library import",
+      "n_repos": 240,
+      "n_flagged": 7,
+      "pct": 2.9
+    },
+    {
+      "year": 2012,
+      "domain": "All domains",
+      "series": "ML library import",
+      "n_repos": 506,
+      "n_flagged": 16,
+      "pct": 3.2
+    },
+    {
+      "year": 2013,
+      "domain": "All domains",
+      "series": "ML library import",
+      "n_repos": 1150,
+      "n_flagged": 35,
+      "pct": 3.0
+    },
+    {
+      "year": 2014,
+      "domain": "All domains",
+      "series": "ML library import",
+      "n_repos": 2179,
+      "n_flagged": 96,
+      "pct": 4.4
+    },
+    {
+      "year": 2015,
+      "domain": "All domains",
+      "series": "ML library import",
+      "n_repos": 4051,
+      "n_flagged": 247,
+      "pct": 6.1
+    },
+    {
+      "year": 2016,
+      "domain": "All domains",
+      "series": "ML library import",
+      "n_repos": 6154,
+      "n_flagged": 750,
+      "pct": 12.2
+    },
+    {
+      "year": 2017,
+      "domain": "All domains",
+      "series": "ML library import",
+      "n_repos": 9830,
+      "n_flagged": 2172,
+      "pct": 22.1
+    },
+    {
+      "year": 2018,
+      "domain": "All domains",
+      "series": "ML library import",
+      "n_repos": 14621,
+      "n_flagged": 4791,
+      "pct": 32.8
+    },
+    {
+      "year": 2019,
+      "domain": "All domains",
+      "series": "ML library import",
+      "n_repos": 21171,
+      "n_flagged": 8720,
+      "pct": 41.2
+    },
+    {
+      "year": 2020,
+      "domain": "All domains",
+      "series": "ML library import",
+      "n_repos": 30317,
+      "n_flagged": 13835,
+      "pct": 45.6
+    },
+    {
+      "year": 2021,
+      "domain": "All domains",
+      "series": "ML library import",
+      "n_repos": 35941,
+      "n_flagged": 18125,
+      "pct": 50.4
+    },
+    {
+      "year": 2022,
+      "domain": "All domains",
+      "series": "ML library import",
+      "n_repos": 40700,
+      "n_flagged": 22309,
+      "pct": 54.8
+    },
+    {
+      "year": 2023,
+      "domain": "All domains",
+      "series": "ML library import",
+      "n_repos": 47493,
+      "n_flagged": 27642,
+      "pct": 58.2
+    },
+    {
+      "year": 2024,
+      "domain": "All domains",
+      "series": "ML library import",
+      "n_repos": 50784,
+      "n_flagged": 31046,
+      "pct": 61.1
+    },
+    {
+      "year": 2010,
+      "domain": "Health Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 4,
+      "n_flagged": 2,
+      "pct": 50.0
+    },
+    {
+      "year": 2011,
+      "domain": "Health Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 5,
+      "n_flagged": 1,
+      "pct": 20.0
+    },
+    {
+      "year": 2012,
+      "domain": "Health Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 16,
+      "n_flagged": 1,
+      "pct": 6.2
+    },
+    {
+      "year": 2013,
+      "domain": "Health Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 49,
+      "n_flagged": 9,
+      "pct": 18.4
+    },
+    {
+      "year": 2014,
+      "domain": "Health Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 96,
+      "n_flagged": 20,
+      "pct": 20.8
+    },
+    {
+      "year": 2015,
+      "domain": "Health Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 182,
+      "n_flagged": 27,
+      "pct": 14.8
+    },
+    {
+      "year": 2016,
+      "domain": "Health Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 279,
+      "n_flagged": 61,
+      "pct": 21.9
+    },
+    {
+      "year": 2017,
+      "domain": "Health Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 420,
+      "n_flagged": 81,
+      "pct": 19.3
+    },
+    {
+      "year": 2018,
+      "domain": "Health Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 706,
+      "n_flagged": 119,
+      "pct": 16.9
+    },
+    {
+      "year": 2019,
+      "domain": "Health Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 1002,
+      "n_flagged": 180,
+      "pct": 18.0
+    },
+    {
+      "year": 2020,
+      "domain": "Health Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 1905,
+      "n_flagged": 397,
+      "pct": 20.8
+    },
+    {
+      "year": 2021,
+      "domain": "Health Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 2058,
+      "n_flagged": 456,
+      "pct": 22.2
+    },
+    {
+      "year": 2022,
+      "domain": "Health Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 2318,
+      "n_flagged": 645,
+      "pct": 27.8
+    },
+    {
+      "year": 2023,
+      "domain": "Health Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 2466,
+      "n_flagged": 845,
+      "pct": 34.3
+    },
+    {
+      "year": 2024,
+      "domain": "Health Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 2493,
+      "n_flagged": 960,
+      "pct": 38.5
+    },
+    {
+      "year": 2010,
+      "domain": "Health Sciences",
+      "series": "ML library import",
+      "n_repos": 4,
+      "n_flagged": 2,
+      "pct": 50.0
+    },
+    {
+      "year": 2011,
+      "domain": "Health Sciences",
+      "series": "ML library import",
+      "n_repos": 5,
+      "n_flagged": 0,
+      "pct": 0.0
+    },
+    {
+      "year": 2012,
+      "domain": "Health Sciences",
+      "series": "ML library import",
+      "n_repos": 16,
+      "n_flagged": 1,
+      "pct": 6.2
+    },
+    {
+      "year": 2013,
+      "domain": "Health Sciences",
+      "series": "ML library import",
+      "n_repos": 49,
+      "n_flagged": 2,
+      "pct": 4.1
+    },
+    {
+      "year": 2014,
+      "domain": "Health Sciences",
+      "series": "ML library import",
+      "n_repos": 96,
+      "n_flagged": 2,
+      "pct": 2.1
+    },
+    {
+      "year": 2015,
+      "domain": "Health Sciences",
+      "series": "ML library import",
+      "n_repos": 182,
+      "n_flagged": 7,
+      "pct": 3.8
+    },
+    {
+      "year": 2016,
+      "domain": "Health Sciences",
+      "series": "ML library import",
+      "n_repos": 279,
+      "n_flagged": 30,
+      "pct": 10.8
+    },
+    {
+      "year": 2017,
+      "domain": "Health Sciences",
+      "series": "ML library import",
+      "n_repos": 420,
+      "n_flagged": 56,
+      "pct": 13.3
+    },
+    {
+      "year": 2018,
+      "domain": "Health Sciences",
+      "series": "ML library import",
+      "n_repos": 706,
+      "n_flagged": 156,
+      "pct": 22.1
+    },
+    {
+      "year": 2019,
+      "domain": "Health Sciences",
+      "series": "ML library import",
+      "n_repos": 1002,
+      "n_flagged": 266,
+      "pct": 26.5
+    },
+    {
+      "year": 2020,
+      "domain": "Health Sciences",
+      "series": "ML library import",
+      "n_repos": 1905,
+      "n_flagged": 620,
+      "pct": 32.5
+    },
+    {
+      "year": 2021,
+      "domain": "Health Sciences",
+      "series": "ML library import",
+      "n_repos": 2058,
+      "n_flagged": 749,
+      "pct": 36.4
+    },
+    {
+      "year": 2022,
+      "domain": "Health Sciences",
+      "series": "ML library import",
+      "n_repos": 2318,
+      "n_flagged": 1025,
+      "pct": 44.2
+    },
+    {
+      "year": 2023,
+      "domain": "Health Sciences",
+      "series": "ML library import",
+      "n_repos": 2466,
+      "n_flagged": 1246,
+      "pct": 50.5
+    },
+    {
+      "year": 2024,
+      "domain": "Health Sciences",
+      "series": "ML library import",
+      "n_repos": 2493,
+      "n_flagged": 1389,
+      "pct": 55.7
+    },
+    {
+      "year": 2010,
+      "domain": "Life Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 22,
+      "n_flagged": 4,
+      "pct": 18.2
+    },
+    {
+      "year": 2011,
+      "domain": "Life Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 69,
+      "n_flagged": 24,
+      "pct": 34.8
+    },
+    {
+      "year": 2012,
+      "domain": "Life Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 134,
+      "n_flagged": 30,
+      "pct": 22.4
+    },
+    {
+      "year": 2013,
+      "domain": "Life Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 297,
+      "n_flagged": 52,
+      "pct": 17.5
+    },
+    {
+      "year": 2014,
+      "domain": "Life Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 610,
+      "n_flagged": 112,
+      "pct": 18.4
+    },
+    {
+      "year": 2015,
+      "domain": "Life Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 1022,
+      "n_flagged": 195,
+      "pct": 19.1
+    },
+    {
+      "year": 2016,
+      "domain": "Life Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 1454,
+      "n_flagged": 323,
+      "pct": 22.2
+    },
+    {
+      "year": 2017,
+      "domain": "Life Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 2079,
+      "n_flagged": 468,
+      "pct": 22.5
+    },
+    {
+      "year": 2018,
+      "domain": "Life Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 2712,
+      "n_flagged": 592,
+      "pct": 21.8
+    },
+    {
+      "year": 2019,
+      "domain": "Life Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 3537,
+      "n_flagged": 830,
+      "pct": 23.5
+    },
+    {
+      "year": 2020,
+      "domain": "Life Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 4274,
+      "n_flagged": 1017,
+      "pct": 23.8
+    },
+    {
+      "year": 2021,
+      "domain": "Life Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 4432,
+      "n_flagged": 1113,
+      "pct": 25.1
+    },
+    {
+      "year": 2022,
+      "domain": "Life Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 4517,
+      "n_flagged": 1230,
+      "pct": 27.2
+    },
+    {
+      "year": 2023,
+      "domain": "Life Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 4263,
+      "n_flagged": 1242,
+      "pct": 29.1
+    },
+    {
+      "year": 2024,
+      "domain": "Life Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 4066,
+      "n_flagged": 1391,
+      "pct": 34.2
+    },
+    {
+      "year": 2010,
+      "domain": "Life Sciences",
+      "series": "ML library import",
+      "n_repos": 22,
+      "n_flagged": 2,
+      "pct": 9.1
+    },
+    {
+      "year": 2011,
+      "domain": "Life Sciences",
+      "series": "ML library import",
+      "n_repos": 69,
+      "n_flagged": 3,
+      "pct": 4.3
+    },
+    {
+      "year": 2012,
+      "domain": "Life Sciences",
+      "series": "ML library import",
+      "n_repos": 134,
+      "n_flagged": 5,
+      "pct": 3.7
+    },
+    {
+      "year": 2013,
+      "domain": "Life Sciences",
+      "series": "ML library import",
+      "n_repos": 297,
+      "n_flagged": 9,
+      "pct": 3.0
+    },
+    {
+      "year": 2014,
+      "domain": "Life Sciences",
+      "series": "ML library import",
+      "n_repos": 610,
+      "n_flagged": 29,
       "pct": 4.8
     },
     {
       "year": 2015,
-      "total": 3451,
-      "with_ml": 231,
-      "pct": 6.7
+      "domain": "Life Sciences",
+      "series": "ML library import",
+      "n_repos": 1022,
+      "n_flagged": 59,
+      "pct": 5.8
     },
     {
       "year": 2016,
-      "total": 5430,
-      "with_ml": 709,
-      "pct": 13.1
+      "domain": "Life Sciences",
+      "series": "ML library import",
+      "n_repos": 1454,
+      "n_flagged": 125,
+      "pct": 8.6
     },
     {
       "year": 2017,
-      "total": 8839,
-      "with_ml": 2056,
-      "pct": 23.3
+      "domain": "Life Sciences",
+      "series": "ML library import",
+      "n_repos": 2079,
+      "n_flagged": 220,
+      "pct": 10.6
     },
     {
       "year": 2018,
-      "total": 13219,
-      "with_ml": 4544,
-      "pct": 34.4
+      "domain": "Life Sciences",
+      "series": "ML library import",
+      "n_repos": 2712,
+      "n_flagged": 464,
+      "pct": 17.1
     },
     {
       "year": 2019,
-      "total": 19469,
-      "with_ml": 8395,
-      "pct": 43.1
+      "domain": "Life Sciences",
+      "series": "ML library import",
+      "n_repos": 3537,
+      "n_flagged": 708,
+      "pct": 20.0
     },
     {
       "year": 2020,
-      "total": 28137,
-      "with_ml": 13399,
-      "pct": 47.6
+      "domain": "Life Sciences",
+      "series": "ML library import",
+      "n_repos": 4274,
+      "n_flagged": 987,
+      "pct": 23.1
     },
     {
       "year": 2021,
-      "total": 33684,
-      "with_ml": 17612,
-      "pct": 52.3
+      "domain": "Life Sciences",
+      "series": "ML library import",
+      "n_repos": 4432,
+      "n_flagged": 1193,
+      "pct": 26.9
     },
     {
       "year": 2022,
-      "total": 38234,
-      "with_ml": 21652,
-      "pct": 56.6
+      "domain": "Life Sciences",
+      "series": "ML library import",
+      "n_repos": 4517,
+      "n_flagged": 1435,
+      "pct": 31.8
     },
     {
       "year": 2023,
-      "total": 44403,
-      "with_ml": 26689,
-      "pct": 60.1
+      "domain": "Life Sciences",
+      "series": "ML library import",
+      "n_repos": 4263,
+      "n_flagged": 1591,
+      "pct": 37.3
     },
     {
       "year": 2024,
-      "total": 47145,
-      "with_ml": 29870,
-      "pct": 63.4
-    }
-  ],
-  "domains": [
-    {
-      "domain_name": "Physical Sciences",
-      "total": 196118,
-      "with_ml": 111693,
-      "pct": 57.0
+      "domain": "Life Sciences",
+      "series": "ML library import",
+      "n_repos": 4066,
+      "n_flagged": 1825,
+      "pct": 44.9
     },
     {
-      "domain_name": "Life Sciences",
-      "total": 31215,
-      "with_ml": 8744,
-      "pct": 28.0
+      "year": 2010,
+      "domain": "Physical Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 57,
+      "n_flagged": 11,
+      "pct": 19.3
     },
     {
-      "domain_name": "Social Sciences",
-      "total": 19040,
-      "with_ml": 7569,
-      "pct": 39.8
+      "year": 2011,
+      "domain": "Physical Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 145,
+      "n_flagged": 30,
+      "pct": 20.7
     },
     {
-      "domain_name": "Health Sciences",
-      "total": 13003,
-      "with_ml": 5641,
-      "pct": 43.4
+      "year": 2012,
+      "domain": "Physical Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 318,
+      "n_flagged": 50,
+      "pct": 15.7
+    },
+    {
+      "year": 2013,
+      "domain": "Physical Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 709,
+      "n_flagged": 113,
+      "pct": 15.9
+    },
+    {
+      "year": 2014,
+      "domain": "Physical Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 1298,
+      "n_flagged": 219,
+      "pct": 16.9
+    },
+    {
+      "year": 2015,
+      "domain": "Physical Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 2518,
+      "n_flagged": 373,
+      "pct": 14.8
+    },
+    {
+      "year": 2016,
+      "domain": "Physical Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 3980,
+      "n_flagged": 728,
+      "pct": 18.3
+    },
+    {
+      "year": 2017,
+      "domain": "Physical Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 6608,
+      "n_flagged": 1384,
+      "pct": 20.9
+    },
+    {
+      "year": 2018,
+      "domain": "Physical Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 10214,
+      "n_flagged": 2416,
+      "pct": 23.7
+    },
+    {
+      "year": 2019,
+      "domain": "Physical Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 15242,
+      "n_flagged": 4339,
+      "pct": 28.5
+    },
+    {
+      "year": 2020,
+      "domain": "Physical Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 22173,
+      "n_flagged": 7269,
+      "pct": 32.8
+    },
+    {
+      "year": 2021,
+      "domain": "Physical Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 27011,
+      "n_flagged": 9784,
+      "pct": 36.2
+    },
+    {
+      "year": 2022,
+      "domain": "Physical Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 31018,
+      "n_flagged": 12197,
+      "pct": 39.3
+    },
+    {
+      "year": 2023,
+      "domain": "Physical Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 37299,
+      "n_flagged": 15967,
+      "pct": 42.8
+    },
+    {
+      "year": 2024,
+      "domain": "Physical Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 37795,
+      "n_flagged": 17591,
+      "pct": 46.5
+    },
+    {
+      "year": 2010,
+      "domain": "Physical Sciences",
+      "series": "ML library import",
+      "n_repos": 57,
+      "n_flagged": 5,
+      "pct": 8.8
+    },
+    {
+      "year": 2011,
+      "domain": "Physical Sciences",
+      "series": "ML library import",
+      "n_repos": 145,
+      "n_flagged": 3,
+      "pct": 2.1
+    },
+    {
+      "year": 2012,
+      "domain": "Physical Sciences",
+      "series": "ML library import",
+      "n_repos": 318,
+      "n_flagged": 10,
+      "pct": 3.1
+    },
+    {
+      "year": 2013,
+      "domain": "Physical Sciences",
+      "series": "ML library import",
+      "n_repos": 709,
+      "n_flagged": 21,
+      "pct": 3.0
+    },
+    {
+      "year": 2014,
+      "domain": "Physical Sciences",
+      "series": "ML library import",
+      "n_repos": 1298,
+      "n_flagged": 60,
+      "pct": 4.6
+    },
+    {
+      "year": 2015,
+      "domain": "Physical Sciences",
+      "series": "ML library import",
+      "n_repos": 2518,
+      "n_flagged": 170,
+      "pct": 6.8
+    },
+    {
+      "year": 2016,
+      "domain": "Physical Sciences",
+      "series": "ML library import",
+      "n_repos": 3980,
+      "n_flagged": 565,
+      "pct": 14.2
+    },
+    {
+      "year": 2017,
+      "domain": "Physical Sciences",
+      "series": "ML library import",
+      "n_repos": 6608,
+      "n_flagged": 1796,
+      "pct": 27.2
+    },
+    {
+      "year": 2018,
+      "domain": "Physical Sciences",
+      "series": "ML library import",
+      "n_repos": 10214,
+      "n_flagged": 3982,
+      "pct": 39.0
+    },
+    {
+      "year": 2019,
+      "domain": "Physical Sciences",
+      "series": "ML library import",
+      "n_repos": 15242,
+      "n_flagged": 7418,
+      "pct": 48.7
+    },
+    {
+      "year": 2020,
+      "domain": "Physical Sciences",
+      "series": "ML library import",
+      "n_repos": 22173,
+      "n_flagged": 11665,
+      "pct": 52.6
+    },
+    {
+      "year": 2021,
+      "domain": "Physical Sciences",
+      "series": "ML library import",
+      "n_repos": 27011,
+      "n_flagged": 15350,
+      "pct": 56.8
+    },
+    {
+      "year": 2022,
+      "domain": "Physical Sciences",
+      "series": "ML library import",
+      "n_repos": 31018,
+      "n_flagged": 18747,
+      "pct": 60.4
+    },
+    {
+      "year": 2023,
+      "domain": "Physical Sciences",
+      "series": "ML library import",
+      "n_repos": 37299,
+      "n_flagged": 23252,
+      "pct": 62.3
+    },
+    {
+      "year": 2024,
+      "domain": "Physical Sciences",
+      "series": "ML library import",
+      "n_repos": 37795,
+      "n_flagged": 24277,
+      "pct": 64.2
+    },
+    {
+      "year": 2010,
+      "domain": "Social Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 8,
+      "n_flagged": 1,
+      "pct": 12.5
+    },
+    {
+      "year": 2011,
+      "domain": "Social Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 23,
+      "n_flagged": 9,
+      "pct": 39.1
+    },
+    {
+      "year": 2012,
+      "domain": "Social Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 44,
+      "n_flagged": 8,
+      "pct": 18.2
+    },
+    {
+      "year": 2013,
+      "domain": "Social Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 99,
+      "n_flagged": 20,
+      "pct": 20.2
+    },
+    {
+      "year": 2014,
+      "domain": "Social Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 192,
+      "n_flagged": 44,
+      "pct": 22.9
+    },
+    {
+      "year": 2015,
+      "domain": "Social Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 353,
+      "n_flagged": 86,
+      "pct": 24.4
+    },
+    {
+      "year": 2016,
+      "domain": "Social Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 469,
+      "n_flagged": 119,
+      "pct": 25.4
+    },
+    {
+      "year": 2017,
+      "domain": "Social Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 753,
+      "n_flagged": 164,
+      "pct": 21.8
+    },
+    {
+      "year": 2018,
+      "domain": "Social Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 1049,
+      "n_flagged": 214,
+      "pct": 20.4
+    },
+    {
+      "year": 2019,
+      "domain": "Social Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 1457,
+      "n_flagged": 377,
+      "pct": 25.9
+    },
+    {
+      "year": 2020,
+      "domain": "Social Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 2071,
+      "n_flagged": 553,
+      "pct": 26.7
+    },
+    {
+      "year": 2021,
+      "domain": "Social Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 2530,
+      "n_flagged": 720,
+      "pct": 28.5
+    },
+    {
+      "year": 2022,
+      "domain": "Social Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 2917,
+      "n_flagged": 927,
+      "pct": 31.8
+    },
+    {
+      "year": 2023,
+      "domain": "Social Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 3209,
+      "n_flagged": 1086,
+      "pct": 33.8
+    },
+    {
+      "year": 2024,
+      "domain": "Social Sciences",
+      "series": "Dependency manifest",
+      "n_repos": 4439,
+      "n_flagged": 1867,
+      "pct": 42.1
+    },
+    {
+      "year": 2010,
+      "domain": "Social Sciences",
+      "series": "ML library import",
+      "n_repos": 8,
+      "n_flagged": 0,
+      "pct": 0.0
+    },
+    {
+      "year": 2011,
+      "domain": "Social Sciences",
+      "series": "ML library import",
+      "n_repos": 23,
+      "n_flagged": 1,
+      "pct": 4.3
+    },
+    {
+      "year": 2012,
+      "domain": "Social Sciences",
+      "series": "ML library import",
+      "n_repos": 44,
+      "n_flagged": 1,
+      "pct": 2.3
+    },
+    {
+      "year": 2013,
+      "domain": "Social Sciences",
+      "series": "ML library import",
+      "n_repos": 99,
+      "n_flagged": 3,
+      "pct": 3.0
+    },
+    {
+      "year": 2014,
+      "domain": "Social Sciences",
+      "series": "ML library import",
+      "n_repos": 192,
+      "n_flagged": 8,
+      "pct": 4.2
+    },
+    {
+      "year": 2015,
+      "domain": "Social Sciences",
+      "series": "ML library import",
+      "n_repos": 353,
+      "n_flagged": 15,
+      "pct": 4.2
+    },
+    {
+      "year": 2016,
+      "domain": "Social Sciences",
+      "series": "ML library import",
+      "n_repos": 469,
+      "n_flagged": 39,
+      "pct": 8.3
+    },
+    {
+      "year": 2017,
+      "domain": "Social Sciences",
+      "series": "ML library import",
+      "n_repos": 753,
+      "n_flagged": 115,
+      "pct": 15.3
+    },
+    {
+      "year": 2018,
+      "domain": "Social Sciences",
+      "series": "ML library import",
+      "n_repos": 1049,
+      "n_flagged": 215,
+      "pct": 20.5
+    },
+    {
+      "year": 2019,
+      "domain": "Social Sciences",
+      "series": "ML library import",
+      "n_repos": 1457,
+      "n_flagged": 373,
+      "pct": 25.6
+    },
+    {
+      "year": 2020,
+      "domain": "Social Sciences",
+      "series": "ML library import",
+      "n_repos": 2071,
+      "n_flagged": 629,
+      "pct": 30.4
+    },
+    {
+      "year": 2021,
+      "domain": "Social Sciences",
+      "series": "ML library import",
+      "n_repos": 2530,
+      "n_flagged": 889,
+      "pct": 35.1
+    },
+    {
+      "year": 2022,
+      "domain": "Social Sciences",
+      "series": "ML library import",
+      "n_repos": 2917,
+      "n_flagged": 1174,
+      "pct": 40.2
+    },
+    {
+      "year": 2023,
+      "domain": "Social Sciences",
+      "series": "ML library import",
+      "n_repos": 3209,
+      "n_flagged": 1414,
+      "pct": 44.1
+    },
+    {
+      "year": 2024,
+      "domain": "Social Sciences",
+      "series": "ML library import",
+      "n_repos": 4439,
+      "n_flagged": 2339,
+      "pct": 52.7
     }
   ]
 }

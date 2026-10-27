@@ -14,7 +14,7 @@ from lib.confidence import (
     PUBLICATION_YEAR_FLOOR,
     filter_high_precision_document_repository_links,
 )
-from lib.hf_loader import load_table
+from lib.hf_loader import load_table, run_meta
 
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "..", "output", "home_stats.json")
 
@@ -67,6 +67,7 @@ def run() -> dict:
     # --- site-snippet:end ---
 
     return {
+        "meta": run_meta(),
         "methodology": (
             "document_repository_link filtered to NULL OR confidence >= 0.9994; "
             f"publication_year >= {PUBLICATION_YEAR_FLOOR}"

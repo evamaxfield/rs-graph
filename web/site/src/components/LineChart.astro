@@ -1,11 +1,17 @@
 ---
+interface Row {
+  year: number;
+  pct: number;
+  series?: string;
+  n?: number;
+}
 interface FilterOption {
   label: string;
-  data: { year: number; pct: number }[];
+  data: Row[];
 }
 interface Props {
   id: string;
-  data: { year: number; pct: number }[];
+  data: Row[];
   yLabel?: string;
   yMax?: number;
   filterOptions?: FilterOption[];
@@ -15,7 +21,7 @@ const {
   id,
   data,
   yLabel = '% with declared dependencies',
-  yMax = 60,
+  yMax,
   filterOptions,
   filterLabel,
 } = Astro.props;
@@ -39,7 +45,7 @@ const {
     class="chart chart--line"
     data-payload={JSON.stringify(data)}
     data-y-label={yLabel}
-    data-y-max={yMax}
+    data-y-max={yMax ?? undefined}
     data-filter-options={filterOptions ? JSON.stringify(filterOptions) : undefined}
   >
   </div>
@@ -48,27 +54,51 @@ const {
 <script>
   import * as Plot from '@observablehq/plot';
 
-  function renderLineChart(el: HTMLElement, data: { year: number; pct: number }[]) {
+  interface Row {
+    year: number;
+    pct: number;
+    series?: string;
+    n?: number;
+  }
+
+  function renderLineChart(el: HTMLElement, data: Row[]) {
     const yLabel = el.dataset.yLabel || '% with declared dependencies';
-    const yMax = Number(el.dataset.yMax) || 60;
+    const dataMax = Math.max(0, ...data.map((d) => d.pct));
+    const yMax = Number(el.dataset.yMax) || Math.max(5, Math.ceil((dataMax * 1.15) / 5) * 5);
+    const seriesNames = [...new Set(data.map((d) => d.series).filter((s) => s !== undefined))];
+    const multi = seriesNames.length > 0;
+    const color = multi
+      ? {
+          legend: true,
+          domain: seriesNames,
+          range: seriesNames.map((_, i) => `var(--chart-${(i % 7) + 1})`),
+        }
+      : undefined;
+    const stroke = multi ? 'series' : 'var(--chart-1)';
+    const tipTitle = (d: Row) =>
+      [
+        d.series,
+        String(d.year),
+        `${d.pct}%`,
+        d.n !== undefined && `${d.n.toLocaleString()} repos`,
+      ]
+        .filter(Boolean)
+        .join('\n');
+    const tipOptions = { x: 'year', y: 'pct', title: tipTitle };
     const plot = Plot.plot({
       width: el.clientWidth || 640,
       height: 340,
       marginLeft: 50,
+      // Tip fill and text follow the theme, not Plot's white default.
+      style: '--plot-background: var(--color-card-bg); color: var(--color-text)',
       x: { label: 'Repo creation year', tickFormat: (d: number) => String(d) },
       y: { label: yLabel, domain: [0, yMax] },
+      color,
       marks: [
-        Plot.lineY(data, { x: 'year', y: 'pct', stroke: 'var(--chart-1)', strokeWidth: 2 }),
-        Plot.dot(data, { x: 'year', y: 'pct', fill: 'var(--chart-1)' }),
+        Plot.lineY(data, { x: 'year', y: 'pct', stroke, strokeWidth: 2 }),
+        Plot.dot(data, { x: 'year', y: 'pct', fill: multi ? 'series' : 'var(--chart-1)' }),
         Plot.ruleY([0]),
-        Plot.tip(
-          data,
-          Plot.pointerX({
-            x: 'year',
-            y: 'pct',
-            title: (d: { year: number; pct: number }) => `${d.year}\n${d.pct}%`,
-          }),
-        ),
+        Plot.tip(data, multi ? Plot.pointer(tipOptions) : Plot.pointerX(tipOptions)),
       ],
     });
     el.replaceChildren(plot);

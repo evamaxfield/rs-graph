@@ -19,8 +19,6 @@
     "@mozilla-protocol/core": "^22.0.0",
     "@observablehq/plot": "^0.6.16",
     "astro": "^5.1.0",
-    "d3": "^7.9.0",
-    "minisearch": "^7.2.0",
     "sass": "^1.99.0"
   },
   "devDependencies": {

@@ -4,7 +4,7 @@ Research Software Graph (rs-graph) is a software repository which contains the f
 
 1. A Python library for collecting, processing, and standardizing scientific publication and associated research software/code from multiple sources.
 
-2. Select publications, analysis scripts, and presentations which utilize the created dataset(s). Notably, this includes our preprint [Code Contribution and Credit in Science](https://evamaxfield.github.io/rs-graph/qss-code-contribution.html) which investigates how code contributions are recognized and rewarded in scientific publications.
+2. Select publications, analysis scripts, and presentations which utilize the created dataset(s). Notably, this includes our preprint [Code Contribution and Credit in Science](https://evamaxfield.github.io/rs-graph/qss-code-authors.html) which investigates how code contributions are recognized and rewarded in scientific publications.
 
 If you are interested in:
 
@@ -89,7 +89,7 @@ The database schema/models are available at: [./rs_graph/db/models.py](./rs_grap
 
 The initial release of data from our processing pipeline is stored in Harvard Dataverse: [https://doi.org/10.7910/DVN/KPYVI1](https://doi.org/10.7910/DVN/KPYVI1)
 
-This dataset was used to create the preprint manuscript [Code Contribution and Credit in Science](https://evamaxfield.github.io/rs-graph/qss-code-contribution.html).
+This dataset was used to create the preprint manuscript [Code Contribution and Credit in Science](https://evamaxfield.github.io/rs-graph/qss-code-authors.html).
 
 To access the dataset, please create an account on Harvard Dataverse and download the
 `rs-graph-v1-redacted.db` and/or `rs-graph-v1-prod.db` SQLite database file(s).

@@ -1,33 +1,38 @@
 {
+  "meta": {
+    "repo_id": "sci-soft-collections/rs-graph-v2-full",
+    "revision_sha": "f89430637f0b437e4692cdfd664414c573d1cdbc",
+    "run_date": "2026-10-27"
+  },
   "methodology": "document_repository_link filtered to NULL OR confidence >= 0.9994; publication_year >= 2008",
-  "n_documents": 275231,
-  "n_repositories": 268860,
-  "n_links": 282033,
+  "n_documents": 303157,
+  "n_repositories": 296786,
+  "n_links": 309959,
   "year_min": 2008,
   "year_max": 2026,
   "n_domains": 4,
   "n_fields": 26,
-  "n_distinct_venues": 6848,
+  "n_distinct_venues": 7591,
   "venue_type_counts": [
     {
       "source_type": "journal",
-      "n": 5950
+      "n": 6539
     },
     {
       "source_type": "conference",
-      "n": 415
+      "n": 445
     },
     {
       "source_type": "repository",
-      "n": 287
+      "n": 373
     },
     {
       "source_type": "book series",
-      "n": 151
+      "n": 180
     },
     {
       "source_type": "ebook platform",
-      "n": 45
+      "n": 54
     }
   ]
 }

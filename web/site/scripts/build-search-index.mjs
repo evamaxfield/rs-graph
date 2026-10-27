@@ -1,5 +1,5 @@
-// Stages the raw pairs payload data-prep writes to search-data/ (from
-// web/data-prep/output/search_articles_repos.json -- see web/README.md) into
+// Stages the raw pairs payload data-prep writes to
+// web/data-prep/output/search_articles_repos.json into
 // public/search-index/ for the "Explore the Data" page to fetch.
 //
 // No index-build step: an earlier version built a MiniSearch inverted index
@@ -21,7 +21,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SEARCH_DATA_DIR = join(__dirname, '..', 'search-data');
+const SEARCH_DATA_DIR = join(__dirname, '..', '..', 'data-prep', 'output');
 const OUTPUT_DIR = join(__dirname, '..', 'public', 'search-index');
 
 mkdirSync(OUTPUT_DIR, { recursive: true });

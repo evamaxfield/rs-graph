@@ -1,18 +1,203 @@
 {
-  "question": "Are code contributions recognized as authorship?",
-  "methodology": "document_repository_link filtered to NULL OR confidence >= 0.9994; researcher_developer_account_link filtered to confidence >= 0.9",
-  "unrestricted": {
-    "n_hp_linked_documents": 275255,
-    "n_with_confidently_matched_contributor": 244445,
-    "n_with_non_author_contributor": 78468,
-    "pct_of_all_hp_linked": 28.51,
-    "pct_of_matched": 32.1
+  "meta": {
+    "repo_id": "sci-soft-collections/rs-graph-v2-full",
+    "revision_sha": "f89430637f0b437e4692cdfd664414c573d1cdbc",
+    "run_date": "2026-10-27",
+    "thresholds": {
+      "pair_confidence": 0.9994,
+      "identity_confidence": 0.97,
+      "min_publication_year": 2008
+    },
+    "n_pairs": 309959,
+    "n_rows": 26
   },
-  "paper_equivalent": {
-    "description": "single linked repository, 3-11 listed authors",
-    "n_qualifying_documents": 209771,
-    "n_with_non_author_contributor": 59905,
-    "pct": 28.56,
-    "published_v1_finding_pct": 28.6
-  }
+  "headline": {
+    "n_papers": 69830,
+    "n_with_non_author_contributor": 15740,
+    "pct_non_author": 22.5
+  },
+  "rows": [
+    {
+      "domain": "Physical Sciences",
+      "field": "Computer Science",
+      "n_papers": 32299,
+      "n_with_non_author_contributor": 8654,
+      "pct_non_author": 26.8
+    },
+    {
+      "domain": "Physical Sciences",
+      "field": "Engineering",
+      "n_papers": 7047,
+      "n_with_non_author_contributor": 1597,
+      "pct_non_author": 22.7
+    },
+    {
+      "domain": "Life Sciences",
+      "field": "Biochemistry, Genetics and Molecular Biology",
+      "n_papers": 6164,
+      "n_with_non_author_contributor": 1139,
+      "pct_non_author": 18.5
+    },
+    {
+      "domain": "Health Sciences",
+      "field": "Medicine",
+      "n_papers": 4487,
+      "n_with_non_author_contributor": 820,
+      "pct_non_author": 18.3
+    },
+    {
+      "domain": "Physical Sciences",
+      "field": "Physics and Astronomy",
+      "n_papers": 3566,
+      "n_with_non_author_contributor": 650,
+      "pct_non_author": 18.2
+    },
+    {
+      "domain": "Physical Sciences",
+      "field": "Environmental Science",
+      "n_papers": 2728,
+      "n_with_non_author_contributor": 360,
+      "pct_non_author": 13.2
+    },
+    {
+      "domain": "Life Sciences",
+      "field": "Neuroscience",
+      "n_papers": 2088,
+      "n_with_non_author_contributor": 401,
+      "pct_non_author": 19.2
+    },
+    {
+      "domain": "Physical Sciences",
+      "field": "Mathematics",
+      "n_papers": 2042,
+      "n_with_non_author_contributor": 337,
+      "pct_non_author": 16.5
+    },
+    {
+      "domain": "Social Sciences",
+      "field": "Social Sciences",
+      "n_papers": 1991,
+      "n_with_non_author_contributor": 386,
+      "pct_non_author": 19.4
+    },
+    {
+      "domain": "Social Sciences",
+      "field": "Decision Sciences",
+      "n_papers": 1195,
+      "n_with_non_author_contributor": 270,
+      "pct_non_author": 22.6
+    },
+    {
+      "domain": "Life Sciences",
+      "field": "Agricultural and Biological Sciences",
+      "n_papers": 1119,
+      "n_with_non_author_contributor": 157,
+      "pct_non_author": 14.0
+    },
+    {
+      "domain": "Social Sciences",
+      "field": "Psychology",
+      "n_papers": 984,
+      "n_with_non_author_contributor": 179,
+      "pct_non_author": 18.2
+    },
+    {
+      "domain": "Physical Sciences",
+      "field": "Earth and Planetary Sciences",
+      "n_papers": 938,
+      "n_with_non_author_contributor": 133,
+      "pct_non_author": 14.2
+    },
+    {
+      "domain": "Physical Sciences",
+      "field": "Materials Science",
+      "n_papers": 712,
+      "n_with_non_author_contributor": 156,
+      "pct_non_author": 21.9
+    },
+    {
+      "domain": "Social Sciences",
+      "field": "Economics, Econometrics and Finance",
+      "n_papers": 512,
+      "n_with_non_author_contributor": 92,
+      "pct_non_author": 18.0
+    },
+    {
+      "domain": "Life Sciences",
+      "field": "Immunology and Microbiology",
+      "n_papers": 350,
+      "n_with_non_author_contributor": 48,
+      "pct_non_author": 13.7
+    },
+    {
+      "domain": "Social Sciences",
+      "field": "Business, Management and Accounting",
+      "n_papers": 275,
+      "n_with_non_author_contributor": 73,
+      "pct_non_author": 26.5
+    },
+    {
+      "domain": "Physical Sciences",
+      "field": "Chemistry",
+      "n_papers": 253,
+      "n_with_non_author_contributor": 61,
+      "pct_non_author": 24.1
+    },
+    {
+      "domain": "Health Sciences",
+      "field": "Health Professions",
+      "n_papers": 236,
+      "n_with_non_author_contributor": 35,
+      "pct_non_author": 14.8
+    },
+    {
+      "domain": "Social Sciences",
+      "field": "Arts and Humanities",
+      "n_papers": 165,
+      "n_with_non_author_contributor": 31,
+      "pct_non_author": 18.8
+    },
+    {
+      "domain": "Physical Sciences",
+      "field": "Energy",
+      "n_papers": 62,
+      "n_with_non_author_contributor": 11,
+      "pct_non_author": 17.7
+    },
+    {
+      "domain": "Health Sciences",
+      "field": "Dentistry",
+      "n_papers": 45,
+      "n_with_non_author_contributor": 7,
+      "pct_non_author": 15.6
+    },
+    {
+      "domain": "Health Sciences",
+      "field": "Nursing",
+      "n_papers": 40,
+      "n_with_non_author_contributor": 6,
+      "pct_non_author": 15.0
+    },
+    {
+      "domain": "Health Sciences",
+      "field": "Veterinary",
+      "n_papers": 32,
+      "n_with_non_author_contributor": 6,
+      "pct_non_author": 18.8
+    },
+    {
+      "domain": "Life Sciences",
+      "field": "Pharmacology, Toxicology and Pharmaceutics",
+      "n_papers": 32,
+      "n_with_non_author_contributor": 7,
+      "pct_non_author": 21.9
+    },
+    {
+      "domain": "Physical Sciences",
+      "field": "Chemical Engineering",
+      "n_papers": 24,
+      "n_with_non_author_contributor": 2,
+      "pct_non_author": 8.3
+    }
+  ]
 }

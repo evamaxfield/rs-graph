@@ -20,10 +20,9 @@ def build_pairs() -> dict:
     repositories = load_table("repository").select("id", "owner", "name", "stargazers_count")
 
     # Each document's best-scoring topic -> field_name, same join pattern
-    # used by ml_tooling_adoption.py / dependency_manifest_growth.py (there
-    # it's domain_name; here we want the finer-grained field_name -- 26
-    # values vs. 4 -- since it's far more informative per-item on a browse
-    # card than the broad domain would be).
+    # used by ml_tooling_adoption.py (there it's domain_name; here we want
+    # the finer-grained field_name -- 26 values vs. 4 -- since it's far more
+    # informative per-item on a browse card than the broad domain would be).
     document_topic = load_table("document_topic")
     topic = load_table("topic").select("id", "field_name").rename({"id": "topic_id"})
     best_field = (

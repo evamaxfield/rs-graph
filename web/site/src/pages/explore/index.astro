@@ -9,17 +9,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   <section class="container">
     <h1 class="title-lg">Explore the data</h1>
     <p class="body-md intro">
-      Every card below is one high-precision article&ndash;repository pair &mdash; a paper and
-      the code repository linked to it. Search, filter by field, and sort below; everything here
-      runs client-side against a precomputed index &mdash; no server, no live API calls.
-    </p>
-    <p class="body-sm intro">
-      This covers every high-precision pair in rs-graph &mdash; see the count noted under the
-      search box for exactly how many are browsable. Browse the public dataset (authors,
-      developers, and every other table) directly via the
-      <a href="https://huggingface.co/datasets/sci-soft-collections/rs-graph-v2"
-        >HuggingFace dataset viewer</a
-      >.
+      Browse every article&ndash;repository pair. Search titles or repo names, filter by field,
+      sort.
     </p>
 
     <p class="body-sm explore-count" data-explore-count></p>
@@ -49,7 +40,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         </select>
       </label>
     </div>
-    <div class="explore-results card-grid" data-explore-results></div>
+    <div class="explore-results" data-explore-results></div>
     <div class="explore-pagination" data-explore-pagination></div>
   </section>
 </BaseLayout>
@@ -58,6 +49,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   import { withBase } from '../../lib/url';
 
   const RESULTS_PER_PAGE = 20;
+  const MIN_YEAR = 2008;
   const INDEX_URL = withBase('/search-index/articles-repos.json');
 
   // [title, doi, cited_by_count, publication_date, field_idx|null, repo_full_name, stars]
@@ -93,8 +85,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   async function loadPairs(): Promise<{ fields: string[]; pairs: Pair[] }> {
     const res = await fetch(INDEX_URL);
     const payload: IndexPayload = await res.json();
-    const pairs = payload.records.map(
-      ([title, doi, citedByCount, publicationDate, fieldIdx, repoFullName, stars]) => ({
+    const pairs = payload.records
+      .filter((r) => Number(r[3].slice(0, 4)) >= MIN_YEAR)
+      .map(([title, doi, citedByCount, publicationDate, fieldIdx, repoFullName, stars]) => ({
         title,
         doi,
         citedByCount,
@@ -102,8 +95,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         fieldIdx,
         repoFullName,
         stars,
-      }),
-    );
+      }));
     return { fields: payload.fields, pairs };
   }
 
@@ -152,9 +144,6 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const fieldLabel = pair.fieldIdx !== null ? fields[pair.fieldIdx] : null;
     const date = pair.publicationDate;
 
-    // nth-child in the underlying card-grid drives the Protocol color-rotation
-    // border via CSS -- no class needed here beyond "card", the grid position
-    // does the work (see .card-grid > .card:nth-child(6n + N) in global.scss).
     return `<div class="card explore-card">
       <div class="explore-card-header">
         <p class="body-md explore-card-title">
@@ -183,6 +172,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     page: number,
     resultsEl: HTMLElement,
     paginationEl: HTMLElement,
+    scrollToTop = false,
   ) {
     const totalPages = Math.max(1, Math.ceil(results.length / RESULTS_PER_PAGE));
     const clampedPage = Math.min(Math.max(page, 0), totalPages - 1);
@@ -208,7 +198,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       prevBtn.textContent = 'Previous';
       prevBtn.disabled = clampedPage === 0;
       prevBtn.addEventListener('click', () =>
-        renderPage(fields, results, clampedPage - 1, resultsEl, paginationEl),
+        renderPage(fields, results, clampedPage - 1, resultsEl, paginationEl, true),
       );
 
       const nextBtn = document.createElement('button');
@@ -216,13 +206,15 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       nextBtn.textContent = 'Next';
       nextBtn.disabled = clampedPage >= totalPages - 1;
       nextBtn.addEventListener('click', () =>
-        renderPage(fields, results, clampedPage + 1, resultsEl, paginationEl),
+        renderPage(fields, results, clampedPage + 1, resultsEl, paginationEl, true),
       );
 
       paginationEl.appendChild(prevBtn);
       paginationEl.appendChild(info);
       paginationEl.appendChild(nextBtn);
     }
+
+    if (scrollToTop) resultsEl.scrollIntoView({ block: 'start' });
   }
 
   async function main() {
@@ -244,9 +236,6 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
     input.disabled = false;
     input.placeholder = originalPlaceholder;
-    if (countEl) {
-      countEl.textContent = `Browsing ${pairs.length.toLocaleString()} article-repository pairs.`;
-    }
 
     // Populate the field/domain filter from the index's own fields lookup,
     // sorted alphabetically so it's scannable rather than in raw index order.
@@ -273,6 +262,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         results = results.filter((p) => matchesField(p, selectedField));
       results = sortPairs(results, sortKey);
 
+      if (countEl) {
+        countEl.textContent = `Showing ${results.length.toLocaleString()} of ${pairs.length.toLocaleString()} pairs`;
+      }
       renderPage(fields, results, 0, resultsEl!, paginationEl!);
     }
 
@@ -320,38 +312,40 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   .explore-controls .chart-filter {
     margin-bottom: 0;
   }
-  /* Reuses the site's .card-grid (see global.scss) so results pick up the
-     same Protocol color-rotation top borders as the home/schema card grids;
-     minmax is narrower than the default 16rem since these cards are denser. */
   .explore-results {
+    display: grid;
     grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
     gap: 0.75rem;
     margin-top: 1rem;
   }
-  .explore-card {
+  .explore-results :global(.explore-card) {
+    border-top: 3px solid var(--color-brand);
     padding: 0.9rem 1.1rem;
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
   }
-  .explore-card-header {
+  .explore-results :global(.explore-card-header) {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     gap: 0.5rem;
   }
-  .explore-card-title {
+  .explore-results :global(.explore-card-title) {
+    flex: 1 1 0;
+    min-width: 0;
     word-break: break-word;
   }
-  .explore-card-title :global(a) {
+  .explore-results :global(.explore-card-title a) {
     color: var(--color-brand);
     text-decoration: none;
   }
-  .explore-card-title :global(a:hover) {
+  .explore-results :global(.explore-card-title a:hover) {
     text-decoration: underline;
   }
-  .explore-card-field {
-    flex: 0 0 auto;
+  .explore-results :global(.explore-card-field) {
+    flex: 0 1 auto;
+    max-width: 40%;
     font-size: 0.7rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -360,18 +354,17 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     background: var(--color-bg-alt);
     border-radius: 4px;
     padding: 0.2rem 0.5rem;
-    white-space: nowrap;
   }
-  .explore-card-repo :global(a) {
+  .explore-results :global(.explore-card-repo a) {
     color: var(--color-text-muted);
     text-decoration: none;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
-  .explore-card-repo :global(a:hover) {
+  .explore-results :global(.explore-card-repo a:hover) {
     text-decoration: underline;
     color: var(--color-brand);
   }
-  .explore-card-meta {
+  .explore-results :global(.explore-card-meta) {
     display: flex;
     flex-wrap: wrap;
     gap: 0.75rem;
@@ -400,7 +393,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   .explore-pagination :global(button:not(:disabled):hover) {
     border-color: var(--color-brand);
   }
-  .explore-pagination-info {
+  .explore-pagination :global(.explore-pagination-info) {
     color: var(--color-text-muted);
   }
 </style>

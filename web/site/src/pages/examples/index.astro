@@ -1,0 +1,169 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CodeSnippet from '../../components/CodeSnippet.astro';
+import DataTable from '../../components/DataTable.astro';
+import LineChart from '../../components/LineChart.astro';
+import { withBase } from '../../lib/url';
+
+import nonAuthor from '../../../public/data/non_author_contributors.json';
+import mlTooling from '../../../public/data/ml_tooling_adoption.json';
+import topLibraries from '../../../public/data/top_libraries.json';
+import nonAuthorCode from '../../generated/non_author_contributors.py.txt?raw';
+import mlToolingCode from '../../generated/ml_tooling_adoption.py.txt?raw';
+import topLibrariesCode from '../../generated/top_libraries.py.txt?raw';
+
+const fmt = (n: number) => n.toLocaleString('en-US');
+const provenance = (meta: { repo_id: string; revision_sha: string; run_date: string }) =>
+  `Computed from ${meta.repo_id} at revision ${meta.revision_sha.slice(0, 7)} on ${meta.run_date}.`;
+
+const limitations = withBase('/docs#limitations');
+
+const nonAuthorColumns = [
+  { key: 'field', label: 'Field' },
+  { key: 'domain', label: 'Domain' },
+  { key: 'n_papers', label: 'Papers', format: 'int' as const },
+  { key: 'n_with_non_author_contributor', label: 'With a non-author', format: 'int' as const },
+  { key: 'pct_non_author', label: 'Share', format: 'pct' as const },
+];
+
+const ALL_DOMAINS = 'All domains';
+const domains = [...new Set(mlTooling.rows.map((r) => r.domain))].sort();
+domains.unshift(...domains.splice(domains.indexOf(ALL_DOMAINS), 1));
+const adoptionFilters = domains.map((domain) => ({
+  label: domain,
+  data: mlTooling.rows
+    .filter((r) => r.domain === domain)
+    .map((r) => ({ year: r.year, pct: r.pct, series: r.series, n: r.n_repos })),
+}));
+const ml = mlTooling.headline;
+
+const libraryColumns = [
+  { key: 'library', label: 'Library' },
+  { key: 'n_pairs_importing', label: 'Pairs importing', format: 'int' as const },
+  { key: 'n_pairs_not_mentioned', label: 'Pairs not mentioning', format: 'int' as const },
+  { key: 'pct_not_mentioned', label: 'Not mentioned', format: 'pct' as const },
+];
+const top = topLibraries.headline;
+---
+
+<BaseLayout title="Examples">
+  <div class="container examples">
+    <h1 class="title-lg">Examples</h1>
+    <p class="body-lg intro">
+      Three short analyses. Each runs as shown once you've saved <code>load_rs_graph.py</code> from
+      the <a href={withBase('/#get-the-data')}>Home page</a>.
+    </p>
+
+    <section id="non-author-contributors">
+      <h2>How often does a paper's code have a contributor who isn't one of its authors?</h2>
+      <CodeSnippet code={nonAuthorCode} />
+      <p class="body-md">
+        {fmt(nonAuthor.headline.n_with_non_author_contributor)} of {
+          fmt(nonAuthor.headline.n_papers)
+        }
+        papers ({nonAuthor.headline.pct_non_author}%) have at least one code contributor whose
+        GitHub account is not linked, at confidence ≥ {
+          nonAuthor.meta.thresholds.identity_confidence
+        }, to any of the paper's authors. The count covers cited papers with a single
+        repository, a last push within 90 days of publication, and at least 3 authors (up to the
+        97th percentile of team size).
+      </p>
+      <DataTable
+        id="non-author-table"
+        columns={nonAuthorColumns}
+        rows={nonAuthor.rows}
+        defaultSortKey="n_papers"
+        searchKeys={['field', 'domain']}
+        searchPlaceholder="Search fields or domains"
+      />
+      <p class="body-sm note">
+        Identity links come from a model, so some real authors are counted as non-authors. <a
+          href={limitations}>Limitations</a
+        >
+      </p>
+      <p class="body-sm note">{provenance(nonAuthor.meta)}</p>
+    </section>
+
+    <section id="ml-tooling">
+      <h2>How fast did ML libraries and dependency manifests spread, 2010–2024?</h2>
+      <CodeSnippet code={mlToolingCode} />
+      <p class="body-md">
+        Among repositories created in 2010, {ml.ml_pct_2010.toFixed(1)}% import an ML library
+        and {ml.manifest_pct_2010.toFixed(1)}% declare dependencies in a manifest. By 2024 the
+        shares are {ml.ml_pct_2024.toFixed(1)}% and {ml.manifest_pct_2024.toFixed(1)}%, out of {
+          fmt(ml.ml_n_repos_2024)
+        } repositories.
+      </p>
+      <LineChart
+        id="adoption-chart"
+        data={adoptionFilters[0].data}
+        yLabel="% of repositories"
+        filterOptions={adoptionFilters}
+        filterLabel="Domain"
+      />
+      <p class="body-sm note">
+        Text alternative: a line chart of the share of repositories, by creation year, that
+        import an ML library and that declare a dependency manifest; both rise from 2010 to
+        2024, and the domain picker redraws it for one domain.
+      </p>
+      <p class="body-sm note">
+        Imports are extracted for Python and R only. A repository linked to papers in two
+        domains counts once in each, and once in All domains. <a href={limitations}
+          >Limitations</a
+        >
+      </p>
+      <p class="body-sm note">{provenance(mlTooling.meta)}</p>
+    </section>
+
+    <section id="imported-not-mentioned">
+      <h2>Which libraries does the code import that the paper never mentions?</h2>
+      <CodeSnippet code={topLibrariesCode} />
+      <p class="body-md">
+        Across {fmt(top.n_eligible_pairs)} pairs published through 2022 with both imports and extracted
+        mentions, <code>{top.library}</code> is imported in {fmt(top.n_pairs_importing)} pairs and
+        goes unmentioned in {fmt(top.n_pairs_not_mentioned)} of them ({top.pct_not_mentioned}%).
+      </p>
+      <DataTable
+        id="libraries-table"
+        columns={libraryColumns}
+        rows={topLibraries.rows}
+        defaultSortKey="n_pairs_not_mentioned"
+        searchKeys={['library']}
+        searchPlaceholder="Search libraries"
+        filterKey="field"
+      />
+      <p class="body-sm note">
+        Mention names come from automated extraction and are noisy, and mention coverage ends in
+        2022. <a href={limitations}>Limitations</a>
+      </p>
+      <p class="body-sm note">{provenance(topLibraries.meta)}</p>
+    </section>
+  </div>
+</BaseLayout>
+
+<style>
+  .examples {
+    max-width: 56rem;
+  }
+  .intro {
+    margin-bottom: 1rem;
+  }
+  .examples section {
+    margin-top: 3rem;
+  }
+  .examples h2 {
+    font-size: 1.75rem;
+    line-height: 1.2;
+    margin-bottom: 1rem;
+  }
+  .examples p {
+    overflow-wrap: anywhere;
+  }
+  .examples :global(.snippet-wrap) {
+    margin-bottom: 1rem;
+  }
+  .note {
+    margin: 0.5rem 0 0;
+    color: var(--color-text-muted);
+  }
+</style>

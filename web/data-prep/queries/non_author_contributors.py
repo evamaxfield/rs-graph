@@ -1,99 +1,116 @@
-"""Q2: whether code contributions are recognized as authorship (qss-code-authors replication).
-
-Matches repository contributors to researchers via ResearcherDeveloperAccountLink
-(confidence >= 0.97), restricted throughout to high-precision article-repository links.
-See doi.org/10.1162/QSS.a.465 for the original v1 finding this replicates.
-"""
+"""How often a paper's code has a contributor who is not one of its authors."""
 
 import json
 import os
 
-import polars as pl
-from lib.confidence import (
-    filter_high_confidence_researcher_developer_links,
-    filter_high_precision_document_repository_links,
-)
-from lib.hf_loader import load_table
+import load_rs_graph
+from lib.hf_loader import run_meta, use_release_loader
 
 OUTPUT_PATH = os.path.join(
     os.path.dirname(__file__), "..", "output", "non_author_contributors.json"
 )
 
+use_release_loader(load_rs_graph)
+
 
 def run() -> dict:
     # --- site-snippet:start ---
-    hp_links = filter_high_precision_document_repository_links(
-        load_table("document_repository_link")
-    ).select("document_id", "repository_id")
-    repo_contributors = load_table("repository_contributor").select(
-        "repository_id", "developer_account_id"
-    )
-    rdal = filter_high_confidence_researcher_developer_links(
-        load_table("researcher_developer_account_link")
-    ).select("researcher_id", "developer_account_id")
-    authors = load_table("document_contributor").select("document_id", "researcher_id").unique()
+    import polars as pl
+    from load_rs_graph import load_filtered_pairs, load_table
 
-    # every confidently-matched code contributor's researcher_id, per document
-    doc_contributor_researchers = (
-        hp_links.join(repo_contributors, on="repository_id")
-        .join(rdal, on="developer_account_id")
-        .select("document_id", "researcher_id")
+    all_pairs = load_filtered_pairs()
+    authors = load_table("document_contributor").select("document_id", "researcher_id").unique()
+    devs = load_table("repository_contributor").select("repository_id", "developer_account_id")
+    links = load_table("researcher_developer_account_link").select(
+        "researcher_id",
+        "developer_account_id",
+        pl.col("predictive_model_confidence").alias("conf"),
+    )
+
+    # Cited papers with one repository each, last pushed within 90 days of publication
+    pairs = all_pairs.filter(pl.col("document_cited_by_count") >= 1)
+    pairs = pairs.filter(pl.col("document_id").is_unique())
+    pairs = pairs.filter(pl.col("repository_id").is_unique())
+    pushed = pl.col("repository_last_pushed_datetime").str.to_datetime(strict=False)
+    published = pl.col("document_publication_date").str.to_date(strict=False).cast(pl.Datetime)
+    pairs = pairs.filter((pushed - published).dt.total_days() <= 90)
+
+    # At least 3 authors (up to the 97th percentile) and at least 1 code contributor
+    n_authors = authors.group_by("document_id").agg(n_authors=pl.len())
+    n_devs = devs.group_by("repository_id").agg(n_devs=pl.len())
+    pairs = pairs.join(n_authors, on="document_id").join(n_devs, on="repository_id")
+    pairs = pairs.filter(pl.col("n_authors") >= 3)
+    pairs = pairs.filter(pl.col("n_authors") <= pl.col("n_authors").quantile(0.97, "linear"))
+
+    # Each researcher keeps their best-scoring link among the repository's contributors
+    pair_devs = pairs.select("document_id", "repository_id").join(devs, on="repository_id")
+    pair_links = (
+        pair_devs.join(links, on="developer_account_id")
+        .sort("conf", descending=True)
+        .unique(subset=["document_id", "researcher_id"], keep="first")
+        .filter(pl.col("conf") >= 0.97)
+        .join(
+            authors.with_columns(is_author=True),
+            on=["document_id", "researcher_id"],
+            how="left",
+        )
+        .group_by("document_id", "developer_account_id")
+        .agg(n_linked=pl.len(), is_author=pl.col("is_author").is_not_null().any())
+    )
+
+    # A contributor is a non-author unless linked to one of the paper's authors (those linked to
+    # more than 3 researchers are skipped)
+    non_author_docs = (
+        pair_devs.join(pair_links, on=["document_id", "developer_account_id"], how="left")
+        .filter(pl.col("n_linked").fill_null(0) <= 3)
+        .filter(~pl.col("is_author").fill_null(False))
+        .select("document_id")
         .unique()
     )
-
-    # contributors who are NOT listed authors on that document
-    non_author_rows = doc_contributor_researchers.join(
-        authors, on=["document_id", "researcher_id"], how="anti"
+    pairs = pairs.with_columns(
+        has_non_author=pl.col("document_id").is_in(non_author_docs["document_id"].implode())
     )
 
-    unrestricted_docs = hp_links.select("document_id").unique()
-    matched_docs = doc_contributor_researchers.select("document_id").unique()
-    non_author_docs = non_author_rows.select("document_id").unique()
-
-    # paper-equivalent filter: single linked repository, 3-11 listed authors
-    repo_count_per_doc = hp_links.group_by("document_id").agg(n_repos=pl.len())
-    author_count_per_doc = authors.group_by("document_id").agg(n_authors=pl.len())
-    paper_docs = (
-        repo_count_per_doc.filter(pl.col("n_repos") == 1)
-        .join(author_count_per_doc, on="document_id")
-        .filter(pl.col("n_authors").is_between(3, 11))
-        .select("document_id")
+    # Papers without an assigned topic count in the headline only
+    by_field = (
+        pairs.drop_nulls("document_field_name")
+        .group_by("document_domain_name", "document_field_name")
+        .agg(n_papers=pl.len(), n_with_non_author_contributor=pl.col("has_non_author").sum())
+        .with_columns(
+            pct_non_author=(
+                pl.col("n_with_non_author_contributor") / pl.col("n_papers") * 100
+            ).round(1)
+        )
+        .rename({"document_domain_name": "domain", "document_field_name": "field"})
+        .sort("n_papers", descending=True)
     )
-    paper_non_author_docs = non_author_docs.join(paper_docs, on="document_id")
+    n_with_non_author = pairs.filter("has_non_author").height
+    headline = {
+        "n_papers": pairs.height,
+        "n_with_non_author_contributor": n_with_non_author,
+        "pct_non_author": round(n_with_non_author / pairs.height * 100, 1),
+    }
+    print(headline)
+    print(by_field)
     # --- site-snippet:end ---
 
-    n_unrestricted = unrestricted_docs.height
-    n_matched = matched_docs.height
-    n_non_author = non_author_docs.height
-    n_paper = paper_docs.height
-    n_paper_non_author = paper_non_author_docs.height
-
-    result = {
-        "question": "Are code contributions recognized as authorship?",
-        "methodology": (
-            "document_repository_link filtered to NULL OR confidence >= 0.9994; "
-            "researcher_developer_account_link filtered to confidence >= 0.97"
-        ),
-        "unrestricted": {
-            "n_hp_linked_documents": n_unrestricted,
-            "n_with_confidently_matched_contributor": n_matched,
-            "n_with_non_author_contributor": n_non_author,
-            "pct_of_all_hp_linked": round(n_non_author / n_unrestricted * 100, 2),
-            "pct_of_matched": round(n_non_author / n_matched * 100, 2),
+    return {
+        "meta": {
+            **run_meta(),
+            "thresholds": {
+                "pair_confidence": load_rs_graph.PAIR_CONFIDENCE_THRESHOLD,
+                "identity_confidence": load_rs_graph.IDENTITY_CONFIDENCE_THRESHOLD,
+                "min_publication_year": load_rs_graph.MIN_PUBLICATION_YEAR,
+            },
+            "n_pairs": all_pairs.height,
+            "n_rows": by_field.height,
         },
-        "paper_equivalent": {
-            "description": "single linked repository, 3-11 listed authors",
-            "n_qualifying_documents": n_paper,
-            "n_with_non_author_contributor": n_paper_non_author,
-            "pct": round(n_paper_non_author / n_paper * 100, 2),
-            "published_v1_finding_pct": 28.6,
-        },
+        "headline": headline,
+        "rows": by_field.to_dicts(),
     }
-    return result
 
 
 if __name__ == "__main__":
     result = run()
     with open(OUTPUT_PATH, "w") as f:
-        json.dump(result, f, indent=2)
-    print(json.dumps(result, indent=2))
+        json.dump(result, f, indent=2, default=str)

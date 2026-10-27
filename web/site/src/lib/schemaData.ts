@@ -28,7 +28,8 @@ export const families: FamilyDef[] = [
   {
     slug: 'documents',
     title: 'Documents',
-    reason: "Everything hanging directly off a paper's own identity.",
+    reason:
+      'The papers: identifiers, citation counts, open-access status, topics, abstracts and the software each paper mentions.',
     tables: [
       {
         name: 'Document',
@@ -41,7 +42,7 @@ export const families: FamilyDef[] = [
           { name: 'cited_by_count', type: 'int' },
           {
             name: 'fwci',
-            type: 'float | None -- Field-Weighted Citation Impact: citation count normalized against the global average for same-year, same-field documents (1.0 = average)',
+            type: 'float | None. Field-Weighted Citation Impact: citation count normalized against the global average for same-year, same-field documents (1.0 = average)',
           },
           { name: 'citation_normalized_percentile', type: 'float | None' },
           { name: 'document_type', type: 'str' },
@@ -63,7 +64,7 @@ export const families: FamilyDef[] = [
       {
         name: 'DocumentAlternateDOI',
         docstring:
-          'Stores alternate DOIs for a document -- DOIs previously associated with a document that resolved to a more recent version.',
+          'Stores alternate DOIs for a document: DOIs previously associated with a document that resolved to a more recent version.',
         fields: [
           { name: 'document_id', type: 'int (FK: document)' },
           { name: 'doi', type: 'str' },
@@ -110,7 +111,7 @@ export const families: FamilyDef[] = [
   {
     slug: 'people-and-institutions',
     title: 'People & Institutions',
-    reason: 'Author-side entities and their document-scoped roles.',
+    reason: 'Who wrote each paper, and the institutions they were affiliated with.',
     tables: [
       {
         name: 'Researcher',
@@ -160,7 +161,7 @@ export const families: FamilyDef[] = [
   {
     slug: 'funding',
     title: 'Funding',
-    reason: 'Small, self-contained 3-table family.',
+    reason: 'Funders and grants, and which grants funded which papers.',
     tables: [
       {
         name: 'Funder',
@@ -192,9 +193,7 @@ export const families: FamilyDef[] = [
     slug: 'repositories-and-code',
     title: 'Repositories & Code',
     reason:
-      'The repo-side mirror of the Documents page. No raw source file contents are stored here: ' +
-      'RepositoryFile is path/size/language metadata only, and RepositoryImport / RepositoryDependency ' +
-      'are extracted library-name signal, not code. The only free-text field is RepositoryReadme.content.',
+      'Each repository: metadata, README, languages, file tree, imported libraries, declared dependencies and contributors.',
     tables: [
       {
         name: 'Repository',
@@ -259,7 +258,7 @@ export const families: FamilyDef[] = [
           { name: 'repository_id', type: 'int (FK: repository)' },
           { name: 'software_name', type: 'str' },
           { name: 'software_name_normalized', type: 'str' },
-          { name: 'file_paths', type: 'str | None -- semicolon-separated paths' },
+          { name: 'file_paths', type: 'str | None, semicolon-separated paths' },
         ],
       },
       {
@@ -272,7 +271,7 @@ export const families: FamilyDef[] = [
           { name: 'software_name_normalized', type: 'str' },
           { name: 'version_spec', type: 'str | None' },
           { name: 'ecosystem', type: 'str | None' },
-          { name: 'manifest_paths', type: 'str | None -- semicolon-separated paths' },
+          { name: 'manifest_paths', type: 'str | None, semicolon-separated paths' },
           { name: 'dependency_type', type: 'str | None' },
         ],
       },
@@ -290,7 +289,7 @@ export const families: FamilyDef[] = [
     slug: 'developer-accounts-and-matching',
     title: 'Developer Accounts & Author-Developer Matching',
     reason:
-      'The ML-matching boundary: predictive_model_* fields make this qualitatively different from the rest of People.',
+      'GitHub accounts, and the model-predicted links between researchers and those accounts.',
     tables: [
       {
         name: 'DeveloperAccount',
@@ -313,7 +312,7 @@ export const families: FamilyDef[] = [
           { name: 'predictive_model_version', type: 'str | None' },
           {
             name: 'predictive_model_confidence',
-            type: "float | None -- see Home's 'Using this dataset responsibly'",
+            type: 'float | None. See Recommended filters.',
           },
           { name: 'last_snowball_processed_datetime', type: 'datetime | None' },
         ],
@@ -323,7 +322,8 @@ export const families: FamilyDef[] = [
   {
     slug: 'article-repository-links',
     title: 'Article-Repository Links',
-    reason: 'The single relationship the whole project exists to produce.',
+    reason:
+      'Which repository goes with which article, the model confidence for each link, and the source it came from.',
     tables: [
       {
         name: 'DocumentRepositoryLink',
@@ -337,7 +337,7 @@ export const families: FamilyDef[] = [
           { name: 'predictive_model_version', type: 'str | None' },
           {
             name: 'predictive_model_confidence',
-            type: "float | None -- see Home's 'Using this dataset responsibly'",
+            type: 'float | None. See Recommended filters.',
           },
         ],
       },
@@ -351,7 +351,7 @@ export const families: FamilyDef[] = [
   {
     slug: 'provenance-and-internals',
     title: 'Provenance & Internals',
-    reason: 'OpenAlex-sourced bibliographic plumbing -- real fields, low-traffic.',
+    reason: 'Where each paper is published or hosted: venues and locations from OpenAlex.',
     tables: [
       {
         name: 'Source',

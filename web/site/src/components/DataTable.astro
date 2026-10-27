@@ -1,0 +1,265 @@
+---
+interface Column {
+  key: string;
+  label: string;
+  format?: 'int' | 'pct';
+}
+type Row = Record<string, string | number | null>;
+interface Props {
+  id: string;
+  columns: Column[];
+  rows: Row[];
+  defaultSortKey?: string;
+  searchKeys: string[];
+  searchPlaceholder?: string;
+  filterKey?: string;
+}
+const {
+  id,
+  columns,
+  rows,
+  defaultSortKey,
+  searchKeys,
+  searchPlaceholder = 'Search',
+  filterKey,
+} = Astro.props;
+const filterValues = filterKey
+  ? [...new Set(rows.map((r) => String(r[filterKey] ?? '')))].sort()
+  : [];
+const allIndex = filterValues.findIndex((v) => v.startsWith('All'));
+if (allIndex > 0) filterValues.unshift(...filterValues.splice(allIndex, 1));
+---
+
+<div
+  class="data-table-wrap"
+  id={id}
+  data-payload={JSON.stringify(rows)}
+  data-columns={JSON.stringify(columns)}
+  data-search-keys={JSON.stringify(searchKeys)}
+  data-filter-key={filterKey}
+  data-default-sort-key={defaultSortKey}
+>
+  {
+    filterKey && (
+      <select class="data-table-filter" aria-label="Filter rows" data-table-filter>
+        {filterValues.map((v) => (
+          <option value={v}>{v}</option>
+        ))}
+      </select>
+    )
+  }
+  {
+    searchKeys.length > 0 && (
+      <input
+        type="text"
+        class="schema-search"
+        placeholder={searchPlaceholder}
+        aria-label={searchPlaceholder}
+        data-table-search
+      />
+    )
+  }
+  <p class="body-sm data-table-empty" data-table-empty hidden>No rows match.</p>
+  <div class="data-table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr>
+          {
+            columns.map((c) => (
+              <th
+                scope="col"
+                class={c.format ? 'data-table-num' : undefined}
+                data-sort-key={c.key}
+                aria-sort="none"
+              >
+                <button type="button">{c.label}</button>
+              </th>
+            ))
+          }
+        </tr>
+      </thead>
+      <tbody data-table-body></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  type Value = string | number | null;
+  type Row = Record<string, Value>;
+  interface Column {
+    key: string;
+    label: string;
+    format?: 'int' | 'pct';
+  }
+
+  function escapeHtml(s: string): string {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function formatCell(v: Value, format?: 'int' | 'pct'): string {
+    if (v === null || v === undefined || v === '') return '&mdash;';
+    if (format === 'int') return escapeHtml(Number(v).toLocaleString());
+    if (format === 'pct') return escapeHtml(`${Number(v).toFixed(1)}%`);
+    return escapeHtml(String(v));
+  }
+
+  const MAX_CELL_CHARS = 80;
+
+  function cellHtml(c: Column, v: Value): string {
+    const cls = c.format ? ' class="data-table-num"' : '';
+    const text = typeof v === 'string' ? v : '';
+    // Long text is cut with an ellipsis; the full text stays in the title.
+    if (!c.format && text.length > MAX_CELL_CHARS)
+      return `<td${cls} title="${escapeHtml(text)}">${escapeHtml(text.slice(0, MAX_CELL_CHARS))}&hellip;</td>`;
+    return `<td${cls}>${formatCell(v, c.format)}</td>`;
+  }
+
+  document.querySelectorAll<HTMLElement>('.data-table-wrap').forEach((wrap) => {
+    const allRows: Row[] = JSON.parse(wrap.dataset.payload || '[]');
+    const columns: Column[] = JSON.parse(wrap.dataset.columns || '[]');
+    const searchKeys: string[] = JSON.parse(wrap.dataset.searchKeys || '[]');
+    const filterKey = wrap.dataset.filterKey;
+    const tbody = wrap.querySelector<HTMLElement>('[data-table-body]')!;
+    const search = wrap.querySelector<HTMLInputElement>('[data-table-search]');
+    const filter = wrap.querySelector<HTMLSelectElement>('[data-table-filter]');
+    const emptyMsg = wrap.querySelector<HTMLElement>('[data-table-empty]')!;
+    const headers = wrap.querySelectorAll<HTMLElement>('th[data-sort-key]');
+
+    const isNumeric = (key: string) => !!columns.find((c) => c.key === key)?.format;
+    let sortKey = wrap.dataset.defaultSortKey || columns[0]?.key || '';
+    let descending = isNumeric(sortKey);
+
+    function visibleRows(): Row[] {
+      let rows = allRows;
+      if (filter && filterKey)
+        rows = rows.filter((r) => String(r[filterKey] ?? '') === filter.value);
+      const query = search?.value.trim().toLowerCase();
+      if (!query) return rows;
+      return rows.filter((r) =>
+        searchKeys.some((k) =>
+          String(r[k] ?? '')
+            .toLowerCase()
+            .includes(query),
+        ),
+      );
+    }
+
+    function rerender() {
+      const rows = visibleRows();
+      emptyMsg.hidden = rows.length > 0;
+      // Nulls sort last in both directions.
+      const sorted = [...rows].sort((a, b) => {
+        const av = a[sortKey] ?? null;
+        const bv = b[sortKey] ?? null;
+        if (av === null || bv === null) return av === bv ? 0 : av === null ? 1 : -1;
+        if (av === bv) return 0;
+        const cmp = av < bv ? -1 : 1;
+        return descending ? -cmp : cmp;
+      });
+      tbody.innerHTML = sorted
+        .map((row) => `<tr>${columns.map((c) => cellHtml(c, row[c.key])).join('')}</tr>`)
+        .join('');
+      headers.forEach((th) => {
+        th.setAttribute(
+          'aria-sort',
+          th.dataset.sortKey === sortKey ? (descending ? 'descending' : 'ascending') : 'none',
+        );
+      });
+    }
+
+    search?.addEventListener('input', rerender);
+    filter?.addEventListener('change', rerender);
+    headers.forEach((th) => {
+      th.querySelector('button')!.addEventListener('click', () => {
+        const key = th.dataset.sortKey!;
+        if (key === sortKey) {
+          descending = !descending;
+        } else {
+          sortKey = key;
+          descending = isNumeric(key);
+        }
+        rerender();
+      });
+    });
+
+    rerender();
+  });
+</script>
+
+<style>
+  .data-table-wrap {
+    margin-top: 1rem;
+  }
+  .data-table-filter {
+    display: block;
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    font: inherit;
+    background: var(--color-card-bg);
+    color: var(--color-text);
+  }
+  .data-table-wrap :global(.schema-search) {
+    margin-bottom: 0.75rem;
+  }
+  .data-table-scroll {
+    overflow: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    max-height: 28rem;
+  }
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+  .data-table th {
+    position: sticky;
+    top: 0;
+    background: var(--color-bg-alt);
+    text-align: left;
+    padding: 0;
+    white-space: nowrap;
+  }
+  .data-table th button {
+    all: unset;
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+  }
+  .data-table th.data-table-num button {
+    text-align: right;
+  }
+  .data-table th button:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: -2px;
+  }
+  .data-table th[aria-sort='descending'] button::after {
+    content: ' \25BC';
+  }
+  .data-table th[aria-sort='ascending'] button::after {
+    content: ' \25B2';
+  }
+  /* tbody cells are injected by client JS, so scoped styles never attach to them. */
+  .data-table :global(td) {
+    white-space: nowrap;
+    padding: 0.4rem 0.75rem;
+    border-top: 1px solid var(--color-border);
+  }
+  .data-table :global(.data-table-num) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .data-table-empty {
+    padding: 0.5rem 0;
+  }
+</style>

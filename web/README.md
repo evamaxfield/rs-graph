@@ -19,35 +19,33 @@ cd web/data-prep
 python3 -m venv .venv
 .venv/bin/pip install -e .
 # requires HF_TOKEN in rs-graph/.env
-PYTHONPATH=. .venv/bin/python queries/dependency_manifest_growth.py
-PYTHONPATH=. .venv/bin/python queries/non_author_contributors.py
-PYTHONPATH=. .venv/bin/python queries/top_libraries.py
-PYTHONPATH=. .venv/bin/python queries/library_cross_view.py
-PYTHONPATH=. .venv/bin/python queries/ml_tooling_adoption.py
-PYTHONPATH=. .venv/bin/python queries/coauthorship_network.py
-PYTHONPATH=. .venv/bin/python queries/embedding_clusters.py   # slow -- embeds + UMAPs a sample; NOT rendered on the site (see below)
-PYTHONPATH=. .venv/bin/python queries/home_stats.py
+# PYTHONPATH makes `import load_rs_graph` and `lib.*` resolve
+export PYTHONPATH=.:../../rs_graph/release/templates
+# optional: pin the dataset to a commit sha or tag (default: main)
+export RS_GRAPH_REVISION=main
+# optional: repo the load_rs_graph-based queries read (default: the -full dataset)
+export RS_GRAPH_REPO_ID=sci-soft-collections/rs-graph-v2-full
+.venv/bin/python queries/non_author_contributors.py
+.venv/bin/python queries/top_libraries.py
+.venv/bin/python queries/ml_tooling_adoption.py
+.venv/bin/python queries/home_stats.py
+.venv/bin/python queries/home_samples.py
+.venv/bin/python queries/license_distribution.py   # read from output/ by Docs, not staged
+.venv/bin/python queries/search_index.py           # staged by `npm run build-search-index`
 .venv/bin/python extract_snippets.py   # regenerates site/src/generated/*.py.txt (also copies rs_graph/release/templates/load_rs_graph.py)
 
-# stage the new output for the site
-cp output/*.json ../site/public/data/
+# stage the JSON the site imports from public/data/
+cp output/{home_stats,home_samples,non_author_contributors,top_libraries,ml_tooling_adoption}.json ../site/public/data/
 ```
-
-`embedding_clusters.py`'s `SAMPLE_SIZE` constant is currently 3,200 -- the plan doc recommends up
-to 5,000 for a more statistically robust production run. Its output is **not currently wired into
-the site** -- the "code vs. text clusters" question it backed was cut (2026-08-23, see
-`experiments-comms/memory/2026-08-23-rs-graph-docs-site-q3-rework-q4-cut-coauthorship.md`); the
-script is left in place in case that question comes back, but running it is optional for a normal
-site regen.
 
 ## Running the site locally
 
-Requires Node 20+ (this repo's dev machine defaults to an older system Node -- use nvm to select
+Requires Node 22+ (this repo's dev machine defaults to an older system Node -- use nvm to select
 a newer one if `astro dev` complains about engine support).
 
 ```bash
 cd web/site
-npm install
+npm ci
 npm run dev
 npm run build   # outputs to site/dist/
 ```

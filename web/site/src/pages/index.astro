@@ -1,794 +1,240 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import StatTile from '../components/StatTile.astro';
-import TabNav from '../components/TabNav.astro';
-import LineChart from '../components/LineChart.astro';
-import BarChart from '../components/BarChart.astro';
-import LibraryTable from '../components/LibraryTable.astro';
-import NetworkChart from '../components/NetworkChart.astro';
 import CodeSnippet from '../components/CodeSnippet.astro';
+import DataTable from '../components/DataTable.astro';
 import { withBase } from '../lib/url';
-import { Code } from 'astro:components';
+import { CITATION_TEXT, CITATION_BIBTEX } from '../lib/citation';
 
 import homeStats from '../../public/data/home_stats.json';
-import q1 from '../../public/data/dependency_manifest_growth.json';
-import q2 from '../../public/data/non_author_contributors.json';
-import q3 from '../../public/data/top_libraries.json';
-import q3CrossView from '../../public/data/library_cross_view.json';
-import mlAdoption from '../../public/data/ml_tooling_adoption.json';
-import coauthorship from '../../public/data/coauthorship_network.json';
-
-import q1Snippet from '../generated/dependency_manifest_growth.py.txt?raw';
-import q2Snippet from '../generated/non_author_contributors.py.txt?raw';
-import q3Snippet from '../generated/top_libraries.py.txt?raw';
-import q3CrossViewSnippet from '../generated/library_cross_view.py.txt?raw';
-import mlAdoptionSnippet from '../generated/ml_tooling_adoption.py.txt?raw';
-import coauthorshipSnippet from '../generated/coauthorship_network.py.txt?raw';
+import homeSamples from '../../public/data/home_samples.json';
 import loadSnippet from '../generated/load_rs_graph.py.txt?raw';
 
-const mlAdoptionDomainsByPct = [...mlAdoption.domains].sort(
-  (a: { pct: number }, b: { pct: number }) => b.pct - a.pct,
-);
-const mlAdoptionMaxDomain = mlAdoptionDomainsByPct[0];
-const mlAdoptionMinDomain = mlAdoptionDomainsByPct[mlAdoptionDomainsByPct.length - 1];
+const fmt = (n: number) => n.toLocaleString('en-US');
+const sampleColumns = (columns: string[]) => columns.map((key) => ({ key, label: key }));
+const loaderLines = Math.round(loadSnippet.trimEnd().split('\n').length / 10) * 10;
 
-// Co-authorship: domain sorted by largest-connected-component fraction, the
-// stat that shows the starkest cross-domain spread (see the query's own
-// docstring for why -- Physical Sciences' large collaborations vs. smaller,
-// tighter groups elsewhere).
-const coauthorshipByComponentFrac = [...coauthorship.domains].sort(
-  (a: { largest_component_frac: number }, b: { largest_component_frac: number }) =>
-    b.largest_component_frac - a.largest_component_frac,
-);
-const coauthorshipMaxComponent = coauthorshipByComponentFrac[0];
-const coauthorshipMinComponent =
-  coauthorshipByComponentFrac[coauthorshipByComponentFrac.length - 1];
-const coauthorshipByTransitivity = [...coauthorship.domains].sort(
-  (a: { transitivity: number }, b: { transitivity: number }) => b.transitivity - a.transitivity,
-);
-const coauthorshipMaxTransitivity = coauthorshipByTransitivity[0];
-const coauthorshipMinTransitivity =
-  coauthorshipByTransitivity[coauthorshipByTransitivity.length - 1];
-const coauthorshipDensityBarData = coauthorship.domains.map(
-  (d: { domain_name: string; n_researchers: number }) => ({
-    name: d.domain_name,
-    count: d.n_researchers,
-    domain_name: d.domain_name,
-  }),
-);
+const usageSnippet = `# pip install datasets polars, then save the loader below as load_rs_graph.py
+from load_rs_graph import load_filtered_pairs, load_table
 
-// Q1 domain-filter dropdown options -- "All domains" (the original overall
-// series) plus one per top-4 domain, computed for real in dependency_manifest_growth.py.
-const q1FilterOptions = [
-  {
-    label: 'All domains',
-    data: q1.series.map((r: { year: number; pct: number }) => ({ year: r.year, pct: r.pct })),
-  },
-  ...Object.entries(q1.domains as Record<string, { year: number; pct: number }[]>).map(
-    ([domainName, series]) => ({
-      label: domainName,
-      data: series.map((r) => ({ year: r.year, pct: r.pct })),
-    }),
-  ),
-];
-
-// Q3 per-field library ranking dropdown -- one option per field already
-// present in field_slices, re-rendering the same bar chart in place.
-const q3FilterOptions = q3.field_slices.map(
-  (f: {
-    field_name: string;
-    n_repos: number;
-    top_libraries: { name: string; pct: number }[];
-  }) => ({
-    label: `${f.field_name} (n=${f.n_repos.toLocaleString()})`,
-    data: f.top_libraries.map((l) => ({ name: l.name, count: l.pct })),
-  }),
-);
-
-const mlAdoptionDomainBarData = mlAdoption.domains.map(
-  (d: { domain_name: string; pct: number }) => ({
-    name: d.domain_name,
-    count: d.pct,
-    domain_name: d.domain_name,
-  }),
-);
-
-// Simple-to-complex order: ML/AI-tooling adoption (single import flag, no
-// cross-table joins) -> manifest adoption -> author credit -> libraries used
-// (three joined views + fuzzy cross-view reconciliation) -> co-authorship
-// network (a graph built and analyzed with rustworkx), most complex last.
-const questionTabs = [
-  { id: 'ml-adoption', label: '1. ML/AI-tooling adoption' },
-  { id: 'q1', label: '2. Manifest adoption' },
-  { id: 'q2', label: '3. Author credit' },
-  { id: 'q3', label: '4. Libraries used' },
-  { id: 'coauthorship', label: '5. Co-authorship network' },
-];
-
-const loadingSnippet = `pip install datasets polars
-
-${loadSnippet}`;
+pairs = load_filtered_pairs()                # article–repository pairs, recommended filters applied
+pairs.select("document_doi", "document_title", "repository_url").head()
+imports = load_table("repository_import")    # any table, by name`;
 ---
 
 <BaseLayout title="Home">
-  <section class="hero">
-    <div class="container">
-      <h1 class="title-2xl">Linking scientific publications to the code that produced them</h1>
-      <p class="body-lg hero__lede">
-        RS-Graph connects {Math.round(homeStats.n_documents / 1000)}k+ academic papers to
-        {Math.round(homeStats.n_repositories / 1000)}k+ code repositories (high-precision links,
-        {homeStats.year_min}–{homeStats.year_max}), tracking who wrote the paper, who wrote the
-        code, and whether those are the same people.
+  <div class="container home">
+    <section class="hero">
+      <h1 class="hero__title">Research papers, linked to their code</h1>
+      <p class="body-lg">
+        RS-Graph links {fmt(homeStats.n_documents)} scientific articles to the {
+          fmt(homeStats.n_repositories)
+        } GitHub repositories that store their code, forming {fmt(homeStats.n_links)} article–repository
+        pairs. Each pair comes with bibliometric information, metadata, and details about the article's
+        authors and the repository's code contributors.
+      </p>
+      <p class="body-lg">
+        Access to each repository lets you study the code researchers create. We also processed
+        that code to understand the software researchers use: the libraries each repository
+        imports (<code>repository_import</code>) and the dependencies it declares (<code
+          >repository_dependency</code
+        >). And we joined each article to its software mentions from SoftCite-2025 (<code
+          >document_software_mention</code
+        >), so you can see what a paper says it used beside what its code uses.
       </p>
       <div class="hero__ctas">
-        <a class="btn" href="#explore">Explore the data</a>
-        <a class="btn btn--secondary" href={withBase('/schema')}>Browse the schema</a>
+        <a class="btn" href="#get-the-data">Get the data</a>
+        <a class="btn btn--secondary" href={withBase('/docs')}>Read the docs</a>
       </div>
-      <p class="body-sm hero__access-note">
-        RS-Graph v2 is on HuggingFace in two variants: a public release and a gated full
-        release. There's no pinned dataset version/DOI yet. See "Using this dataset responsibly"
-        below for what differs and how to request full access.
-      </p>
-      <p class="body-sm hero__access-note">
-        51.7% of linked repos carry a detected license (MIT 25.7% &middot; Apache-2.0 7.8%
-        &middot; GPLv3 6.9%): <a href={withBase('/#license-breakdown')}>full breakdown &darr;</a
+    </section>
+
+    <section class="stats" aria-label="Dataset size">
+      <div class="stat-tile">
+        <span class="value">{fmt(homeStats.n_documents)}</span>
+        <span class="label">articles</span>
+      </div>
+      <div class="stat-tile">
+        <span class="value">{fmt(homeStats.n_repositories)}</span>
+        <span class="label">repositories</span>
+      </div>
+      <div class="stat-tile">
+        <span class="value">{fmt(homeStats.n_links)}</span>
+        <span class="label"
+          >article–repository pairs<sup><a href="#fn1" id="fnref1">1</a></sup></span
         >
-      </p>
-    </div>
-  </section>
-
-  <section class="container">
-    <div class="card-grid stats-grid">
-      <StatTile value={homeStats.n_documents.toLocaleString()} label="documents" />
-      <StatTile value={homeStats.n_repositories.toLocaleString()} label="repositories" />
-      <StatTile value={homeStats.n_links.toLocaleString()} label="article-repository links" />
-      <StatTile
-        value={`${homeStats.year_min}–${homeStats.year_max}`}
-        label="publication years"
-      />
-      <StatTile
-        value={homeStats.n_domains.toLocaleString()}
-        label="research domains (broad, e.g. Life Sciences)"
-      />
-      <StatTile
-        value={homeStats.n_fields.toLocaleString()}
-        label="research fields (specific, e.g. Genetics)"
-      />
-    </div>
-    <details class="stats-footnote">
-      <summary class="body-sm">How these numbers are filtered</summary>
-      <p class="body-sm">
-        Already restricted to the high-precision population: <code
-          >document_repository_link</code
-        >
-        filtered to <code>NULL OR confidence &gt;= 0.9994</code>, publication year &gt;= 2008
-        (GitHub's launch; earlier dates on linked code are a data-encoding artifact). See the
-        "Using this dataset responsibly" section below for the full rationale.
-      </p>
-      <p class="body-sm">
-        Domain and field above are the two broadest levels of OpenAlex's 4-level topic
-        hierarchy: domain (broadest, 4 values) &gt; field (26 values, e.g. Genetics) &gt;
-        subfield &gt; topic (most granular). See the <a href={withBase('/schema#documents')}
-          >Topic table on the Schema page</a
-        > for all four levels.
-      </p>
-    </details>
-  </section>
-
-  <section class="container explore" id="explore">
-    <h2 class="title-md">Loading the dataset &amp; example questions</h2>
-    <TabNav
-      paramName="tab"
-      tabs={[
-        { id: 'loading', label: 'Loading the Dataset' },
-        { id: 'examples', label: 'Example Questions' },
-      ]}
-    >
-      <div data-tab-panel="loading">
-        <p class="body-md intro">
-          Every RS-Graph table is a separate HuggingFace dataset config under
-          <code>sci-soft-collections/rs-graph-v2</code>. Load individual tables by name and join
-          with polars.
-        </p>
-        <p class="body-sm quickstart-note">
-          The snippet below loads the public release, which needs no access request. It omits
-          abstracts and developer display names and emails; those are only in the gated
-          <code>sci-soft-collections/rs-graph-v2-full</code>. See "Dataset versions &amp;
-          access" below.
-        </p>
-        <Code
-          code={loadingSnippet}
-          lang="python"
-          themes={{ light: 'github-light', dark: 'github-dark-dimmed' }}
-          defaultColor={false}
-          wrap
-        />
-        <p class="body-md">
-          <code>repository_readme</code> and <code>repository_import</code> are the two code-adjacent
-          tables (README text and extracted library names). There is no table containing actual source
-          file contents. See
-          <a href={withBase('/schema#repositories-and-code')}>Repositories &amp; Code</a> on the Schema
-          page for what's actually stored.
-        </p>
       </div>
+    </section>
 
-      <div data-tab-panel="examples" hidden>
-        <p class="body-md intro">
-          Five worked questions, simple to complex, each backed by a real query against the
-          dataset. Every snippet below is pulled verbatim from the script that produced the
-          number -- see <code>web/data-prep/queries/</code> in the repo.
-        </p>
+    <p class="notification">
+      Pairs beyond the five seed sources were found by mining the graph with our
+      Article–Repository Matching Model (ARMM), which you can run on your own candidates.
+      <a href={withBase('/docs#built')}>How RS-Graph was built</a>
+    </p>
 
-        <TabNav nested paramName="q" tabs={questionTabs}>
-          <div data-tab-panel="ml-adoption">
-            <article class="question">
-              <h3 class="title-sm">
-                1. How has the use of ML/AI methods grown in scientific code, and does it vary
-                by domain?
-              </h3>
-              <p class="body-md">
-                Repositories flagged by whether they import a canonical ML/AI library (deep
-                learning frameworks, classical-ML libraries, and the Hugging Face-centered
-                modeling ecosystem -- see "View the query" for the full set), restricted to
-                high-precision article-repository links. This tracks how AI/ML methods get
-                adopted as instruments of science, not <a href={withBase('/#ai-signal-caveat')}
-                  >AI-written code</a
-                > -- a different question the schema can't directly answer.
-              </p>
-              <div class="card-grid">
-                <div class="stat-tile">
-                  <span class="value"
-                    >{
-                      mlAdoption.series.find((r: { year: number }) => r.year === 2015)?.pct
-                    }%</span
-                  >
-                  <span class="label"
-                    >of repos created in 2015 import an ML library (n={
-                      mlAdoption.series
-                        .find((r: { year: number }) => r.year === 2015)
-                        ?.total.toLocaleString()
-                    })</span
-                  >
-                </div>
-                <div class="stat-tile">
-                  <span class="value"
-                    >{
-                      mlAdoption.series.find((r: { year: number }) => r.year === 2024)?.pct
-                    }%</span
-                  >
-                  <span class="label"
-                    >by 2024 (n={
-                      mlAdoption.series
-                        .find((r: { year: number }) => r.year === 2024)
-                        ?.total.toLocaleString()
-                    })</span
-                  >
-                </div>
-              </div>
-              <LineChart
-                id="chart-ml-adoption"
-                data={mlAdoption.series}
-                yLabel="% of repos importing an ML/AI library"
-                yMax={70}
-              />
-              <h4 class="body-md">By scientific domain (all years pooled)</h4>
-              <BarChart
-                id="chart-ml-adoption-domain"
-                data={mlAdoptionDomainBarData}
-                xLabel="% of repos importing an ML/AI library"
-                colorField="domain_name"
-              />
-              <p class="body-sm note">
-                A clean, monotonic adoption curve: {
-                  mlAdoption.series.find((r: { year: number }) => r.year === 2015)?.pct
-                }% to {mlAdoption.series.find((r: { year: number }) => r.year === 2024)?.pct}%
-                in a decade, and a real spread by domain -- {mlAdoptionMaxDomain.domain_name} leads
-                at {mlAdoptionMaxDomain.pct}%, while {mlAdoptionMinDomain.domain_name} trails at
-                {mlAdoptionMinDomain.pct}%. The canonical-library set is a judgment call,
-                documented in the query below rather than picked ad hoc.
-              </p>
-              <details>
-                <summary class="body-sm">View the query</summary>
-                <CodeSnippet code={mlAdoptionSnippet} />
-              </details>
-            </article>
-          </div>
+    <section id="get-the-data">
+      <h2>Get the data</h2>
+      {/* TODO: rs-graph-v2 at rename */}
+      <p>
+        RS-Graph v2 is on HuggingFace as <a
+          href="https://huggingface.co/datasets/sci-soft-collections/rs-graph-v2-full"
+          ><code>sci-soft-collections/rs-graph-v2-full</code></a
+        >, under CC BY 4.0<sup><a href="#fn2" id="fnref2">2</a></sup>. Request access on its
+        HuggingFace page.
+      </p>
+      {/* TODO: rs-graph-v2 at rename */}
+      <p>
+        Each table is one HuggingFace config. Any one loads with <code
+          >load_dataset("sci-soft-collections/rs-graph-v2-full", "document", split="train")</code
+        >.
+      </p>
+      <p>To pin your copy, pass <code>revision="v2.0"</code>.</p>
 
-          <div data-tab-panel="q1" hidden>
-            <article class="question">
-              <h3 class="title-sm">2. How has dependency-manifest adoption grown over time?</h3>
-              <p class="body-sm note">
-                Filtered using the recommended high-precision threshold. See "Using this dataset
-                responsibly" below.
-              </p>
-              <p class="body-md" id="q1-narrative">
-                <span id="q1-narrative-domain">All domains: </span>Adoption climbs from
-                <strong id="q1-narrative-start"
-                  >{q1.series.find((r: { year: number }) => r.year === 2015)?.pct}</strong
-                >% of repos created in 2015 to <strong id="q1-narrative-end"
-                  >{q1.series.find((r: { year: number }) => r.year === 2025)?.pct}</strong
-                >% by 2025. Reproducibility practice is improving, but still leaves roughly <strong
-                  id="q1-narrative-remainder"
-                  >{
-                    (
-                      100 - (q1.series.find((r: { year: number }) => r.year === 2025)?.pct ?? 0)
-                    ).toFixed(1)
-                  }</strong
-                >% of newly-created linked repos without a declared, installable environment.
-              </p>
-              <LineChart
-                id="chart-q1"
-                data={q1FilterOptions[0].data}
-                filterOptions={q1FilterOptions}
-                filterLabel="Filter by scientific domain"
-              />
-              <p class="body-sm note">
-                Repos linked to papers in more than one field are assigned their first-linked
-                paper's domain (<code>.unique(subset=["repository_id"], keep="first")</code>) --
-                see "View the query" below.
-              </p>
-              <details>
-                <summary class="body-sm">View the query</summary>
-                <CodeSnippet code={q1Snippet} />
-              </details>
-            </article>
-          </div>
+      <CodeSnippet code={usageSnippet} />
 
-          <div data-tab-panel="q2" hidden>
-            <article class="question" id="q2">
-              <h3 class="title-sm">3. Are code contributions recognized as authorship?</h3>
-              <p class="body-sm note">
-                A direct follow-up to <a href="https://doi.org/10.1162/QSS.a.465"
-                  >Code Contribution and Credit in Science</a
-                >: "does this replicate on v2?" Filtered using the recommended high-precision
-                threshold.
-              </p>
-              <p class="body-md">
-                A "non-author contributor" here means someone who committed code to the linked
-                repository but is not listed as an author on the paper itself: code work that
-                the publication-credit system (authorship) doesn't recognize at all.
-              </p>
-              <div class="card-grid">
-                <div class="stat-tile">
-                  <span class="value">{q2.paper_equivalent.pct}%</span>
-                  <span class="label"
-                    >v2, paper-equivalent filter (n={
-                      q2.paper_equivalent.n_qualifying_documents.toLocaleString()
-                    })</span
-                  >
-                </div>
-                <div class="stat-tile">
-                  <span class="value">{q2.paper_equivalent.published_v1_finding_pct}%</span>
-                  <span class="label">published v1 finding</span>
-                </div>
-                <div class="stat-tile">
-                  <span class="value">{q2.unrestricted.pct_of_all_hp_linked}%</span>
-                  <span class="label">unrestricted (all hp-linked documents)</span>
-                </div>
-              </div>
-              <p class="body-sm">
-                {q2.paper_equivalent.pct}% lands almost exactly on the paper's own {
-                  q2.paper_equivalent.published_v1_finding_pct
-                }% v1 finding, a close replication once the correct confidence threshold is
-                applied.
-              </p>
-              <details>
-                <summary class="body-sm">View the query</summary>
-                <CodeSnippet code={q2Snippet} />
-              </details>
-            </article>
-          </div>
+      <details class="loader">
+        <summary>Show <code>load_rs_graph.py</code> (about {loaderLines} lines)</summary>
+        <CodeSnippet code={loadSnippet} />
+      </details>
+      {/* TODO: rs-graph-v2 at rename */}
+      <p>
+        The same file is printed on the <a
+          href="https://huggingface.co/datasets/sci-soft-collections/rs-graph-v2-full"
+          >dataset card</a
+        >. <code>load_filtered_pairs()</code> keeps pairs with confidence ≥ 0.9994 or a curated link,
+        and articles published in 2008 or later. <a href={withBase('/docs#filters')}
+          >Why these filters</a
+        >.
+      </p>
 
-          <div data-tab-panel="q3" hidden>
-            <article class="question">
-              <h3 class="title-sm">
-                4. What libraries does this science actually run on, and does the paper text say
-                so?
-              </h3>
-              <p class="body-md">
-                Three parallel rankings, all restricted to high-precision article-repository
-                links: imported code, manifest-declared dependencies (split by package
-                ecosystem), and mentions in the paper text itself.
-              </p>
-              <div class="chart-row">
-                <div>
-                  <h4 class="body-md">Top imported libraries</h4>
-                  <BarChart id="chart-q3-imports" data={q3.top_imported} />
-                </div>
-                <div>
-                  <h4 class="body-md">Top manifest-declared dependencies, by ecosystem</h4>
-                  <BarChart
-                    id="chart-q3-deps"
-                    data={q3.top_dependencies}
-                    colorField="ecosystem"
-                  />
-                </div>
-              </div>
-              <p class="body-sm note">
-                Mentioned-in-text rankings are dominated by generic terms ("code", "scripts") --
-                SoftCite's NER-based extraction catches common English words alongside real
-                library names.
-              </p>
-              <h4 class="body-md">Biggest import-vs-mention gap</h4>
-              <p class="body-sm">
-                Code dependencies vastly outrun what gets named in the paper text: {
-                  q3.import_vs_mention_gap[0].name
-                } is imported by {q3.import_vs_mention_gap[0].import_pct}% of repos but
-                mentioned in only
-                {q3.import_vs_mention_gap[0].mention_pct}% of papers -- a global figure across
-                all repos, not scoped to the field filter below. See the full cross-view lookup
-                table below for how any individual library's ranking shifts between imports,
-                dependencies, and mentions.
-              </p>
-              <h4 class="body-md">Per-field normalization</h4>
-              <p class="body-sm note">
-                This chart normalizes to percent of repos within the selected field, not the
-                absolute repository counts used above.
-              </p>
-              <BarChart
-                id="chart-q3-field"
-                data={q3FilterOptions[0].data}
-                xLabel="% of repos in field"
-                filterOptions={q3FilterOptions}
-                filterLabel="Filter by research field"
-              />
-              <details>
-                <summary class="body-sm">View the query</summary>
-                <CodeSnippet code={q3Snippet} />
-              </details>
+      <h3>A sample of <code>pairs</code></h3>
+      <DataTable
+        id="sample-pairs"
+        columns={sampleColumns(homeSamples.pairs.columns)}
+        rows={homeSamples.pairs.rows}
+        searchKeys={[]}
+      />
+      <h3>A sample of <code>imports</code></h3>
+      <DataTable
+        id="sample-imports"
+        columns={sampleColumns(homeSamples.imports.columns)}
+        rows={homeSamples.imports.rows}
+        searchKeys={[]}
+      />
+      <p class="muted">
+        10 random rows (fixed seed) from the frames above. Scroll sideways for every column.
+      </p>
+    </section>
 
-              <h4 class="body-md">Look up any library across all three views</h4>
-              <p class="body-sm">
-                Union of the top {q3CrossView.top_n_per_view} libraries by count in each view, reconciled
-                into {q3CrossView.n_canonical_groups} canonical cross-view identities via fuzzy alignment
-                (the same Hungarian-algorithm + rapidfuzz machinery used elsewhere in rs_graph to
-                align software names within one article-repo pair, extended here to a global, three-way
-                reconciliation) rather than an exact string match -- {
-                  q3CrossView.n_groups_with_multiple_spellings
-                } rows are spelled differently across at least two views (e.g. "torch" as an import
-                and pypi dependency vs. "pytorch" as a paper-text mention -- now one row, not two
-                disconnected ones). A dash means the library fell outside that view's top {
-                  q3CrossView.top_n_per_view
-                }, not that it was measured and found at zero.
-              </p>
-              <LibraryTable
-                id="chart-q3-cross-view"
-                rows={q3CrossView.rows}
-                topNPerView={q3CrossView.top_n_per_view}
-              />
-              <details>
-                <summary class="body-sm">View the query</summary>
-                <CodeSnippet code={q3CrossViewSnippet} />
-              </details>
-            </article>
-          </div>
+    <section id="cite">
+      <h2>Cite</h2>
+      <p>If you use RS-Graph, please cite:</p>
+      <p class="cite-text">{CITATION_TEXT}</p>
+      <p class="muted">Citation coming soon.</p>
+      <CodeSnippet code={CITATION_BIBTEX} lang="bibtex" />
+      <p>Please also note the dataset revision you used, e.g. <code>v2.0</code>.</p>
+    </section>
 
-          <div data-tab-panel="coauthorship" hidden>
-            <article class="question">
-              <h3 class="title-sm">
-                5. Does co-authorship network structure differ across scientific domains?
-              </h3>
-              <p class="body-md">
-                The only author-identity structure the schema actually has at the document level
-                is <code>document_contributor</code> (researcher &harr; document). A co-authorship
-                graph -- an edge between two researchers whenever they share a document -- is the
-                one network genuinely implied by that data, not assumed on top of it. Built and analyzed
-                with <a href="https://www.rustworkx.org/">rustworkx</a>: one undirected graph
-                per domain, restricted to high-precision article-repository links and documents
-                with {coauthorship.min_authors}&ndash;{coauthorship.max_authors} listed authors (bounds
-                the all-pairs edge count so large-consortium papers don't dominate).
-              </p>
-              <div class="card-grid">
-                <div class="stat-tile">
-                  <span class="value">{coauthorshipMaxComponent.largest_component_pct}%</span>
-                  <span class="label"
-                    >of {coauthorshipMaxComponent.domain_name} researchers sit in one connected component</span
-                  >
-                </div>
-                <div class="stat-tile">
-                  <span class="value">{coauthorshipMinComponent.largest_component_pct}%</span>
-                  <span class="label"
-                    >same, {coauthorshipMinComponent.domain_name} (most fragmented)</span
-                  >
-                </div>
-                <div class="stat-tile">
-                  <span class="value">{coauthorshipMaxTransitivity.transitivity}</span>
-                  <span class="label"
-                    >{coauthorshipMaxTransitivity.domain_name} transitivity (tightest-knit)</span
-                  >
-                </div>
-                <div class="stat-tile">
-                  <span class="value">{coauthorshipMinTransitivity.transitivity}</span>
-                  <span class="label"
-                    >{coauthorshipMinTransitivity.domain_name} transitivity (loosest)</span
-                  >
-                </div>
-              </div>
-              <p class="body-sm">
-                A real cross-domain difference, and not the same one on both statistics:{' '}
-                {coauthorshipMaxComponent.domain_name} has by far the largest share of researchers
-                in one giant connected component ({
-                  coauthorshipMaxComponent.largest_component_pct
-                }%) but the loosest local clustering ({coauthorshipMaxComponent.transitivity})
-                -- consistent with large, sprawling collaborations that connect many people
-                transitively without forming many closed triangles. {
-                  coauthorshipMinComponent.domain_name
-                } and {
-                  coauthorshipMinTransitivity.domain_name ===
-                  coauthorshipMinComponent.domain_name
-                    ? 'it'
-                    : coauthorshipMinTransitivity.domain_name
-                } run the opposite way: smaller, fragmented components but much tighter-knit local
-                groups ({coauthorshipMaxTransitivity.transitivity}&ndash;{
-                  coauthorshipMinTransitivity.transitivity
-                } transitivity elsewhere) -- the pattern you'd expect from small, stable wet-lab or
-                field-study teams rather than large instrument collaborations.
-              </p>
-              <h4 class="body-md">Researchers per domain (graph size)</h4>
-              <BarChart
-                id="chart-coauthorship-size"
-                data={coauthorshipDensityBarData}
-                xLabel="Distinct researchers"
-                colorField="domain_name"
-              />
-              <h4 class="body-md">
-                Illustrative subgraph -- {coauthorship.illustrative_domain}, largest connected
-                component (sampled to {coauthorship.illustrative_max_nodes} nodes)
-              </h4>
-              <p class="body-sm note">
-                A precomputed rustworkx spring layout, not a live force simulation -- hover a
-                node for its researcher ID.
-              </p>
-              <NetworkChart
-                id="chart-coauthorship-network"
-                nodes={coauthorship.illustrative_nodes}
-                edges={coauthorship.illustrative_edges}
-                idLabel="researcher"
-              />
-              <details>
-                <summary class="body-sm">View the query</summary>
-                <CodeSnippet code={coauthorshipSnippet} />
-              </details>
-            </article>
-          </div>
-        </TabNav>
-      </div>
-    </TabNav>
-  </section>
-
-  <section class="container footer-sections">
-    <details class="accordion">
-      <summary class="body-md">Data sources</summary>
-      <div class="accordion__body">
-        <p class="body-sm">
-          Every article-repository pair traces back to one of six upstream sources, recorded in
-          <code>dataset_source</code> and referenced by every <code
-            >document_repository_link</code
-          > row: JOSS, PLOS, Papers with Code, SoftwareX, SoftCite 2025, and RS-Graph's own snowball-sampling
-          discovery model.
-        </p>
-        <p class="body-sm">
-          RS-Graph's ingestion pipeline retrieves article-repo pairs from a source, enriches
-          article metadata via OpenAlex and repository data via the GitHub API, matches authors
-          to developers, and stores everything in a SQLite database. It then publishes tables to
-          HuggingFace via console scripts such as <code
-            >rs-graph-prelinked-dataset-ingestion</code
-          > and
-          <code>rs-graph-upload-to-huggingface</code>. To add a data source, fix a bug, or
-          discuss the pipeline, open an issue on <a
-            href="https://github.com/evamaxfield/rs-graph">GitHub</a
+    <section class="footnotes">
+      <h2>Footnotes</h2>
+      <ol>
+        <li id="fn1">
+          Counts use the recommended filters. <a href={withBase('/docs#filters')}>Details</a>.
+        </li>
+        {/* TODO: rs-graph-v2 at rename */}
+        <li id="fn2">
+          Rows from Papers with Code are CC BY-SA. READMEs, repository descriptions and
+          software-mention snippets keep their original terms. See the <a
+            href="https://huggingface.co/datasets/sci-soft-collections/rs-graph-v2-full"
+            >dataset card</a
           >.
-        </p>
-      </div>
-    </details>
-
-    <details class="accordion">
-      <summary class="body-md">Using this dataset responsibly</summary>
-      <div class="accordion__body">
-        <h3 class="title-sm">Confidence-threshold methodology</h3>
-        <p class="body-sm">
-          <code>predictive_model_confidence</code> shows up in two different tables with two different
-          recommended thresholds -- don't conflate them. A separate publication-year floor (2008)
-          applies sitewide; see below.
-        </p>
-        <p class="body-sm">
-          <code>document_repository_link.predictive_model_confidence</code> -- <code>NULL</code> means
-          curated ground truth (JOSS, PLOS, Papers with Code, SoftwareX, SoftCite), no model involved.
-          A non-null value is the snowball-sampling-discovery model's own confidence.
-          <strong>Recommended filter:</strong>
-          <code>IS NULL OR &gt;= 0.9994</code> (~0.99 precision). Of 503,047 total links, the combined
-          high-precision set is 282,057 links (56.1%), covering 275,255 documents and 268,873 repositories.
-        </p>
-        <p class="body-sm">
-          <code>researcher_developer_account_link.predictive_model_confidence</code> -- every row
-          is model-predicted, no curated case. <strong>Recommended filter:</strong>
-          <code>&gt;= 0.97</code>.
-        </p>
-        <p class="body-sm">
-          <strong>Publication-year floor: 2008.</strong> GitHub launched February 2008; any document
-          or repository data implying earlier linked code is a data-encoding artifact, not a real
-          pre-GitHub repository. Every year-based stat/chart on this site filters to <code
-            >&gt;= 2008</code
+        </li>
+        <li id="fn3">
+          rs-graph-v1, used in "<a href="https://doi.org/10.1162/QSS.a.465"
+            >Code Contribution and Credit in Science</a
+          >", is available on <a href="https://doi.org/10.7910/DVN/KPYVI1">Harvard Dataverse</a
           >.
-        </p>
-        <h3 class="title-sm">Limitations</h3>
-        <ul class="body-sm limitations-list">
-          <li>
-            Article-repository links are partly model-predicted -- see the confidence filter
-            above.
-          </li>
-          <li>
-            Software-mention extraction (SoftCite NER) is noisy -- catches generic English words
-            alongside real library names.
-          </li>
-          <li>
-            Author-developer matching has a real error rate even at the recommended threshold.
-          </li>
-          <li>Coverage skews toward GitHub and Computer Science.</li>
-          <li>API rate limits shaped ingestion order, not scientific importance.</li>
-          <li id="license-breakdown">
-            Nearly half (48.3%) of the 268,873 high-precision-linked repos carry no detected
-            license at all; of the rest, MIT is 25.7%, Apache 2.0 is 7.8%, GPLv3 is 6.9%. Check <code
-              >license</code
-            >
-            per-repository before training on or redistributing README/code-adjacent content at scale.
-          </li>
-          <li id="ai-signal-caveat">
-            No AI-authorship signal in the schema -- the closest proxy is <code
-              >RepositoryImport.software_name_normalized</code
-            >, i.e. whether a repo imports ML/AI tooling, not whether an AI agent wrote the
-            code.
-          </li>
-          <li>
-            MPL-2.0 (footer) covers this repo's code, not the dataset -- treat the underlying
-            papers'/repos' own licenses as controlling for redistribution.
-          </li>
-        </ul>
-        <h3 class="title-sm">Dataset versions &amp; access</h3>
-        <p class="body-sm">
-          RS-Graph v2 ships as two HuggingFace dataset repos built from the same database:
-          <code>sci-soft-collections/rs-graph-v2</code> (public) and
-          <code>sci-soft-collections/rs-graph-v2-full</code> (gated, manual approval). The public
-          release omits the <code>document_abstract</code> table (abstracts are available from OpenAlex
-          by DOI) and the <code>developer_account</code>
-          <code>name</code> and
-          <code>email</code> columns (available from the GitHub API by username); everything else
-          ships in both, including every analysis on this site. The full release is for work that
-          needs those fields. To request full access, use the gated-access form on its HuggingFace
-          page; see the
-          <a href="https://github.com/evamaxfield/rs-graph#rs-graph-v2">repo README</a> for details.
-          There is no dataset revision/version number pinned anywhere yet -- note the date you pulled
-          the data if reproducing a specific number matters.
-        </p>
-        <h3 class="title-sm" id="citing">Citing RS-Graph</h3>
-        <p class="body-sm">
-          <strong>The paper</strong> (v1 dataset): Brown, E. M., Slaughter, I., &amp; Weber, N. (2026).
-          Code Contribution and Credit in Science. <em>Quantitative Science Studies</em>.
-          <a href="https://doi.org/10.1162/QSS.a.465">https://doi.org/10.1162/QSS.a.465</a>
-          (preprint: <a href="https://arxiv.org/abs/2510.16242">arXiv:2510.16242</a>).
-        </p>
-        <p class="body-sm">
-          <strong>The dataset itself</strong> (v2, this site): there is no dataset DOI, Zenodo record,
-          or <code>CITATION.cff</code> yet. Until one exists, cite the GitHub repository and the commit
-          you pulled data at (<code>git log -1 --format=%H</code>), per standard
-          software-citation practice for un-DOI'd artifacts.
-        </p>
-      </div>
-    </details>
-
-    <details class="accordion">
-      <summary class="body-md">Publications</summary>
-      <div class="accordion__body">
-        <p class="body-sm">
-          <span class="badge badge--published body-sm">Published</span><br />
-          <strong>Code Contribution and Credit in Science</strong><br />
-          Eva Maxfield Brown, Isaac Slaughter, Nicholas Weber &middot; Quantitative Science Studies
-          (MIT Press)<br />
-          <a href="https://doi.org/10.1162/QSS.a.465">https://doi.org/10.1162/QSS.a.465</a> &middot;
-          <a href="https://arxiv.org/abs/2510.16242">arXiv preprint</a>
-          <br /><em>(used rs-graph-v1, via Harvard Dataverse)</em>
-        </p>
-        <p class="body-sm">
-          Also in progress, with analysis/figure scripts only so far: nature-comp-sci-rs-graph,
-          pnas-software-in-science.
-        </p>
-      </div>
-    </details>
-  </section>
+        </li>
+        <li id="fn4">
+          Want to add a source, share ARMM results on a new source, or fix an error? <a
+            href="https://github.com/evamaxfield/rs-graph/issues">Open an issue</a
+          >. <a href={withBase('/docs#contribute')}>How to contribute</a>.
+        </li>
+        <li id="fn5">
+          To ask for a record to be removed, <a
+            href="https://github.com/evamaxfield/rs-graph/issues">open an issue</a
+          > (same as the dataset card's takedown section).
+        </li>
+        <li id="fn6">
+          Worked examples are on <a href={withBase('/examples')}>Examples</a>. You can browse
+          every pair on <a href={withBase('/explore')}>Browse pairs</a>.
+        </li>
+      </ol>
+    </section>
+  </div>
 </BaseLayout>
 
-<script>
-  // Keep Q1's narrative sentence in sync with its domain-filter dropdown --
-  // otherwise the prose reads like static "all domains" copy even after the
-  // chart below it has re-rendered for a different domain.
-  function updateQ1Narrative(select: HTMLSelectElement) {
-    const chartEl = document.getElementById('chart-q1');
-    const filterOptions = JSON.parse(chartEl?.dataset.filterOptions || '[]');
-    const opt = filterOptions[Number(select.value)];
-    if (!opt) return;
-    const start = opt.data.find((r: { year: number }) => r.year === 2015)?.pct;
-    const end = opt.data.find((r: { year: number }) => r.year === 2025)?.pct;
-    const domainEl = document.getElementById('q1-narrative-domain');
-    const startEl = document.getElementById('q1-narrative-start');
-    const endEl = document.getElementById('q1-narrative-end');
-    const remainderEl = document.getElementById('q1-narrative-remainder');
-    if (domainEl) domainEl.textContent = `${opt.label}: `;
-    if (startEl && start !== undefined) startEl.textContent = String(start);
-    if (endEl && end !== undefined) endEl.textContent = String(end);
-    if (remainderEl && end !== undefined) remainderEl.textContent = (100 - end).toFixed(1);
-  }
-  function wireQ1Narrative() {
-    const select = document.querySelector<HTMLSelectElement>(
-      '[data-chart-filter-for="chart-q1"]',
-    );
-    if (!select || select.dataset.narrativeWired) return;
-    select.dataset.narrativeWired = 'true';
-    select.addEventListener('change', () => updateQ1Narrative(select));
-  }
-  wireQ1Narrative();
-  document.addEventListener('astro:page-load', wireQ1Narrative);
-</script>
-
 <style>
-  .hero {
-    padding: 4rem 0 2rem;
-    text-align: center;
+  .home {
+    max-width: 56rem;
   }
-  .hero__lede {
-    max-width: 42rem;
-    margin: 1rem auto 2rem;
-    color: var(--color-text-muted);
+  .home h2 {
+    font-size: 1.75rem;
+    line-height: 1.2;
+    margin: 3rem 0 1rem;
+  }
+  .home h3 {
+    font-size: 1.25rem;
+    line-height: 1.2;
+    margin: 2rem 0 0.5rem;
+  }
+  .home code {
+    overflow-wrap: anywhere;
+  }
+  .hero {
+    padding: 3rem 0 1.5rem;
+  }
+  .hero__title {
+    font-size: clamp(2rem, 6vw, 3rem);
+    line-height: 1.1;
+    margin: 0 0 1.5rem;
   }
   .hero__ctas {
     display: flex;
+    flex-wrap: wrap;
     gap: 1rem;
-    justify-content: center;
+    margin-top: 1.5rem;
   }
-  .hero__access-note {
-    max-width: 36rem;
-    margin: 1.25rem auto 0;
-    color: var(--color-text-muted);
-  }
-  .stats-grid {
-    margin: 2rem 0 0.5rem;
-  }
-  .stats-footnote {
-    color: var(--color-text-muted);
-    margin-bottom: 3rem;
-  }
-  .explore {
-    margin-bottom: 2rem;
-  }
-  .intro {
-    max-width: 48rem;
-    margin-bottom: 1.5rem;
-    color: var(--color-text-muted);
-  }
-  .quickstart-note {
-    color: var(--color-text-muted);
-    margin: -0.5rem 0 1rem;
-  }
-  .question {
-    margin-bottom: 1rem;
-  }
-  .question .note {
-    color: var(--color-text-muted);
-  }
-  .chart-row {
+  .stats {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+  }
+  .stats .value {
+    font-size: clamp(2rem, 8vw, 2.75rem);
+    line-height: 1.1;
+  }
+  .stats .label {
+    font-size: 1rem;
+  }
+  .cite-text {
+    overflow-wrap: anywhere;
+  }
+  .muted {
+    color: var(--color-text-muted);
+  }
+  .loader {
     margin: 1rem 0;
   }
-  .limitations-list li {
-    margin-bottom: 0.75rem;
-  }
-  .badge {
-    display: inline-block;
-    padding: 0.15rem 0.6rem;
-    border-radius: 999px;
+  .loader summary {
+    cursor: pointer;
     font-weight: 600;
-    background: color-mix(in srgb, var(--color-brand) 15%, transparent);
-    color: var(--color-brand);
+    padding: 0.5rem 0;
+  }
+  .footnotes li {
+    margin-bottom: 0.5rem;
+    overflow-wrap: anywhere;
+  }
+  .footnotes {
+    color: var(--color-text-muted);
   }
 </style>

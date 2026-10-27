@@ -1,0 +1,567 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import StatTile from '../../components/StatTile.astro';
+import CodeSnippet from '../../components/CodeSnippet.astro';
+import { families } from '../../lib/schemaData';
+import { withBase } from '../../lib/url';
+
+import homeStats from '../../../public/data/home_stats.json';
+import licenseDist from '../../../../data-prep/output/license_distribution.json';
+import loaderSource from '../../generated/load_rs_graph.py.txt?raw';
+
+// TODO: rs-graph-v2 at rename
+const FULL_REPO = 'sci-soft-collections/rs-graph-v2-full';
+const REPO_URL = `https://huggingface.co/datasets/${FULL_REPO}`;
+const ISSUES_URL = 'https://github.com/evamaxfield/rs-graph/issues';
+
+const toSnake = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+const nTables = families.reduce((n, family) => n + family.tables.length, 0);
+
+const filterConstants = loaderSource
+  .split('\n')
+  .filter((line) =>
+    /^(PAIR_CONFIDENCE_THRESHOLD|MIN_PUBLICATION_YEAR|IDENTITY_CONFIDENCE_THRESHOLD) =/.test(
+      line,
+    ),
+  )
+  .join('\n');
+
+const licensePct = (name: string) =>
+  licenseDist.top_licenses.find((entry) => entry.license === name)?.pct;
+const mitPct = licensePct('MIT License');
+const apachePct = licensePct('Apache License 2.0');
+const gplPct = licensePct('GNU General Public License v3.0');
+
+const sections = [
+  { id: 'access', label: 'Access and versions' },
+  { id: 'filters', label: 'Recommended filters' },
+  { id: 'coverage', label: "What's in it" },
+  { id: 'built', label: 'How RS-Graph was built' },
+  { id: 'tables', label: 'Tables' },
+  { id: 'limitations', label: 'Limitations' },
+  { id: 'contribute', label: 'Contribute' },
+];
+---
+
+<BaseLayout title="Docs">
+  <div class="container docs">
+    <h1 class="title-lg">Docs</h1>
+    <p class="body-md intro">
+      How to get RS-Graph, which filters to apply, what it contains, how it was built, every
+      table and column, its limits, and how to contribute.
+    </p>
+    <nav aria-label="On this page">
+      <ul class="jump body-md">
+        {
+          sections.map((section) => (
+            <li>
+              <a href={`#${section.id}`}>{section.label}</a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+
+    <section id="access">
+      <h2>Access and versions</h2>
+      {
+        /* TODO: rs-graph-v2 at rename: describe both variants and what the public one withholds */
+      }
+      <p class="body-md">
+        RS-Graph v2 is on HuggingFace as <a href={REPO_URL}><code>{FULL_REPO}</code></a>, under
+        CC BY 4.0. It is gated: request access with the form on its HuggingFace page. Requests
+        are approved manually, for research use. The form asks for your name, affiliation,
+        intended use, and a checkbox: "I will use this for research only and not contact or
+        re-identify individuals".
+      </p>
+      <p class="body-md">
+        A public variant without article abstracts or developers' names and emails will follow.
+      </p>
+      <p class="body-md">
+        Each table is one HuggingFace config. Any one loads with <code
+          >load_dataset("{FULL_REPO}", "document", split="train")</code
+        >. To pin your copy, pass <code>revision="v2.0"</code> to <code>load_dataset</code> or to
+        the loader. The loader is on the <a href={withBase('/#get-the-data')}>Home page</a>.
+      </p>
+      <p class="body-md">
+        Version 1 is on <a href="https://doi.org/10.7910/DVN/KPYVI1">Harvard Dataverse</a>.
+      </p>
+    </section>
+
+    <section id="filters">
+      <h2>Recommended filters</h2>
+      <p class="body-md">
+        The release applies no filter: every row ships, whatever the model confidence. The
+        loader's
+        <code>load_filtered_pairs()</code> applies these three, and the counts on this site use the
+        first and third.
+      </p>
+      <ul class="body-md">
+        <li>
+          <strong>Article–repository pairs.</strong>
+          <code>document_repository_link.predictive_model_confidence</code> is <code>NULL</code> for
+          curated links from JOSS, PLOS, Papers with Code, SoftwareX and SoftCite, where no model
+          is involved. Any other value is the ARMM's confidence. Keep pairs that are
+          <code>NULL</code> or at least 0.9994, which gives about 0.99 precision.
+        </li>
+        <li>
+          <strong>Researcher–developer identities.</strong>
+          <code>researcher_developer_account_link.predictive_model_confidence</code> is set on every
+          row, since every link is model-predicted. Keep links of at least 0.97.
+        </li>
+        <li>
+          <strong>Publication year.</strong> Keep articles published in 2008 or later. GitHub launched
+          in February 2008, so earlier dates on linked code are a data-encoding artifact, not pre-GitHub
+          repositories.
+        </li>
+      </ul>
+      <p class="body-md">
+        With the pair and year filters, RS-Graph has {homeStats.n_links.toLocaleString()} pairs, covering
+        {homeStats.n_documents.toLocaleString()} articles and {
+          homeStats.n_repositories.toLocaleString()
+        } repositories.
+      </p>
+      <CodeSnippet code={filterConstants} lang="python" />
+      <p class="body-md">
+        <code>load_filtered_pairs(require_identity_link=True)</code> also keeps only pairs whose article
+        has at least one author, and whose repository has at least one contributor, with an identity
+        link of confidence ≥ 0.97. It is off by default, as in the paper.
+      </p>
+    </section>
+
+    <section id="coverage">
+      <h2>What's in it</h2>
+      <div class="card-grid stats-grid">
+        <StatTile
+          value={`${homeStats.year_min}–${homeStats.year_max}`}
+          label="publication years"
+        />
+        <StatTile
+          value={homeStats.n_domains.toLocaleString()}
+          label="research domains (broad, e.g. Life Sciences)"
+        />
+        <StatTile
+          value={homeStats.n_fields.toLocaleString()}
+          label="research fields (specific, e.g. Genetics)"
+        />
+      </div>
+      <p class="body-md">
+        Domain and field are the two broadest levels of OpenAlex's 4-level topic hierarchy:
+        domain (broadest, {homeStats.n_domains} values), field ({homeStats.n_fields} values, e.g.
+        Genetics), subfield, and topic (most granular). The <code>topic</code> table under
+        <a href="#tables">Tables</a> holds all four levels.
+      </p>
+    </section>
+
+    <section id="built">
+      <h2>How RS-Graph was built</h2>
+      <p class="body-md">
+        Every pair comes from one of six sources, recorded in <code>dataset_source</code>. Five
+        are seed sources with curated pairs: JOSS, PLOS, Papers with Code, SoftwareX and
+        SoftCite 2025. The sixth, <code>snowball-sampling-discovery</code>, holds the pairs we
+        found by mining. For each pair we fetch article metadata from OpenAlex and repository
+        data from the GitHub API, then match authors to developers.
+      </p>
+      <figure class="workflow">
+        <img
+          src={withBase('/img/mining-workflow.png')}
+          width="1547"
+          height="663"
+          alt="Mining workflow: seed article–repository pairs lead to their articles' researchers and their repositories' developer accounts. The ADAMM links researchers to developer accounts. For each linked identity, the ARMM scores the researcher's articles against the developer's repositories. New pairs feed back into the dataset."
+        />
+        <figcaption class="body-md">
+          How RS-Graph grows: seed pairs, identity matching (ADAMM), then article–repository
+          matching (ARMM) over each identity's work, repeated for five rounds.
+        </figcaption>
+      </figure>
+      <p class="body-md">
+        The Article–Repository Matching Model (ARMM) decides whether a repository is the
+        official code for an article. It is fine-tuned from <code>gte-multilingual-base</code> on
+        the seed pairs plus generated negative examples, and reads article and repository details,
+        including the abstract and the README. On held-out test pairs it reaches a macro F1 of 0.975.
+        RS-Graph keeps ARMM pairs with confidence ≥ 0.9994, the lowest score at which test precision
+        reached 0.999.
+      </p>
+      <p class="body-md">
+        The author–developer account matching model (ADAMM) links an article's authors to GitHub
+        accounts. It is a fine-tuned DeBERTa-v3-base model that compares an author's name with
+        an account's username and display name. RS-Graph uses identities with confidence ≥ 0.97.
+      </p>
+      <p class="body-md">
+        For each researcher with a linked GitHub account, the ARMM scores their articles against
+        the repositories they contributed to. New pairs bring new authors and new identities,
+        and the next round starts from them.
+      </p>
+      {/* TODO: ARMM public at paper release */}
+      <p class="body-md">
+        Both models ship with inference code in <a
+          href="https://github.com/evamaxfield/sci-soft-models"><code>sci-soft-models</code></a
+        >: <code>binary_article_repo_em.match_articles_and_repositories(...)</code> for the ARMM and
+        <code>dev_author_em.match_devs_and_authors(...)</code> for the ADAMM. The README has a worked
+        example of each. Models:
+        <a href="https://huggingface.co/evamxb/binary-article-repo-em-clf-optimized">ARMM</a> ·
+        <a href="https://huggingface.co/evamxb/dev-author-em-clf">ADAMM</a>.
+      </p>
+    </section>
+
+    <section id="tables">
+      <h2>Tables</h2>
+      <p class="body-md intro">
+        {nTables} tables in {families.length} families. Every table also carries <code
+          >created_datetime</code
+        > and <code>updated_datetime</code>, left out of the field lists below. Each table links
+        to its HuggingFace viewer, which needs an account with approved access. Tables and
+        columns marked "full variant only" are the ones the planned public variant will
+        withhold.
+      </p>
+
+      <input
+        type="search"
+        class="schema-search"
+        placeholder="Search tables or fields (e.g. confidence, fwci)"
+        aria-label="Search tables and families"
+        id="schema-search-input"
+      />
+      <p class="body-md search-empty" id="schema-search-empty" hidden>
+        No tables match your search.
+      </p>
+
+      <div id="schema-families">
+        {
+          families.map((family) => (
+            <details
+              class="accordion"
+              id={family.slug}
+              data-family={family.slug}
+              data-family-title={family.title.toLowerCase()}
+            >
+              <summary class="body-lg">
+                <span class="family-title">{family.title}</span>
+                <span class="body-md table-count">{family.tables.length} tables</span>
+              </summary>
+              <div class="accordion__body">
+                <p class="body-md reason">{family.reason}</p>
+                {family.slug === 'developer-accounts-and-matching' ||
+                family.slug === 'article-repository-links' ? (
+                  <div class="notification body-md">
+                    This family includes a <code>predictive_model_confidence</code> field. See{' '}
+                    <a href="#filters">Recommended filters</a> for the thresholds.
+                  </div>
+                ) : null}
+                {family.slug === 'repositories-and-code' && (
+                  <div class="notification body-md">
+                    No source code table. The dataset holds READMEs, extracted imports and
+                    dependencies, and file-tree metadata, but no source file contents.
+                  </div>
+                )}
+                {family.tables.map(
+                  (table: {
+                    name: string;
+                    docstring: string;
+                    fields: { name: string; type: string; fullOnly?: boolean }[];
+                    fullOnly?: boolean;
+                  }) => (
+                    <div
+                      class="table-block"
+                      data-table-name={toSnake(table.name)}
+                      data-table-search={[
+                        toSnake(table.name),
+                        table.docstring,
+                        ...table.fields.map((f) => `${f.name} ${f.type}`),
+                      ]
+                        .join(' ')
+                        .toLowerCase()}
+                    >
+                      <h3>{toSnake(table.name)}</h3>
+                      {table.fullOnly && <span class="full-only-badge">full variant only</span>}
+                      <p class="body-md docstring">{table.docstring}</p>
+                      <div class="table-scroll">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th scope="col">Field</th>
+                              <th scope="col">Type</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {table.fields.map((f) => (
+                              <tr>
+                                <td>
+                                  <code class="field-name">{f.name}</code>
+                                  {f.fullOnly && (
+                                    <span class="full-only-badge">full variant only</span>
+                                  )}
+                                </td>
+                                <td>{f.type}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <a
+                        class="body-md viewer-link"
+                        href={`${REPO_URL}/viewer/${toSnake(table.name)}`}
+                      >
+                        View <code>{toSnake(table.name)}</code> on HuggingFace
+                      </a>
+                    </div>
+                  ),
+                )}
+              </div>
+            </details>
+          ))
+        }
+      </div>
+    </section>
+
+    <section id="limitations">
+      <h2>Limitations</h2>
+      <ul class="body-md">
+        <li>
+          Article–repository pairs are partly model-predicted. See <a href="#filters"
+            >Recommended filters</a
+          >.
+        </li>
+        <li>
+          Author–developer matching has a real error rate, even at the recommended threshold.
+        </li>
+        <li>
+          Software mentions come from named-entity recognition (SoftCite), which is noisy: it
+          catches generic English words alongside real library names.
+        </li>
+        <li>Mention extraction is complete only through 2022.</li>
+        <li>
+          The year filter drops pairs whose publication date can't be parsed, without a warning.
+        </li>
+        <li>Coverage skews toward GitHub and Computer Science.</li>
+        <li>API rate limits shaped the order of ingestion, not scientific importance.</li>
+        <li id="license-breakdown">
+          {licenseDist.pct_no_license}% of linked repositories have no detected license. Of all
+          linked repositories, {mitPct}% are MIT, {apachePct}% Apache-2.0 and {gplPct}% GPLv3.
+          Check each repository's <code>license</code> before you redistribute README or code-adjacent
+          content at scale.
+        </li>
+        <li>
+          The dataset is CC BY 4.0. Rows from Papers with Code are CC BY-SA. READMEs, repository
+          descriptions and software-mention snippets keep their original terms.
+        </li>
+        <li>
+          To ask for a record to be removed, <a href={ISSUES_URL}>open an issue</a>. The
+          <a href={REPO_URL}>dataset card</a> has the same takedown section.
+        </li>
+      </ul>
+    </section>
+
+    <section id="contribute">
+      <h2>Contribute</h2>
+      <p class="body-md">
+        RS-Graph grows through new sources. <a href={ISSUES_URL}>Open an issue on GitHub</a> to:
+      </p>
+      <ul class="body-md">
+        <li>
+          <strong>Add a source.</strong> Each source is one module in <code
+            >rs_graph/sources/</code
+          >. Propose one in an issue, or send a pull request and we will review it.
+        </li>
+        <li>
+          <strong>Share ARMM results for a new source.</strong> Ran the ARMM on your own candidate
+          pairs? Send the results and we will process the pairs as a new source.
+        </li>
+        <li>
+          <strong>Report an error.</strong> A wrong link, wrong metadata, or a record to remove.
+        </li>
+      </ul>
+    </section>
+  </div>
+</BaseLayout>
+
+<script>
+  const input = document.getElementById('schema-search-input') as HTMLInputElement;
+  const emptyMsg = document.getElementById('schema-search-empty') as HTMLElement;
+  const families = Array.from(document.querySelectorAll<HTMLDetailsElement>('[data-family]'));
+
+  function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  // Highlight the matched substring in a visible text element, restoring the
+  // element's original text first so repeated keystrokes don't nest <mark>s.
+  function highlight(el: HTMLElement, query: string) {
+    if (el.dataset.original === undefined) el.dataset.original = el.textContent || '';
+    const original = el.dataset.original;
+    if (!query) {
+      el.textContent = original;
+      return;
+    }
+    const match = original.match(new RegExp(escapeRegExp(query), 'i'));
+    if (!match || match.index === undefined) {
+      el.textContent = original;
+      return;
+    }
+    const start = match.index;
+    const end = start + match[0].length;
+    el.textContent = '';
+    el.append(
+      document.createTextNode(original.slice(0, start)),
+      Object.assign(document.createElement('mark'), {
+        textContent: original.slice(start, end),
+      }),
+      document.createTextNode(original.slice(end)),
+    );
+  }
+
+  input.addEventListener('input', () => {
+    const query = input.value.trim().toLowerCase();
+    let anyVisible = false;
+
+    families.forEach((family) => {
+      const familyTitle = family.dataset.familyTitle || '';
+      const tables = Array.from(family.querySelectorAll<HTMLElement>('[data-table-name]'));
+      const familyMatches = query === '' || familyTitle.includes(query);
+      let familyHasMatchingTable = false;
+
+      const familyTitleEl = family.querySelector<HTMLElement>('.family-title');
+      if (familyTitleEl) highlight(familyTitleEl, familyMatches ? query : '');
+
+      tables.forEach((table) => {
+        const tableMatches = query === '' || (table.dataset.tableSearch || '').includes(query);
+        const show = familyMatches || tableMatches;
+        table.classList.toggle('accordion--hidden', !show);
+        if (tableMatches && query !== '') familyHasMatchingTable = true;
+
+        const nameEl = table.querySelector<HTMLElement>('h3');
+        const docEl = table.querySelector<HTMLElement>('.docstring');
+        const fieldEls = Array.from(table.querySelectorAll<HTMLElement>('.field-name'));
+        const highlightQuery = tableMatches ? query : '';
+        if (nameEl) highlight(nameEl, highlightQuery);
+        if (docEl) highlight(docEl, highlightQuery);
+        fieldEls.forEach((fieldEl) => highlight(fieldEl, highlightQuery));
+      });
+
+      const showFamily = query === '' || familyMatches || familyHasMatchingTable;
+      family.classList.toggle('accordion--hidden', !showFamily);
+      if (showFamily) anyVisible = true;
+
+      // Auto-expand a family when the search narrows to specific tables inside it,
+      // but not on an empty query or when the whole family title matched.
+      if (query !== '' && familyHasMatchingTable && !familyMatches) {
+        family.open = true;
+      } else if (query === '') {
+        family.open = false;
+      }
+    });
+
+    emptyMsg.hidden = anyVisible;
+  });
+</script>
+
+<style>
+  .docs section {
+    margin-top: 3rem;
+  }
+  .docs h2 {
+    font-size: 1.75rem;
+    line-height: 1.2;
+    margin-bottom: 1rem;
+  }
+  .docs p,
+  .docs li {
+    margin-bottom: 1rem;
+    overflow-wrap: anywhere;
+  }
+  .docs :global(.snippet-wrap) {
+    margin-bottom: 1rem;
+  }
+  .intro {
+    max-width: 48rem;
+    margin-bottom: 1.5rem;
+    color: var(--color-text-muted);
+  }
+  .jump {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .stats-grid {
+    margin-bottom: 1.5rem;
+  }
+  .workflow {
+    margin: 1.5rem 0;
+  }
+  .workflow img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: #fff;
+  }
+  .workflow figcaption {
+    margin-top: 0.5rem;
+    color: var(--color-text-muted);
+  }
+  #schema-families details.accordion {
+    border-left-color: var(--color-brand);
+  }
+  .family-title {
+    flex: 1 1 auto;
+  }
+  .table-count {
+    color: var(--color-text-muted);
+    font-weight: 400;
+    flex-shrink: 0;
+  }
+  .reason {
+    color: var(--color-text-muted);
+    margin-bottom: 1rem;
+  }
+  .table-block {
+    margin-bottom: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border);
+  }
+  .table-block:first-of-type {
+    border-top: none;
+    padding-top: 0;
+  }
+  .table-block h3 {
+    display: inline;
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: monospace;
+  }
+  .docstring {
+    color: var(--color-text-muted);
+    margin: 0.5rem 0 0.75rem;
+  }
+  .table-scroll {
+    overflow-x: auto;
+  }
+  .full-only-badge {
+    display: inline-block;
+    margin-left: 0.5rem;
+    padding: 0 0.4rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    font-weight: 400;
+    white-space: nowrap;
+  }
+  .viewer-link {
+    display: inline-block;
+    margin-top: 0.5rem;
+  }
+  .search-empty {
+    color: var(--color-text-muted);
+    margin-bottom: 1rem;
+  }
+  :global(#schema-families mark) {
+    background: var(--color-highlight-bg);
+    color: inherit;
+    border-radius: 2px;
+  }
+</style>
