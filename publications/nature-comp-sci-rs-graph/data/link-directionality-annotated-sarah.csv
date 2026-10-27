@@ -1,0 +1,193 @@
+document_repository_link_id,document_id,repository_id,document_field_name_pruned,document_url,document_is_open_access,repository_url,label,full-text-available,this-repo-linked-in-article,this-article-linked-in-repo,notes
+471076,463857,457892,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1101/2022.03.21.485135,1,https://github.com/marcellszi/dl-rna,match,yes,yes,yes,
+432383,425192,419199,Physics and Astronomy,https://doi.org/10.48550/arxiv.2510.17398,1,https://github.com/perturber/hierarchical,match,yes,yes,yes,
+273083,266169,259899,Medicine,https://doi.org/10.1145/3343031.3356058,0,https://github.com/kelkalot/biomedia-2019,match,yes,no,no,
+236838,230014,223654,Other,https://doi.org/10.1109/waspaa66052.2025.11230997,0,https://github.com/optimusprimus/tacos,match,yes,yes,yes,
+687536,636899,639058,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1186/s12859-016-1240-1,1,https://github.com/sbrg/solveme_pub,match,yes,no,no,marked as a match based on matching names
+342361,335326,329177,Computer Science,https://doi.org/10.1109/wacv45572.2020.9093398,0,https://github.com/ltnghia/video-maskrcnn,match,no,no,yes,
+232717,225904,219533,Physics and Astronomy,https://doi.org/10.48550/arxiv.2201.11101,1,https://github.com/andreasbuchheit/lattice_continuum_representation,match,yes,no,yes,provided on the linked zenodo
+704014,648307,650874,Medicine,https://doi.org/10.1101/2020.11.18.20233825,1,https://github.com/wvdtoorn/covidstrategycalculator,match,yes,yes,yes,
+529296,208304,512528,Physics and Astronomy,https://doi.org/10.1093/mnras/stz1521,1,https://github.com/jmackereth/monoage-velocity-dispersion,match,yes,yes,yes,
+590573,565630,563948,Computer Science,https://doi.org/10.48550/arxiv.2605.31388,1,https://github.com/giseung-park/constrained-maxmin-morl,match,yes,yes,yes,
+328089,321073,314905,Engineering,https://doi.org/10.1109/bigdata55660.2022.10021040,0,https://github.com/poonam2015/ieee2022crddcsubmission,match,no,no,yes,
+465595,458378,452411,Other,https://doi.org/10.12688/routledgeopenres.19547.1,1,https://github.com/anashra/indianrhythmdiscrimination,match,yes,yes,yes,provided on the linked zenodo
+640859,603462,604321,Medicine,https://doi.org/10.1053/j.gastro.2017.11.083,0,https://github.com/jeff-goldsmith/p8105_hw4p1,no-match,yes,no,no,
+277424,270498,264240,Physics and Astronomy,https://doi.org/10.48550/arxiv.2506.19804,1,https://github.com/telos-collaboration/spectral_density_cb_mesons_2025,match,yes,no,yes, 
+245333,238491,232149,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1101/2023.06.16.545359,1,https://github.com/broadinstitute/dino4cells_code,match,yes,yes,yes,
+505228,497534,491781,Computer Science,https://doi.org/10.48550/arxiv.2005.14461,1,https://github.com/liqiufu/wavesnet,match,yes,no,yes,
+543284,527898,524326,Medicine,https://doi.org/10.1109/icassp43922.2022.9747207,0,https://github.com/lseventeen/maa-net-vessel-segmentation,match,no,yes,no,
+342680,335645,329496,Engineering,https://doi.org/10.1016/j.patcog.2024.111101,1,https://github.com/wentaoheunnc/ntu-rgr,match,yes,yes,yes,
+521709,510730,506079,Engineering,https://doi.org/10.1073/pnas.2320222121,1,https://github.com/hsd1503/data-driven-inverse-design-of-flexible-pressure-sensors,match,yes,yes,no,
+210514,203770,197330,Other,https://doi.org/10.48550/arxiv.2506.09278,1,https://github.com/uniflowmatch/ufm,match,yes,yes,yes,provided on the linked github.io
+280741,273805,267557,Physics and Astronomy,https://doi.org/10.1002/qua.27458,1,https://github.com/djuliannader/gaussianwells,match,yes,no,yes,
+218579,211806,205395,Computer Science,https://doi.org/10.1145/2911451.2914802,0,https://github.com/simongog/sigir16-topkcomplete,match,yes,no,yes,
+378624,371581,365440,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1101/2022.07.24.501297,1,https://github.com/cerdem12/mobile,match,yes,yes,yes,
+299458,292493,286274,Physics and Astronomy,https://doi.org/10.48550/arxiv.2110.12569,1,https://github.com/behavioral-ds/generalized-model-of-social-influence,match,yes,yes,no,
+456360,449147,443176,Medicine,https://doi.org/10.1101/2023.11.11.23298412,1,https://github.com/grubaughlab/2023_paper_denv-travelers,match,yes,yes,yes,
+303194,296225,290010,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1016/j.dam.2015.07.017,1,https://github.com/thoppe/encyclopedia-of-finite-graphs,match,yes,no,yes,
+214858,208101,201674,Engineering,https://doi.org/10.1109/lra.2020.2969200,1,https://github.com/corsmal/benchmark,match,yes,yes,yes,
+645358,606688,607701,Medicine,https://doi.org/10.1101/2021.08.19.457016,1,https://github.com/kropskilab/pcls,match,yes,no,no,
+275447,268527,262263,Physics and Astronomy,https://doi.org/10.1038/s41550-024-02315-7,0,https://github.com/lianjianhui/source-data-for-mw-size-paper,match,no,yes,yes,
+200578,193875,187394,Engineering,https://doi.org/10.1137/18m1222569,1,https://github.com/azaitzeff/dmiim,match,yes,yes,yes,
+250685,243828,237501,Computer Science,https://doi.org/10.1007/978-3-030-10925-7_5,0,https://github.com/bhooi/gridwatch,match,yes,yes,yes,
+342707,335672,329523,Other,https://doi.org/10.3389/fpls.2021.716784,1,https://github.com/weizhenliubioinform/stomatal_index,match,yes,yes,yes,
+436611,429415,423427,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1101/2023.02.16.528819,1,https://github.com/gilbertoppereira/protacability,match,yes,yes,no,
+304081,297111,290897,Medicine,https://doi.org/10.48550/arxiv.2412.00308,1,https://github.com/reml-lab/bots,match,yes,yes,yes,
+649401,609631,610698,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.21203/rs.3.rs-7019918/v1,1,https://github.com/shizhuoxing/isa-tools,match,yes,yes,no,the repo is empty
+579041,556444,554396,Computer Science,https://doi.org/10.1109/iccvw69036.2025.00445,0,https://github.com/nikosips/infusing,match,yes,yes,yes,
+295508,288552,282324,Engineering,https://doi.org/10.1109/case48305.2020.9216779,1,https://github.com/baklawe/cobe,match,no,no,yes,repo links to the arxiv version of the paper
+612098,582602,581810,Engineering,https://doi.org/10.48550/arxiv.2603.28091,1,https://github.com/a-pru/sharp,match,yes,yes,yes,
+572802,551491,549197,Computer Science,https://doi.org/10.48550/arxiv.2602.19517,1,https://github.com/gcyzsl/cfe_benchmark,match,yes,yes,no,
+389982,382939,376798,Medicine,https://doi.org/10.1038/s41467-019-11319-1,1,https://github.com/shirfilo/mdm_gen_figs,match,yes,yes,yes,there are several githubs linked -> this repo is only for the figures
+227766,220967,214582,Computer Science,https://doi.org/10.1109/ijcnn60899.2024.10650608,0,https://github.com/paulankita137/reservoir-in-reservoir,match,no,no,no,
+237622,230795,224438,Physics and Astronomy,https://doi.org/10.1103/physrevd.103.092007,1,https://github.com/viniciusmikuni/ucluster,match,yes,no,no,
+372251,365209,359067,Other,https://doi.org/10.1162/qss_a_00224,1,https://github.com/tklebel/rpt-policy-analysis,match,yes,no,no,
+718167,467203,660753,Other,https://doi.org/10.3390/rs16060996,1,https://github.com/john-waczak/robotteamsupervised2,match,yes,no,no,
+257859,250984,244675,Engineering,https://doi.org/10.1109/twc.2025.3564399,0,https://github.com/lorenzomiretti/powercontrol,match,no,no,no,citation 
+289936,282985,276752,Physics and Astronomy,https://doi.org/10.1364/ao.412729,0,https://github.com/witsoclab/dlp4710-slm,match,no,no,no,citation 
+646887,607808,608860,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1038/s42003-023-05737-7,1,https://github.com/jumentib/nat_com_mr,match,yes,yes,no,
+449588,442377,436404,Engineering,https://doi.org/10.1016/j.jss.2025.112661,1,https://github.com/ashfaq92/soslr,match,yes,yes,yes,
+439677,432477,426493,Computer Science,https://doi.org/10.1145/3472716.3472860,1,https://github.com/nrybowski/spms,match,yes,yes,yes,poster i think 
+344138,337100,330954,Medicine,https://doi.org/10.1002/mrm.28014,0,https://github.com/nmnaughton/dmri-muscle-sensitivity,match,yes,no,yes,
+313210,306216,300026,Computer Science,https://doi.org/10.48550/arxiv.2509.16527,1,https://github.com/george-zhuang/lbm,match,yes,no,yes,paper links to git.io
+332119,325098,318935,Computer Science,https://doi.org/10.48550/arxiv.2407.12820,1,https://github.com/hugozhl/pqcache,match,yes,no,yes,paper links to other repos
+676307,628911,630819,Engineering,https://doi.org/10.36227/techrxiv.21542967,1,https://github.com/tklatzer/esm-data,not-available,,,,
+320495,313487,307311,Physics and Astronomy,https://doi.org/10.1117/12.3020633,0,https://github.com/pandoramission/pandora-sat,match,yes,no,no,
+529940,517298,513048,Medicine,https://doi.org/10.48550/arxiv.2604.21193,1,https://github.com/vr25/davinci,match,yes,yes,yes,
+607973,579355,578406,Computer Science,https://doi.org/10.48550/arxiv.1905.06010,1,https://github.com/dlaredo/automatic_model_selection,match,yes,yes,yes,
+603473,575809,292957,Other,https://doi.org/10.1145/3383313.3412225,0,https://github.com/yixinwang/causal-recsys-public,match,yes,yes,yes,
+386813,379770,373629,Medicine,https://doi.org/10.1242/bio.058222,1,https://github.com/ctr-bfx/first-second-trimester-methylation,match,yes,yes,yes,
+491786,484546,478602,Medicine,https://doi.org/10.1038/s41467-022-30366-9,1,https://github.com/courtiol/twinr,match,yes,yes,yes,
+464534,457317,451350,Other,https://doi.org/10.1111/ele.13918,1,https://github.com/lfuzessy/fuzessy_et_al_2021-ele,match,yes,no,yes,links to the authors git profile
+585548,561566,559807,Other,https://doi.org/10.1175/waf-d-22-0070.1,1,https://github.com/ai2es/waf_ml_tutorial_part1,match,yes,yes,yes,
+423628,416450,410444,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.3389/fgene.2019.01372,1,https://github.com/tomsexton00/4see,match,yes,yes,no,
+259585,252702,246401,Medicine,https://doi.org/10.1109/sipaim62974.2024.10783620,0,https://github.com/krisandre7/sipaim2024-glaucoma,match,yes,yes,no,"Is this good enough to be considered a match --> ""This repository contains the code for the SIPAIM 2024 paper 'Automatic Glaucoma Classification and Justification Using a Large and Diverse Dataset'."""
+388620,381577,375436,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1093/nar/gkz139,1,https://github.com/ysora/bimir,match,yes,yes,no,
+654545,613395,614594,Medicine,https://doi.org/10.1101/2023.11.30.569373,1,https://github.com/kylecard/s_aureus_evolution,match,yes,yes,yes,
+677306,629599,631550,Computer Science,https://doi.org/10.21037/qims-2025-1746,1,https://github.com/deep-geo/hfef,match,yes,yes,no,citation
+303584,296615,290400,Physics and Astronomy,https://doi.org/10.1140/epjc/s10052-023-11749-8,1,https://github.com/mmikhasenko/rescattering-3pi-2023-001,match,yes,no,yes,
+241295,234463,228111,Medicine,https://doi.org/10.1109/jbhi.2023.3288757,1,https://github.com/perceptioncomputinglab/tac-net,match,yes,yes,yes,
+383109,376066,369925,Medicine,https://doi.org/10.1101/2023.03.24.534116,1,https://github.com/sayangsep/beatrice-finemapping,match,yes,yes,yes,
+506562,196085,492949,Physics and Astronomy,https://doi.org/10.7282/t3-b1d7-2j50,1,https://github.com/jwuphysics/galaxy-cnns-paper,,,,,"there is paper repo, and then another repo that is listed in the paper."
+220323,213543,207139,Engineering,https://doi.org/10.1109/cvpr52729.2023.00471,0,https://github.com/delinqu/nw-rsba,match,yes,no,yes,github.io
+486043,478810,472859,Other,https://doi.org/10.1534/g3.118.200443,1,https://github.com/dkainer/blupga,match,yes,yes,yes,
+727690,664349,435983,Engineering,https://doi.org/10.25165/j.ijabe.20221502.6267,1,https://github.com/akashlevy/ni-rram-python,no-match,yes,no,no,
+439438,432238,426254,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1016/j.ifacsc.2024.100252,1,https://github.com/wahlquisty/automated-covariate-modeling-with-fastpksim,match,yes,yes,no,
+300523,293557,287339,Other,https://doi.org/10.48550/arxiv.2512.02840,1,https://github.com/finitearth/prompt-optimization-framework-comparison,match,yes,yes,yes,
+287444,280497,274260,Computer Science,https://doi.org/10.32614/cran.package.tinyscholar,0,https://github.com/shixiangwang/tinyscholar,,,,,this links to a package
+275482,268562,262298,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1038/s41590-024-01975-x,1,https://github.com/nupulmonary/bailey_puritz_senkow_rpra_2024,match,yes,yes,yes,
+587153,562875,561119,Engineering,https://doi.org/10.48550/arxiv.2404.01112,1,https://github.com/pbonazzi/guassian-diffusion,not-available,yes,,yes,paper has been withdrawn
+247321,240472,234137,Other,https://doi.org/10.48550/arxiv.2010.11761,1,https://github.com/apwright/ai-open-guidelines,match,yes,no,yes,
+698417,644444,646970,Medicine,https://doi.org/10.1098/rsif.2025.0962,1,https://github.com/schwarz-e/postnatal_pulmonary_artery_gnr,match,yes,no,no,
+204586,197865,191402,Computer Science,https://doi.org/10.1109/tpami.2018.2889070,0,https://github.com/amgao/tgprfsrdcf,match,no,no,yes,
+329174,322158,315990,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1101/656025,1,https://github.com/jcboyd/multi-cell-line,match,yes,yes,yes,
+316292,309295,303108,Other,https://doi.org/10.48550/arxiv.2208.12404,1,https://github.com/mjconder/discrete-algorithm,match,yes,no,yes,links to author git profile
+362972,355931,349788,Engineering,https://doi.org/10.1016/j.softx.2022.101065,1,https://github.com/tomflint22/beamweldfoam,match,yes,no,yes,
+580765,557785,555822,Computer Science,https://doi.org/10.1121/10.0026223,0,https://github.com/dahan-wang/audio-samples-for-the-modified-tcs,match,no,no,no,
+211454,204704,198270,Physics and Astronomy,https://doi.org/10.3390/e23020160,1,https://github.com/csenevirathna/influencecascades,match,yes,yes,no,
+648887,609256,610326,Medicine,https://doi.org/10.17863/cam.80309,1,https://github.com/nickwilliamssanger/mpn_phylogenies_and_evolution,match,yes,yes,no,
+282008,275067,268824,Computer Science,https://doi.org/10.1109/alife-cis64968.2025.10979835,0,https://github.com/cliff-bohm/ieee_ssci_2025,match,no,no,no,
+440597,433396,427413,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1186/s13148-023-01528-3,1,https://github.com/kristinelh/stabsel-clock,match,no,yes,no,
+468048,460829,454864,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.7554/elife.72177,1,https://github.com/mmosmond/spacetrees-ms,match,yes,yes,yes,
+662896,619453,620932,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1158/1538-7445.am2014-2218,0,https://github.com/mschubert/nmfconsensus,unsure,no,no,no,this is just an abstract
+646326,607400,608427,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1109/tcbb.2011.51,0,https://github.com/yp/heu-mchc,match,no,yes,yes,
+249874,243018,236690,Computer Science,https://doi.org/10.3929/ethz-b-000490887,1,https://github.com/anastasiskratsios/neu_non_euclidean_upgrading,match,yes,no,yes,
+352093,345053,338909,Physics and Astronomy,https://doi.org/10.1038/s41598-025-94381-8,1,https://github.com/cuihong-yu/dmfft,match,yes,no,no,names provided doe
+377393,370350,364209,Other,https://doi.org/10.1093/jeb/voaf134,1,https://github.com/lcmrc/dispersal_sub_pop,match,yes,yes,yes,
+231389,224580,218205,Medicine,https://doi.org/10.1038/s41746-024-01250-1,1,https://github.com/public-health-scotland/sparra-performance-analysis,match,yes,no,no,links to diff repo
+354558,347517,341374,Physics and Astronomy,https://doi.org/10.1101/746495,0,https://github.com/andszilagyi/chromosome_modeling,match,yes,no,yes,
+230494,223688,217310,Medicine,https://doi.org/10.1016/j.juro.2013.02.2480,0,https://github.com/bd-j/hrdspy,no-match,no,,no,"this is only one page, not a paper i think"
+594162,568419,566943,Engineering,https://doi.org/10.48550/arxiv.2504.05033,1,https://github.com/jaykamat99/close-representation,match,yes,yes,no,
+727956,664528,667668,Computer Science,https://doi.org/10.1109/re48521.2020.00023,1,https://github.com/amelbennaceur/oasis,match,no,no,no,
+612142,582636,581847,Other,https://doi.org/10.48550/arxiv.1412.6367,1,https://github.com/kif/pyfai_publi,match,yes,yes,no,the version linked in the paper is the forked version...
+365133,358092,351949,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1093/bioinformatics/btad444,1,https://github.com/x-lab-3d/gradpose,match,yes,yes,no,
+394657,387614,381473,Other,https://doi.org/10.4121/c.5335433.v1,1,https://github.com/christavanijzendoorn/jat,,,,,
+472053,464834,458869,Physics and Astronomy,https://doi.org/10.1371/journal.pone.0198217,1,https://github.com/lsaravia/marinefoodwebssmallworld,match,yes,yes,yes,
+227053,220258,213869,Physics and Astronomy,https://doi.org/10.48550/arxiv.2508.14161,1,https://github.com/apophis-1/mlr-scripts,match,yes,no,no,links to the .io
+286835,279889,273651,Medicine,https://doi.org/10.1109/embc48229.2022.9871291,0,https://github.com/anne3101/coughlime,match,no,no,no,
+320074,313067,306890,Engineering,https://doi.org/10.48550/arxiv.1810.09381,1,https://github.com/eldar/differentiable-point-clouds,match,yes,no,yes,
+359536,352495,346352,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.7554/elife.39397,1,https://github.com/jertubiana/proteinmotifrbm,match,yes,yes,yes,
+307865,300886,294681,Other,https://doi.org/10.1016/j.jag.2022.103095,1,https://github.com/aj1365/3dgan-vit,match,yes,no,yes,
+719731,658906,661814,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1016/j.devcel.2020.09.022,1,https://github.com/alushing/lim-domain,match,yes,no,no,"the one linked in the paper is named the same, but is updated "
+308780,301797,295596,Medicine,https://doi.org/10.1007/978-3-031-25069-9_14,0,https://github.com/sfu-mial/circle,match,yes,yes,yes,
+410398,403315,397214,Computer Science,https://doi.org/10.48550/arxiv.2602.13943,1,https://github.com/tathagatasrimani/paoa_spads,match,yes,yes,no,
+458721,451507,445537,Engineering,https://doi.org/10.1016/j.bspc.2025.107585,0,https://github.com/goldmilkyway/ppg_bp_estimation,match,no,no,no,
+412247,405150,399063,Computer Science,https://doi.org/10.1109/cvpr46437.2021.01521,0,https://github.com/zhangxuying1004/rstnet,match,no,no,yes,
+260484,253599,247300,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.7910/dvn/anfor3,1,https://github.com/emilyalsentzer/rare-disease-simulation,match,yes,yes,no,dataset
+256470,249601,243286,Engineering,https://doi.org/10.1109/lsp.2023.3244511,1,https://github.com/hashemghanem/bilevel-optim-analysis-sparsity,match,no,no,no,
+336358,329330,323174,Physics and Astronomy,https://doi.org/10.36227/techrxiv.177100284.48520964/v1,1,https://github.com/small-dumpling/foundation-neural-operators-a-survey,match,yes,yes,yes,
+231643,224834,218459,Other,https://doi.org/10.31234/osf.io/yehjb,1,https://github.com/drbenvincent/darc-experiments-matlab,match,yes,yes,yes,
+589521,564795,563078,Physics and Astronomy,https://doi.org/10.5194/egusphere-egu26-4279,1,https://github.com/hrkz/online-sgs-qg-planetary,match,no,no,yes,"weird case where the paper link is to the abstract, but the full paper is on the git"
+282644,275702,269460,Physics and Astronomy,https://doi.org/10.3390/s23218665,1,https://github.com/cvjena/gradstats4pinns,match,yes,yes,no,
+415271,408144,402087,Medicine,https://doi.org/10.48550/arxiv.2103.01299,1,https://github.com/gliff-ai/robust-3d-unet-macular-holes,match,yes,no,yes,
+278046,271118,264862,Other,https://doi.org/10.48550/arxiv.2004.04376,1,https://github.com/21s003018/brain-computing,match,yes,no,yes,
+582890,436557,557582,Physics and Astronomy,https://doi.org/10.1117/1.jatis.9.2.025007,1,https://github.com/mikeireland/asgard,match,no,no,no,
+566957,546877,544269,Physics and Astronomy,https://doi.org/10.1093/mnras/stad2179,1,https://github.com/maria-vincenzi/euclid_lsst_sniasims,match,yes,yes,no,
+677223,629542,631489,Engineering,https://doi.org/10.48550/arxiv.2307.16499,1,https://github.com/maltemosbach/generalizable_tool_use,match,yes,no,no,link to an .io
+603752,576020,574949,Physics and Astronomy,https://doi.org/10.21468/scipost.report.7154,1,https://github.com/zkbaykara/non-susy_ads3,match,yes,no,no,
+472862,465643,459678,Medicine,https://doi.org/10.1101/2025.06.24.661267,1,https://github.com/rngoodman/noma-metagenomics,match,yes,no,yes,this links to a .io
+461805,454588,448621,Computer Science,https://doi.org/10.1016/j.knosys.2021.107888,0,https://github.com/yyyyyyhp/mkgcn,match,no,no,no,
+377734,370691,364550,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1093/bioinformatics/btr442,0,https://github.com/danmaclean/gee_fu,match,yes,no,no,
+534583,520987,516960,Other,https://doi.org/10.1037/met0000270,1,https://github.com/donaldrwilliams/mean_wpvar,match,yes,no,no,
+360491,353450,347307,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1101/gr.238253.118,1,https://github.com/emiraldi/inftrn_lassostars,match,yes,yes,yes,
+753384,685850,519587,Other,https://doi.org/10.3390/rs11010011,1,https://github.com/liweijia/oil-palm-detection,match,yes,yes,no,
+213657,206901,200473,Physics and Astronomy,https://doi.org/10.48550/arxiv.2410.11067,1,https://github.com/charlesm93/vi_location_robust,match,yes,yes,yes,
+325820,318809,312636,Physics and Astronomy,https://doi.org/10.3847/1538-3881/ab737c,1,https://github.com/ireis/agn-lines,match,yes,yes,no,
+295229,288274,282045,Engineering,https://doi.org/10.1016/j.ifacol.2025.07.135,1,https://github.com/contipaolo/multifidelitybo_softsensor,match,yes,yes,yes,
+302822,295853,289638,Medicine,https://doi.org/10.23919/cinc53138.2021.9662935,0,https://github.com/berken-demirel/two_might_do,match,no,no,no,
+526316,514427,510012,Other,https://doi.org/10.1007/978-3-030-95405-5_15,0,https://github.com/adithya-samavedhi/profiling-and-characterizing-fake-news,match,no,no,no,
+229735,222931,216551,Computer Science,https://doi.org/10.48550/arxiv.2010.12905,1,https://github.com/masakat0/atro,match,yes,no,no,
+346062,339023,332878,Medicine,https://doi.org/10.1101/2022.04.07.22273549,1,https://github.com/fmiura/coronadr_2022,match,yes,yes,yes,
+538795,524356,520563,Physics and Astronomy,https://doi.org/10.1109/hpec49654.2021.9622806,0,https://github.com/ak47mrj/trianglecentrality-in-graphblas,match,no,no,no,
+561611,542623,539754,Medicine,https://doi.org/10.20944/preprints202410.1667.v1,1,https://github.com/mlbc-lab/exshall-cnn,match,yes,yes,no,
+225563,218769,212379,Engineering,https://doi.org/10.1109/ojcoms.2025.3539836,1,https://github.com/sys-uos/starlink-on-the-autobahn,match,yes,no,yes,
+370124,363082,356940,Other,https://doi.org/10.1016/j.neuropsychologia.2024.109008,1,https://github.com/cogneuro-uit/mw-itbs-dlpfc--2021,match,yes,no,yes,
+299075,292110,285891,Physics and Astronomy,https://doi.org/10.1073/pnas.2308006120,1,https://github.com/nicolasloizeau/quantum-localization,match,yes,yes,yes,
+347963,340923,334779,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1093/bioinformatics/btab266,1,https://github.com/elkebir-group/doubletd,match,yes,yes,no,
+353907,346866,340723,Medicine,https://doi.org/10.1038/s42003-019-0525-0,1,https://github.com/claremccormack/metapop_model,match,yes,yes,no,
+219773,212995,206589,Physics and Astronomy,https://doi.org/10.1093/mnras/sty1278,1,https://github.com/jls713/craterii,match,yes,yes,no,
+355980,348939,342796,Other,https://doi.org/10.1101/2023.09.28.559516,1,https://github.com/vu-hms/tutorial-stabilizing-walking,match,yes,yes,yes,
+296220,289260,283036,Computer Science,https://doi.org/10.32614/cran.package.groupdata2,1,https://github.com/ludvigolsen/groupdata2,,,,,r package
+627998,594806,594678,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1016/j.ijbiomac.2017.07.147,0,https://github.com/sikaoguo22/dynamics-of-dimeric-kinesins,match,yes,yes,yes,
+390924,383881,377740,Engineering,https://doi.org/10.1016/j.camwa.2021.09.003,0,https://github.com/gongzheng-justin/channel3d,match,yes,yes,yes,
+376881,369838,363697,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1016/j.ajhg.2021.11.008,1,https://github.com/privefl/ukbb-pgs,match,yes,yes,yes,
+746347,679411,681676,Engineering,https://doi.org/10.48550/arxiv.2509.24129,1,https://github.com/priyankamandikal/sparta-robot,match,yes,no,no,
+474029,466810,460845,Medicine,https://doi.org/10.21203/rs.3.rs-5395446/v1,1,https://github.com/graco-roza/hiate,match,yes,yes,no,
+398499,391456,385315,Other,https://doi.org/10.1016/j.rse.2019.111362,1,https://github.com/javierpachecolabrador/scope_mcinv,match,yes,no,yes,
+277106,270181,263922,Engineering,https://doi.org/10.1038/s44182-024-00016-x,1,https://github.com/haonanpeng/efficient-data-driven-joint-level-calibration-of-cable-driven-surgical-robots,match,yes,yes,no,
+519299,508822,504024,Computer Science,https://doi.org/10.48550/arxiv.2510.20075,1,https://github.com/noranta4/calgacus,match,yes,yes,yes,
+244765,237923,231581,Other,https://doi.org/10.48550/arxiv.2511.09904,1,https://github.com/teunvdweij/ctrl-alt-deceit,match,yes,yes,yes,
+627330,594297,594143,Medicine,https://doi.org/10.1016/j.esxm.2021.100461,1,https://github.com/pableres/iiefbrief,match,yes,yes,no,
+252220,245362,239036,Computer Science,https://doi.org/10.1038/s41598-025-96508-3,1,https://github.com/zagovora/llm-laten-content-analysis,match,yes,yes,yes,
+202329,195619,189145,Other,https://doi.org/10.48550/arxiv.2503.11221,1,https://github.com/chrisdud0257/afine,match,yes,no,yes,link to an .io
+317493,310491,304309,Engineering,https://doi.org/10.1038/s41592-020-0910-0,1,https://github.com/eliasnehme/deepstorm3d,match,yes,no,yes,
+482866,475637,469682,Engineering,https://doi.org/10.1109/cvpr52734.2025.00928,0,https://github.com/visual-ai/mr.detr,match,yes,no,yes,link to an .io
+572669,551377,549080,Engineering,https://doi.org/10.1109/cvpr52733.2024.01459,0,https://github.com/yuvalhg/radsimreal,match,yes,no,no,
+735283,669620,672675,Physics and Astronomy,https://doi.org/10.48550/arxiv.2602.07838,1,https://github.com/yizheng-wang/lmdem,match,yes,yes,yes,
+339626,332596,326442,Medicine,https://doi.org/10.48550/arxiv.2210.17121,1,https://github.com/denglinsui/2dsmt-manuscript-sourcecode,match,yes,yes,no,
+235208,228390,222024,Physics and Astronomy,https://doi.org/10.3847/2515-5172/abd6e2,0,https://github.com/richardsgroup/lsst_dcr,match,yes,no,yes,
+330802,323782,317618,Other,https://doi.org/10.3762/bjnano.10.17,1,https://github.com/tomaszstawski/silicalysozymesaxs,match,yes,yes,yes,
+340991,333961,327807,Physics and Astronomy,https://doi.org/10.1073/pnas.2221343120,1,https://github.com/akhilrao/constellations-oligopoly,match,yes,no,no,
+274583,267665,261399,Other,https://doi.org/10.1016/j.media.2021.102233,1,https://github.com/xxlya/braingnn_pytorch,match,yes,yes,no,citation
+736177,670442,673453,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1200/po.22.00593,0,https://github.com/gubazoltan/qbronze2023,no-match,yes,no,no,
+364445,357404,351261,Other,https://doi.org/10.5334/jors.473,1,https://github.com/it-is-me-mario/mario,match,yes,yes,no,
+607726,450368,578202,Medicine,https://doi.org/10.1007/978-3-031-19493-1_21,0,https://github.com/maumruiz/fsl-loss,not-available,no,,no,
+396161,389118,382977,Medicine,https://doi.org/10.1038/s41467-023-36878-2,1,https://github.com/rabadanlab/chek2_scrnaseq,match,yes,yes,no,just title of the paper provided
+567855,547578,545019,Medicine,https://doi.org/10.1109/tbme.2026.3679957,1,https://github.com/nikolasmorshuis/undersampledmriseg,match,yes,yes,yes,
+289346,282395,276162,Computer Science,https://doi.org/10.1145/2851581.2892290,0,https://github.com/ruofeidu/vrsurus,match,yes,yes,yes,
+246361,239512,233177,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.64898/2026.01.22.700663,1,https://github.com/francoissimon/exatrack,match,yes,no,no,
+495317,488075,482133,Other,https://doi.org/10.1371/journal.pbio.1001406,1,https://github.com/jrosindell/onezoomoriginal,match,yes,no,no,repo links to software itself
+500109,492863,486925,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.3390/drones3010025,1,https://github.com/reneheim/mr_drone,match,yes,yes,yes,
+759091,690740,689397,Engineering,https://doi.org/10.48550/arxiv.2305.12672,1,https://github.com/wustl-cig/bcpnpwww,match,yes,no,no,diff repo listed
+253680,246817,240496,Other,https://doi.org/10.52202/079017-1956,0,https://github.com/ingra14m/specular-gaussians,match,yes,yes,yes,
+682383,633221,429422,Physics and Astronomy,https://doi.org/10.1103/6fsj-6nc5,1,https://github.com/tripathydevjyoti/qsl-info-scrambling,match,yes,yes,yes,
+294421,287466,281237,Computer Science,https://doi.org/10.48550/arxiv.2507.04705,1,https://github.com/rain152/ipvg,match,yes,yes,yes,
+265147,258251,251963,Medicine,https://doi.org/10.1101/2023.11.29.569308,1,https://github.com/srp33/bio_image_colorblindness,match,yes,yes,yes,
+322680,315670,309496,Engineering,https://doi.org/10.1109/tgrs.2025.3564261,0,https://github.com/1e12leon/sifdal,match,no,yes,yes,
+356838,349797,343654,Other,https://doi.org/10.33612/diss.255711610,1,https://github.com/marinapapa/selforg-colesc-pigeons,,,,,this links to a dissertation
+359869,352828,346685,Other,https://doi.org/10.1038/s41467-022-29235-2,1,https://github.com/juliancandia/prostatecancerproteomics,match,yes,yes,yes,
+323211,316201,310027,Other,https://doi.org/10.48550/arxiv.2407.03456,1,https://github.com/brendon-boldt/xferbench,match,yes,no,yes,no repo listed
+305575,298601,292391,Other,https://doi.org/10.1109/wacv48630.2021.00049,0,https://github.com/tunai/hybrid-boat-detection,match,no,yes,yes,
+493838,486596,480654,Engineering,https://doi.org/10.1109/iros58592.2024.10802246,0,https://github.com/rros-lab/iros2024-bin-packing,match,no,no,yes,
+485274,478044,472090,"Biochemistry, Genetics and Molecular Biology",https://doi.org/10.1101/2022.02.25.482050,1,https://github.com/mortonjt/asd_multiomics_analyses,match,yes,no,yes,diff repo listed
+330557,323537,317373,Other,https://doi.org/10.48550/arxiv.2505.21076,1,https://github.com/james234165/dvl,match,yes,no,no,"def related repo, but the updated version links a new repo"

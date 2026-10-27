@@ -7,6 +7,7 @@ from pathlib import Path
 import polars as pl
 import typer
 import utils as u
+from scipy.stats import binomtest
 
 ################################################################################
 
@@ -21,6 +22,9 @@ ANNOTATION_CATEGORIES = {
     "this-repo-linked-in-article": ["yes", "no"],
     "this-article-linked-in-repo": ["yes", "no"],
 }
+ANNOTATED_FILENAME_TEMPLATE = "link-directionality-annotated-{annotator}.csv"
+OPEN_ACCESS_CATEGORIES = ["0", "1"]
+AGREED_FILENAME_PATH = DATA_DIR / "link-directionality-training-agreed-labels.csv"
 FULL_TO_ANNOTATE_FILENAME_TEMPLATE = "link-directionality-to-annotate-{annotator}.csv"
 TRAINING_ANNOTATION_FILENAME_PATH = DATA_DIR / "link-directionality-training-annotation-set.csv"
 TRAINING_ANNOTATION_FILENAME_TEMPLATE = "link-directionality-training-annotated-{annotator}.csv"
@@ -331,6 +335,140 @@ def compare_annotation_sets() -> None:
     summary = pl.DataFrame(summary_rows)
     typer.echo(summary)
     u.save_table(summary, "link_directionality_trial_agreement", u.OUTPUT_DIR)
+
+
+def _load_annotated_pairs() -> pl.DataFrame:
+    """Stack every present annotator's sheet plus the agreed trial set, blank cells as null."""
+    categories = {**ANNOTATION_CATEGORIES, "document_is_open_access": OPEN_ACCESS_CATEGORIES}
+    frames = []
+    sources = [
+        (annotator, DATA_DIR / ANNOTATED_FILENAME_TEMPLATE.format(annotator=annotator))
+        for annotator in ANNOTATORS
+    ]
+    for annotator, path in [*sources, ("agreed", AGREED_FILENAME_PATH)]:
+        if not path.exists():
+            typer.echo(f"Skipping {annotator}: {path.name} not found")
+            continue
+        df = pl.read_csv(path, infer_schema=False).with_columns(
+            pl.col(col).str.strip_chars().replace("", None) for col in categories
+        )
+        for col, allowed in categories.items():
+            unknown = set(df[col].drop_nulls().to_list()) - set(allowed)
+            if unknown:
+                raise ValueError(f"{annotator} has unexpected {col} values: {sorted(unknown)}")
+        frames.append(df.with_columns(pl.lit(annotator).alias("annotator")))
+    if not frames:
+        raise FileNotFoundError("No annotated link-directionality files found")
+    return pl.concat(frames, how="diagonal")
+
+
+def _stat_row(
+    subset: str, statistic: str, count: int, denominator: int, with_ci: bool = False
+) -> dict[str, str | int | float | None]:
+    """One summary row: count, denominator, percent and optionally an exact 95% CI."""
+    row: dict[str, str | int | float | None] = {
+        "subset": subset,
+        "statistic": statistic,
+        "count": count,
+        "denominator": denominator,
+        "percent": 100 * count / denominator if denominator else None,
+        "ci_low_percent": None,
+        "ci_high_percent": None,
+    }
+    if with_ci and denominator:
+        ci = binomtest(count, denominator).proportion_ci(method="exact")
+        row["ci_low_percent"] = 100 * ci.low
+        row["ci_high_percent"] = 100 * ci.high
+    return row
+
+
+def _stat_rows(df: pl.DataFrame, subset: str) -> list[dict[str, str | int | float | None]]:
+    """Every statistic for one set of annotated pairs."""
+    rows = []
+    n_all = df.height
+    labeled = df.filter(pl.col("label").is_not_null())
+    n_labeled = labeled.height
+    n_match = labeled.filter(pl.col("label") == "match").height
+    n_no_match = labeled.filter(pl.col("label") == "no-match").height
+
+    rows.append(_stat_row(subset, "precision_strict", n_match, n_labeled, with_ci=True))
+    rows.append(
+        _stat_row(subset, "precision_lenient", n_match, n_match + n_no_match, with_ci=True)
+    )
+    rows.append(_stat_row(subset, "excluded", n_labeled - n_match - n_no_match, n_labeled))
+
+    # Directionality and access are over matched pairs only
+    matches = labeled.filter(pl.col("label") == "match")
+    a2r_col, r2a_col = "this-repo-linked-in-article", "this-article-linked-in-repo"
+    d = matches.drop_nulls([a2r_col, r2a_col])
+    a2r, r2a = pl.col(a2r_col) == "yes", pl.col(r2a_col) == "yes"
+    counts = {
+        "neither": d.filter(~a2r & ~r2a).height,
+        "one_way": d.filter(a2r ^ r2a).height,
+        "both": d.filter(a2r & r2a).height,
+        "one_way_article_to_repo_only": d.filter(a2r & ~r2a).height,
+        "one_way_repo_to_article_only": d.filter(~a2r & r2a).height,
+    }
+    for name, count in counts.items():
+        rows.append(_stat_row(subset, f"directionality_match_{name}", count, d.height))
+
+    for name, col in [("article_links_repo", a2r_col), ("repo_links_article", r2a_col)]:
+        filled = matches.drop_nulls(col)
+        rows.append(
+            _stat_row(
+                subset,
+                f"{name}_match",
+                filled.filter(pl.col(col) == "yes").height,
+                filled.height,
+            )
+        )
+
+    n_closed_match = matches.filter(pl.col("document_is_open_access") == "0").height
+    rows.append(_stat_row(subset, "closed_access_match", n_closed_match, matches.height))
+    n_no_full_text_match = matches.filter(pl.col("full-text-available") == "no").height
+    rows.append(_stat_row(subset, "no_full_text_match", n_no_full_text_match, matches.height))
+
+    rows.append(_stat_row(subset, "article_link_unknown", df[a2r_col].null_count(), n_all))
+
+    no_full_text = df.filter(pl.col("full-text-available") == "no").height
+    rows.append(_stat_row(subset, "no_full_text", no_full_text, n_all))
+    rows.append(
+        _stat_row(subset, "full_text_blank", df["full-text-available"].null_count(), n_all)
+    )
+    return rows
+
+
+@app.command()
+def summarize_annotated_pairs() -> None:
+    """Report precision, directionality and access stats from the independent annotation sets."""
+    df = _load_annotated_pairs()
+    annotators = df["annotator"].unique(maintain_order=True).to_list()
+    typer.echo(f"Pairs: {df.height} from {annotators}")
+
+    blank_labels = df.filter(pl.col("label").is_null())
+    typer.echo(f"\n--- Blank labels ({blank_labels.height} rows) ---")
+    for r in blank_labels.iter_rows(named=True):
+        typer.echo(
+            f"- {r['annotator']} link {r['document_repository_link_id']}: "
+            f"{r['document_url']} | {r['repository_url']} | notes: {r['notes'] or '(none)'}"
+        )
+
+    rows = _stat_rows(df, "all")
+    for annotator in annotators:
+        rows.extend(_stat_rows(df.filter(pl.col("annotator") == annotator), annotator))
+
+    for subset in ["all", *annotators]:
+        typer.echo(f"\n--- {subset} ---")
+        for r in (r for r in rows if r["subset"] == subset):
+            pct = "n/a" if r["percent"] is None else f"{r['percent']:.1f}%"
+            ci = (
+                ""
+                if r["ci_low_percent"] is None
+                else f" (95% CI {r['ci_low_percent']:.1f}-{r['ci_high_percent']:.1f}%)"
+            )
+            typer.echo(f"{r['statistic']}: {r['count']}/{r['denominator']} = {pct}{ci}")
+
+    u.save_table(pl.DataFrame(rows), "link_directionality_annotation_summary", u.OUTPUT_DIR)
 
 
 if __name__ == "__main__":
