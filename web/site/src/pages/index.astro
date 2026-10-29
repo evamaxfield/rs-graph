@@ -72,18 +72,19 @@ imports = load_table("repository_import")    # any table, by name`;
 
     <section id="get-the-data">
       <h2>Get the data</h2>
-      {/* TODO: rs-graph-v2 at rename */}
       <p>
         RS-Graph v2 is on HuggingFace as <a
+          href="https://huggingface.co/datasets/sci-soft-collections/rs-graph-v2"
+          ><code>sci-soft-collections/rs-graph-v2</code></a
+        >, under CC BY 4.0<sup><a href="#fn2" id="fnref2">2</a></sup>. A gated variant, <a
           href="https://huggingface.co/datasets/sci-soft-collections/rs-graph-v2-full"
           ><code>sci-soft-collections/rs-graph-v2-full</code></a
-        >, under CC BY 4.0<sup><a href="#fn2" id="fnref2">2</a></sup>. Request access on its
+        >, adds article abstracts and developers' names and emails. Request access on its
         HuggingFace page.
       </p>
-      {/* TODO: rs-graph-v2 at rename */}
       <p>
         Each table is one HuggingFace config. Any one loads with <code
-          >load_dataset("sci-soft-collections/rs-graph-v2-full", "document", split="train")</code
+          >load_dataset("sci-soft-collections/rs-graph-v2", "document", split="train")</code
         >.
       </p>
       <p>To pin your copy, pass <code>revision="v2.0"</code>.</p>
@@ -94,10 +95,9 @@ imports = load_table("repository_import")    # any table, by name`;
         <summary>Show <code>load_rs_graph.py</code> (about {loaderLines} lines)</summary>
         <CodeSnippet code={loadSnippet} />
       </details>
-      {/* TODO: rs-graph-v2 at rename */}
       <p>
         The same file is printed on the <a
-          href="https://huggingface.co/datasets/sci-soft-collections/rs-graph-v2-full"
+          href="https://huggingface.co/datasets/sci-soft-collections/rs-graph-v2"
           >dataset card</a
         >. <code>load_filtered_pairs()</code> keeps pairs with confidence ≥ 0.9994 or a curated link,
         and articles published in 2008 or later. <a href={withBase('/docs#filters')}
@@ -139,11 +139,10 @@ imports = load_table("repository_import")    # any table, by name`;
         <li id="fn1">
           Counts use the recommended filters. <a href={withBase('/docs#filters')}>Details</a>.
         </li>
-        {/* TODO: rs-graph-v2 at rename */}
         <li id="fn2">
           Rows from Papers with Code are CC BY-SA. READMEs, repository descriptions and
           software-mention snippets keep their original terms. See the <a
-            href="https://huggingface.co/datasets/sci-soft-collections/rs-graph-v2-full"
+            href="https://huggingface.co/datasets/sci-soft-collections/rs-graph-v2"
             >dataset card</a
           >.
         </li>

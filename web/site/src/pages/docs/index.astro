@@ -9,9 +9,10 @@ import homeStats from '../../../public/data/home_stats.json';
 import licenseDist from '../../../../data-prep/output/license_distribution.json';
 import loaderSource from '../../generated/load_rs_graph.py.txt?raw';
 
-// TODO: rs-graph-v2 at rename
+const PUBLIC_REPO = 'sci-soft-collections/rs-graph-v2';
 const FULL_REPO = 'sci-soft-collections/rs-graph-v2-full';
-const REPO_URL = `https://huggingface.co/datasets/${FULL_REPO}`;
+const REPO_URL = `https://huggingface.co/datasets/${PUBLIC_REPO}`;
+const FULL_REPO_URL = `https://huggingface.co/datasets/${FULL_REPO}`;
 const ISSUES_URL = 'https://github.com/evamaxfield/rs-graph/issues';
 
 const toSnake = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
@@ -64,22 +65,29 @@ const sections = [
 
     <section id="access">
       <h2>Access and versions</h2>
-      {
-        /* TODO: rs-graph-v2 at rename: describe both variants and what the public one withholds */
-      }
       <p class="body-md">
-        RS-Graph v2 is on HuggingFace as <a href={REPO_URL}><code>{FULL_REPO}</code></a>, under
-        CC BY 4.0. It is gated: request access with the form on its HuggingFace page. Requests
-        are approved manually, for research use. The form asks for your name, affiliation,
-        intended use, and a checkbox: "I will use this for research only and not contact or
-        re-identify individuals".
+        RS-Graph v2 is on HuggingFace in two variants, both under CC BY 4.0.
       </p>
-      <p class="body-md">
-        A public variant without article abstracts or developers' names and emails will follow.
-      </p>
+      <ul class="body-md">
+        <li>
+          <strong>Public.</strong>
+          <a href={REPO_URL}><code>{PUBLIC_REPO}</code></a> is open to everyone. It withholds the
+          <code>document_abstract</code> table and
+          <code>developer_account.name</code> and <code>developer_account.email</code>. Fetch
+          abstracts from OpenAlex by DOI, and public profiles from the GitHub API by
+          <code>developer_account.username</code>.
+        </li>
+        <li>
+          <strong>Gated.</strong>
+          <a href={FULL_REPO_URL}><code>{FULL_REPO}</code></a> adds the abstracts and developers'
+          names and emails. Request access with the form on its HuggingFace page. Requests are approved
+          manually, for research use. The form asks for your name, affiliation, intended use, and
+          a checkbox: "I will use this for research only and not contact or re-identify individuals".
+        </li>
+      </ul>
       <p class="body-md">
         Each table is one HuggingFace config. Any one loads with <code
-          >load_dataset("{FULL_REPO}", "document", split="train")</code
+          >load_dataset("{PUBLIC_REPO}", "document", split="train")</code
         >. To pin your copy, pass <code>revision="v2.0"</code> to <code>load_dataset</code> or to
         the loader. The loader is on the <a href={withBase('/#get-the-data')}>Home page</a>.
       </p>
@@ -210,9 +218,8 @@ const sections = [
         {nTables} tables in {families.length} families. Every table also carries <code
           >created_datetime</code
         > and <code>updated_datetime</code>, left out of the field lists below. Each table links
-        to its HuggingFace viewer, which needs an account with approved access. Tables and
-        columns marked "full variant only" are the ones the planned public variant will
-        withhold.
+        to its HuggingFace viewer. Tables and columns marked "full variant only" are in the
+        gated variant alone, and viewing them needs approved access.
       </p>
 
       <input
@@ -300,7 +307,7 @@ const sections = [
                       </div>
                       <a
                         class="body-md viewer-link"
-                        href={`${REPO_URL}/viewer/${toSnake(table.name)}`}
+                        href={`${table.fullOnly ? FULL_REPO_URL : REPO_URL}/viewer/${toSnake(table.name)}`}
                       >
                         View <code>{toSnake(table.name)}</code> on HuggingFace
                       </a>
