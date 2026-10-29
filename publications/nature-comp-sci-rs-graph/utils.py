@@ -63,6 +63,8 @@ MANIFEST_ECOSYSTEMS_BY_LANGUAGE: dict[str, list[str]] = {
 ALL_MANIFEST_ECOSYSTEMS: list[str] = sorted(
     {e for ecosystems in MANIFEST_ECOSYSTEMS_BY_LANGUAGE.values() for e in ecosystems}
 )
+# GitHub primary languages that can carry an extracted import or a pypi/conda/cran manifest.
+PYTHON_R_JUPYTER_LANGUAGES: list[str] = ["Python", "R", "Jupyter Notebook"]
 
 # Mention extraction is absent/partial after this publication year (see the
 # mentions-coverage diagnostic), so mention-dependent analyses cap at it.

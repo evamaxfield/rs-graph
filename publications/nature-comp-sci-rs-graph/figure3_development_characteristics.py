@@ -101,6 +101,7 @@ _DEPENDENCY_CATEGORIES: dict[str, set[str]] = {
 }
 
 MANIFEST_ADOPTION_MIN_REPOS_PER_YEAR = 100
+MANIFEST_POOLED_LABEL = "Python-, R- or Jupyter-primary repositories"
 LICENSE_ADOPTION_MIN_REPOS_PER_YEAR = 100
 
 # License-category keyword lists for Panel D.
@@ -202,13 +203,14 @@ def _manifest_adoption_over_time(df: pl.DataFrame, deps: pl.DataFrame) -> pl.Dat
         .filter(
             (pl.col("document_publication_year") >= u.DEFAULT_MIN_YEAR)
             & (pl.col("document_publication_year") < current_year)
+            & pl.col("repository_primary_language").is_in(u.PYTHON_R_JUPYTER_LANGUAGES)
         )
     )
-    # Pooled series (all repos, Python/R manifests only -- pypi/conda/cran, matching this
-    # analysis's Python/R scope) plus Python/R ecosystem reference series.
+    # Pooled series (Python/R/Jupyter-primary repos, Python/R manifests only -- pypi/conda/cran,
+    # matching this analysis's Python/R scope) plus Python/R ecosystem reference series.
     series_specs: list[tuple[str, pl.DataFrame, pl.DataFrame]] = [
         (
-            "All repositories",
+            MANIFEST_POOLED_LABEL,
             year_repo,
             deps.filter(pl.col("ecosystem").is_in(u.ALL_MANIFEST_ECOSYSTEMS))
             .select("repository_id")
@@ -311,7 +313,7 @@ def _python_share_by_field_over_time(
 def _manifest_adoption_by_field_over_time(
     df: pl.DataFrame, deps: pl.DataFrame, top_n_fields: int = PYTHON_SHARE_TOP_N_FIELDS
 ) -> pl.DataFrame:
-    """Per-field split of the pooled "All repositories" series from
+    """Per-field split of the pooled `MANIFEST_POOLED_LABEL` series from
     `_manifest_adoption_over_time`: % of repositories with a parsed Python/R (pypi/conda/cran)
     manifest, by first-seen publication year. Same repo-year attribution, numerator and
     per-year repository floor as that series; field buckets match
@@ -327,11 +329,17 @@ def _manifest_adoption_by_field_over_time(
     )
     top_fields = _top_pruned_field_names(df, top_n_fields)
     repo_year = (
-        df.select("repository_id", "document_publication_year", "document_field_name_pruned")
+        df.select(
+            "repository_id",
+            "document_publication_year",
+            "document_field_name_pruned",
+            "repository_primary_language",
+        )
         .unique(subset="repository_id", keep="first")
         .filter(
             (pl.col("document_publication_year") >= u.DEFAULT_MIN_YEAR)
             & (pl.col("document_publication_year") < current_year)
+            & pl.col("repository_primary_language").is_in(u.PYTHON_R_JUPYTER_LANGUAGES)
         )
         .join(repos_with_manifest, on="repository_id", how="left")
         .with_columns(
@@ -758,18 +766,18 @@ def figure_3_software_development_characteristics(
     print("\nLicense adoption by year (Panel D):")
     print(license_adoption)
 
-    # Panel B/C data as labeled tables; Panel C's pooled line is the "All repositories"
-    # series, checked against the per-field frame's pooled line below.
+    # Panel B/C data as labeled tables; Panel C's pooled line is the
+    # pooled series, checked against the per-field frame's pooled line below.
     u.save_table(manifest_adoption, "figure3_manifest_adoption_by_year", output_dir)
     u.save_table(python_share, "figure3_python_share_by_field_over_year", output_dir)
     u.save_table(manifest_by_field, "figure3_manifest_adoption_by_field_over_year", output_dir)
     manifest_by_field_pooled = manifest_by_field.filter(
         pl.col("series") == PYTHON_SHARE_OVERALL_LABEL
     ).select("document_publication_year", "count", "total")
-    manifest_all_repos = manifest_adoption.filter(pl.col("series") == "All repositories")
+    manifest_all_repos = manifest_adoption.filter(pl.col("series") == MANIFEST_POOLED_LABEL)
     assert manifest_by_field_pooled.equals(
         manifest_all_repos.select("document_publication_year", "count", "total")
-    ), "Panel C per-field pooled line diverges from the 'All repositories' series"
+    ), "Panel C per-field pooled line diverges from the pooled manifest series"
     current_year = u.DATASET_AS_OF.year
     category_by_year_plotted = category_by_year.filter(
         pl.col("document_publication_year") < current_year
@@ -940,7 +948,8 @@ def figure_3_software_development_characteristics(
     u.shrink_ticks(ax_c, size=9)
     u.print_caption_note(
         "figure3 Panel C",
-        "Share of repositories with a parsed Python or R dependency manifest (pypi, conda or "
+        "Share of Python-, R- or Jupyter-primary repositories with a parsed Python or R "
+        "dependency manifest (pypi, conda or "
         f"cran), by first-seen publication year; top {PYTHON_SHARE_TOP_N_FIELDS} fields + "
         "Other (translucent, same field colors as Panel B) + a pooled all-repositories "
         f"line (black dashed); years with < {MANIFEST_ADOPTION_MIN_REPOS_PER_YEAR} repos in a "
@@ -1130,7 +1139,7 @@ def figure_3_software_development_characteristics(
     # ---- Supplemental: manifest adoption, Python-primary vs. R-primary repositories (Q10 --
     # moved out of the main text; the R-primary decline is counter-intuitive and needs its own
     # explanation, which belongs in the Supplement, not Results) ----
-    manifest_by_language = manifest_adoption.filter(pl.col("series") != "All repositories")
+    manifest_by_language = manifest_adoption.filter(pl.col("series") != MANIFEST_POOLED_LABEL)
     u.save_table(manifest_by_language, "supplemental_manifest_adoption_by_language", output_dir)
     fig_manifest_supp, ax_manifest_supp = plt.subplots(figsize=(7, 5))
     language_colors = u.general_palette(manifest_by_language.get_column("series").n_unique())
@@ -1711,7 +1720,11 @@ def _characteristics_row(
         .alias("has_manifest"),
     )
     known_language = repos.drop_nulls("repository_primary_language")
-    last_year = repos.filter(pl.col("document_publication_year") == current_year - 1)
+    # Manifest shares use the Fig. 3C denominator: Python/R/Jupyter-primary repositories only.
+    prj_repos = repos.filter(
+        pl.col("repository_primary_language").is_in(u.PYTHON_R_JUPYTER_LANGUAGES)
+    )
+    prj_last_year = prj_repos.filter(pl.col("document_publication_year") == current_year - 1)
     timing = _dev_duration_frame(pairs)
 
     def pct(frame: pl.DataFrame, expr: pl.Expr) -> float:
@@ -1738,8 +1751,8 @@ def _characteristics_row(
             repos, pl.col("license_category") == "other_or_unclassified"
         ),
         "pct_no_license": pct(repos, pl.col("license_category") == "none"),
-        "pct_with_manifest_2008_to_last_year": pct(repos, pl.col("has_manifest")),
-        f"pct_with_manifest_{current_year - 1}": pct(last_year, pl.col("has_manifest")),
+        "pct_with_manifest_2008_to_last_year": pct(prj_repos, pl.col("has_manifest")),
+        f"pct_with_manifest_{current_year - 1}": pct(prj_last_year, pl.col("has_manifest")),
         "n_repositories_known_language": known_language.height,
         "pct_python_of_known_language": pct(
             known_language, pl.col("repository_primary_language") == "Python"

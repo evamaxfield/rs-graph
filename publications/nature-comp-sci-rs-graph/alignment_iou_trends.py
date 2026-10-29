@@ -466,7 +466,10 @@ def _mentions_pair_iou_frames(
         n_matched = len(matched_items)
         union_size = len(unique_b) + len(unique_mentions) - n_matched
         iou_as_is = n_matched / union_size if union_size else float("nan")
-        unmatched_mentions[pair_idx] = unique_mentions - matched_mentions
+        # Stop list applies to the ranking only; eligibility stays on the raw mention set.
+        unmatched_mentions[pair_idx] = (
+            unique_mentions - matched_mentions - u.GENERIC_SOFTWARE_NAME_STOPLIST
+        )
         unmatched_items[pair_idx] = unique_b - matched_items
 
         # Generic-filtered variant: same pair, stoplist terms removed from the mention

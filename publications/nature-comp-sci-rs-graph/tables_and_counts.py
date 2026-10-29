@@ -718,12 +718,14 @@ def mining_rounds_table(output_dir: Path = u.OUTPUT_DIR) -> None:
 
 def data_coverage_counts(output_dir: Path = u.OUTPUT_DIR) -> None:
     """
-    Count how many standard-filtered pairs have each data view present: articles with >=1
-    extracted software mention, repositories with >=1 import, repositories with >=1
+    Count how many standard-filtered, Python/R/Jupyter-primary pairs have each data view
+    present: articles with >=1 extracted software mention, repositories with >=1 import, repositories with >=1
     pypi/conda/cran manifest dependency, and every pairwise/three-way combination
     ("complete coverage" = imports AND dependencies AND mentions).
     """
-    df = u.load_filtered_pairs()
+    df = u.load_filtered_pairs().filter(
+        pl.col("repository_primary_language").is_in(u.PYTHON_R_JUPYTER_LANGUAGES)
+    )
 
     print("\nLoading imports/dependencies/mentions from HuggingFace...")
     imports = u.load_table("repository_import")

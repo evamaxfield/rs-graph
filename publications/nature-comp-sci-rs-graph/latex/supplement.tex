@@ -32,8 +32,7 @@
 
 % Supplementary References continue the main list's numbering.
 % Set this to the number of distinct \cite keys in main.tex (37 on 2026-10-09).
-% Note from Claude: main-with-methods-notes.tex had 39 distinct keys on 2026-10-23 while Methods was still being written. Recount once Methods is final.
-\newcommand{\SImainrefcount}{39}
+\newcommand{\SImainrefcount}{38}
 % natbib's thebibliography zeroes NAT@ctr when it opens, so the offset goes after it.
 \makeatletter
 \let\SIorigthebibliography\thebibliography
@@ -70,7 +69,18 @@ The largest connected component holds 84.9\% of researchers in the seed-only net
 Over the same change, the number of connected components falls from 14,145 to 9,387, and the second-largest component in the seed and mined network has only 49 researchers.
 We expect this increase by construction, because we find every mined pair through a researcher who already authored an article in RS-Graph.
 
-\section*{Supplementary Note 2: ARMM input format}\label{snote:armminput}
+\section*{Supplementary Note 2: Out-of-domain repository sample}\label{snote:ood}
+
+% Sources: pool size from sci-soft-models binary_article_repo_em full-ood-sample.parquet (394,707 rows); 93 test-positive repositories also in the pool (2026-10-28 check). Query date and criteria from Eva (2026-10-29), not yet pinned to a file.
+Negative strategies 2 and 3 pair seed articles with repositories from an out-of-domain sample of GitHub.
+Compiling a random sample of GitHub repositories through the public API is difficult~\cite{kalliamvakou2016promises}, so GitHub staff provided the sample by querying GitHub's internal database of repository information for public repositories created before July 2025.
+The sample is meant to represent the non-research repositories the ARMM may meet during mining, such as homework assignments, course materials, and side projects.
+It holds 394,707 repositories, which we split into disjoint pools for the training and test sets.
+We did not filter the sample against the seed pairs, and 93 repositories from positive test pairs also appear in it.
+The out-of-domain repositories used as negatives are included in the ARMM training dataset (Code availability), and the full sample is available on request.
+We thank GitHub staff for providing it.
+
+\section*{Supplementary Note 3: ARMM input format}\label{snote:armminput}
 
 % Source: sci-soft-models binary_article_repo_em/constants.py (OPTIMIZED_MODEL_STR_INPUT_TEMPLATE, truncation lengths, TRUNC_ELEMENT); main.py _prepare_input and training.py use the same template, and missing values become the string "None" in both.
 We pass each candidate article-repository pair to the ARMM as a single XML string, built from the template below by replacing each placeholder in braces with the pair's value.
@@ -108,6 +118,44 @@ We write a missing value as the string \texttt{None}.
 \end{verbatim}
 \endgroup
 
+\section*{Supplementary Note 4: ARMM configuration and training}\label{snote:armmconfig}
+
+% Sources: sci-soft-models binary_article_repo_em: final-model-training-data-optimized/train-script-final-article-repo-em.py (TrainingArguments) and results.json (thresholds); data/files/ablation/ablation-training-results.csv and data/files/experiments/exp-training-results.csv (model selection). Optimizer and schedule are not set in the script, so they are the Transformers defaults.
+Due to the randomness of synthetic negative creation, there is a chance that a negative strategy reproduces a positive example.
+As such, after all negative generation, we deduplicate all pairs, keeping the positive pair wherever a synthetic negative duplicates a real seed pair.
+
+We fine-tuned the final ARMM with the Hugging Face Transformers \texttt{Trainer} using the settings below.
+
+\begin{center}
+\footnotesize
+\begin{tabular}{@{}ll@{}}
+\toprule
+Setting & Value \\
+\midrule
+Base model & \texttt{gte-multilingual-base} \\
+Input features & 18 (Supplementary Note 3) \\
+Epochs & 1 \\
+Optimizer and learning-rate schedule & Transformers defaults (AdamW) \\
+Learning rate & $5\times10^{-5}$ \\
+Weight decay & 0.01 \\
+Mixed precision & FP16 \\
+Gradient checkpointing & Yes \\
+Batch size & Found automatically (\texttt{auto\_find\_batch\_size}) \\
+Maximum input length & 8,192 tokens \\
+Random seed & 12 \\
+\botrule
+\end{tabular}
+\end{center}
+
+We chose the input features and base model with single runs, one per configuration, each fine-tuned for one epoch with the same settings on a subsample of 32,768 positives and evaluated on a separate 39,988-example model-selection set (17,696 match, 22,292 no-match; Supplementary Table~\ref{stab:ablation}).
+These runs predate a revision of our train/test split, which now splits positives before generating negatives, so the model-selection set was most likely built with the earlier procedure, which generated negatives before splitting.
+The same configuration (\texttt{gte-multilingual-base} with the final 18 features) scored a macro F1 of 0.967 in the base-model run and 0.961 in the ablation run, so single-run differences of about 0.006 are within noise.
+We therefore did not select the highest-scoring feature set.
+We excluded the six features (author list, contributor list, topic domains, topic fields, document type, and repository file tree) mainly because they need multiple API calls per candidate pair before inference, which would make mining time-intensive, and we dropped the author and contributor lists together so the model could not lean on their overlap (Methods).
+
+On the 120,030-example test set, the candidate confidence thresholds were 0.751 by Youden's J, 0.479 by maximum F1, 0.940 as the lowest threshold with a false positive rate of at most 0.01, and 0.99937 as the lowest threshold with precision of at least 0.999.
+We use the last, rounded to 0.9994 (Methods).
+
 \clearpage
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -131,8 +179,8 @@ Resource & What it links & Fields & Official article-repository pairs & Identiti
 Papers with Code & Papers to code implementations & Mostly CS and ML & Author-provided links mixed with community reimplementations & -- & -- \\ \addlinespace
 Linked\-Papers\-With\-Code~\cite{farber2023linked} & Papers with Code as an RDF knowledge graph & ML & As in Papers with Code & -- & -- \\ \addlinespace
 Science Data Lake~\cite{wilinski2026science} & Eight scholarly sources joined by DOI, including Papers with Code & All fields (bibliometric), with paper--code links from Papers with Code only & As in Papers with Code & -- & -- \\ \addlinespace
-OpenAIRE Graph~\cite{manghi2019openaire} & Publication--software relations within a scholarly knowledge graph & All fields & Not distinguished, because inferred links are all typed \texttt{IsRelatedTo} and do not separate an article's own code from software it used & -- & -- \\ \addlinespace
-Wattanakriengkrai et al.~\cite{wattanakriengkrai2022github} & 20,278 GitHub repositories created 2014--2018 whose READMEs reference academic papers & Mixed, with ML the most common topic & Not tested, since a README may cite any paper and more than half of cited papers do not link back & -- & -- \\ \addlinespace
+OpenAIRE Graph~\cite{manghi2019openaire} & Publication--software relations within a scholarly knowledge graph & All fields & Not distinguished; links do not separate an article's own code from software it used & -- & -- \\ \addlinespace
+Wattanakriengkrai et al.~\cite{wattanakriengkrai2022github} & 20,278 GitHub repositories created 2014--2018 whose READMEs reference academic papers & Mixed, with ML the most common topic & Not tested, since a README may cite any paper & -- & -- \\ \addlinespace
 Trisovic et al.~\cite{trisovic2022large} & Replication datasets in Harvard Dataverse and their R code & Studies depositing replication data in Harvard Dataverse & Code deposited with the study & -- & -- \\
 \midrule
 \multicolumn{6}{@{}l}{\textit{Software mentions}}\\
@@ -153,11 +201,12 @@ RS-Graph v1~\cite{brown2026code} & 163,292 article-repository pairs from Papers 
 \begin{table}[p]
 \caption{\textbf{RS-Graph data dictionary.} Tables and key columns in RS-Graph (\texttt{rs\_graph/db/models.py}), grouped by node and edge type. Every table also carries an integer \texttt{id} and \texttt{created\_datetime} / \texttt{updated\_datetime} collection timestamps. Fields marked \textsuperscript{\dag} are omitted from the public release. Seed pairs have an empty \texttt{iteration}. Mined pairs have the \texttt{dataset\_source} \texttt{snowball-sampling-discovery} and their mining round in \texttt{iteration}.}\label{stab:dictionary}
 \footnotesize
+\setlength{\aboverulesep}{0.5pt}\setlength{\belowrulesep}{0.5pt}
 \setlength{\tabcolsep}{3pt}
 \begin{tabular}{@{}>{\raggedright\arraybackslash}p{94pt}>{\raggedright\arraybackslash}p{92pt}>{\raggedright\arraybackslash}p{174pt}@{}}
 \toprule
 Table & Holds & Key columns \\
-\addlinespace[1pt]
+\midrule
 \multicolumn{3}{@{}l}{\textbf{Articles}}\\
 \texttt{document} & One row per article & \texttt{doi}, \texttt{open\_alex\_id}, \texttt{title}, \texttt{publication\_date}, \texttt{cited\_by\_count}, \texttt{fwci}, \texttt{citation\_normalized\_percentile}, \texttt{document\_type}, \texttt{is\_open\_access}, \texttt{primary\_location\_id}, \texttt{best\_open\_access\_location\_id} \\
 \texttt{document\_alternate\_doi} & Alternate DOIs (e.g., a preprint's DOI) & \texttt{document\_id}, \texttt{doi} \\
@@ -165,28 +214,28 @@ Table & Holds & Key columns \\
 \texttt{location}, \texttt{source} & Where an article is published or hosted & \texttt{landing\_page\_url}, \texttt{pdf\_url}, \texttt{is\_open\_access}, \texttt{license}, \texttt{version}; venue \texttt{name}, \texttt{source\_type}, \texttt{host\_organization\_name} \\
 \texttt{topic}, \texttt{document\_topic} & OpenAlex topics and their fields, subfields, and domains & \texttt{name}, \texttt{field\_name}, \texttt{subfield\_name}, \texttt{domain\_name}; per-document \texttt{score} \\
 \texttt{funder}, \texttt{funding\_instance}, \texttt{document\_funding\_\allowbreak instance} & Funding acknowledged by each article & funder \texttt{name}, \texttt{award\_id} \\
-\addlinespace[1pt]
-\multicolumn{3}{@{}l}{\textbf{Researchers}}\\
-\texttt{researcher} & One row per OpenAlex author record & \texttt{open\_alex\_id}, \texttt{orcid}, \texttt{name}, \texttt{works\_count}, \texttt{cited\_by\_count}, \texttt{h\_index}, \texttt{i10\_index}, \texttt{two\_year\_mean\_citedness} \\
-\texttt{institution}, \texttt{document\_contributor\_\allowbreak institution} & Author affiliations on each article & \texttt{name}, \texttt{country\_code}, \texttt{institution\_type}, \texttt{ror} \\
-\addlinespace[1pt]
+\midrule
 \multicolumn{3}{@{}l}{\textbf{Repositories}}\\
 \texttt{code\_host} & Code host (GitHub) & \texttt{name} \\
 \texttt{repository} & One row per repository & \texttt{owner}, \texttt{name}, \texttt{description}, \texttt{is\_fork}, \texttt{forks\_count}, \texttt{stargazers\_count}, \texttt{open\_issues\_count}, \texttt{commits\_count}, \texttt{size\_kb}, \texttt{topics}, \texttt{primary\_language}, \texttt{license}, \texttt{processed\_at\_sha}, \texttt{creation\_datetime}, \texttt{last\_pushed\_datetime} \\
 \texttt{repository\_readme} & README text & \texttt{repository\_id}, \texttt{content} \\
 \texttt{repository\_language} & Bytes of code per language & \texttt{language}, \texttt{bytes\_of\_code} \\
 \texttt{repository\_file} & File tree & \texttt{path}, \texttt{tree\_type}, \texttt{bytes\_of\_code} \\
-\addlinespace[1pt]
+\midrule
+\multicolumn{3}{@{}l}{\textbf{Researchers}}\\
+\texttt{researcher} & One row per OpenAlex author record & \texttt{open\_alex\_id}, \texttt{orcid}, \texttt{name}, \texttt{works\_count}, \texttt{cited\_by\_count}, \texttt{h\_index}, \texttt{i10\_index}, \texttt{two\_year\_mean\_citedness} \\
+\texttt{institution}, \texttt{document\_contributor\_\allowbreak institution} & Author affiliations on each article & \texttt{name}, \texttt{country\_code}, \texttt{institution\_type}, \texttt{ror} \\
+\midrule
 \multicolumn{3}{@{}l}{\textbf{Developer accounts}}\\
 \texttt{developer\_account} & One row per account & \texttt{username}, \texttt{name}\textsuperscript{\dag}, \texttt{email}\textsuperscript{\dag} \\
-\addlinespace[1pt]
+\midrule
 \multicolumn{3}{@{}l}{\textbf{Edges}}\\
 \texttt{document\_contributor} & Authorships & \texttt{researcher\_id}, \texttt{document\_id}, \texttt{position}, \texttt{is\_corresponding} \\
 \texttt{repository\_contributor} & Code contributions & \texttt{repository\_id}, \texttt{developer\_account\_id} \\
 \texttt{researcher\_developer\_\allowbreak account\_link} & Researcher-developer-account identities & \texttt{researcher\_id}, \texttt{developer\_account\_id}, \texttt{predictive\_model\_name}, \texttt{predictive\_model\_version}, \texttt{predictive\_model\_confidence}, \texttt{last\_snowball\_processed\_datetime} \\
 \texttt{document\_repository\_link} & Article-repository pairs & \texttt{document\_id}, \texttt{repository\_id}, \texttt{dataset\_source\_id} (route), \texttt{iteration} (mining round), \texttt{predictive\_model\_name}, \texttt{predictive\_model\_version}, \texttt{predictive\_model\_confidence} \\
 \texttt{dataset\_source} & Route names & \texttt{name} \\
-\addlinespace[1pt]
+\midrule
 \multicolumn{3}{@{}l}{\textbf{Software-use views}}\\
 \texttt{document\_software\_\allowbreak mention} & Software mentions from SoftCite-2025 & \texttt{softcite\_mention\_id}, \texttt{software\_name}, \texttt{software\_name\_normalized}, \texttt{mention\_context} \\
 \texttt{repository\_import} & Imported third-party libraries & \texttt{software\_name}, \texttt{software\_name\_normalized}, \texttt{file\_paths} \\
@@ -198,19 +247,19 @@ Table & Holds & Key columns \\
 
 % Table S3
 \begin{sidewaystable}
-\caption{\textbf{Characteristics of seed and mined pairs.} Each column uses the same population as the corresponding statistic in Results: FWCI over all articles; license, manifest, and Python share over repositories linked to articles published 2008--2025; timing per pair. Python share here is pooled over 2008--2025 (53.6\% for all pairs), while Results pools 2012--2025 (53.7\%). No repository is linked through both a seed pair and a mined pair.}\label{stab:seedmined}
+\caption{\textbf{Characteristics of seed and mined pairs.} Each column uses the same population as the corresponding statistic in Results: FWCI over all articles; license, manifest, and Python share over repositories linked to articles published 2008--2025 (manifest shares among Python-, R- or Jupyter-primary repositories only); timing per pair. Python share here is pooled over 2008--2025 (53.6\% for all pairs), while Results pools 2012--2025 (53.7\%). No repository is linked through both a seed pair and a mined pair.}\label{stab:seedmined}
 \setlength{\tabcolsep}{3pt}
 \begin{tabular}{@{}>{\raggedright\arraybackslash}p{88pt}*{9}{>{\raggedleft\arraybackslash}p{39pt}}>{\raggedleft\arraybackslash}p{52pt}@{}}
 \toprule
 Group & Pairs & Articles with FWCI & Median FWCI & Articles with FWCI $>$ 1 & Permissive license & No license & Manifest (2008--2025) & Manifest (2025) & Python (known language) & Median days created before / last push after publication \\
 \midrule
-All pairs & 309,959 & 57.6\% & 2.04 & 65.1\% & 35.8\% & 49.9\% & 34.0\% & 42.5\% & 53.6\% & 96 / 117 \\
-Seed (all sources) & 196,107 & 54.2\% & 2.47 & 68.7\% & 39.4\% & 46.6\% & 38.6\% & 46.4\% & 61.0\% & 97 / 164 \\
-Seed: Papers with Code & 168,456 & 51.4\% & 2.70 & 70.4\% & 41.1\% & 46.6\% & 40.8\% & 47.8\% & 65.4\% & 81 / 163 \\
-Seed: other four sources & 27,651 & 70.6\% & 1.63 & 61.5\% & 29.1\% & 46.1\% & 24.6\% & 28.2\% & 31.6\% & 268 / 176 \\
-Mined (rounds 1--5) & 113,852 & 63.3\% & 1.59 & 59.9\% & 29.5\% & 55.5\% & 26.1\% & 38.5\% & 40.4\% & 95 / 51 \\
-Mined, excluding Computer Science & 64,727 & 68.6\% & 1.76 & 62.2\% & 27.6\% & 55.5\% & 21.9\% & 30.2\% & 30.4\% & 118 / 49 \\
-Seed, excluding Computer Science & 82,607 & 61.3\% & 2.38 & 68.4\% & 35.2\% & 47.2\% & 31.6\% & 39.4\% & 46.7\% & 166 / 142 \\
+All pairs & 309,959 & 57.6\% & 2.04 & 65.1\% & 35.8\% & 49.9\% & 47.2\% & 55.5\% & 53.6\% & 96 / 117 \\
+Seed (all sources) & 196,107 & 54.2\% & 2.47 & 68.7\% & 39.4\% & 46.6\% & 50.4\% & 58.5\% & 61.0\% & 97 / 164 \\
+Seed: Papers with Code & 168,456 & 51.4\% & 2.70 & 70.4\% & 41.1\% & 46.6\% & 51.4\% & 59.2\% & 65.4\% & 81 / 163 \\
+Seed: other four sources & 27,651 & 70.6\% & 1.63 & 61.5\% & 29.1\% & 46.1\% & 42.0\% & 45.7\% & 31.6\% & 268 / 176 \\
+Mined (rounds 1--5) & 113,852 & 63.3\% & 1.59 & 59.9\% & 29.5\% & 55.5\% & 40.5\% & 52.3\% & 40.4\% & 95 / 51 \\
+Mined, excluding Computer Science & 64,727 & 68.6\% & 1.76 & 62.2\% & 27.6\% & 55.5\% & 34.2\% & 42.2\% & 30.4\% & 118 / 49 \\
+Seed, excluding Computer Science & 82,607 & 61.3\% & 2.38 & 68.4\% & 35.2\% & 47.2\% & 45.0\% & 52.2\% & 46.7\% & 166 / 142 \\
 \botrule
 \end{tabular}
 \footnotetext{Median FWCI includes articles with zero citations. Percentages of articles with FWCI are of all articles in the group; the median and the share above 1 are among articles with an FWCI.}
@@ -236,11 +285,12 @@ All pairs & 309,959 & 96 & 117 & 27.3\% \\
 
 % Table S5 (sideways: five name-and-count columns do not fit the text width)
 % Sources: upper block outputs/top_software_by_view.csv (mentions_as_is, mentions_stoplist_filtered, imports, dependencies); lower block outputs/import_dependency_unmatched_top5_by_direction.csv and outputs/mentions_alignment_unmatched_top5_by_direction.csv.
-% The lower-block mention counts (e.g., code 8,528) come from mentions_alignment_unmatched_top5_by_direction.csv and are correct for "not matched". The 8,530 in mentions_alignment_generic_stoplist_removed_counts.csv counts pairs where the stop list removes the term, a different quantity.
+% The lower-block mention counts come from mentions_alignment_unmatched_top5_by_direction.csv and are correct for "not matched". mentions_alignment_generic_stoplist_removed_counts.csv counts pairs where the stop list removes a term, a different quantity.
 % Stop list: utils.GENERIC_SOFTWARE_NAME_STOPLIST (23 terms).
 % top_software_by_view.csv rerun 2026-10-23 under the 23-term list; output identical to the 2026-09-19 file.
+% mentions_alignment_unmatched_top5_by_direction.csv rerun 2026-10-29 with the stop list applied to the mention rankings only, so eligible pairs still match Table S6.
 \begin{sidewaystable}
-\caption{\textbf{Most common software within each view, and software one view carries that another does not.} The upper block gives the most common software names within each view, counted as the number of article-repository pairs in which the name appears, over that view's own eligible population. We show mentions twice, with and without the 23 generic extraction terms in our stop list (code, codes, script, scripts, latex, software, github, gitlab, bitbucket, library, libraries, package, packages, tool, tools, toolbox, pipeline, workflow, api, database, website, server, and notebook). The two mention rows have different eligible populations, because pairs whose only mentions are generic terms drop out once those terms are removed. The lower block gives, for each of the six pairwise directions, the five most common names present in one view and matched by nothing in the other, over pairs published through 2022 for which that comparison is computable; mention names there are shown before the generic-term stop list is applied, to show what mention extraction returns in practice. Names are in their normalized form.}\label{stab:topsoftware}
+\caption{\textbf{Most common software within each view, and software one view carries that another does not.} The upper block gives the most common software names within each view, counted as the number of article-repository pairs in which the name appears, over that view's own eligible population. We show mentions twice, with and without the 23 generic extraction terms in our stop list (code, codes, script, scripts, latex, software, github, gitlab, bitbucket, library, libraries, package, packages, tool, tools, toolbox, pipeline, workflow, api, database, website, server, and notebook). The two mention rows have different eligible populations, because pairs whose only mentions are generic terms drop out once those terms are removed. The lower block gives, for each of the six pairwise directions, the five most common names present in one view and matched by nothing in the other, over pairs published through 2022 with both views present; generic terms are left out of the mention rankings there but not out of the eligible pairs. Names are in their normalized form.}\label{stab:topsoftware}
 \footnotesize
 \setlength{\tabcolsep}{3pt}
 \renewcommand{\arraystretch}{1.1}
@@ -260,10 +310,10 @@ Dependencies & 42,197 & numpy (28,135) & scipy (19,801) & matplotlib (18,549) & 
 Imports not matched to dependencies & 41,994 & numpy (7,684) & matplotlib (7,018) & scipy (5,804) & torch (5,161) & pandas (4,789) \\
 Dependencies not matched to imports & 41,994 & six (7,903) & certifi (7,343) & pythondateutil (7,295) & pyparsing (6,870) & cycler (5,912) \\
 \addlinespace
-Mentions not matched to imports & 34,014 & code (8,528) & scripts (3,908) & latex (3,687) & github (2,976) & script (2,789) \\
+Mentions not matched to imports & 34,014 & matlab (1,220) & linux (1,150) & samtools (614) & adam (608) & windows (595) \\
 Imports not matched to mentions & 34,014 & numpy (25,187) & matplotlib (15,653) & scipy (14,198) & pandas (12,325) & tqdm (9,448) \\
 \addlinespace
-Mentions not matched to dependencies & 14,586 & code (3,534) & latex (1,836) & github (1,270) & scripts (1,248) & script (1,004) \\
+Mentions not matched to dependencies & 14,586 & linux (588) & matlab (502) & pytorch (497) & windows (339) & bioconductor (314) \\
 Dependencies not matched to mentions & 14,586 & numpy (8,971) & scipy (6,331) & matplotlib (5,883) & pandas (5,306) & tqdm (4,963) \\
 \botrule
 \end{tabular}
@@ -300,57 +350,135 @@ Cap & Model & n (rows) & Popularity: odds change (p) & Age: odds change (p) \\
 \multicolumn{5}{@{}l}{\textbf{All pairs with imports}}\\
 2022 & Age only & 975,239 & -- & $-$4.0\% (0.275) \\
 2022 & Popularity only & 975,239 & $-$8.6\% (0.064) & -- \\
-2022 & Popularity and age & 975,239 & $-$16.3\% ($<$0.001) & $+$7.9\% (0.015) \\
-2022 & Controlled\textsuperscript{\dag} & 975,239 & $-$8.5\% (0.014) & $+$3.1\% (0.505) \\
+2022 & Popularity and age & 975,239 & $-$16.3\%\textsuperscript{***} ($<$0.001) & $+$7.9\%\textsuperscript{*} (0.015) \\
+\textbf{2022} & \textbf{Controlled} & \textbf{975,239} & \textbf{$-$8.5\%\textsuperscript{*} (0.014)} & \textbf{$+$3.1\% (0.505)} \\
 \addlinespace
-None & Age only & 2,493,085 & -- & $-$9.5\% ($<$0.001) \\
-None & Popularity only & 2,493,085 & $-$14.8\% ($<$0.001) & -- \\
-None & Popularity and age & 2,493,085 & $-$12.9\% (0.007) & $-$1.8\% (0.412) \\
+None & Age only & 2,493,085 & -- & $-$9.5\%\textsuperscript{***} ($<$0.001) \\
+None & Popularity only & 2,493,085 & $-$14.8\%\textsuperscript{***} ($<$0.001) & -- \\
+None & Popularity and age & 2,493,085 & $-$12.9\%\textsuperscript{**} (0.007) & $-$1.8\% (0.412) \\
 None & Controlled & 2,493,085 & $-$4.8\% (0.198) & $+$0.7\% (0.852) \\
 \midrule
 \multicolumn{5}{@{}l}{\textbf{Mention-eligible pairs}}\\
 2022 & Age only & 346,278 & -- & $-$3.4\% (0.412) \\
 2022 & Popularity only & 346,278 & $-$6.8\% (0.197) & -- \\
-2022 & Popularity and age & 346,278 & $-$11.7\% (0.003) & $+$4.9\% (0.178) \\
+2022 & Popularity and age & 346,278 & $-$11.7\%\textsuperscript{**} (0.003) & $+$4.9\% (0.178) \\
 2022 & Controlled & 346,278 & $-$6.7\% (0.069) & $+$2.2\% (0.659) \\
 \addlinespace
 None & Age only & 385,502 & -- & $-$3.4\% (0.399) \\
 None & Popularity only & 385,502 & $-$6.8\% (0.195) & -- \\
-None & Popularity and age & 385,502 & $-$11.4\% (0.005) & $+$4.5\% (0.175) \\
+None & Popularity and age & 385,502 & $-$11.4\%\textsuperscript{**} (0.005) & $+$4.5\% (0.175) \\
 None & Controlled & 385,502 & $-$6.5\% (0.077) & $+$1.8\% (0.712) \\
 \botrule
 \end{tabular}
-\footnotetext{\textsuperscript{\dag}Primary specification reported in the main text. --, not in the model. p-values below 0.001 are shown as $<$0.001.}
+\footnotetext{Bold, primary specification reported in the main text. \textsuperscript{*}p $<$ 0.05, \textsuperscript{**}p $<$ 0.01, \textsuperscript{***}p $<$ 0.001. --, not in the model. p-values below 0.001 are shown as $<$0.001.}
 \end{table}
 
 % Table S8
+% Source: sci-soft-models software_mentions_repo_clf/data/files/experiments/exp-training-results.csv (12 rows, f92e0a9); feature sets in software_mentions_repo_clf/exp.py. The grid ran with the synthetic-negative block commented out, so its test set is the 175 annotated examples.
 \begin{table}[p]
-\caption{\textbf{ARMM training and evaluation data by seed source and negative strategy.} Positive counts are those of the replication package (164,479 pairs). The 164,572 positives in Methods are the training pipeline's own count, taken before the $\geq$ 2008 publication-year filter (12 pairs) and before one-to-one deduplication against mined pairs added later (81 pairs).}\label{stab:armmdata}
-% CHECK: is 160,783 negatives counted before or after deduplication? The train negatives aren't local, and the referee's arithmetic suggests all 6,013 deduplicated rows were negatives.
-\begin{tabular}{@{}lrr@{}}
+\caption{\textbf{Software Repository Sharing Statement Classifier input features and training epochs.} ModernBERT-base fine-tuned under four input feature sets for one to three epochs and evaluated on the 175 annotated held-out examples, without synthetic negatives. All: article title, mention context, repository URL, and SoftCite-2025's created, shared, and used purpose confidences. Text only: article title, mention context, and repository URL. Mention details only: mention context, repository URL, and the three purpose confidences. Context and target only: mention context and repository URL. Bold marks the final configuration, which also uses a maximum input length of 2,048 tokens and was retrained with synthetic negatives (Methods). Each row is a single run on 175 examples, so the gap between its macro F1 here (0.822) and the final classifier's 0.776 on the same 175 examples should not be read as evidence that synthetic negatives hurt. Match P, R, and F1 are for the match class. Acc., accuracy.}\label{stab:softcitegrid}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lrrrrrrrr@{}}
 \toprule
-Seed source or negative strategy & Pairs & Share \\
+Feature set & Epochs & Macro P & Macro R & Macro F1 & Match P & Match R & Match F1 & Acc. \\
 \midrule
-\textbf{Positive pairs (one-to-one seed pairs), by seed source} & & \\
-\quad Papers with Code & 143,434 & 87.2\% \\
-\quad SoftCite-2025 & 10,837 & 6.6\% \\
-\quad PLOS & 6,886 & 4.2\% \\
-\quad JOSS & 2,730 & 1.7\% \\
-\quad SoftwareX & 592 & 0.4\% \\
-\quad \textbf{Total} & \textbf{164,479} & \textbf{100.0\%} \\
-\midrule
-\textbf{Negative pairs (synthetic), by strategy} & & \\
-\quad Simple shuffle & 16,457 & 10.2\% \\
-\quad Random out-of-domain & 16,457 & 10.2\% \\
-\quad Nearest-neighbor out-of-domain & 16,453 & 10.2\% \\
-\quad Same author, different article & 57,600 & 35.8\% \\
-\quad Same contributor, different repository & 53,816 & 33.5\% \\
-\quad \textbf{Total} & \textbf{160,783} & \textbf{100.0\%} \\
+All & 1 & 0.822 & 0.792 & 0.804 & 0.860 & 0.917 & 0.888 & 0.840 \\
+All & 2 & 0.830 & 0.753 & 0.776 & 0.827 & 0.950 & 0.885 & 0.829 \\
+All & 3 & 0.831 & 0.796 & 0.810 & 0.862 & 0.926 & 0.892 & 0.846 \\
+\addlinespace
+Context and target only & 1 & 0.798 & 0.774 & 0.784 & 0.852 & 0.901 & 0.876 & 0.823 \\
+Context and target only & 2 & 0.840 & 0.786 & 0.805 & 0.851 & 0.942 & 0.894 & 0.846 \\
+Context and target only & 3 & 0.810 & 0.793 & 0.801 & 0.865 & 0.901 & 0.883 & 0.834 \\
+\addlinespace
+Mention details only & 1 & 0.804 & 0.784 & 0.792 & 0.858 & 0.901 & 0.879 & 0.829 \\
+Mention details only & 2 & 0.835 & 0.791 & 0.807 & 0.856 & 0.934 & 0.893 & 0.846 \\
+Mention details only & 3 & 0.807 & 0.730 & 0.751 & 0.814 & 0.942 & 0.874 & 0.811 \\
+\addlinespace
+Text only & 1 & 0.788 & 0.775 & 0.781 & 0.856 & 0.884 & 0.870 & 0.817 \\
+\textbf{Text only} & \textbf{2} & \textbf{0.830} & \textbf{0.816} & \textbf{0.822} & \textbf{0.880} & \textbf{0.909} & \textbf{0.894} & \textbf{0.851} \\
+Text only & 3 & 0.816 & 0.783 & 0.796 & 0.854 & 0.917 & 0.884 & 0.834 \\
 \botrule
 \end{tabular}
 \end{table}
 
 % Table S9
+% Source: rebuilt 2026-10-29. Train = HF evamxb/article-repo-em-dataset train split (199,312 rows); test = sci-soft-models binary_article_repo_em/data/files/final-model-training-data-optimized/binary-article-repo-em-clf/test-with-preds.parquet (120,030 rows); test accuracy from .../single-feature-evals/dataset_source_name-eval.csv. Reconciles with Methods (164,572 positives; 199,312 and 120,030 examples).
+\begin{table}[p]
+\caption{\textbf{ARMM training and evaluation data by seed source and negative strategy.} Positives are the 164,572 one-to-one seed pairs used to train and test the ARMM. Negatives were generated separately within each split, with targets of 35\% for strategies 4 and 5 and 10\% for the other three, and counts are after deduplication (Supplementary Note 4); same-contributor negatives fall short of their target. The test set holds 38.5\% of positives because we moved every example from fields under 2\% of positives, or from articles published before 2016 or in 2025 or later, to it (Methods). Shares are of all positives or all negatives. Test accuracy is the share of test examples the final ARMM classifies correctly.}\label{stab:armmdata}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Seed source or negative strategy & Train & Test & Total & Share & Test accuracy \\
+\midrule
+\multicolumn{6}{@{}l}{\textbf{Positive pairs (one-to-one seed pairs), by seed source}}\\
+\quad Papers with Code & 90,642 & 52,883 & 143,525 & 87.2\% & 0.979 \\
+\quad SoftCite-2025 & 5,868 & 4,971 & 10,839 & 6.6\% & 0.938 \\
+\quad PLOS & 3,118 & 3,768 & 6,886 & 4.2\% & 0.975 \\
+\quad JOSS & 1,286 & 1,444 & 2,730 & 1.7\% & 0.996 \\
+\quad SoftwareX & 359 & 233 & 592 & 0.4\% & 0.961 \\
+\quad \textbf{Total} & \textbf{101,273} & \textbf{63,299} & \textbf{164,572} & \textbf{100.0\%} & \\
+\midrule
+\multicolumn{6}{@{}l}{\textbf{Negative pairs (synthetic), by strategy}}\\
+\quad Simple shuffle & 10,127 & 6,327 & 16,454 & 10.6\% & 0.990 \\
+\quad Random out-of-domain & 10,127 & 6,329 & 16,456 & 10.6\% & 0.996 \\
+\quad Nearest-neighbor out-of-domain & 10,125 & 6,329 & 16,454 & 10.6\% & 0.991 \\
+\quad Same author, different article & 35,445 & 22,154 & 57,599 & 37.2\% & 0.964 \\
+\quad Same contributor, different repository & 32,215 & 15,592 & 47,807 & 30.9\% & 0.966 \\
+\quad \textbf{Total} & \textbf{98,039} & \textbf{56,731} & \textbf{154,770} & \textbf{100.0\%} & \\
+\midrule
+\textbf{All examples} & \textbf{199,312} & \textbf{120,030} & \textbf{319,342} & & \\
+\botrule
+\end{tabular}
+\end{table}
+
+% Table S10 (sideways: nine columns with long feature-group names)
+% Sources: sci-soft-models binary_article_repo_em/data/files/ablation/ablation-training-results.csv (22 rows, e561cff) and data/files/experiments/exp-training-results.csv (3 rows, 8548667). "Reduced" is defined in git show e561cff (REDUCED_FEATURE_SET_ABLATION).
+% Both CSVs predate 9e65d1d (the split fix), so the model-selection set is inferred, not proven, to come from the earlier split.
+\begin{sidewaystable}
+\caption{\textbf{ARMM feature ablation and base-model comparison.} Upper block: removing each feature or feature group from the 24 candidate features, with \texttt{gte-multilingual-base} as the base model, sorted by macro F1. Lower block: three base models fine-tuned on the final 18-feature set. Every run was fine-tuned for one epoch with the final model's settings on a subsample of 32,768 positives and evaluated on the same 39,988-example model-selection set (Supplementary Note 4), which was most likely built with an earlier version of our train/test split. Each row is a single run: the same configuration (\texttt{gte-multilingual-base} with the final 18 features) scored a macro F1 of 0.967 in the base-model run and 0.961 in the ablation run, so differences of about $\pm$0.006 are within run-to-run noise. Bold marks the final feature set, which is not the highest-scoring one; we chose it mainly because the excluded features need multiple API calls per candidate pair before inference, which would make mining time-intensive. Repository owner was never removed. Match P and R are for the match class.}\label{stab:ablation}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{248pt}rrrrrrrr@{}}
+\toprule
+Features removed or base model & Removed & Kept & Macro P & Macro R & Macro F1 & Match P & Match R & Accuracy \\
+\midrule
+\multicolumn{9}{@{}l}{\textit{Feature ablation (\texttt{gte-multilingual-base})}}\\
+\addlinespace[2pt]
+Contributor list & 1 & 23 & 0.967 & 0.970 & 0.968 & 0.947 & 0.984 & 0.969 \\
+DOI & 1 & 23 & 0.967 & 0.970 & 0.968 & 0.948 & 0.982 & 0.968 \\
+Repository name & 1 & 23 & 0.966 & 0.969 & 0.967 & 0.948 & 0.980 & 0.967 \\
+Author and contributor lists, commits, file tree, description, topic domains, topic fields, and document type & 8 & 16 & 0.966 & 0.968 & 0.967 & 0.948 & 0.979 & 0.967 \\
+None (all 24 features) & 0 & 24 & 0.964 & 0.968 & 0.966 & 0.943 & 0.983 & 0.966 \\
+Commits & 1 & 23 & 0.964 & 0.968 & 0.966 & 0.941 & 0.984 & 0.966 \\
+Commits and file tree & 2 & 22 & 0.964 & 0.968 & 0.966 & 0.943 & 0.982 & 0.966 \\
+Contributor list and file tree & 2 & 22 & 0.964 & 0.967 & 0.965 & 0.944 & 0.981 & 0.966 \\
+Article metadata (topic domains, topic fields, and document type) & 3 & 21 & 0.963 & 0.967 & 0.965 & 0.939 & 0.984 & 0.965 \\
+Repository metadata (language, is-fork, stars, forks, issues, commits, size, topics, and file tree) & 9 & 15 & 0.963 & 0.967 & 0.965 & 0.940 & 0.983 & 0.965 \\
+File tree & 1 & 23 & 0.963 & 0.966 & 0.964 & 0.940 & 0.982 & 0.964 \\
+All but title, DOI, abstract, owner, name, and README & 18 & 6 & 0.961 & 0.965 & 0.963 & 0.937 & 0.982 & 0.963 \\
+Author list and contributor list & 2 & 22 & 0.961 & 0.965 & 0.963 & 0.934 & 0.985 & 0.963 \\
+\textbf{Author list, contributor list, topic domains, topic fields, document type, and file tree (final)} & \textbf{6} & \textbf{18} & \textbf{0.959} & \textbf{0.964} & \textbf{0.961} & \textbf{0.932} & \textbf{0.984} & \textbf{0.961} \\
+Temporal (publication date, creation date, and last push) & 3 & 21 & 0.958 & 0.963 & 0.960 & 0.928 & 0.987 & 0.960 \\
+Abstract & 1 & 23 & 0.955 & 0.959 & 0.956 & 0.924 & 0.983 & 0.957 \\
+Description & 1 & 23 & 0.955 & 0.959 & 0.956 & 0.921 & 0.986 & 0.956 \\
+All but title, DOI, owner, name, and README & 19 & 5 & 0.952 & 0.957 & 0.954 & 0.922 & 0.979 & 0.954 \\
+README & 1 & 23 & 0.934 & 0.940 & 0.935 & 0.886 & 0.980 & 0.935 \\
+Title & 1 & 23 & 0.924 & 0.929 & 0.923 & 0.866 & 0.979 & 0.923 \\
+Six text features (title, DOI, abstract, name, README, and description) & 6 & 18 & 0.811 & 0.806 & 0.792 & 0.700 & 0.928 & 0.792 \\
+Six text features plus author and contributor lists & 8 & 16 & 0.772 & 0.732 & 0.700 & 0.606 & 0.958 & 0.706 \\
+\midrule
+\multicolumn{9}{@{}l}{\textit{Base model (final 18 features)}}\\
+\addlinespace[2pt]
+\texttt{gte-multilingual-base} & 6 & 18 & 0.966 & 0.969 & 0.967 & 0.946 & 0.982 & 0.967 \\
+ModernBERT-base & 6 & 18 & 0.958 & 0.963 & 0.960 & 0.930 & 0.985 & 0.960 \\
+BGE-M3 (predicted every example as a match) & 6 & 18 & 0.221 & 0.500 & 0.307 & 0.443 & 1.000 & 0.443 \\
+\botrule
+\end{tabular}
+\end{sidewaystable}
+
+% Table S11
 % Source: outputs/mention_primary_model_full_coefficients.csv (2026-10-23 refit; popularity and age match the S7 primary row). Reference levels follow statsmodels treatment coding (first level alphabetically): Biochemistry, Genetics and Molecular Biology for field, article for document type.
 \begin{table}[p]
 \caption{\textbf{Full coefficients for the primary specification.} Logistic regression of whether an imported library is mentioned, fit with controls on all pairs with imports published through 2022 (the primary specification in Supplementary Table~\ref{stab:logit}). Coefficients are on the log-odds scale, with two-way cluster-robust standard errors, 95\% confidence intervals, and p-values (article and library). The model has 975,239 rows from 95,299 articles and 18,281 libraries.}\label{stab:primarymodel}
@@ -393,7 +521,7 @@ Term & Coefficient & SE & 95\% CI & p & Odds ratio \\
 \begin{figure}[p]
 \centering
 \includegraphics[width=\textwidth]{figS1_date_window.pdf}
-\caption{\textbf{Days between repository creation and article publication for one-to-one seed pairs.} Publication date minus repository creation date over the 164,479 one-to-one seed pairs in the final data; positive values mean the repository was created before publication. The solid line marks the median (82 days). Dashed lines mark the mining window: repositories created at most 556 days before and 73 days after publication, the 10th and 90th percentiles of one-to-one seed pairs when mining began.}\label{sfig:datewindow}
+\caption{\textbf{Days between repository creation and article publication for one-to-one seed pairs.} Publication date minus repository creation date over the 164,479 one-to-one seed pairs in the final data (the 164,572 ARMM positives in Supplementary Table~\ref{stab:armmdata}, less 12 pairs published before 2008 and 81 that pairs added by mining made no longer one-to-one); positive values mean the repository was created before publication. The solid line marks the median (82 days). Dashed lines mark the mining window: repositories created at most 556 days before and 73 days after publication, the 10th and 90th percentiles of one-to-one seed pairs when mining began.}\label{sfig:datewindow}
 \end{figure}
 
 % Fig. S2
