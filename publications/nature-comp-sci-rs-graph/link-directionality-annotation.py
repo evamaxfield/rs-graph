@@ -386,20 +386,37 @@ def _stat_rows(df: pl.DataFrame, subset: str) -> list[dict[str, str | int | floa
     """Every statistic for one set of annotated pairs."""
     rows = []
     n_all = df.height
-    labeled = df.filter(pl.col("label").is_not_null())
-    n_labeled = labeled.height
-    n_match = labeled.filter(pl.col("label") == "match").height
-    n_no_match = labeled.filter(pl.col("label") == "no-match").height
+    # Blank labels are edge cases (CRAN packages, dissertations, data collections)
+    rows.append(_stat_row(subset, "blank_label", df["label"].null_count(), n_all))
+    n_not_available = df.filter(pl.col("label") == "not-available").height
+    rows.append(_stat_row(subset, "not_available", n_not_available, n_all))
 
-    rows.append(_stat_row(subset, "precision_strict", n_match, n_labeled, with_ci=True))
+    # Not-available is always excluded; unsure is an error in strict only
+    n_match = df.filter(pl.col("label") == "match").height
+    n_no_match = df.filter(pl.col("label") == "no-match").height
+    n_unsure = df.filter(pl.col("label") == "unsure").height
+    rows.append(
+        _stat_row(
+            subset, "precision_strict", n_match, n_match + n_no_match + n_unsure, with_ci=True
+        )
+    )
     rows.append(
         _stat_row(subset, "precision_lenient", n_match, n_match + n_no_match, with_ci=True)
     )
-    rows.append(_stat_row(subset, "excluded", n_labeled - n_match - n_no_match, n_labeled))
+    rows.append(_stat_row(subset, "unsure", n_unsure, n_match + n_no_match + n_unsure))
 
     # Directionality and access are over matched pairs only
-    matches = labeled.filter(pl.col("label") == "match")
     a2r_col, r2a_col = "this-repo-linked-in-article", "this-article-linked-in-repo"
+    # Without full text, an article link not seen elsewhere is unknown
+    unknown = (pl.col("full-text-available") == "no") & (pl.col(a2r_col) != "yes").fill_null(
+        True
+    )
+    matches = df.filter(pl.col("label") == "match").with_columns(
+        pl.when(unknown).then(None).otherwise(pl.col(a2r_col)).alias(a2r_col)
+    )
+    rows.append(
+        _stat_row(subset, "article_link_unknown_match", matches[a2r_col].null_count(), n_match)
+    )
     d = matches.drop_nulls([a2r_col, r2a_col])
     a2r, r2a = pl.col(a2r_col) == "yes", pl.col(r2a_col) == "yes"
     counts = {
@@ -411,6 +428,20 @@ def _stat_rows(df: pl.DataFrame, subset: str) -> list[dict[str, str | int | floa
     }
     for name, count in counts.items():
         rows.append(_stat_row(subset, f"directionality_match_{name}", count, d.height))
+
+    # Bounds on neither: every unknown article links, or none does
+    filled = matches.drop_nulls(r2a_col)
+    for assume in ["yes", "no"]:
+        bound = filled.with_columns(pl.col(a2r_col).fill_null(assume))
+        n_neither = bound.filter((pl.col(a2r_col) != "yes") & (pl.col(r2a_col) != "yes")).height
+        rows.append(
+            _stat_row(
+                subset,
+                f"directionality_match_neither_unknown_{assume}",
+                n_neither,
+                bound.height,
+            )
+        )
 
     for name, col in [("article_links_repo", a2r_col), ("repo_links_article", r2a_col)]:
         filled = matches.drop_nulls(col)
@@ -427,8 +458,6 @@ def _stat_rows(df: pl.DataFrame, subset: str) -> list[dict[str, str | int | floa
     rows.append(_stat_row(subset, "closed_access_match", n_closed_match, matches.height))
     n_no_full_text_match = matches.filter(pl.col("full-text-available") == "no").height
     rows.append(_stat_row(subset, "no_full_text_match", n_no_full_text_match, matches.height))
-
-    rows.append(_stat_row(subset, "article_link_unknown", df[a2r_col].null_count(), n_all))
 
     no_full_text = df.filter(pl.col("full-text-available") == "no").height
     rows.append(_stat_row(subset, "no_full_text", no_full_text, n_all))
