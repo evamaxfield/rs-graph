@@ -65,7 +65,7 @@ CARD_TEXT: dict[str, dict[str, str]] = {
             "abstracts) and `developer_account.name` and `developer_account.email`."
         ),
         "texts": "article titles, article abstracts",
-        "other": "The public variant is at https://huggingface.co/datasets/{org}/rs-graph-v2.",
+        "other": "**Public Variant:** https://huggingface.co/datasets/{org}/rs-graph-v2",
     },
     "public": {
         "title": "RS-Graph v2 (public)",
@@ -81,8 +81,8 @@ CARD_TEXT: dict[str, dict[str, str]] = {
             "`predictive_model_confidence` in `researcher_developer_account_link`."
         ),
         "texts": "article titles",
-        "other": "The gated full variant is at "
-        "https://huggingface.co/datasets/{org}/rs-graph-v2-full.",
+        "other": "**Gated Access Variant:** "
+        "https://huggingface.co/datasets/{org}/rs-graph-v2-full",
     },
 }
 

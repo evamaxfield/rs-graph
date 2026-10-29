@@ -17,6 +17,12 @@ $gated
 
 $summary
 
+**Paper:** TODO
+
+**Docs:** https://evamaxfield.github.io/rs-graph
+
+$other
+
 ## Access
 
 $access
@@ -61,10 +67,4 @@ https://github.com/evamaxfield/rs-graph/issues
 
 ## Citation
 
-Please cite the Quantitative Science Studies paper that introduced the data
-(https://doi.org/10.1162/QSS.a.465). A citation for the Nature Computational Science paper
-will be added once it exists.
-
-## Other variant
-
-$other
+TODO
