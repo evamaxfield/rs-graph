@@ -63,10 +63,10 @@
 Our network mining process grows outward from a known co-authorship network similar to a snowball sampling process.
 As a result, the network becomes increasingly connected and concentrated in a single large component.
 To evaluate network connectivity, we compare the co-authorship network created from the seed pairs alone to the co-authorship network created from the seed and mined pairs together.
-In each network, researchers are nodes and an undirected edge joins two researchers who share an RS-Graph article.
+In each network, researchers are nodes and an undirected edge joins two researchers who share an article in RS-Graph.
 Single-author articles add no edges, so we exclude researchers without any co-authorship edge, which removes 3,834 researchers from the seed-only network and 3,132 from the seed and mined network.
 The largest connected component holds 84.9\% of researchers in the seed-only network (354,036 of 417,082) and 93.6\% in the seed and mined network (590,147 of 630,651).
-Over the same change, the number of connected components falls from 14,145 to 9,387, and the second-largest component in the seed and mined network has only 49 researchers.
+The number of connected components falls from 14,145 to 9,387, and the second-largest component in the seed and mined network has only 49 researchers.
 We expect this increase by construction, because we find every mined pair through a researcher who already authored an article in RS-Graph.
 
 \section*{Supplementary Note 2: Out-of-domain repository sample}\label{snote:ood}
@@ -151,7 +151,7 @@ We chose the input features and base model with single runs, one per configurati
 These runs predate a revision of our train/test split, which now splits positives before generating negatives, so the model-selection set was most likely built with the earlier procedure, which generated negatives before splitting.
 The same configuration (\texttt{gte-multilingual-base} with the final 18 features) scored a macro F1 of 0.967 in the base-model run and 0.961 in the ablation run, so single-run differences of about 0.006 are within noise.
 We therefore did not select the highest-scoring feature set.
-We excluded the six features (author list, contributor list, topic domains, topic fields, document type, and repository file tree) mainly because they need multiple API calls per candidate pair before inference, which would make mining time-intensive, and we dropped the author and contributor lists together so the model could not lean on their overlap (Methods).
+We excluded the six features (author list, contributor list, topic domains, topic fields, document type, and repository file tree) because they need multiple API calls per candidate pair before inference, which would make mining time-intensive, and we dropped the author and contributor lists together so the model could not lean on their overlap (Methods).
 
 On the 120,030-example test set, the candidate confidence thresholds were 0.751 by Youden's J, 0.479 by maximum F1, 0.940 as the lowest threshold with a false positive rate of at most 0.01, and 0.99937 as the lowest threshold with precision of at least 0.999.
 We use the last, rounded to 0.9994 (Methods).
@@ -437,7 +437,7 @@ Seed source or negative strategy & Train & Test & Total & Share & Test accuracy 
 % Sources: sci-soft-models binary_article_repo_em/data/files/ablation/ablation-training-results.csv (22 rows, e561cff) and data/files/experiments/exp-training-results.csv (3 rows, 8548667). "Reduced" is defined in git show e561cff (REDUCED_FEATURE_SET_ABLATION).
 % Both CSVs predate 9e65d1d (the split fix), so the model-selection set is inferred, not proven, to come from the earlier split.
 \begin{sidewaystable}
-\caption{\textbf{ARMM feature ablation and base-model comparison.} Upper block: removing each feature or feature group from the 24 candidate features, with \texttt{gte-multilingual-base} as the base model, sorted by macro F1. Lower block: three base models fine-tuned on the final 18-feature set. Every run was fine-tuned for one epoch with the final model's settings on a subsample of 32,768 positives and evaluated on the same 39,988-example model-selection set (Supplementary Note 4), which was most likely built with an earlier version of our train/test split. Each row is a single run: the same configuration (\texttt{gte-multilingual-base} with the final 18 features) scored a macro F1 of 0.967 in the base-model run and 0.961 in the ablation run, so differences of about $\pm$0.006 are within run-to-run noise. Bold marks the final feature set, which is not the highest-scoring one; we chose it mainly because the excluded features need multiple API calls per candidate pair before inference, which would make mining time-intensive. Repository owner was never removed. Match P and R are for the match class.}\label{stab:ablation}
+\caption{\textbf{ARMM feature ablation and base-model comparison.} Upper block: removing each feature or feature group from the 24 candidate features, with \texttt{gte-multilingual-base} as the base model, sorted by macro F1. Lower block: three base models fine-tuned on the final 18-feature set. Every run was fine-tuned for one epoch with the final model's settings on a subsample of 32,768 positives and evaluated on the same 39,988-example model-selection set (Supplementary Note 4). Each row is a single run: the same configuration (\texttt{gte-multilingual-base} with the final 18 features) scored a macro F1 of 0.967 in the base-model run and 0.961 in the ablation run, so differences of about $\pm$0.006 are within run-to-run noise. Bold marks the final feature set, which is not the highest-scoring one; we chose it mainly because the excluded features need multiple API calls per candidate pair before inference, which would make mining time-intensive. Match P and R are for the match class.}\label{stab:ablation}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}>{\raggedright\arraybackslash}p{248pt}rrrrrrrr@{}}
