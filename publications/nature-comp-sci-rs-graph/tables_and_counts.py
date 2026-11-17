@@ -763,6 +763,8 @@ def data_coverage_counts(output_dir: Path = u.OUTPUT_DIR) -> None:
 
     n_articles_with_mention = flagged.filter(pl.col("has_mention")).n_unique("document_id")
     print(f"Articles with >=1 extracted software mention: {n_articles_with_mention:,}")
+    n_pairs_with_mention = flagged.filter(pl.col("has_mention")).height
+    print(f"Pairs with >=1 extracted software mention: {n_pairs_with_mention:,}")
     n_repos_with_import = flagged.filter(pl.col("has_import")).n_unique("repository_id")
     print(f"Repositories with >=1 extracted import: {n_repos_with_import:,}")
     n_repos_with_dep = flagged.filter(pl.col("has_dependency")).n_unique("repository_id")
@@ -804,6 +806,7 @@ def data_coverage_counts(output_dir: Path = u.OUTPUT_DIR) -> None:
                 "n_articles_total",
                 "n_repositories_total",
                 "n_articles_with_gte1_mention",
+                "n_pairs_with_gte1_mention",
                 "n_repositories_with_gte1_import",
                 "n_repositories_with_gte1_manifest_dependency",
                 "n_pairs_imports_and_mentions",
@@ -819,6 +822,7 @@ def data_coverage_counts(output_dir: Path = u.OUTPUT_DIR) -> None:
                 n_articles,
                 n_repositories,
                 n_articles_with_mention,
+                n_pairs_with_mention,
                 n_repos_with_import,
                 n_repos_with_dep,
                 n_pairs_import_mention,
