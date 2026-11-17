@@ -288,7 +288,8 @@ Some mention contexts, most often in methods sections, list several pieces of so
 The final classifier takes the article title, the mention context, and the repository URL as input.
 On the 199 held-out examples, the classifier achieved a macro F1 of 0.827 (precision 0.860, recall 0.815; on the 175 annotated examples alone, macro F1 0.776 and match precision 0.827).
 
-We then used our trained Software Repository Sharing Statement Classifier to infer additional seed article--repository pairs by applying the model across \textcolor{red}{[SOFTCITE-CANDIDATES: N]} unique pairs of an article DOI and a GitHub URL from SoftCite-2025 mention contexts.
+We then used our trained Software Repository Sharing Statement Classifier to infer additional seed article--repository pairs from SoftCite-2025 mention contexts that contain a GitHub URL.
+After deduplicating to one mention context per unique pair of article DOI and GitHub URL, we applied the model to the remaining 35,771 mention contexts.
 The classifier predicted 24,043 of these pairs as matches, and 16,653 were added to the seeded portion of RS-Graph after DOI resolution and GitHub existence checks.
 These seeds carry no ARMM confidence score, so our 0.9994 threshold does not filter them, and the classifier's match precision on the 175 annotated held-out examples was 0.827.
 
